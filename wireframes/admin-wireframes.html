@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MY Chess Tour — Admin Flow Wireframes</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f3ef;
+    --surface: #ffffff;
+    --surface-alt: #eae7e1;
+    --border: #d4d0c8;
+    --border-strong: #b0ab9f;
+    --text: #2c2a25;
+    --text-muted: #7a756b;
+    --text-light: #a09a8e;
+    --accent: #3d6b4f;
+    --accent-light: #e8f0eb;
+    --accent-hover: #2f5540;
+    --danger: #b5493a;
+    --danger-light: #fde8e6;
+    --warning: #c4882f;
+    --warning-light: #fef3e2;
+    --info: #2b5a8c;
+    --info-light: #e3edf7;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Screen nav ── */
+  .screen-nav {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--text); display: flex; align-items: stretch; overflow-x: auto;
+  }
+  .screen-nav-label {
+    color: var(--text-light); font-size: 11px; font-family: 'DM Mono', monospace;
+    text-transform: uppercase; letter-spacing: 1.5px; padding: 14px 20px;
+    white-space: nowrap; display: flex; align-items: center; border-right: 1px solid rgba(255,255,255,0.08);
+  }
+  .screen-nav button {
+    background: none; border: none; color: rgba(255,255,255,0.5);
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    padding: 14px 18px; cursor: pointer; white-space: nowrap;
+    border-bottom: 2px solid transparent; transition: all 0.2s;
+  }
+  .screen-nav button:hover { color: rgba(255,255,255,0.8); }
+  .screen-nav button.active { color: #fff; border-bottom-color: var(--accent); }
+
+  .screen { display: none; min-height: calc(100vh - 46px); }
+  .screen.active { display: block; }
+
+  .annotation {
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent);
+    background: var(--accent-light); padding: 10px 14px; border-left: 3px solid var(--accent);
+    margin: 16px 32px; border-radius: 0 6px 6px 0; line-height: 1.6;
+  }
+
+  /* ── Layout ── */
+  .admin-layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 46px); }
+  .admin-sidebar {
+    background: var(--text); color: rgba(255,255,255,0.6); padding: 24px 0;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .admin-sidebar-header {
+    padding: 0 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 12px;
+  }
+  .admin-sidebar-header h3 { color: #fff; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .admin-sidebar-header h3 .icon { font-size: 18px; }
+  .admin-sidebar-header p { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; text-transform: uppercase; letter-spacing: 1px; }
+  .admin-nav { list-style: none; }
+  .admin-nav li a {
+    display: flex; align-items: center; gap: 10px; text-decoration: none;
+    color: rgba(255,255,255,0.5); font-size: 14px; font-weight: 500;
+    padding: 10px 24px; transition: all 0.15s;
+  }
+  .admin-nav li a:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.04); }
+  .admin-nav li a.active { color: #fff; background: rgba(255,255,255,0.08); border-left: 2px solid var(--accent); }
+  .admin-nav .nav-badge {
+    font-size: 11px; font-weight: 700; background: var(--warning); color: #fff;
+    padding: 1px 7px; border-radius: 10px; margin-left: auto;
+  }
+  .admin-content { padding: 28px 32px; overflow-x: auto; }
+  .admin-content h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .admin-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+  @media (max-width: 768px) {
+    .admin-layout { grid-template-columns: 1fr; }
+    .admin-sidebar { display: none; }
+  }
+
+  /* ── Shared components ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--border-strong); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #9b3d30; }
+  .btn-danger-outline { background: var(--danger-light); color: var(--danger); border: 1px solid transparent; }
+  .btn-sm { font-size: 13px; padding: 6px 12px; }
+  .btn-lg { font-size: 15px; padding: 12px 24px; }
+
+  /* ── Stats ── */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-card .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .stat-value { font-size: 26px; font-weight: 700; }
+  .stat-card .stat-note { font-size: 12px; color: var(--text-light); }
+  .stat-card .stat-change { font-size: 12px; font-weight: 600; }
+  .stat-card .stat-change.up { color: var(--accent); }
+  .stat-card .stat-change.down { color: var(--danger); }
+
+  /* ── Tables ── */
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+  }
+  .table-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .table-header h2 { font-size: 15px; font-weight: 600; }
+  .table-toolbar { display: flex; gap: 10px; align-items: center; }
+  .table-search {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 6px; width: 200px; outline: none;
+  }
+  .table-search:focus { border-color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead th {
+    text-align: left; padding: 10px 20px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light);
+    border-bottom: 1px solid var(--border); background: #fafaf7;
+  }
+  tbody td { padding: 12px 20px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--bg); cursor: pointer; }
+
+  .status-badge {
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px; display: inline-block;
+  }
+  .status-pending { background: var(--warning-light); color: var(--warning); }
+  .status-approved { background: var(--accent-light); color: var(--accent); }
+  .status-rejected { background: var(--danger-light); color: var(--danger); }
+  .status-published { background: var(--accent-light); color: var(--accent); }
+  .status-draft { background: var(--surface-alt); color: var(--text-light); }
+  .status-completed { background: var(--surface-alt); color: var(--text-muted); }
+  .status-confirmed { background: var(--accent-light); color: var(--accent); }
+  .status-refunded { background: var(--danger-light); color: var(--danger); }
+  .status-info { background: var(--info-light); color: var(--info); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+  }
+  .tab {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+    color: var(--text-muted); background: none; border: none;
+    padding: 12px 18px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  /* ── Application detail ── */
+  .detail-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .detail-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border); background: #fafaf7;
+  }
+  .detail-card-header h2 { font-size: 15px; font-weight: 600; }
+  .detail-card-body { padding: 20px; }
+  .detail-grid {
+    display: grid; grid-template-columns: 160px 1fr; gap: 8px 20px; font-size: 14px;
+  }
+  .detail-grid .label { color: var(--text-light); font-size: 13px; }
+  .detail-grid .value { color: var(--text); }
+  .detail-grid .value a { color: var(--accent); text-decoration: none; }
+  .detail-grid .value a:hover { text-decoration: underline; }
+
+  /* Action bar */
+  .action-bar {
+    display: flex; gap: 12px; align-items: center;
+    padding: 20px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); margin-bottom: 16px;
+  }
+  .action-bar .action-spacer { flex: 1; }
+
+  /* Rejection modal (inline) */
+  .reject-modal {
+    background: var(--danger-light); border: 1px solid var(--danger); border-radius: var(--radius);
+    padding: 16px 20px; margin-bottom: 16px;
+  }
+  .reject-modal h3 { font-size: 14px; font-weight: 600; color: var(--danger); margin-bottom: 8px; }
+  .reject-modal textarea {
+    width: 100%; font-family: 'DM Sans', sans-serif; font-size: 14px;
+    padding: 10px 12px; border: 1px solid var(--danger); border-radius: 6px;
+    background: #fff; outline: none; min-height: 80px; resize: vertical; margin-bottom: 10px;
+  }
+
+  /* Chart placeholder */
+  .chart-placeholder {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 24px; margin-bottom: 16px; min-height: 200px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--text-light); font-family: 'DM Mono', monospace; font-size: 12px;
+  }
+  .chart-placeholder .chart-bars {
+    display: flex; gap: 8px; align-items: flex-end; margin-bottom: 12px; height: 100px;
+  }
+  .chart-bar {
+    width: 32px; border-radius: 4px 4px 0 0; background: var(--accent-light); transition: all 0.2s;
+  }
+
+  /* Filter row */
+  .filter-row {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;
+  }
+  .filter-select {
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 8px 28px 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); appearance: none; cursor: pointer; outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a756b' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-position: right 8px center; background-repeat: no-repeat;
+  }
+  .filter-dropdown {
+    position: relative;
+  }
+  .filter-dropdown-btn {
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 8px 28px 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); cursor: pointer; outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a756b' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-position: right 8px center; background-repeat: no-repeat;
+    white-space: nowrap; transition: border-color 0.15s;
+  }
+  .filter-dropdown-btn:hover { border-color: var(--border-strong); }
+  .filter-dropdown-btn.has-selection { border-color: var(--accent); color: var(--accent); background-color: var(--accent-light); }
+  .filter-dropdown-panel {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow-md); padding: 8px 0; min-width: 180px; z-index: 50;
+  }
+  .filter-dropdown.open .filter-dropdown-panel { display: block; }
+  .filter-dropdown.open .filter-dropdown-btn { border-color: var(--accent); }
+  .filter-checkbox-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s; user-select: none;
+  }
+  .filter-checkbox-item:hover { background: var(--bg); }
+  .filter-checkbox-item input[type="checkbox"] {
+    width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<nav class="screen-nav">
+  <span class="screen-nav-label">Admin Flows</span>
+  <button class="active" onclick="showScreen('dashboard')">1. Dashboard</button>
+  <button onclick="showScreen('applications')">2. Applications</button>
+  <button onclick="showScreen('review')">3. Review Detail</button>
+  <button onclick="showScreen('tournaments')">4. Tournaments</button>
+  <button onclick="showScreen('transactions')">5. Transactions</button>
+</nav>
+
+<!-- ════════════════════════════════════════
+     SCREEN 1: ADMIN DASHBOARD
+     ════════════════════════════════════════ -->
+<div id="screen-dashboard" class="screen active">
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <h3><span class="icon">♟</span> MY Chess Tour</h3>
+        <p>Admin Panel</p>
+      </div>
+      <ul class="admin-nav">
+        <li><a href="#" class="active" onclick="showScreen('dashboard'); return false;">📊 Dashboard</a></li>
+        <li><a href="#" onclick="showScreen('applications'); return false;">📋 Applications <span class="nav-badge">3</span></a></li>
+        <li><a href="#" onclick="showScreen('tournaments'); return false;">🏆 Tournaments</a></li>
+        <li><a href="#" onclick="showScreen('transactions'); return false;">💳 Transactions</a></li>
+        <li><a href="#">👥 Users</a></li>
+        <li><a href="#">⚙️ Settings</a></li>
+      </ul>
+    </aside>
+
+    <main class="admin-content">
+      <div class="annotation" style="margin: 0 0 20px 0;">
+        Annotation: Admin dashboard showing platform-wide metrics. Stats update in real time. The chart shows registration trend over the past 30 days. Quick links to pending actions are shown below.
+      </div>
+
+      <h1>Dashboard</h1>
+      <p class="admin-subtitle">Platform overview</p>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <span class="stat-label">Total Players</span>
+          <span class="stat-value">1,247</span>
+          <span class="stat-change up">↑ 12% this month</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Active Organizers</span>
+          <span class="stat-value">18</span>
+          <span class="stat-change up">↑ 3 new this month</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Tournaments</span>
+          <span class="stat-value">42</span>
+          <span class="stat-note">12 upcoming · 28 completed · 2 draft</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Commission Earned (10%)</span>
+          <span class="stat-value">RM 8,420</span>
+          <span class="stat-change up">↑ 18% this month</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div class="stat-card">
+          <span class="stat-label">Total Registration Volume</span>
+          <span class="stat-value">RM 92,620</span>
+          <span class="stat-note">Total charged to players across all tournaments</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Net Revenue (after CHIP fees)</span>
+          <span class="stat-value">RM 7,578</span>
+          <span class="stat-note">Commission earned minus CHIP's ~10% transaction fee</span>
+        </div>
+      </div>
+
+      <!-- Chart placeholder -->
+      <div class="chart-placeholder">
+        <div class="chart-bars">
+          <div class="chart-bar" style="height: 30px;"></div>
+          <div class="chart-bar" style="height: 45px;"></div>
+          <div class="chart-bar" style="height: 38px;"></div>
+          <div class="chart-bar" style="height: 60px;"></div>
+          <div class="chart-bar" style="height: 52px;"></div>
+          <div class="chart-bar" style="height: 75px;"></div>
+          <div class="chart-bar" style="height: 68px;"></div>
+          <div class="chart-bar" style="height: 90px; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 85px; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 100px; background: var(--accent);"></div>
+        </div>
+        Registrations — Last 30 Days
+      </div>
+
+      <!-- Quick actions -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="table-wrap">
+          <div class="table-header">
+            <h2>Pending Applications</h2>
+            <button class="btn btn-sm btn-secondary" onclick="showScreen('applications')">View All</button>
+          </div>
+          <table>
+            <tbody>
+              <tr onclick="showScreen('review')">
+                <td><strong>Penang Chess Club</strong><br><span style="font-size: 12px; color: var(--text-muted);">Applied 2 hours ago</span></td>
+                <td style="text-align: right;"><span class="status-badge status-pending">Pending</span></td>
+              </tr>
+              <tr>
+                <td><strong>JB Youth Chess Academy</strong><br><span style="font-size: 12px; color: var(--text-muted);">Applied 1 day ago</span></td>
+                <td style="text-align: right;"><span class="status-badge status-pending">Pending</span></td>
+              </tr>
+              <tr>
+                <td><strong>Sabah Chess Federation</strong><br><span style="font-size: 12px; color: var(--text-muted);">Applied 2 days ago</span></td>
+                <td style="text-align: right;"><span class="status-badge status-pending">Pending</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-header">
+            <h2>Recent Transactions</h2>
+            <button class="btn btn-sm btn-secondary" onclick="showScreen('transactions')">View All</button>
+          </div>
+          <table>
+            <tbody>
+              <tr>
+                <td><strong>Ahmad Hassan</strong><br><span style="font-size: 12px; color: var(--text-muted);">KL Open Rapid Championship</span></td>
+                <td style="text-align: right; font-family: 'DM Mono', monospace; font-size: 13px;">RM 38.50</td>
+              </tr>
+              <tr>
+                <td><strong>Siti Lim</strong><br><span style="font-size: 12px; color: var(--text-muted);">KL Open Rapid Championship</span></td>
+                <td style="text-align: right; font-family: 'DM Mono', monospace; font-size: 13px;">RM 55.00</td>
+              </tr>
+              <tr>
+                <td><strong>Raj Kumar</strong><br><span style="font-size: 12px; color: var(--text-muted);">Penang Heritage Chess Classic</span></td>
+                <td style="text-align: right; font-family: 'DM Mono', monospace; font-size: 13px;">RM 88.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 2: ORGANIZER APPLICATIONS
+     ════════════════════════════════════════ -->
+<div id="screen-applications" class="screen">
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <h3><span class="icon">♟</span> MY Chess Tour</h3>
+        <p>Admin Panel</p>
+      </div>
+      <ul class="admin-nav">
+        <li><a href="#" onclick="showScreen('dashboard'); return false;">📊 Dashboard</a></li>
+        <li><a href="#" class="active" onclick="showScreen('applications'); return false;">📋 Applications <span class="nav-badge">3</span></a></li>
+        <li><a href="#" onclick="showScreen('tournaments'); return false;">🏆 Tournaments</a></li>
+        <li><a href="#" onclick="showScreen('transactions'); return false;">💳 Transactions</a></li>
+        <li><a href="#">👥 Users</a></li>
+        <li><a href="#">⚙️ Settings</a></li>
+      </ul>
+    </aside>
+
+    <main class="admin-content">
+      <div class="annotation" style="margin: 0 0 20px 0;">
+        Annotation: List of all organizer applications. Tabs filter by status. The pending count is shown as a badge in the sidebar. Clicking a row navigates to the review detail screen.
+      </div>
+
+      <h1>Organizer Applications</h1>
+      <p class="admin-subtitle">Review and manage organizer applications.</p>
+
+      <div class="tabs">
+        <button class="tab active">Pending (3)</button>
+        <button class="tab">Approved (15)</button>
+        <button class="tab">Rejected (4)</button>
+        <button class="tab">All (22)</button>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-header">
+          <div class="table-toolbar">
+            <input type="text" class="table-search" placeholder="Search applications...">
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Organization</th>
+              <th>Contact</th>
+              <th>Applied</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="showScreen('review')">
+              <td>
+                <strong>Penang Chess Club</strong>
+                <br><span style="font-size: 12px; color: var(--text-muted);">Community chess club in Georgetown since 2015</span>
+              </td>
+              <td style="font-size: 13px;">penangchess@gmail.com<br><span style="color: var(--text-light);">+60 12-345 6789</span></td>
+              <td style="font-size: 13px; color: var(--text-muted);">22 Feb 2026<br><span style="font-size: 12px; color: var(--text-light);">2 hours ago</span></td>
+              <td><span class="status-badge status-pending">Pending</span></td>
+              <td><button class="btn btn-sm btn-primary" onclick="showScreen('review')">Review</button></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>JB Youth Chess Academy</strong>
+                <br><span style="font-size: 12px; color: var(--text-muted);">Youth development program, 200+ students</span>
+              </td>
+              <td style="font-size: 13px;">info@jbyouthchess.my<br><span style="color: var(--text-light);">+60 17-890 1234</span></td>
+              <td style="font-size: 13px; color: var(--text-muted);">21 Feb 2026<br><span style="font-size: 12px; color: var(--text-light);">1 day ago</span></td>
+              <td><span class="status-badge status-pending">Pending</span></td>
+              <td><button class="btn btn-sm btn-primary">Review</button></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Sabah Chess Federation</strong>
+                <br><span style="font-size: 12px; color: var(--text-muted);">State chess federation of Sabah</span>
+              </td>
+              <td style="font-size: 13px;">sabahchess@gov.my<br><span style="color: var(--text-light);">+60 88-123 456</span></td>
+              <td style="font-size: 13px; color: var(--text-muted);">20 Feb 2026<br><span style="font-size: 12px; color: var(--text-light);">2 days ago</span></td>
+              <td><span class="status-badge status-pending">Pending</span></td>
+              <td><button class="btn btn-sm btn-primary">Review</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 3: APPLICATION REVIEW DETAIL
+     ════════════════════════════════════════ -->
+<div id="screen-review" class="screen">
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <h3><span class="icon">♟</span> MY Chess Tour</h3>
+        <p>Admin Panel</p>
+      </div>
+      <ul class="admin-nav">
+        <li><a href="#" onclick="showScreen('dashboard'); return false;">📊 Dashboard</a></li>
+        <li><a href="#" class="active" onclick="showScreen('applications'); return false;">📋 Applications <span class="nav-badge">3</span></a></li>
+        <li><a href="#" onclick="showScreen('tournaments'); return false;">🏆 Tournaments</a></li>
+        <li><a href="#" onclick="showScreen('transactions'); return false;">💳 Transactions</a></li>
+        <li><a href="#">👥 Users</a></li>
+        <li><a href="#">⚙️ Settings</a></li>
+      </ul>
+    </aside>
+
+    <main class="admin-content">
+      <div class="annotation" style="margin: 0 0 20px 0;">
+        Annotation: Detailed view of a single organizer application. Admin reviews the information and can approve or reject. Rejection requires a reason. Approval sends an email notification and activates the organizer account.
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <button class="btn btn-sm btn-secondary" onclick="showScreen('applications')">← Back</button>
+        <h1 style="margin-bottom: 0;">Penang Chess Club</h1>
+        <span class="status-badge status-pending">Pending</span>
+      </div>
+
+      <!-- Action bar -->
+      <div class="action-bar">
+        <span style="font-size: 14px; color: var(--text-muted);">Applied on 22 Feb 2026, 2:34 PM by <strong style="color: var(--text);">Lee Wei Hao</strong></span>
+        <span class="action-spacer"></span>
+        <button class="btn btn-danger-outline btn-sm" onclick="document.getElementById('reject-panel').style.display = document.getElementById('reject-panel').style.display === 'none' ? 'block' : 'none'">Reject</button>
+        <button class="btn btn-primary" onclick="alert('Application approved! (Wireframe demo)')">✓ Approve</button>
+      </div>
+
+      <!-- Reject reason panel (hidden by default) -->
+      <div class="reject-modal" id="reject-panel" style="display: none;">
+        <h3>Rejection Reason</h3>
+        <textarea placeholder="Explain why this application is being rejected. This will be sent to the applicant via email."></textarea>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('reject-panel').style.display = 'none'">Cancel</button>
+          <button class="btn btn-sm btn-danger">Confirm Rejection</button>
+        </div>
+      </div>
+
+      <!-- Organization details -->
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h2>Organization Details</h2>
+        </div>
+        <div class="detail-card-body">
+          <div class="detail-grid">
+            <span class="label">Organization Name</span>
+            <span class="value">Penang Chess Club</span>
+
+            <span class="label">Description</span>
+            <span class="value">Community chess club based in Georgetown, Penang. Established in 2015. We organize monthly rapid tournaments and coaching sessions for players of all levels. Active membership of ~80 players.</span>
+
+            <span class="label">Links</span>
+            <span class="value">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span>🌐 <a href="#">https://penangchess.org</a></span>
+                <span>📘 <a href="#">facebook.com/penangchessclub</a></span>
+                <span>📸 <a href="#">instagram.com/penangchess</a></span>
+              </div>
+            </span>
+
+            <span class="label">Contact Email</span>
+            <span class="value">penangchess@gmail.com</span>
+
+            <span class="label">Contact Phone</span>
+            <span class="value">+60 12-345 6789</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Past tournaments -->
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h2>Past Tournament References</h2>
+        </div>
+        <div class="detail-card-body">
+          <div style="font-size: 14px; color: var(--text-muted); line-height: 1.8;">
+            1. Penang Monthly Rapid #1–12 (Jan 2025 – Dec 2025) — ~30 participants each, held at Penang Chess Club premises.<br>
+            2. Penang Open Rapid 2025 (Mar 2025) — 84 participants, FIDE rated, at Traders Hotel Penang.<br>
+            3. Georgetown Heritage Blitz 2025 (Aug 2025) — 60 participants, unrated community event.
+          </div>
+        </div>
+      </div>
+
+      <!-- Applicant info -->
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h2>Applicant Account</h2>
+        </div>
+        <div class="detail-card-body">
+          <div class="detail-grid">
+            <span class="label">Name</span>
+            <span class="value">Lee Wei Hao</span>
+
+            <span class="label">Email</span>
+            <span class="value">weihao.lee@gmail.com</span>
+
+            <span class="label">Account Created</span>
+            <span class="value">15 Jan 2026</span>
+
+            <span class="label">Player Profile</span>
+            <span class="value">FIDE ID: 5834567 · Rating: 1923 · Active player</span>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 4: TOURNAMENTS OVERVIEW
+     ════════════════════════════════════════ -->
+<div id="screen-tournaments" class="screen">
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <h3><span class="icon">♟</span> MY Chess Tour</h3>
+        <p>Admin Panel</p>
+      </div>
+      <ul class="admin-nav">
+        <li><a href="#" onclick="showScreen('dashboard'); return false;">📊 Dashboard</a></li>
+        <li><a href="#" onclick="showScreen('applications'); return false;">📋 Applications <span class="nav-badge">3</span></a></li>
+        <li><a href="#" class="active" onclick="showScreen('tournaments'); return false;">🏆 Tournaments</a></li>
+        <li><a href="#" onclick="showScreen('transactions'); return false;">💳 Transactions</a></li>
+        <li><a href="#">👥 Users</a></li>
+        <li><a href="#">⚙️ Settings</a></li>
+      </ul>
+    </aside>
+
+    <main class="admin-content">
+      <div class="annotation" style="margin: 0 0 20px 0;">
+        Annotation: Admin view of all tournaments across the platform. Full-width search bar indexes by tournament name or organizer. Status filter uses a dropdown with checkboxes for multi-select. Clicking a row could open the tournament detail for oversight.
+      </div>
+
+      <h1>Tournaments</h1>
+      <p class="admin-subtitle">All tournaments across the platform.</p>
+
+      <div style="margin-bottom: 12px;">
+        <input type="text" class="table-search" placeholder="Search by tournament name or organizer..." style="width: 100%; padding: 10px 14px; font-size: 14px;">
+      </div>
+      <div class="filter-row">
+        <div class="filter-dropdown" id="admin-filter-status">
+          <button class="filter-dropdown-btn" onclick="toggleAdminFilter('admin-filter-status')">Status</button>
+          <div class="filter-dropdown-panel">
+            <label class="filter-checkbox-item"><input type="checkbox" onchange="updateAdminFilterBtn('admin-filter-status', 'Status')"> Published</label>
+            <label class="filter-checkbox-item"><input type="checkbox" onchange="updateAdminFilterBtn('admin-filter-status', 'Status')"> Draft</label>
+            <label class="filter-checkbox-item"><input type="checkbox" onchange="updateAdminFilterBtn('admin-filter-status', 'Status')"> Completed</label>
+            <label class="filter-checkbox-item"><input type="checkbox" onchange="updateAdminFilterBtn('admin-filter-status', 'Status')"> Cancelled</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tournament</th>
+              <th>Organizer</th>
+              <th>Date</th>
+              <th>Registrations</th>
+              <th>Revenue</th>
+              <th>Commission</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>KL Open Rapid Championship 2026</strong><br><span style="font-size: 12px; color: var(--text-muted);">Rapid · Swiss · FIDE Rated</span></td>
+              <td style="font-size: 13px;">KL Chess Association</td>
+              <td style="font-size: 13px;">15 Mar 2026</td>
+              <td>78 / 120</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 3,460</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 346</td>
+              <td><span class="status-badge status-published">Published</span></td>
+            </tr>
+            <tr>
+              <td><strong>KL Blitz Series #4</strong><br><span style="font-size: 12px; color: var(--text-muted);">Blitz · Swiss · MCF Rated</span></td>
+              <td style="font-size: 13px;">KL Chess Association</td>
+              <td style="font-size: 13px;">29 Mar 2026</td>
+              <td>32 / 60</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 960</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 96</td>
+              <td><span class="status-badge status-published">Published</span></td>
+            </tr>
+            <tr>
+              <td><strong>Penang Heritage Chess Classic</strong><br><span style="font-size: 12px; color: var(--text-muted);">Classical · Swiss · FIDE + MCF Rated</span></td>
+              <td style="font-size: 13px;">Penang Chess Club</td>
+              <td style="font-size: 13px;">5 Apr 2026</td>
+              <td>52 / 60</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 4,160</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 416</td>
+              <td><span class="status-badge status-published">Published</span></td>
+            </tr>
+            <tr style="opacity: 0.7;">
+              <td><strong>National Day Classical Open</strong><br><span style="font-size: 12px; color: var(--text-muted);">Classical · Swiss</span></td>
+              <td style="font-size: 13px;">KL Chess Association</td>
+              <td style="font-size: 13px;">31 Aug 2026</td>
+              <td>0 / 80</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 0</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 0</td>
+              <td><span class="status-badge status-draft">Draft</span></td>
+            </tr>
+            <tr style="opacity: 0.5;">
+              <td><strong>New Year Blitz Bash 2026</strong><br><span style="font-size: 12px; color: var(--text-muted);">Blitz · Swiss · Unrated</span></td>
+              <td style="font-size: 13px;">Selangor Chess Academy</td>
+              <td style="font-size: 13px;">18 Jan 2026</td>
+              <td>46 / 50</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 1,380</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 138</td>
+              <td><span class="status-badge status-completed">Completed</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 5: TRANSACTIONS
+     ════════════════════════════════════════ -->
+<div id="screen-transactions" class="screen">
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <h3><span class="icon">♟</span> MY Chess Tour</h3>
+        <p>Admin Panel</p>
+      </div>
+      <ul class="admin-nav">
+        <li><a href="#" onclick="showScreen('dashboard'); return false;">📊 Dashboard</a></li>
+        <li><a href="#" onclick="showScreen('applications'); return false;">📋 Applications <span class="nav-badge">3</span></a></li>
+        <li><a href="#" onclick="showScreen('tournaments'); return false;">🏆 Tournaments</a></li>
+        <li><a href="#" class="active" onclick="showScreen('transactions'); return false;">💳 Transactions</a></li>
+        <li><a href="#">👥 Users</a></li>
+        <li><a href="#">⚙️ Settings</a></li>
+      </ul>
+    </aside>
+
+    <main class="admin-content">
+      <div class="annotation" style="margin: 0 0 20px 0;">
+        Annotation: Transaction monitoring. Shows all payment activity across the platform. Full-width search bar to find by player name or CHIP reference. Each row shows the full breakdown: total paid by player, organizer share, and platform commission. The CHIP transaction reference links to CHIP's dashboard for reconciliation.
+      </div>
+
+      <h1>Transactions</h1>
+      <p class="admin-subtitle">All payment activity across the platform.</p>
+
+      <div class="stats-row" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="stat-card">
+          <span class="stat-label">Total Transactions</span>
+          <span class="stat-value">312</span>
+          <span class="stat-note">All time</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Volume</span>
+          <span class="stat-value">RM 92,620</span>
+          <span class="stat-note">Total amount charged to players</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Platform Commission</span>
+          <span class="stat-value">RM 8,420</span>
+          <span class="stat-note">10% of organizer fees</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Refunds</span>
+          <span class="stat-value">RM 480</span>
+          <span class="stat-note">8 refunds processed</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <input type="text" class="table-search" placeholder="Search by player name or CHIP reference..." style="width: 100%; padding: 10px 14px; font-size: 14px;">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Player</th>
+              <th>Tournament</th>
+              <th>Fee Tier</th>
+              <th>Player Paid</th>
+              <th>Organizer</th>
+              <th>Commission</th>
+              <th>Method</th>
+              <th>Status</th>
+              <th>CHIP Ref</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-size: 13px; white-space: nowrap;">22 Feb<br><span style="font-size: 11px; color: var(--text-light);">2:15 PM</span></td>
+              <td style="font-size: 13px;"><strong>Ahmad Hassan</strong></td>
+              <td style="font-size: 13px;">KL Open Rapid</td>
+              <td style="font-size: 13px;">Early Bird</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 38.50</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 35.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 3.50</td>
+              <td style="font-size: 12px;">FPX</td>
+              <td><span class="status-badge status-confirmed">Confirmed</span></td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);">CHIP-8X4K2M</td>
+            </tr>
+            <tr>
+              <td style="font-size: 13px; white-space: nowrap;">22 Feb<br><span style="font-size: 11px; color: var(--text-light);">1:42 PM</span></td>
+              <td style="font-size: 13px;"><strong>Siti Lim</strong></td>
+              <td style="font-size: 13px;">KL Open Rapid</td>
+              <td style="font-size: 13px;">Standard</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 55.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 50.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 5.00</td>
+              <td style="font-size: 12px;">DuitNow</td>
+              <td><span class="status-badge status-confirmed">Confirmed</span></td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);">CHIP-3P7N9R</td>
+            </tr>
+            <tr>
+              <td style="font-size: 13px; white-space: nowrap;">22 Feb<br><span style="font-size: 11px; color: var(--text-light);">11:08 AM</span></td>
+              <td style="font-size: 13px;"><strong>FM Wong Wei Ming</strong></td>
+              <td style="font-size: 13px;">KL Open Rapid</td>
+              <td style="font-size: 13px;">Titled Player</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">Free</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 0.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 0.00</td>
+              <td style="font-size: 12px;">—</td>
+              <td><span class="status-badge status-confirmed">Confirmed</span></td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-light);">—</td>
+            </tr>
+            <tr>
+              <td style="font-size: 13px; white-space: nowrap;">21 Feb<br><span style="font-size: 11px; color: var(--text-light);">4:30 PM</span></td>
+              <td style="font-size: 13px;"><strong>Raj Kumar</strong></td>
+              <td style="font-size: 13px;">Penang Heritage</td>
+              <td style="font-size: 13px;">Standard</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 88.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 80.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 8.00</td>
+              <td style="font-size: 12px;">Card</td>
+              <td><span class="status-badge status-confirmed">Confirmed</span></td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);">CHIP-6W2T8J</td>
+            </tr>
+            <tr>
+              <td style="font-size: 13px; white-space: nowrap;">20 Feb<br><span style="font-size: 11px; color: var(--text-light);">9:15 AM</span></td>
+              <td style="font-size: 13px;"><strong>Tan Mei Ling</strong></td>
+              <td style="font-size: 13px;">KL Blitz Series #4</td>
+              <td style="font-size: 13px;">Early Bird</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 22.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">RM 20.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent);">RM 2.00</td>
+              <td style="font-size: 12px;">E-Wallet</td>
+              <td><span class="status-badge status-confirmed">Confirmed</span></td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);">CHIP-1M5Q4V</td>
+            </tr>
+            <tr>
+              <td style="font-size: 13px; white-space: nowrap;">18 Feb<br><span style="font-size: 11px; color: var(--text-light);">3:00 PM</span></td>
+              <td style="font-size: 13px;"><strong>Nurul Ain</strong></td>
+              <td style="font-size: 13px;">KL Open Rapid</td>
+              <td style="font-size: 13px;">Standard</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px; text-decoration: line-through; color: var(--text-light);">RM 55.00</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">—</td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 13px;">—</td>
+              <td style="font-size: 12px;">FPX</td>
+              <td><span class="status-badge status-refunded">Refunded</span></td>
+              <td style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted);">CHIP-9H3L6F</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  document.querySelectorAll('.screen-nav button').forEach(b => b.classList.remove('active'));
+  const labels = { dashboard: '1.', applications: '2.', review: '3.', tournaments: '4.', transactions: '5.' };
+  document.querySelectorAll('.screen-nav button').forEach(b => {
+    if (b.textContent.includes(labels[id])) b.classList.add('active');
+  });
+  window.scrollTo(0, 0);
+}
+
+function toggleAdminFilter(id) {
+  const el = document.getElementById(id);
+  const wasOpen = el.classList.contains('open');
+  document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.remove('open'));
+  if (!wasOpen) el.classList.add('open');
+}
+
+function updateAdminFilterBtn(id, label) {
+  const el = document.getElementById(id);
+  const checked = el.querySelectorAll('input[type="checkbox"]:checked');
+  const btn = el.querySelector('.filter-dropdown-btn');
+  if (checked.length > 0) {
+    btn.classList.add('has-selection');
+    const names = Array.from(checked).map(c => c.parentElement.textContent.trim());
+    btn.textContent = names.length <= 2 ? names.join(', ') : label + ' (' + checked.length + ')';
+  } else {
+    btn.classList.remove('has-selection');
+    btn.textContent = label;
+  }
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.filter-dropdown')) {
+    document.querySelectorAll('.filter-dropdown').forEach(d => d.classList.remove('open'));
+  }
+});
+</script>
+</body>
+</html>
