@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MY Chess Tour — Organizer Flow Wireframes</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f3ef;
+    --surface: #ffffff;
+    --surface-alt: #eae7e1;
+    --border: #d4d0c8;
+    --border-strong: #b0ab9f;
+    --text: #2c2a25;
+    --text-muted: #7a756b;
+    --text-light: #a09a8e;
+    --accent: #3d6b4f;
+    --accent-light: #e8f0eb;
+    --accent-hover: #2f5540;
+    --danger: #b5493a;
+    --danger-light: #fde8e6;
+    --warning: #c4882f;
+    --warning-light: #fef3e2;
+    --tag-bg: #eae7e1;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Screen nav ── */
+  .screen-nav {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--text); display: flex; align-items: stretch; overflow-x: auto;
+  }
+  .screen-nav-label {
+    color: var(--text-light); font-size: 11px; font-family: 'DM Mono', monospace;
+    text-transform: uppercase; letter-spacing: 1.5px; padding: 14px 20px;
+    white-space: nowrap; display: flex; align-items: center; border-right: 1px solid rgba(255,255,255,0.08);
+  }
+  .screen-nav button {
+    background: none; border: none; color: rgba(255,255,255,0.5);
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    padding: 14px 18px; cursor: pointer; white-space: nowrap;
+    border-bottom: 2px solid transparent; transition: all 0.2s;
+  }
+  .screen-nav button:hover { color: rgba(255,255,255,0.8); }
+  .screen-nav button.active { color: #fff; border-bottom-color: var(--accent); }
+
+  .screen { display: none; min-height: calc(100vh - 46px); }
+  .screen.active { display: block; }
+
+  .annotation {
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent);
+    background: var(--accent-light); padding: 10px 14px; border-left: 3px solid var(--accent);
+    margin: 16px 32px; border-radius: 0 6px 6px 0; line-height: 1.6;
+  }
+
+  /* ── Shared ── */
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 32px; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .topbar-logo { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .topbar-logo .icon { font-size: 20px; }
+  .topbar-nav { display: flex; gap: 4px; }
+  .topbar-nav a {
+    text-decoration: none; color: var(--text-muted); font-size: 14px; font-weight: 500;
+    padding: 6px 12px; border-radius: 6px; transition: all 0.15s;
+  }
+  .topbar-nav a:hover { color: var(--text); background: var(--surface-alt); }
+  .topbar-nav a.active { color: var(--text); background: var(--surface-alt); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--border-strong); }
+  .btn-danger { background: var(--danger-light); color: var(--danger); }
+  .btn-sm { font-size: 13px; padding: 6px 12px; }
+  .btn-lg { font-size: 15px; padding: 12px 24px; }
+
+  .form-group { margin-bottom: 20px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; font-family: 'DM Sans', sans-serif; font-size: 14px;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); outline: none; transition: border-color 0.15s;
+  }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .form-hint { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .tag {
+    font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 4px;
+    background: var(--tag-bg); color: var(--text-muted);
+  }
+
+  /* ── Dashboard layout ── */
+  .dash-layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 46px); }
+  .dash-sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; }
+  .dash-sidebar-header { padding: 0 20px 16px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .dash-sidebar-header h3 { font-size: 14px; font-weight: 600; }
+  .dash-sidebar-header p { font-size: 12px; color: var(--text-muted); }
+  .dash-sidebar-nav { list-style: none; }
+  .dash-sidebar-nav li a {
+    display: flex; align-items: center; gap: 10px; text-decoration: none;
+    color: var(--text-muted); font-size: 14px; font-weight: 500; padding: 10px 24px; transition: all 0.15s;
+  }
+  .dash-sidebar-nav li a:hover { color: var(--text); background: var(--bg); }
+  .dash-sidebar-nav li a.active { color: var(--accent); background: var(--accent-light); border-right: 2px solid var(--accent); }
+  .dash-content { padding: 28px 32px; }
+  .dash-content h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .dash-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+  @media (max-width: 768px) {
+    .dash-layout { grid-template-columns: 1fr; }
+    .dash-sidebar { display: none; }
+  }
+
+  /* ── Stats row ── */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-card .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .stat-value { font-size: 24px; font-weight: 700; }
+  .stat-card .stat-note { font-size: 12px; color: var(--text-light); }
+
+  /* ── Tournament list table ── */
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+  }
+  .table-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .table-header h2 { font-size: 15px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead th {
+    text-align: left; padding: 10px 20px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light);
+    border-bottom: 1px solid var(--border); background: #fafaf7;
+  }
+  tbody td { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--bg); }
+  .status-badge {
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px; display: inline-block;
+  }
+  .status-draft { background: var(--surface-alt); color: var(--text-light); }
+  .status-published { background: var(--accent-light); color: var(--accent); }
+  .status-completed { background: var(--surface-alt); color: var(--text-muted); }
+  .status-cancelled { background: var(--danger-light); color: var(--danger); }
+
+  /* ════════════════════════════════════════
+     SCREEN 1: APPLY AS ORGANIZER
+     ════════════════════════════════════════ */
+  .apply-layout { max-width: 600px; margin: 0 auto; padding: 40px 32px; }
+  .apply-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+  }
+  .apply-header { padding: 24px; border-bottom: 1px solid var(--border); }
+  .apply-header h1 { font-size: 20px; font-weight: 700; }
+  .apply-header p { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+  .apply-body { padding: 24px; }
+  .apply-footer { padding: 16px 24px; border-top: 1px solid var(--border); background: #fafaf7; display: flex; justify-content: flex-end; }
+
+  /* Status states */
+  .apply-status {
+    max-width: 480px; margin: 0 auto; padding: 80px 32px; text-align: center;
+  }
+  .apply-status-icon { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 20px; }
+  .apply-status-icon.pending { background: var(--warning-light); color: var(--warning); }
+  .apply-status-icon.approved { background: var(--accent-light); color: var(--accent); }
+
+  /* ════════════════════════════════════════
+     SCREEN 3: CREATE TOURNAMENT WIZARD
+     ════════════════════════════════════════ */
+  .wizard-layout { max-width: 700px; margin: 0 auto; padding: 32px; }
+  .wizard-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+  }
+  .wizard-steps {
+    display: flex; border-bottom: 1px solid var(--border); background: #fafaf7;
+  }
+  .wizard-step {
+    flex: 1; padding: 14px 16px; font-size: 13px; font-weight: 500; color: var(--text-light);
+    text-align: center; position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .wizard-step .step-num {
+    width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-alt); color: var(--text-light);
+  }
+  .wizard-step.active { color: var(--accent); }
+  .wizard-step.active .step-num { background: var(--accent); color: #fff; }
+  .wizard-step.done { color: var(--text-muted); }
+  .wizard-step.done .step-num { background: var(--accent-light); color: var(--accent); }
+  .wizard-body { padding: 28px 24px; }
+  .wizard-body h2 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .wizard-body .step-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+  .wizard-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; border-top: 1px solid var(--border); background: #fafaf7;
+  }
+
+  /* Dynamic fee / prize rows */
+  .dynamic-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+  .dynamic-row {
+    display: flex; gap: 10px; align-items: center;
+  }
+  .dynamic-row input {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--bg); outline: none; flex: 1;
+  }
+  .dynamic-row input:focus { border-color: var(--accent); }
+  .dynamic-row .remove-btn {
+    width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: var(--text-light); font-size: 16px; transition: all 0.15s; flex-shrink: 0;
+  }
+  .dynamic-row .remove-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-light); }
+  .add-row-btn {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    color: var(--accent); background: none; border: 1px dashed var(--border);
+    border-radius: 6px; padding: 8px 14px; cursor: pointer; transition: all 0.15s;
+  }
+  .add-row-btn:hover { border-color: var(--accent); background: var(--accent-light); }
+
+  /* Prize category blocks */
+  .prize-category {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 12px;
+  }
+  .prize-category-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+  }
+  .prize-category-header input {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); outline: none; width: 200px;
+  }
+
+  /* ════════════════════════════════════════
+     SCREEN 4: TOURNAMENT MANAGEMENT
+     ════════════════════════════════════════ */
+  .mgmt-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 24px 32px; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .mgmt-header h1 { font-size: 22px; font-weight: 700; }
+  .mgmt-header p { font-size: 14px; color: var(--text-muted); }
+  .mgmt-header-actions { display: flex; gap: 8px; }
+
+  .mgmt-tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    background: var(--surface); padding: 0 32px;
+  }
+  .mgmt-tab {
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+    color: var(--text-muted); background: none; border: none;
+    padding: 12px 18px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .mgmt-tab:hover { color: var(--text); }
+  .mgmt-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .mgmt-content { padding: 24px 32px; }
+
+  /* Participant table extras */
+  .participant-avatar {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--surface-alt);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: var(--text-muted); margin-right: 8px; vertical-align: middle;
+  }
+
+  /* ════════════════════════════════════════
+     SCREEN 6: MEMBER MANAGEMENT
+     ════════════════════════════════════════ */
+  .member-card {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; margin-bottom: 8px;
+  }
+  .member-avatar {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--surface-alt);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; color: var(--text-muted); flex-shrink: 0;
+  }
+  .member-info { flex: 1; }
+  .member-info h4 { font-size: 14px; font-weight: 600; }
+  .member-info p { font-size: 13px; color: var(--text-muted); }
+  .member-role-select {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 6px 28px 6px 10px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+    appearance: none; cursor: pointer; outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a756b' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-position: right 8px center; background-repeat: no-repeat;
+  }
+
+  .invite-bar {
+    display: flex; gap: 10px; margin-bottom: 20px;
+  }
+  .invite-bar input {
+    flex: 1; font-family: 'DM Sans', sans-serif; font-size: 14px;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); outline: none;
+  }
+  .invite-bar input:focus { border-color: var(--accent); }
+
+  /* ── Payout ── */
+  .payout-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    overflow: hidden; margin-bottom: 16px;
+  }
+  .payout-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .payout-card-header h3 { font-size: 15px; font-weight: 600; }
+  .payout-card-body { padding: 16px 20px; }
+  .payout-row { display: flex; justify-content: space-between; font-size: 14px; padding: 6px 0; }
+  .payout-row .label { color: var(--text-muted); }
+  .payout-row.total { font-weight: 700; padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--border); }
+
+  @media (max-width: 600px) {
+    .wizard-layout { padding: 20px; }
+    .wizard-steps { overflow-x: auto; }
+    .wizard-step { font-size: 11px; padding: 10px 8px; }
+    .form-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="screen-nav">
+  <span class="screen-nav-label">Organizer Flows</span>
+  <button class="active" onclick="showScreen('apply')">1. Apply</button>
+  <button onclick="showScreen('dashboard')">2. Dashboard</button>
+  <button onclick="showScreen('create')">3. Create Tournament</button>
+  <button onclick="showScreen('manage')">4. Manage Tournament</button>
+  <button onclick="showScreen('payouts')">5. Payouts</button>
+  <button onclick="showScreen('members')">6. Members</button>
+</nav>
+
+<!-- ════════════════════════════════════════
+     SCREEN 1: APPLY AS ORGANIZER
+     ════════════════════════════════════════ -->
+<div id="screen-apply" class="screen active">
+  <div class="topbar">
+    <div class="topbar-logo"><span class="icon">♟</span> MY Chess Tour</div>
+    <nav class="topbar-nav">
+      <a href="#">Tournaments</a>
+      <a href="#">My Tournaments</a>
+      <a href="#">Profile</a>
+    </nav>
+  </div>
+
+  <div class="annotation">
+    Annotation: A logged-in player navigates here to apply as an organizer. After submission, they see a pending status screen. Once approved by admin, they gain access to the organizer dashboard.
+  </div>
+
+  <div class="apply-layout">
+    <div class="apply-card">
+      <div class="apply-header">
+        <h1>Apply as Tournament Organizer</h1>
+        <p>Fill in your organization details. Your application will be reviewed by our admin team.</p>
+      </div>
+      <div class="apply-body">
+        <div class="form-group">
+          <label>Organization Name *</label>
+          <input type="text" placeholder="e.g., KL Chess Association">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea placeholder="Tell us about your organization and chess activities..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Links</label>
+          <div id="org-links" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <select style="font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); width: 150px; flex-shrink: 0;">
+                <option>Website</option>
+                <option selected>Facebook</option>
+                <option>Instagram</option>
+                <option>X (Twitter)</option>
+                <option>YouTube</option>
+                <option>WhatsApp</option>
+                <option>Telegram</option>
+                <option>Other</option>
+              </select>
+              <input type="text" placeholder="https://facebook.com/..." style="flex: 1; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); outline: none;">
+              <button style="width: 32px; height: 38px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 16px; flex-shrink: 0;" class="remove-link-btn">×</button>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <select style="font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); width: 150px; flex-shrink: 0;">
+                <option selected>Website</option>
+                <option>Facebook</option>
+                <option>Instagram</option>
+                <option>X (Twitter)</option>
+                <option>YouTube</option>
+                <option>WhatsApp</option>
+                <option>Telegram</option>
+                <option>Other</option>
+              </select>
+              <input type="text" placeholder="https://..." style="flex: 1; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); outline: none;">
+              <button style="width: 32px; height: 38px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 16px; flex-shrink: 0;" class="remove-link-btn">×</button>
+            </div>
+          </div>
+          <button onclick="return false;" style="font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; color: var(--accent); background: none; border: 1px dashed var(--border); border-radius: 6px; padding: 8px 14px; cursor: pointer;">+ Add Link</button>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Contact Email *</label>
+            <input type="email" placeholder="chess@org.com">
+          </div>
+          <div class="form-group">
+            <label>Contact Phone</label>
+            <input type="text" placeholder="+60...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Past Tournament References</label>
+          <textarea placeholder="List any tournaments you've previously organized (names, dates, approximate participants)..."></textarea>
+          <span class="form-hint">Optional — helps speed up the approval process.</span>
+        </div>
+      </div>
+      <div class="apply-footer">
+        <button class="btn btn-primary btn-lg">Submit Application</button>
+      </div>
+    </div>
+
+    <!-- Pending state (shown after submission) -->
+    <div style="margin-top: 40px; padding-top: 32px; border-top: 2px dashed var(--border);">
+      <p style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-light); text-align: center; margin-bottom: 16px;">↓ After submission, the page shows this state ↓</p>
+      <div class="apply-status">
+        <div class="apply-status-icon pending">⏳</div>
+        <h1 style="font-size: 22px; margin-bottom: 8px;">Application Submitted</h1>
+        <p style="color: var(--text-muted); font-size: 15px; margin-bottom: 8px;">Your application for <strong>KL Chess Association</strong> is under review. We'll notify you by email once it's been processed.</p>
+        <p style="color: var(--text-light); font-size: 13px;">Typically reviewed within 1–2 business days.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 2: ORGANIZER DASHBOARD
+     ════════════════════════════════════════ -->
+<div id="screen-dashboard" class="screen">
+  <div class="topbar">
+    <div class="topbar-logo"><span class="icon">♟</span> MY Chess Tour</div>
+    <nav class="topbar-nav">
+      <a href="#">Tournaments</a>
+      <a href="#">My Tournaments</a>
+      <a href="#" class="active">Organizer Dashboard</a>
+      <a href="#">Profile</a>
+    </nav>
+  </div>
+
+  <div class="annotation">
+    Annotation: Organizer's home base. Sidebar navigates between sections. The dashboard shows stats at a glance and a list of all tournaments with their status. The "Create Tournament" button is prominent.
+  </div>
+
+  <div class="dash-layout">
+    <aside class="dash-sidebar">
+      <div class="dash-sidebar-header">
+        <h3>KL Chess Association <span title="Verified Organization" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; vertical-align: middle; margin-left: 4px;">✓</span></h3>
+      </div>
+      <ul class="dash-sidebar-nav">
+        <li><a href="#" class="active">📊 Dashboard</a></li>
+        <li><a href="#" onclick="showScreen('create'); return false;">➕ Create Tournament</a></li>
+        <li><a href="#" onclick="showScreen('payouts'); return false;">💰 Payouts</a></li>
+        <li><a href="#" onclick="showScreen('members'); return false;">👥 Members</a></li>
+        <li><a href="#">⚙️ Organization Settings</a></li>
+      </ul>
+    </aside>
+
+    <main class="dash-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="dash-subtitle" style="margin-bottom: 0;">Overview of your tournament activity.</p>
+        </div>
+        <button class="btn btn-primary" onclick="showScreen('create')">+ Create Tournament</button>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <span class="stat-label">Active Tournaments</span>
+          <span class="stat-value">2</span>
+          <span class="stat-note">Currently published</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Registrations</span>
+          <span class="stat-value">156</span>
+          <span class="stat-note">Across all tournaments</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Revenue</span>
+          <span class="stat-value">RM 7,800</span>
+          <span class="stat-note">Total collected</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Pending Payouts</span>
+          <span class="stat-value">RM 2,340</span>
+          <span class="stat-note">1 tournament</span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-header">
+          <h2>Your Tournaments</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Tournament</th>
+              <th>Date</th>
+              <th>Registrations</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="showScreen('manage')" style="cursor: pointer;">
+              <td><strong>KL Open Rapid Championship 2026</strong></td>
+              <td>15 Mar 2026</td>
+              <td>78 / 120</td>
+              <td><span class="status-badge status-published">Published</span></td>
+              <td><button class="btn btn-sm btn-secondary" onclick="showScreen('manage')">Manage</button></td>
+            </tr>
+            <tr style="cursor: pointer;">
+              <td><strong>KL Blitz Series #4</strong></td>
+              <td>29 Mar 2026</td>
+              <td>32 / 60</td>
+              <td><span class="status-badge status-published">Published</span></td>
+              <td><button class="btn btn-sm btn-secondary">Manage</button></td>
+            </tr>
+            <tr style="cursor: pointer;">
+              <td><strong>National Day Classical Open</strong></td>
+              <td>31 Aug 2026</td>
+              <td>0 / 80</td>
+              <td><span class="status-badge status-draft">Draft</span></td>
+              <td><button class="btn btn-sm btn-secondary">Edit</button></td>
+            </tr>
+            <tr style="opacity: 0.6;">
+              <td><strong>New Year Blitz Bash 2026</strong></td>
+              <td>18 Jan 2026</td>
+              <td>46 / 50</td>
+              <td><span class="status-badge status-completed">Completed</span></td>
+              <td><button class="btn btn-sm btn-secondary">View</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 3: CREATE TOURNAMENT (WIZARD)
+     ════════════════════════════════════════ -->
+<div id="screen-create" class="screen">
+  <div class="topbar">
+    <div class="topbar-logo"><span class="icon">♟</span> MY Chess Tour</div>
+    <nav class="topbar-nav">
+      <a href="#">My Tournaments</a>
+      <a href="#" onclick="showScreen('dashboard'); return false;">← Back to Dashboard</a>
+    </nav>
+  </div>
+
+  <div class="annotation">
+    Annotation: Multi-step wizard for creating a tournament. Steps: Basic Info → Format & Schedule → Entry Fees → Prizes → Review & Publish. Each step validates before proceeding. The organizer can save as draft at any point.
+  </div>
+
+  <div class="wizard-layout">
+    <div class="wizard-card">
+
+      <div class="wizard-steps">
+        <div class="wizard-step done" onclick="showWizardStep(1)"><span class="step-num">✓</span> Basic Info</div>
+        <div class="wizard-step active" onclick="showWizardStep(2)"><span class="step-num">2</span> Format</div>
+        <div class="wizard-step" onclick="showWizardStep(3)"><span class="step-num">3</span> Fees</div>
+        <div class="wizard-step" onclick="showWizardStep(4)"><span class="step-num">4</span> Prizes</div>
+        <div class="wizard-step" onclick="showWizardStep(5)"><span class="step-num">5</span> Review</div>
+      </div>
+
+      <!-- STEP 1: Basic Info -->
+      <div class="wizard-body wizard-step-content" id="wizard-step-1" style="display: none;">
+        <h2>Basic Information</h2>
+        <p class="step-desc">Tell players what your tournament is about and where it's held.</p>
+
+        <div class="form-group">
+          <label>Tournament Name *</label>
+          <input type="text" placeholder="e.g., KL Open Rapid Championship 2026">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea placeholder="Full description, rules, what to bring, parking info, etc..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Tournament Poster</label>
+          <div style="border: 2px dashed var(--border); border-radius: 8px; padding: 32px; text-align: center; color: var(--text-light); font-size: 13px; cursor: pointer;">
+            📁 Click to upload or drag and drop<br><span style="font-size: 11px; color: var(--text-light);">Portrait format recommended (3:4 ratio). Max 5MB.</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Venue Name *</label>
+            <input type="text" placeholder="e.g., Dewan Bandaraya KL">
+          </div>
+          <div class="form-group">
+            <label>State *</label>
+            <select>
+              <option>Select state...</option>
+              <option>KL</option>
+              <option>Selangor</option>
+              <option>Penang</option>
+              <option>Johor</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Venue Address *</label>
+          <input type="text" placeholder="Full address">
+        </div>
+      </div>
+
+      <!-- STEP 2: Format & Schedule (visible by default) -->
+      <div class="wizard-body wizard-step-content" id="wizard-step-2">
+        <h2>Format & Schedule</h2>
+        <p class="step-desc">Define the tournament format, time control, and schedule.</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Format Type *</label>
+            <select>
+              <option>Select format...</option>
+              <option selected>Rapid</option>
+              <option>Blitz</option>
+              <option>Classical</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>System *</label>
+            <select>
+              <option>Select system...</option>
+              <option selected>Swiss</option>
+              <option>Round Robin</option>
+              <option>Knockout</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Number of Rounds *</label>
+          <input type="number" value="7" min="1" max="20" style="width: 120px;">
+        </div>
+
+        <h3 style="font-size: 14px; font-weight: 600; margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--border);">Time Control</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Base Time (minutes) *</label>
+            <input type="number" value="10" min="1" style="width: 120px;">
+          </div>
+          <div class="form-group">
+            <label>Increment (seconds)</label>
+            <input type="number" value="5" min="0" style="width: 120px;">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Delay (seconds)</label>
+          <input type="number" value="0" min="0" style="width: 120px;">
+          <span class="form-hint">Optional. Most rapid tournaments use increment only.</span>
+        </div>
+
+        <h3 style="font-size: 14px; font-weight: 600; margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--border);">Schedule & Capacity</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Date *</label>
+            <input type="date">
+          </div>
+          <div class="form-group">
+            <label>End Date *</label>
+            <input type="date">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Registration Deadline *</label>
+            <input type="datetime-local">
+          </div>
+          <div class="form-group">
+            <label>Max Participants *</label>
+            <input type="number" value="120" min="2" style="width: 120px;">
+          </div>
+        </div>
+
+        <h3 style="font-size: 14px; font-weight: 600; margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--border);">Rating</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" style="width: auto; accent-color: var(--accent);"> FIDE Rated
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" style="width: auto; accent-color: var(--accent);"> MCF Rated
+            </label>
+          </div>
+        </div>
+
+        <h3 style="font-size: 14px; font-weight: 600; margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--border);">Restrictions</h3>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Optional. Leave empty if the tournament is open to all players.</p>
+        <div class="dynamic-rows" id="restriction-rows">
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <select style="font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); width: 180px; flex-shrink: 0;">
+              <option>Max Age</option>
+              <option selected>Max Rating</option>
+              <option>Min Rating</option>
+              <option>Gender</option>
+              <option>State</option>
+              <option>Nationality</option>
+              <option>Custom</option>
+            </select>
+            <input type="text" value="1500" placeholder="Value" style="flex: 1; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); outline: none;">
+            <button class="remove-btn" style="width: 32px; height: 38px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 16px; flex-shrink: 0;">×</button>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <select style="font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); width: 180px; flex-shrink: 0;">
+              <option selected>Max Age</option>
+              <option>Max Rating</option>
+              <option>Min Rating</option>
+              <option>Gender</option>
+              <option>State</option>
+              <option>Nationality</option>
+              <option>Custom</option>
+            </select>
+            <input type="text" value="12" placeholder="Value" style="flex: 1; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); outline: none;">
+            <button class="remove-btn" style="width: 32px; height: 38px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 16px; flex-shrink: 0;">×</button>
+          </div>
+        </div>
+        <button class="add-row-btn">+ Add Restriction</button>
+      </div>
+
+      <!-- STEP 3: Entry Fees -->
+      <div class="wizard-body wizard-step-content" id="wizard-step-3" style="display: none;">
+        <h2>Entry Fees</h2>
+        <p class="step-desc">Set the standard fee, then add additional tiers for early bird, titled players, rating-based, or age-based discounts.</p>
+
+        <div style="margin-bottom: 20px; padding: 12px 14px; background: var(--surface-alt); border-radius: 8px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">ℹ️</span>
+          <span>A <strong>10% platform commission</strong> is added on top of the fee you set. You receive the full amount you enter — the commission is charged to the player.</span>
+        </div>
+
+        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 14px;">Standard Fee</h3>
+
+        <!-- Standard Fee (non-removable) -->
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 14px; font-weight: 600; min-width: 120px;">Standard</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 13px; color: var(--text-muted);">RM</span>
+              <input type="text" value="50.00" placeholder="0.00" style="width: 100px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: right;">
+            </div>
+          </div>
+          <span style="font-size: 11px; color: var(--text-light); margin-top: 6px; display: block;">The base entry fee applied to all players by default. This tier cannot be removed.</span>
+          <!-- Net breakdown -->
+          <div style="margin-top: 12px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Your revenue</span>
+              <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 50.00</span>
+            </div>
+            <span style="color: var(--border-strong);">+</span>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Commission (10%)</span>
+              <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 5.00</span>
+            </div>
+            <span style="color: var(--border-strong);">=</span>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Player pays</span>
+              <span style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);">RM 55.00</span>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 6px; padding-top: 16px; border-top: 1px solid var(--border);">Additional Fee Tiers</h3>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">Optional. Add discounted or special fees. Players who qualify will see these options during registration.</p>
+
+        <div id="additional-fee-tiers" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
+
+          <!-- Early Bird Tier -->
+          <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 14px; font-weight: 600;">Early Bird</span>
+              <button class="remove-btn" style="width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 14px; flex-shrink: 0;">×</button>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: var(--text-muted);">RM</span>
+                <input type="text" value="35.00" placeholder="0.00" style="width: 100px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: right;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: var(--text-muted);">Valid until</span>
+                <input type="date" style="font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none;">
+              </div>
+            </div>
+            <span style="font-size: 11px; color: var(--text-light); margin-top: 8px; display: block;">Players who register on or before this date will pay this fee instead of the standard fee.</span>
+            <!-- Net breakdown -->
+            <div style="margin-top: 12px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Your revenue</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 35.00</span>
+              </div>
+              <span style="color: var(--border-strong);">+</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Commission (10%)</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 3.50</span>
+              </div>
+              <span style="color: var(--border-strong);">=</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Player pays</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);">RM 38.50</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Titled Players Tier -->
+          <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 14px; font-weight: 600;">Titled Players</span>
+              <button class="remove-btn" style="width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 14px; flex-shrink: 0;">×</button>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: var(--text-muted);">RM</span>
+                <input type="text" value="0.00" placeholder="0.00" style="width: 100px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: right;">
+              </div>
+              <div style="flex: 1; min-width: 220px;">
+                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 6px;">Applies to titles:</span>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" checked style="accent-color: var(--accent);"> GM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" checked style="accent-color: var(--accent);"> IM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" checked style="accent-color: var(--accent);"> FM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" style="accent-color: var(--accent);"> WGM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" style="accent-color: var(--accent);"> WIM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" style="accent-color: var(--accent);"> WFM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" style="accent-color: var(--accent);"> CM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" style="accent-color: var(--accent);"> WCM
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;">
+                    <input type="checkbox" style="accent-color: var(--accent);"> NM
+                  </label>
+                </div>
+              </div>
+            </div>
+            <!-- Net breakdown -->
+            <div style="margin-top: 12px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Your revenue</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 0.00</span>
+              </div>
+              <span style="color: var(--border-strong);">+</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Commission (10%)</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 0.00</span>
+              </div>
+              <span style="color: var(--border-strong);">=</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Player pays</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);">Free</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rating-Based Tier -->
+          <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 14px; font-weight: 600;">Rating-Based</span>
+              <button class="remove-btn" style="width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 14px; flex-shrink: 0;">×</button>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: var(--text-muted);">RM</span>
+                <input type="text" value="30.00" placeholder="0.00" style="width: 100px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: right;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: var(--text-muted);">Rating from</span>
+                <input type="number" value="0" style="width: 80px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: center;">
+                <span style="font-size: 13px; color: var(--text-muted);">to</span>
+                <input type="number" value="1500" style="width: 80px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: center;">
+              </div>
+            </div>
+            <span style="font-size: 11px; color: var(--text-light); margin-top: 8px; display: block;">Players with a rating within this range will see this fee option.</span>
+            <!-- Net breakdown -->
+            <div style="margin-top: 12px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Your revenue</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 30.00</span>
+              </div>
+              <span style="color: var(--border-strong);">+</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Commission (10%)</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 3.00</span>
+              </div>
+              <span style="color: var(--border-strong);">=</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Player pays</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);">RM 33.00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Age-Based Tier -->
+          <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-size: 14px; font-weight: 600;">Age-Based</span>
+              <button class="remove-btn" style="width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-light); font-size: 14px; flex-shrink: 0;">×</button>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: var(--text-muted);">RM</span>
+                <input type="text" value="25.00" placeholder="0.00" style="width: 100px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: right;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 13px; color: var(--text-muted);">Age from</span>
+                <input type="number" value="0" style="width: 70px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: center;">
+                <span style="font-size: 13px; color: var(--text-muted);">to</span>
+                <input type="number" value="12" style="width: 70px; font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); outline: none; text-align: center;">
+                <span style="font-size: 12px; color: var(--text-light);">years old</span>
+              </div>
+            </div>
+            <span style="font-size: 11px; color: var(--text-light); margin-top: 8px; display: block;">Players within this age range will see this fee option.</span>
+            <!-- Net breakdown -->
+            <div style="margin-top: 12px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Your revenue</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 25.00</span>
+              </div>
+              <span style="color: var(--border-strong);">+</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Commission (10%)</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text);">RM 2.50</span>
+              </div>
+              <span style="color: var(--border-strong);">=</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">Player pays</span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 700; color: var(--accent);">RM 27.50</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Add tier dropdown -->
+        <div style="position: relative; display: inline-block;" id="add-tier-wrap">
+          <button class="add-row-btn" onclick="document.getElementById('add-tier-menu').style.display = document.getElementById('add-tier-menu').style.display === 'block' ? 'none' : 'block'">+ Add Fee Tier</button>
+          <div id="add-tier-menu" style="display: none; position: absolute; top: calc(100% + 4px); left: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 6px 0; min-width: 200px; z-index: 10;">
+            <div style="padding: 8px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">Early Bird</div>
+            <div style="padding: 8px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">Titled Players</div>
+            <div style="padding: 8px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">Rating-Based</div>
+            <div style="padding: 8px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">Age-Based</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; padding: 14px; background: var(--accent-light); border-radius: 8px; font-size: 13px; color: var(--accent);">
+          💡 Players will see the fee tiers they qualify for during registration. The breakdown updates automatically as you change amounts.
+        </div>
+      </div>
+
+      <!-- STEP 4: Prizes -->
+      <div class="wizard-body wizard-step-content" id="wizard-step-4" style="display: none;">
+        <h2>Prizes</h2>
+        <p class="step-desc">Define prize categories and amounts. Add as many categories and placements as needed.</p>
+
+        <div id="prize-categories">
+          <div class="prize-category">
+            <div class="prize-category-header">
+              <input type="text" value="Open">
+              <button class="remove-btn" style="width: auto; padding: 4px 10px; font-size: 12px;">Remove</button>
+            </div>
+            <div class="dynamic-rows">
+              <div class="dynamic-row">
+                <input type="text" value="1st Place" placeholder="Placement" style="flex: 1;">
+                <input type="text" value="3,000" placeholder="Amount (RM)" style="width: 120px; flex: 0 0 120px;">
+                <button class="remove-btn">×</button>
+              </div>
+              <div class="dynamic-row">
+                <input type="text" value="2nd Place" placeholder="Placement">
+                <input type="text" value="2,000" placeholder="Amount (RM)" style="width: 120px; flex: 0 0 120px;">
+                <button class="remove-btn">×</button>
+              </div>
+              <div class="dynamic-row">
+                <input type="text" value="3rd Place" placeholder="Placement">
+                <input type="text" value="1,000" placeholder="Amount (RM)" style="width: 120px; flex: 0 0 120px;">
+                <button class="remove-btn">×</button>
+              </div>
+            </div>
+            <button class="add-row-btn">+ Add Prize</button>
+          </div>
+
+          <div class="prize-category">
+            <div class="prize-category-header">
+              <input type="text" value="Under-12">
+              <button class="remove-btn" style="width: auto; padding: 4px 10px; font-size: 12px;">Remove</button>
+            </div>
+            <div class="dynamic-rows">
+              <div class="dynamic-row">
+                <input type="text" value="1st Place" placeholder="Placement">
+                <input type="text" value="500" placeholder="Amount (RM)" style="width: 120px; flex: 0 0 120px;">
+                <button class="remove-btn">×</button>
+              </div>
+              <div class="dynamic-row">
+                <input type="text" value="2nd Place" placeholder="Placement">
+                <input type="text" value="300" placeholder="Amount (RM)" style="width: 120px; flex: 0 0 120px;">
+                <button class="remove-btn">×</button>
+              </div>
+            </div>
+            <button class="add-row-btn">+ Add Prize</button>
+          </div>
+        </div>
+        <button class="add-row-btn" style="margin-top: 8px;">+ Add Prize Category</button>
+
+        <h3 style="font-size: 14px; font-weight: 600; margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--border);">Special Prizes</h3>
+        <div class="dynamic-rows">
+          <div class="dynamic-row">
+            <input type="text" value="Best Female Player" placeholder="Prize name">
+            <input type="text" value="500" placeholder="Amount (RM)" style="width: 120px; flex: 0 0 120px;">
+            <button class="remove-btn">×</button>
+          </div>
+          <div class="dynamic-row">
+            <input type="text" value="Best Veteran (50+)" placeholder="Prize name">
+            <input type="text" value="300" placeholder="Amount (RM)" style="width: 120px; flex: 0 0 120px;">
+            <button class="remove-btn">×</button>
+          </div>
+        </div>
+        <button class="add-row-btn">+ Add Special Prize</button>
+      </div>
+
+      <!-- STEP 5: Review -->
+      <div class="wizard-body wizard-step-content" id="wizard-step-5" style="display: none;">
+        <h2>Review & Publish</h2>
+        <p class="step-desc">Review your tournament details before publishing or saving as draft.</p>
+
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 15px; font-weight: 600;">Basic Information</h3>
+            <button class="btn btn-sm btn-secondary" onclick="showWizardStep(1)">Edit</button>
+          </div>
+          <div style="font-size: 14px; color: var(--text-muted); display: grid; grid-template-columns: 120px 1fr; gap: 6px 16px;">
+            <span style="color: var(--text-light);">Name</span><span>KL Open Rapid Championship 2026</span>
+            <span style="color: var(--text-light);">Venue</span><span>Dewan Bandaraya KL</span>
+            <span style="color: var(--text-light);">Address</span><span>Jalan Raja, 50050 KL</span>
+          </div>
+        </div>
+
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 15px; font-weight: 600;">Format & Schedule</h3>
+            <button class="btn btn-sm btn-secondary" onclick="showWizardStep(2)">Edit</button>
+          </div>
+          <div style="font-size: 14px; color: var(--text-muted); display: grid; grid-template-columns: 120px 1fr; gap: 6px 16px;">
+            <span style="color: var(--text-light);">Format</span><span>Rapid · Swiss · 7 rounds</span>
+            <span style="color: var(--text-light);">Time Control</span><span>10 min + 5 sec increment</span>
+            <span style="color: var(--text-light);">Dates</span><span>15 Mar 2026</span>
+            <span style="color: var(--text-light);">Deadline</span><span>12 Mar 2026, 11:59 PM</span>
+            <span style="color: var(--text-light);">Capacity</span><span>120 players</span>
+            <span style="color: var(--text-light);">Rating</span><span>FIDE Rated</span>
+            <span style="color: var(--text-light);">Restrictions</span><span>Max Rating 1500, Max Age 12</span>
+          </div>
+        </div>
+
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 15px; font-weight: 600;">Entry Fees</h3>
+            <button class="btn btn-sm btn-secondary" onclick="showWizardStep(3)">Edit</button>
+          </div>
+          <div style="font-size: 14px; color: var(--text-muted);">
+            <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 4px 16px; align-items: center;">
+              <span style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light);">Tier</span>
+              <span style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); text-align: right;">Your Revenue</span>
+              <span style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); text-align: right;">Player Pays</span>
+
+              <span>Standard</span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right;">RM 50.00</span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right; color: var(--accent); font-weight: 600;">RM 55.00</span>
+
+              <span>Early Bird <span style="font-size: 12px; color: var(--text-light);">(until 1 Mar)</span></span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right;">RM 35.00</span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right; color: var(--accent); font-weight: 600;">RM 38.50</span>
+
+              <span>Titled Players <span style="font-size: 12px; color: var(--text-light);">(GM, IM, FM)</span></span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right;">RM 0.00</span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right; color: var(--accent); font-weight: 600;">Free</span>
+
+              <span>Rating-Based <span style="font-size: 12px; color: var(--text-light);">(0–1500)</span></span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right;">RM 30.00</span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right; color: var(--accent); font-weight: 600;">RM 33.00</span>
+
+              <span>Age-Based <span style="font-size: 12px; color: var(--text-light);">(0–12 yrs)</span></span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right;">RM 25.00</span>
+              <span style="font-family: 'DM Mono', monospace; text-align: right; color: var(--accent); font-weight: 600;">RM 27.50</span>
+            </div>
+            <div style="margin-top: 8px; font-size: 11px; color: var(--text-light);">10% platform commission is added to your fee and charged to the player.</div>
+          </div>
+        </div>
+
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 15px; font-weight: 600;">Prizes</h3>
+            <button class="btn btn-sm btn-secondary" onclick="showWizardStep(4)">Edit</button>
+          </div>
+          <div style="font-size: 14px; color: var(--text-muted);">
+            <div style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 4px;">Open</div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>1st</span><span>RM 3,000</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>2nd</span><span>RM 2,000</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>3rd</span><span>RM 1,000</span></div>
+            <div style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin: 8px 0 4px;">Under-12</div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>1st</span><span>RM 500</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>2nd</span><span>RM 300</span></div>
+            <div style="font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin: 8px 0 4px;">Special</div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>Best Female Player</span><span>RM 500</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>Best Veteran (50+)</span><span>RM 300</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wizard-footer">
+        <button class="btn btn-secondary" id="wizard-back-btn" onclick="wizardBack()">← Back</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary">Save as Draft</button>
+          <button class="btn btn-primary" id="wizard-next-btn" onclick="wizardNext()">Next →</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 4: TOURNAMENT MANAGEMENT
+     ════════════════════════════════════════ -->
+<div id="screen-manage" class="screen">
+  <div class="topbar">
+    <div class="topbar-logo"><span class="icon">♟</span> MY Chess Tour</div>
+    <nav class="topbar-nav">
+      <a href="#">My Tournaments</a>
+      <a href="#" onclick="showScreen('dashboard'); return false;">← Back to Dashboard</a>
+    </nav>
+  </div>
+
+  <div class="mgmt-header">
+    <div>
+      <h1>KL Open Rapid Championship 2026</h1>
+      <p>15 Mar 2026 · Dewan Bandaraya KL · <span class="status-badge status-published">Published</span></p>
+    </div>
+    <div class="mgmt-header-actions">
+      <button class="btn btn-secondary">Edit Tournament</button>
+      <button class="btn btn-secondary">Close Registration</button>
+      <button class="btn btn-danger btn-sm">Cancel</button>
+    </div>
+  </div>
+
+  <div class="mgmt-tabs">
+    <button class="mgmt-tab active">Participants (78)</button>
+    <button class="mgmt-tab">Registration Stats</button>
+    <button class="mgmt-tab">Payout</button>
+  </div>
+
+  <div class="annotation" style="margin-top: 0; border-radius: 0;">
+    Annotation: Tournament management view. Participants tab shows all registered players in a searchable, sortable table with export capability. Stats tab shows registration over time. Payout tab shows the financial summary for this tournament.
+  </div>
+
+  <div class="mgmt-content">
+    <div class="stats-row">
+      <div class="stat-card">
+        <span class="stat-label">Registered</span>
+        <span class="stat-value">78</span>
+        <span class="stat-note">of 120 capacity</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Confirmed</span>
+        <span class="stat-value">72</span>
+        <span class="stat-note">Paid</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Pending</span>
+        <span class="stat-value" style="color: var(--warning);">6</span>
+        <span class="stat-note">Awaiting payment</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Revenue</span>
+        <span class="stat-value">RM 3,460</span>
+        <span class="stat-note">Total collected</span>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <h2>Participants</h2>
+          <input type="text" placeholder="Search participants..." style="font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; width: 200px; outline: none;">
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm btn-secondary">📥 Export CSV</button>
+          <button class="btn btn-sm btn-secondary">📥 Export Excel</button>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Player</th>
+            <th>FIDE ID</th>
+            <th>Rating</th>
+            <th>Fee Tier</th>
+            <th>Status</th>
+            <th>Registered</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><span class="participant-avatar">AH</span> Ahmad Hassan</td>
+            <td style="font-family: 'DM Mono', monospace; font-size: 13px;">5812345</td>
+            <td>1856</td>
+            <td>Early Bird</td>
+            <td><span class="status-badge status-published">Confirmed</span></td>
+            <td style="color: var(--text-muted); font-size: 13px;">22 Feb 2026</td>
+            <td><button class="btn btn-sm btn-secondary">⋯</button></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><span class="participant-avatar">SL</span> Siti Lim</td>
+            <td style="font-family: 'DM Mono', monospace; font-size: 13px;">5823456</td>
+            <td>1742</td>
+            <td>Early Bird</td>
+            <td><span class="status-badge status-published">Confirmed</span></td>
+            <td style="color: var(--text-muted); font-size: 13px;">23 Feb 2026</td>
+            <td><button class="btn btn-sm btn-secondary">⋯</button></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><span class="participant-avatar">RK</span> Raj Kumar</td>
+            <td style="font-family: 'DM Mono', monospace; font-size: 13px;">—</td>
+            <td>—</td>
+            <td>Standard</td>
+            <td><span class="status-badge status-published">Confirmed</span></td>
+            <td style="color: var(--text-muted); font-size: 13px;">5 Mar 2026</td>
+            <td><button class="btn btn-sm btn-secondary">⋯</button></td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><span class="participant-avatar">FM</span> FM Wong Wei Ming</td>
+            <td style="font-family: 'DM Mono', monospace; font-size: 13px;">5801234</td>
+            <td>2187</td>
+            <td>Titled Player</td>
+            <td><span class="status-badge status-published">Confirmed</span></td>
+            <td style="color: var(--text-muted); font-size: 13px;">7 Mar 2026</td>
+            <td><button class="btn btn-sm btn-secondary">⋯</button></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td><span class="participant-avatar">TN</span> Tan Nee</td>
+            <td style="font-family: 'DM Mono', monospace; font-size: 13px;">—</td>
+            <td>—</td>
+            <td>Standard</td>
+            <td><span class="status-badge" style="background: var(--warning-light); color: var(--warning);">Pending</span></td>
+            <td style="color: var(--text-muted); font-size: 13px;">10 Mar 2026</td>
+            <td><button class="btn btn-sm btn-secondary">⋯</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 5: PAYOUTS
+     ════════════════════════════════════════ -->
+<div id="screen-payouts" class="screen">
+  <div class="topbar">
+    <div class="topbar-logo"><span class="icon">♟</span> MY Chess Tour</div>
+    <nav class="topbar-nav">
+      <a href="#">My Tournaments</a>
+      <a href="#" onclick="showScreen('dashboard'); return false;">← Back to Dashboard</a>
+    </nav>
+  </div>
+
+  <div class="annotation">
+    Annotation: Payout overview. Each tournament has its own payout card showing the financial breakdown. Payouts are processed after a tournament is completed. The organizer can see pending, processing, and completed payouts.
+  </div>
+
+  <div style="max-width: 700px; margin: 0 auto; padding: 32px;">
+    <h1 style="font-size: 22px; font-weight: 700; margin-bottom: 4px;">Payouts</h1>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 24px;">Track your earnings from each tournament.</p>
+
+    <div class="payout-card">
+      <div class="payout-card-header">
+        <h3>New Year Blitz Bash 2026</h3>
+        <span class="status-badge status-published">Completed</span>
+      </div>
+      <div class="payout-card-body">
+        <div class="payout-row">
+          <span class="label">Total Collected (46 registrations)</span>
+          <span style="font-family: 'DM Mono', monospace;">RM 1,380.00</span>
+        </div>
+        <div class="payout-row">
+          <span class="label">Refunds (2 players)</span>
+          <span style="font-family: 'DM Mono', monospace; color: var(--danger);">- RM 60.00</span>
+        </div>
+        <div class="payout-row total">
+          <span>Net Payout</span>
+          <span style="font-family: 'DM Mono', monospace;">RM 1,320.00</span>
+        </div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--text-light);">
+          Platform commission (10%) was charged separately to players and is not deducted from your payout.
+        </div>
+        <div style="margin-top: 12px; font-size: 13px; color: var(--accent);">
+          ✓ Paid on 25 Jan 2026 · Ref: PAYOUT-20260125-3K7X
+        </div>
+      </div>
+    </div>
+
+    <div class="payout-card">
+      <div class="payout-card-header">
+        <h3>KL Open Rapid Championship 2026</h3>
+        <span class="status-badge" style="background: var(--warning-light); color: var(--warning);">Pending</span>
+      </div>
+      <div class="payout-card-body">
+        <div class="payout-row">
+          <span class="label">Total Collected (72 confirmed)</span>
+          <span style="font-family: 'DM Mono', monospace;">RM 3,460.00</span>
+        </div>
+        <div class="payout-row">
+          <span class="label">Refunds</span>
+          <span style="font-family: 'DM Mono', monospace;">RM 0.00</span>
+        </div>
+        <div class="payout-row total">
+          <span>Estimated Payout</span>
+          <span style="font-family: 'DM Mono', monospace;">RM 3,460.00</span>
+        </div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--text-light);">
+          Platform commission (10%) was charged separately to players and is not deducted from your payout.
+        </div>
+        <div style="margin-top: 12px; font-size: 13px; color: var(--text-light);">
+          ⏳ Payout will be processed after the tournament is completed (15 Mar 2026).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 6: MEMBER MANAGEMENT
+     ════════════════════════════════════════ -->
+<div id="screen-members" class="screen">
+  <div class="topbar">
+    <div class="topbar-logo"><span class="icon">♟</span> MY Chess Tour</div>
+    <nav class="topbar-nav">
+      <a href="#">My Tournaments</a>
+      <a href="#" onclick="showScreen('dashboard'); return false;">← Back to Dashboard</a>
+    </nav>
+  </div>
+
+  <div class="annotation">
+    Annotation: Manage organization members. The owner can invite new members by email, assign roles (owner, admin, member), and remove members. Role permissions are displayed for clarity.
+  </div>
+
+  <div style="max-width: 600px; margin: 0 auto; padding: 32px;">
+    <h1 style="font-size: 22px; font-weight: 700; margin-bottom: 4px;">Members</h1>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Manage who can access and manage your organization's tournaments.</p>
+
+    <div class="invite-bar">
+      <input type="email" placeholder="Invite by email address...">
+      <select style="font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); width: 120px;">
+        <option>Admin</option>
+        <option>Member</option>
+      </select>
+      <button class="btn btn-primary">Invite</button>
+    </div>
+
+    <div style="margin-bottom: 20px; padding: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-muted); line-height: 1.7;">
+      <strong style="color: var(--text);">Role Permissions:</strong><br>
+      <strong>Owner</strong> — Full control: tournaments, members, payouts, settings. One per organization.<br>
+      <strong>Admin</strong> — Create and manage tournaments, view participants and payouts.<br>
+      <strong>Member</strong> — View tournaments and participants only.
+    </div>
+
+    <div>
+      <div class="member-card">
+        <div class="member-avatar">AZ</div>
+        <div class="member-info">
+          <h4>Ahmad Zulkifli <span class="tag" style="font-size: 10px; margin-left: 4px;">You</span></h4>
+          <p>ahmad@klchess.org</p>
+        </div>
+        <span class="tag" style="background: var(--accent-light); color: var(--accent);">Owner</span>
+      </div>
+
+      <div class="member-card">
+        <div class="member-avatar">NR</div>
+        <div class="member-info">
+          <h4>Nurul Rahman</h4>
+          <p>nurul@klchess.org</p>
+        </div>
+        <select class="member-role-select">
+          <option selected>Admin</option>
+          <option>Member</option>
+        </select>
+        <button class="btn btn-sm btn-danger" style="margin-left: 8px;">Remove</button>
+      </div>
+
+      <div class="member-card">
+        <div class="member-avatar">KT</div>
+        <div class="member-info">
+          <h4>Kevin Tan</h4>
+          <p>kevin.tan@email.com</p>
+        </div>
+        <select class="member-role-select">
+          <option>Admin</option>
+          <option selected>Member</option>
+        </select>
+        <button class="btn btn-sm btn-danger" style="margin-left: 8px;">Remove</button>
+      </div>
+
+      <div class="member-card" style="opacity: 0.6; border-style: dashed;">
+        <div class="member-avatar">?</div>
+        <div class="member-info">
+          <h4>siti.lee@email.com</h4>
+          <p style="color: var(--warning);">Invitation pending...</p>
+        </div>
+        <span class="tag">Admin</span>
+        <button class="btn btn-sm btn-secondary" style="margin-left: 8px;">Resend</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  document.querySelectorAll('.screen-nav button').forEach(b => b.classList.remove('active'));
+  const labels = { apply: '1.', dashboard: '2.', create: '3.', manage: '4.', payouts: '5.', members: '6.' };
+  document.querySelectorAll('.screen-nav button').forEach(b => {
+    if (b.textContent.includes(labels[id])) b.classList.add('active');
+  });
+  window.scrollTo(0, 0);
+}
+
+// Wizard navigation
+let currentStep = 2;
+function showWizardStep(step) {
+  currentStep = step;
+  document.querySelectorAll('.wizard-step-content').forEach(s => s.style.display = 'none');
+  document.getElementById('wizard-step-' + step).style.display = 'block';
+  document.querySelectorAll('.wizard-step').forEach((s, i) => {
+    s.className = 'wizard-step';
+    if (i + 1 < step) s.classList.add('done');
+    else if (i + 1 === step) s.classList.add('active');
+  });
+  // Update buttons
+  document.getElementById('wizard-back-btn').style.visibility = step === 1 ? 'hidden' : 'visible';
+  const nextBtn = document.getElementById('wizard-next-btn');
+  if (step === 5) {
+    nextBtn.textContent = '🚀 Publish Tournament';
+    nextBtn.onclick = function() { alert('Tournament published! (Wireframe demo)'); showScreen('dashboard'); };
+  } else {
+    nextBtn.textContent = 'Next →';
+    nextBtn.onclick = wizardNext;
+  }
+}
+function wizardNext() { if (currentStep < 5) showWizardStep(currentStep + 1); }
+function wizardBack() { if (currentStep > 1) showWizardStep(currentStep - 1); }
+</script>
+</body>
+</html>
