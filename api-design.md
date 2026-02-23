@@ -157,7 +157,8 @@ Returns the current user's profile and all associated roles.
   "data": {
     "id": "uuid",
     "email": "user@example.com",
-    "full_name": "Lee Wei Hao",
+    "first_name": "Wei Hao",
+    "last_name": "Lee",
     "phone": "+60123456789",
     "role": "user",
     "player_profile": {
@@ -631,7 +632,8 @@ Same shape as POST, but all fields optional. Only provided fields are updated. C
       "registration_id": "uuid",
       "player": {
         "id": "uuid",
-        "full_name": "Ahmad Hassan",
+        "first_name": "Ahmad",
+        "last_name": "Hassan",
         "fide_id": "5801234",
         "fide_rating": 1756,
         "state": "Selangor"
@@ -829,7 +831,8 @@ Note: `total_commission_cents` is not shown to organizers in payouts (commission
       "approval_status": "pending",
       "applicant": {
         "id": "uuid",
-        "full_name": "Lee Wei Hao",
+        "first_name": "Wei Hao",
+        "last_name": "Lee",
         "email": "weihao.lee@gmail.com"
       },
       "created_at": "2026-02-22T14:34:00Z"
@@ -940,7 +943,8 @@ The `search` parameter indexes player name and CHIP reference.
       "date": "2026-02-22T14:15:00Z",
       "player": {
         "id": "uuid",
-        "full_name": "Ahmad Hassan"
+        "first_name": "Ahmad",
+        "last_name": "Hassan"
       },
       "tournament": {
         "id": "uuid",
