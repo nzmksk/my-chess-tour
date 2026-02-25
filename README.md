@@ -40,16 +40,17 @@ The most important week. Get the boring stuff out of the way so everything after
 
 **Tasks:**
 
-- [ ] Initialize Next.js project (App Router, TypeScript, Tailwind CSS)
-- [ ] Set up Supabase project (database, auth, storage bucket for posters)
-- [ ] Run database migrations — create all tables, indexes, constraints from the schema doc
-- [ ] Configure Supabase Auth (email/password, magic link)
-- [ ] Set up Supabase Row Level Security (RLS) policies for basic access control
-- [ ] Create auth middleware for Next.js (session extraction, route protection)
-- [ ] Build the permission helper functions (`requireOrgRole`, `requireAdmin`)
-- [ ] Deploy to Netlify — connect repo, configure environment variables
-- [ ] Verify deployment pipeline works (push → build → deploy)
-- [ ] Create seed script with realistic test data (5 organizers, 15 tournaments, 50 players, 200 registrations)
+- [x] Initialize Next.js project (App Router, TypeScript, Tailwind CSS)
+- [x] Set up Supabase project (database, auth, storage bucket for posters)
+- [x] Run database migrations — create all tables, indexes, constraints from the schema doc
+- [x] Configure Supabase Auth (email/password, magic link)
+- [x] Set up Supabase Row Level Security (RLS) policies for basic access control
+- [x] Create auth middleware for Next.js (session extraction, route protection)
+- [x] Build the permission helper functions (`requireOrgRole`, `requireAdmin`)
+- [x] Deploy to Netlify — connect repo, configure environment variables
+- [x] Verify deployment pipeline works (push → build → deploy)
+- [x] Create seed script with realistic test data (5 organizers, 15 tournaments, 50 players, 200 registrations)
+- [x] Set up domain
 
 **Deliverable:** A deployed app at `staging.mychesstour.com` with auth working (signup, login, logout) and a seeded database.
 
