@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm email change – MY Chess Tour</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lato:wght@300;400&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: #0e0e0e;
+      font-family: 'Lato', sans-serif;
+      color: #d4c5a0;
+      padding: 40px 16px;
+    }
+
+    .wrapper {
+      max-width: 560px;
+      margin: 0 auto;
+      background: #141414;
+      border: 1px solid #2e2a1e;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #0a0a0a;
+      border-bottom: 2px solid #c9a84c;
+      padding: 36px 40px 28px;
+      text-align: center;
+      position: relative;
+    }
+
+    .board-strip {
+      display: flex;
+      height: 8px;
+    }
+    .board-strip span {
+      flex: 1;
+    }
+    .board-strip span:nth-child(odd)  { background: #c9a84c; }
+    .board-strip span:nth-child(even) { background: #1a1a1a; }
+
+    .logo-icon {
+      font-size: 42px;
+      line-height: 1;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .brand-name {
+      font-family: 'Cinzel', serif;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: #c9a84c;
+      text-transform: uppercase;
+    }
+
+    .brand-sub {
+      font-family: 'Lato', sans-serif;
+      font-weight: 300;
+      font-size: 11px;
+      letter-spacing: 0.3em;
+      color: #7a6e55;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* ── Body ── */
+    .body {
+      padding: 44px 40px 36px;
+      text-align: center;
+    }
+
+    .headline {
+      font-family: 'Cinzel', serif;
+      font-size: 20px;
+      font-weight: 600;
+      color: #e8d9b4;
+      letter-spacing: 0.05em;
+      margin-bottom: 18px;
+    }
+
+    .divider {
+      width: 48px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #c9a84c, transparent);
+      margin: 0 auto 24px;
+    }
+
+    .message {
+      font-size: 15px;
+      line-height: 1.75;
+      color: #a89878;
+      font-weight: 300;
+      margin-bottom: 36px;
+    }
+
+    .cta-btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #c9a84c 0%, #a07c2c 100%);
+      color: #0e0e0e;
+      font-family: 'Cinzel', serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 14px 36px;
+      border-radius: 2px;
+      box-shadow: 0 4px 20px rgba(201,168,76,0.25);
+    }
+
+    .fallback {
+      margin-top: 28px;
+      font-size: 12px;
+      color: #5a5040;
+      line-height: 1.7;
+    }
+
+    .fallback a {
+      color: #8a7040;
+      word-break: break-all;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      background: #0a0a0a;
+      border-top: 1px solid #2e2a1e;
+      padding: 24px 40px;
+      text-align: center;
+    }
+
+    .footer-board {
+      display: flex;
+      height: 4px;
+      margin-bottom: 20px;
+    }
+    .footer-board span {
+      flex: 1;
+    }
+    .footer-board span:nth-child(odd)  { background: #2e2a1e; }
+    .footer-board span:nth-child(even) { background: #0a0a0a; }
+
+    .footer p {
+      font-size: 11px;
+      color: #4a4030;
+      letter-spacing: 0.06em;
+      line-height: 1.7;
+    }
+
+    .footer a {
+      color: #6a5830;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- Decorative chessboard strip -->
+    <div class="board-strip">
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <span class="logo-icon">♔</span>
+      <div class="brand-name">MY Chess Tour</div>
+      <div class="brand-sub">Play | Compete | Triumph</div>
+    </div>
+
+    <!-- Body -->
+    <div class="body">
+      <h1 class="headline">Confirm Email Change</h1>
+      <div class="divider"></div>
+
+      <p class="message">
+        We received a request to change your email address<br>
+        from <strong style="color: #d4c5a0;">{{ .Email }}</strong>
+        to <strong style="color: #d4c5a0;">{{ .NewEmail }}</strong>.<br><br>
+        Please confirm this change by clicking the button below.
+      </p>
+
+      <a href="{{ .ConfirmationURL }}" class="cta-btn">Confirm New Email</a>
+
+      <p class="fallback">
+        If the button above doesn't work, copy and paste<br>
+        the link below into your browser:<br>
+        <a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a>
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-board">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <p>
+        You received this email because an email change was<br>
+        requested for your account on <a href="#">mychessstour.com</a>.<br>
+        If you didn't request this, you can safely ignore this email.
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -113,7 +113,8 @@ Core user table linked to Supabase Auth. A single user can hold multiple roles (
 |---|---|---|---|
 | id | uuid | PK, default gen_random_uuid() | Matches Supabase Auth user ID |
 | email | varchar(255) | unique, not null | User's email address |
-| full_name | varchar(255) | not null | Display name |
+| first_name | varchar(255) | not null | First name |
+| last_name | varchar(255) | not null | Last name |
 | phone | varchar(20) | nullable | Contact number |
 | role | varchar(20)[] | not null, default '{player}' | Array of roles: player, organizer, admin |
 | avatar_url | text | nullable | Profile photo URL |
@@ -589,7 +590,7 @@ The following features are intentionally excluded from the MVP to keep the build
 
 ## Go-to-Market Strategy (MVP Phase)
 
-> **See also:** `project-roadmap.md` for the full sprint plan with 6 milestones, weekly tasks, hour estimates, risk mitigation, and launch checklist.
+> **See also:** `README.md` for the full sprint plan with 6 milestones, weekly tasks, hour estimates, risk mitigation, and launch checklist.
 
 - Launch with a small group of organizers personally known within the Malaysian chess community.
 - Seed the platform with real upcoming tournaments to provide immediate value to players.
