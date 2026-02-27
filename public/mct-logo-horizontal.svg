@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" width="220" height="60" role="img" aria-label="MY Chess Tour">
+  <defs>
+    <linearGradient id="gold-sq" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c9a84c"/>
+      <stop offset="100%" stop-color="#a07c2c"/>
+    </linearGradient>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&amp;display=swap');
+      .t-my   { font-family: 'Cinzel', 'Georgia', serif; font-size: 9px;  font-weight: 600; letter-spacing: 0.28em; fill: #c9a84c; }
+      .t-chess { font-family: 'Cinzel', 'Georgia', serif; font-size: 19px; font-weight: 700; letter-spacing: 0.10em; fill: #e8d9b4; }
+      .t-tour  { font-family: 'Cinzel', 'Georgia', serif; font-size: 9px;  font-weight: 400; letter-spacing: 0.28em; fill: #a89878; }
+    </style>
+  </defs>
+
+  <!-- 2×2 Chessboard icon — centred vertically in 60px height, left-aligned -->
+  <!-- Square size: 20px, gap: 3px, total block: 43×43, vertically centred → y offset = (60-43)/2 = 8.5 -->
+
+  <!-- Row 1 -->
+  <rect x="8"  y="8.5" width="20" height="20" rx="1.5" fill="url(#gold-sq)"/>
+  <rect x="31" y="8.5" width="20" height="20" rx="1.5" fill="#1a1a1a"/>
+
+  <!-- Row 2 -->
+  <rect x="8"  y="31.5" width="20" height="20" rx="1.5" fill="#1a1a1a"/>
+  <rect x="31" y="31.5" width="20" height="20" rx="1.5" fill="url(#gold-sq)"/>
+
+  <!-- Subtle border on dark squares -->
+  <rect x="31" y="8.5"  width="20" height="20" rx="1.5" fill="none" stroke="#2e2a1e" stroke-width="1"/>
+  <rect x="8"  y="31.5" width="20" height="20" rx="1.5" fill="none" stroke="#2e2a1e" stroke-width="1"/>
+
+  <!-- Text block — starts at x=63 -->
+  <!-- "MY" label -->
+  <text x="63" y="20" class="t-my">MY</text>
+
+  <!-- "CHESS" main wordmark -->
+  <text x="62" y="40" class="t-chess">CHESS</text>
+
+  <!-- "TOUR" sub-label -->
+  <text x="63" y="53" class="t-tour">TOUR</text>
+
+  <!-- Vertical rule between icon and text -->
+  <line x1="57" y1="10" x2="57" y2="50" stroke="#2e2a1e" stroke-width="1"/>
+</svg>

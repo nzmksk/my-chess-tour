@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="MY Chess Tour">
+  <defs>
+    <linearGradient id="gold-sq" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c9a84c"/>
+      <stop offset="100%" stop-color="#a07c2c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Gold squares (diagonal) -->
+  <rect x="2"  y="2"  width="21" height="21" rx="2" fill="url(#gold-sq)"/>
+  <rect x="25" y="25" width="21" height="21" rx="2" fill="url(#gold-sq)"/>
+
+  <!-- Dark squares -->
+  <rect x="25" y="2"  width="21" height="21" rx="2" fill="#1a1a1a" stroke="#2e2a1e" stroke-width="1"/>
+  <rect x="2"  y="25" width="21" height="21" rx="2" fill="#1a1a1a" stroke="#2e2a1e" stroke-width="1"/>
+</svg>
