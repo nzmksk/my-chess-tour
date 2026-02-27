@@ -9,7 +9,9 @@
       "Bash(cd /d/Programming/git-repositories/my-chess-tour && npm run build 2>&1)",
       "Bash(git:*)",
       "Bash(npm run:*)",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "Bash(npm install:*)",
+      "Bash(npm test:*)"
     ]
   }
 }
