@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(gh issue:*)",
+      "Bash(ls:*)",
+      "Bash(cd:*)",
+      "Bash(cd /d/Programming/git-repositories/my-chess-tour && npx tsc --noEmit 2>&1)",
+      "Bash(cd /d/Programming/git-repositories/my-chess-tour && npm run build 2>&1)"
     ]
   }
 }
