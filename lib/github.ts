@@ -3,11 +3,7 @@ import { Octokit } from "@octokit/rest";
 const REPO_OWNER = "nzmksk";
 const REPO_NAME = "my-chess-tour";
 
-export async function getIssueProgress(): Promise<{
-  resolved: number;
-  total: number;
-  percentage: number;
-}> {
+export async function getIssueProgress(): Promise<number> {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
   const [closedResult, allResult] = await Promise.all([
@@ -25,5 +21,5 @@ export async function getIssueProgress(): Promise<{
   const total = allResult.data.total_count;
   const percentage = total > 0 ? Math.round((resolved / total) * 100) : 0;
 
-  return { resolved, total, percentage };
+  return percentage;
 }

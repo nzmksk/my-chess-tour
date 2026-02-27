@@ -1,11 +1,10 @@
-import Image from "next/image";
 import { getIssueProgress } from "@/lib/github";
 import WaitlistForm from "@/app/_components/WaitlistForm";
 
 export const revalidate = 3600; // refresh GitHub stats once per hour
 
 export default async function HomePage() {
-  const { resolved, total, percentage } = await getIssueProgress();
+  const percentage = await getIssueProgress();
 
   return (
     <main
