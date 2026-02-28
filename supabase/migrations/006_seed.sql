@@ -293,11 +293,8 @@ BEGIN
       t_deadline := (t_start - '7 days'::interval)::timestamptz;
 
       t_status := CASE
-        WHEN t_offset_wk < -4 THEN 'completed'
-        WHEN t_offset_wk < -1 THEN 'ongoing'
-        WHEN t_offset_wk <  0 THEN 'registration_closed'
-        WHEN t_offset_wk <  2 THEN 'published'
-        ELSE                       'draft'
+        WHEN t_offset_wk < 4 THEN 'published'
+        ELSE                      'draft'
       END;
 
       t_fee := fee_opts[((idx - 1) % 5) + 1];
