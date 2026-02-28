@@ -159,7 +159,6 @@ Returns the current user's profile and all associated roles.
     "email": "user@example.com",
     "first_name": "Wei Hao",
     "last_name": "Lee",
-    "phone": "+60123456789",
     "role": "user",
     "player_profile": {
       "fide_id": "5834567",
@@ -446,8 +445,8 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
     { "type": "website", "url": "https://penangchess.org" },
     { "type": "facebook", "url": "https://facebook.com/penangchessclub" }
   ],
-  "contact_email": "penangchess@gmail.com",
-  "contact_phone": "+60123456789",
+  "email": "penangchess@gmail.com",
+  "phone": "+60123456789",
   "past_tournament_refs": "Penang Monthly Rapid #1-12 (2025)..."
 }
 ```
@@ -826,8 +825,8 @@ Note: `total_commission_cents` is not shown to organizers in payouts (commission
       "id": "uuid",
       "organization_name": "Penang Chess Club",
       "description": "Community chess club...",
-      "contact_email": "penangchess@gmail.com",
-      "contact_phone": "+60123456789",
+      "email": "penangchess@gmail.com",
+      "phone": "+60123456789",
       "approval_status": "pending",
       "applicant": {
         "id": "uuid",
