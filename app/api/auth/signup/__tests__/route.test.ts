@@ -7,6 +7,10 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn(() => ({ getAll: vi.fn(() => []), set: vi.fn() })),
 }));
 
+vi.mock("bcryptjs", () => ({
+  default: { hash: vi.fn().mockResolvedValue("$2b$12$mockedhash") },
+}));
+
 const mockSignUp = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -67,30 +71,7 @@ describe("POST /api/auth/signup", () => {
     expect(json.message).toMatch(/check your email/i);
   });
 
-  it("passes first_name, last_name, and phone to signUp metadata", async () => {
-    mockSignUp.mockResolvedValue({
-      data: { user: { id: "abc-123" } },
-      error: null,
-    });
-
-    await POST(makeRequest({ ...validBody, phone: "+60123456789" }));
-
-    expect(mockSignUp).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: validBody.email,
-        password: validBody.password,
-        options: {
-          data: {
-            first_name: validBody.first_name,
-            last_name: validBody.last_name,
-            phone: "+60123456789",
-          },
-        },
-      })
-    );
-  });
-
-  it("omits phone from metadata when not provided", async () => {
+  it("passes correct metadata to signUp", async () => {
     mockSignUp.mockResolvedValue({
       data: { user: { id: "abc-123" } },
       error: null,
@@ -98,13 +79,17 @@ describe("POST /api/auth/signup", () => {
 
     await POST(makeRequest(validBody));
 
-    expect(mockSignUp).toHaveBeenCalledWith(
-      expect.objectContaining({
-        options: {
-          data: { first_name: validBody.first_name, last_name: validBody.last_name },
+    expect(mockSignUp).toHaveBeenCalledWith({
+      email: validBody.email,
+      password: validBody.password,
+      options: {
+        data: {
+          first_name: validBody.first_name,
+          last_name: validBody.last_name,
+          password_hash: "$2b$12$mockedhash",
         },
-      })
-    );
+      },
+    });
   });
 
   // --- Validation errors ----------------------------------------------------
