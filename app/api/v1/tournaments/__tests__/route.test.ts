@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "../route";
 
 
@@ -33,6 +33,18 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Date constants — fixed "today" so date-range assertions are deterministic
+//
+//   MOCK_TODAY      2026-03-01
+//   MOCK_WEEK_END   2026-03-08  (today + 7 days)
+//   MOCK_MONTH_END  2026-04-01  (today + 1 month)
+// ---------------------------------------------------------------------------
+
+const MOCK_TODAY = "2026-03-01";
+const MOCK_WEEK_END = "2026-03-08";
+const MOCK_MONTH_END = "2026-04-01";
+
+// ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
@@ -62,6 +74,88 @@ function makeTournament(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+/**
+ * Six diverse tournaments for list-based filter tests.
+ * (relative to MOCK_TODAY = 2026-03-01)
+ *
+ *  id      start        state         rating        format      window
+ *  ------  -----------  ------------  ------------  ----------  ----------------------------
+ *  t-wk-1  2026-03-03   Kuala Lumpur  FIDE          rapid       upcoming / this week / month
+ *  t-wk-2  2026-03-07   Selangor      MCF           blitz       upcoming / this week / month
+ *  t-mo-1  2026-03-15   Penang        FIDE          classical   upcoming / this month
+ *  t-fu-1  2026-04-15   Kuala Lumpur  none          rapid       upcoming (beyond this month)
+ *  t-pa-1  2026-02-10   Johor         MCF           rapid       past
+ *  t-pa-2  2026-01-05   Kuala Lumpur  FIDE + MCF    blitz       past
+ */
+const T = {
+  weekFideRapidKL: makeTournament({
+    id: "t-wk-1",
+    name: "KL Rapid Open",
+    start_date: "2026-03-03",
+    end_date: "2026-03-03",
+    venue_state: "Kuala Lumpur",
+    is_fide_rated: true,
+    is_mcf_rated: false,
+    format: { type: "rapid", system: "swiss", rounds: 7 },
+  }),
+  weekMcfBlitzSelangor: makeTournament({
+    id: "t-wk-2",
+    name: "Selangor Blitz Championship",
+    start_date: "2026-03-07",
+    end_date: "2026-03-07",
+    venue_state: "Selangor",
+    is_fide_rated: false,
+    is_mcf_rated: true,
+    format: { type: "blitz", system: "swiss", rounds: 9 },
+  }),
+  monthClassicalPenang: makeTournament({
+    id: "t-mo-1",
+    name: "Penang Chess Festival",
+    start_date: "2026-03-15",
+    end_date: "2026-03-17",
+    venue_state: "Penang",
+    is_fide_rated: true,
+    is_mcf_rated: false,
+    format: { type: "classical", system: "swiss", rounds: 9 },
+  }),
+  futureRapidKL: makeTournament({
+    id: "t-fu-1",
+    name: "KL April Rapid",
+    start_date: "2026-04-15",
+    end_date: "2026-04-16",
+    venue_state: "Kuala Lumpur",
+    is_fide_rated: false,
+    is_mcf_rated: false,
+    format: { type: "rapid", system: "swiss", rounds: 7 },
+  }),
+  pastMcfJohor: makeTournament({
+    id: "t-pa-1",
+    name: "Johor Open Rapid",
+    start_date: "2026-02-10",
+    end_date: "2026-02-20",
+    venue_state: "Johor",
+    is_fide_rated: false,
+    is_mcf_rated: true,
+    format: { type: "rapid", system: "swiss", rounds: 7 },
+  }),
+  pastFideMcfBlitzKL: makeTournament({
+    id: "t-pa-2",
+    name: "KL Blitz January",
+    start_date: "2026-01-05",
+    end_date: "2026-01-10",
+    venue_state: "Kuala Lumpur",
+    is_fide_rated: true,
+    is_mcf_rated: true,
+    format: { type: "blitz", system: "swiss", rounds: 9 },
+  }),
+};
+
+const ALL_TOURNAMENTS = Object.values(T);
+const UPCOMING      = [T.weekFideRapidKL, T.weekMcfBlitzSelangor, T.monthClassicalPenang, T.futureRapidKL];
+const THIS_WEEK     = [T.weekFideRapidKL, T.weekMcfBlitzSelangor];
+const THIS_MONTH    = [T.weekFideRapidKL, T.weekMcfBlitzSelangor, T.monthClassicalPenang];
+const PAST          = [T.pastMcfJohor, T.pastFideMcfBlitzKL];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,9 +191,15 @@ function setRegistrationsResult(data: unknown, error: unknown = null) {
 
 describe("GET /api/tournaments", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(MOCK_TODAY));
     vi.clearAllMocks();
     setTournamentsResult([]);
     setRegistrationsResult([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // -------------------------------------------------------------------------
@@ -230,6 +330,16 @@ describe("GET /api/tournaments", () => {
       expect(json.has_more).toBe(false);
       expect(json.next_cursor).toBeNull();
     });
+
+    it("returns all six tournaments in the list when no filters are applied", async () => {
+      setTournamentsResult(ALL_TOURNAMENTS);
+
+      const res = await GET(makeRequest());
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(6);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -272,6 +382,29 @@ describe("GET /api/tournaments", () => {
 
       const eqMock = mockRegistrationsBuilder.eq as ReturnType<typeof vi.fn>;
       expect(eqMock).toHaveBeenCalledWith("status", "confirmed");
+    });
+
+    it("correctly tallies participant counts across a list of tournaments", async () => {
+      setTournamentsResult(ALL_TOURNAMENTS);
+      setRegistrationsResult([
+        { tournament_id: "t-wk-1" },
+        { tournament_id: "t-wk-1" },
+        { tournament_id: "t-wk-1" },
+        { tournament_id: "t-wk-2" },
+        { tournament_id: "t-mo-1" },
+        { tournament_id: "t-mo-1" },
+      ]);
+
+      const res = await GET(makeRequest());
+      const json = await res.json();
+
+      const byId = Object.fromEntries(json.data.map((t: { id: string; current_participants: number }) => [t.id, t.current_participants]));
+      expect(byId["t-wk-1"]).toBe(3);
+      expect(byId["t-wk-2"]).toBe(1);
+      expect(byId["t-mo-1"]).toBe(2);
+      expect(byId["t-fu-1"]).toBe(0);
+      expect(byId["t-pa-1"]).toBe(0);
+      expect(byId["t-pa-2"]).toBe(0);
     });
   });
 
@@ -334,82 +467,422 @@ describe("GET /api/tournaments", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Filters — verify the query builder receives filter calls
+  // Date filtering — uses mocked current date (MOCK_TODAY = 2026-03-01)
   // -------------------------------------------------------------------------
 
-  describe("filter application", () => {
-    it("applies a search filter via or() for name and venue_name", async () => {
-      setTournamentsResult([]);
+  describe("date filtering", () => {
+    it("date=upcoming applies gte(start_date, today) and returns all upcoming tournaments", async () => {
+      setTournamentsResult(UPCOMING);
 
-      await GET(makeRequest({ search: "open" }));
+      const res = await GET(makeRequest({ date: "upcoming" }));
+      const json = await res.json();
 
-      const orMock = mockTournamentsBuilder.or as ReturnType<typeof vi.fn>;
-      expect(orMock).toHaveBeenCalledWith(expect.stringMatching(/name.*ilike.*open/i));
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(4);
+
+      const gteMock = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+
+      const ids = json.data.map((t: { id: string }) => t.id);
+      expect(ids).toContain("t-wk-1");
+      expect(ids).toContain("t-wk-2");
+      expect(ids).toContain("t-mo-1");
+      expect(ids).toContain("t-fu-1");
     });
 
-    it("applies a state filter via in()", async () => {
-      setTournamentsResult([]);
+    it("date=this_week applies gte+lte and returns only tournaments starting within 7 days", async () => {
+      setTournamentsResult(THIS_WEEK);
 
-      await GET(makeRequest({ state: "selangor,penang" }));
+      const res = await GET(makeRequest({ date: "this_week" }));
+      const json = await res.json();
 
-      const inMock = mockTournamentsBuilder.in as ReturnType<typeof vi.fn>;
-      expect(inMock).toHaveBeenCalledWith("venue_state", ["selangor", "penang"]);
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(2);
+
+      const gteMock = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
+      const lteMock = mockTournamentsBuilder.lte as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(lteMock).toHaveBeenCalledWith("start_date", MOCK_WEEK_END);
+
+      const ids = json.data.map((t: { id: string }) => t.id);
+      expect(ids).toContain("t-wk-1");
+      expect(ids).toContain("t-wk-2");
+      expect(ids).not.toContain("t-mo-1");
+      expect(ids).not.toContain("t-fu-1");
     });
 
-    it("applies a format filter via or()", async () => {
-      setTournamentsResult([]);
+    it("date=this_month applies gte+lte and returns tournaments starting within this calendar month", async () => {
+      setTournamentsResult(THIS_MONTH);
 
-      await GET(makeRequest({ format: "rapid,blitz" }));
+      const res = await GET(makeRequest({ date: "this_month" }));
+      const json = await res.json();
 
-      const orMock = mockTournamentsBuilder.or as ReturnType<typeof vi.fn>;
-      expect(orMock).toHaveBeenCalledWith(expect.stringMatching(/rapid.*blitz|blitz.*rapid/i));
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(3);
+
+      const gteMock = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
+      const lteMock = mockTournamentsBuilder.lte as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(lteMock).toHaveBeenCalledWith("start_date", MOCK_MONTH_END);
+
+      const ids = json.data.map((t: { id: string }) => t.id);
+      expect(ids).toContain("t-wk-1");
+      expect(ids).toContain("t-wk-2");
+      expect(ids).toContain("t-mo-1");
+      expect(ids).not.toContain("t-fu-1");
     });
 
-    it("applies a fide rating filter via eq()", async () => {
-      setTournamentsResult([]);
+    it("date=past applies lt(end_date, today) and returns only past tournaments", async () => {
+      setTournamentsResult(PAST);
 
-      await GET(makeRequest({ rating: "fide" }));
+      const res = await GET(makeRequest({ date: "past" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(2);
+
+      const ltMock = mockTournamentsBuilder.lt as ReturnType<typeof vi.fn>;
+      expect(ltMock).toHaveBeenCalledWith("end_date", MOCK_TODAY);
+
+      const ids = json.data.map((t: { id: string }) => t.id);
+      expect(ids).toContain("t-pa-1");
+      expect(ids).toContain("t-pa-2");
+    });
+
+    it("omitting date filter applies no date bounds and returns all tournaments", async () => {
+      setTournamentsResult(ALL_TOURNAMENTS);
+
+      const res = await GET(makeRequest());
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(6);
+
+      const gteMock = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
+      const lteMock = mockTournamentsBuilder.lte as ReturnType<typeof vi.fn>;
+      const ltMock  = mockTournamentsBuilder.lt  as ReturnType<typeof vi.fn>;
+      expect(gteMock).not.toHaveBeenCalled();
+      expect(lteMock).not.toHaveBeenCalled();
+      expect(ltMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Rating filtering
+  // -------------------------------------------------------------------------
+
+  describe("rating filtering", () => {
+    it("rating=fide returns only FIDE-rated tournaments", async () => {
+      const fideOnly = [T.weekFideRapidKL, T.monthClassicalPenang, T.pastFideMcfBlitzKL];
+      setTournamentsResult(fideOnly);
+
+      const res = await GET(makeRequest({ rating: "fide" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(3);
 
       const eqMock = mockTournamentsBuilder.eq as ReturnType<typeof vi.fn>;
       expect(eqMock).toHaveBeenCalledWith("is_fide_rated", true);
+
+      expect(json.data.map((t: { id: string }) => t.id)).toEqual(
+        expect.arrayContaining(["t-wk-1", "t-mo-1", "t-pa-2"])
+      );
     });
 
-    it("applies a mcf rating filter via eq()", async () => {
-      setTournamentsResult([]);
+    it("rating=mcf returns only MCF-rated tournaments", async () => {
+      const mcfOnly = [T.weekMcfBlitzSelangor, T.pastMcfJohor, T.pastFideMcfBlitzKL];
+      setTournamentsResult(mcfOnly);
 
-      await GET(makeRequest({ rating: "mcf" }));
+      const res = await GET(makeRequest({ rating: "mcf" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(3);
 
       const eqMock = mockTournamentsBuilder.eq as ReturnType<typeof vi.fn>;
       expect(eqMock).toHaveBeenCalledWith("is_mcf_rated", true);
+
+      expect(json.data.map((t: { id: string }) => t.id)).toEqual(
+        expect.arrayContaining(["t-wk-2", "t-pa-1", "t-pa-2"])
+      );
     });
 
-    it("applies a combined fide+mcf rating filter via or()", async () => {
-      setTournamentsResult([]);
+    it("rating=fide,mcf applies an or() filter and returns all rated tournaments", async () => {
+      const ratedAll = [T.weekFideRapidKL, T.weekMcfBlitzSelangor, T.monthClassicalPenang, T.pastMcfJohor, T.pastFideMcfBlitzKL];
+      setTournamentsResult(ratedAll);
 
-      await GET(makeRequest({ rating: "fide,mcf" }));
+      const res = await GET(makeRequest({ rating: "fide,mcf" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(5);
 
       const orMock = mockTournamentsBuilder.or as ReturnType<typeof vi.fn>;
       expect(orMock).toHaveBeenCalledWith(
         expect.stringMatching(/is_fide_rated.*is_mcf_rated|is_mcf_rated.*is_fide_rated/)
       );
+
+      // Unrated tournament is excluded
+      const ids = json.data.map((t: { id: string }) => t.id);
+      expect(ids).not.toContain("t-fu-1");
     });
 
-    it("applies an upcoming date filter via gte()", async () => {
-      setTournamentsResult([]);
+    it("omitting rating filter returns tournaments regardless of rating", async () => {
+      setTournamentsResult([T.futureRapidKL]);
 
-      await GET(makeRequest({ date: "upcoming" }));
+      const res = await GET(makeRequest());
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data[0].id).toBe("t-fu-1");
+      expect(json.data[0].is_fide_rated).toBe(false);
+      expect(json.data[0].is_mcf_rated).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // State filtering
+  // -------------------------------------------------------------------------
+
+  describe("state filtering", () => {
+    it("state=Kuala Lumpur returns only KL tournaments", async () => {
+      const klOnly = [T.weekFideRapidKL, T.futureRapidKL, T.pastFideMcfBlitzKL];
+      setTournamentsResult(klOnly);
+
+      const res = await GET(makeRequest({ state: "Kuala Lumpur" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(3);
+
+      const inMock = mockTournamentsBuilder.in as ReturnType<typeof vi.fn>;
+      expect(inMock).toHaveBeenCalledWith("venue_state", ["Kuala Lumpur"]);
+
+      expect(json.data.every((t: { state: string }) => t.state === "Kuala Lumpur")).toBe(true);
+    });
+
+    it("state=Selangor,Penang returns tournaments from both states", async () => {
+      const multiState = [T.weekMcfBlitzSelangor, T.monthClassicalPenang];
+      setTournamentsResult(multiState);
+
+      const res = await GET(makeRequest({ state: "Selangor,Penang" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(2);
+
+      const inMock = mockTournamentsBuilder.in as ReturnType<typeof vi.fn>;
+      expect(inMock).toHaveBeenCalledWith("venue_state", ["Selangor", "Penang"]);
+
+      const states = json.data.map((t: { state: string }) => t.state);
+      expect(states).toContain("Selangor");
+      expect(states).toContain("Penang");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Format filtering
+  // -------------------------------------------------------------------------
+
+  describe("format filtering", () => {
+    it("format=rapid uses a filter() call and returns only rapid tournaments", async () => {
+      const rapidOnly = [T.weekFideRapidKL, T.futureRapidKL, T.pastMcfJohor];
+      setTournamentsResult(rapidOnly);
+
+      const res = await GET(makeRequest({ format: "rapid" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(3);
+
+      const filterMock = mockTournamentsBuilder.filter as ReturnType<typeof vi.fn>;
+      expect(filterMock).toHaveBeenCalledWith("format->>type", "eq", "rapid");
+
+      expect(
+        json.data.every((t: { format: { type: string } }) => t.format.type === "rapid")
+      ).toBe(true);
+    });
+
+    it("format=blitz,classical applies an or() filter and returns those formats", async () => {
+      const blitzOrClassical = [T.weekMcfBlitzSelangor, T.monthClassicalPenang, T.pastFideMcfBlitzKL];
+      setTournamentsResult(blitzOrClassical);
+
+      const res = await GET(makeRequest({ format: "blitz,classical" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(3);
+
+      const orMock = mockTournamentsBuilder.or as ReturnType<typeof vi.fn>;
+      expect(orMock).toHaveBeenCalledWith(expect.stringMatching(/blitz.*classical|classical.*blitz/i));
+
+      const formats = json.data.map((t: { format: { type: string } }) => t.format.type);
+      expect(formats).not.toContain("rapid");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Search filtering
+  // -------------------------------------------------------------------------
+
+  describe("search filtering", () => {
+    it("applies a search filter via or() for name and venue_name", async () => {
+      setTournamentsResult([T.weekFideRapidKL]);
+
+      await GET(makeRequest({ search: "KL Rapid" }));
+
+      const orMock = mockTournamentsBuilder.or as ReturnType<typeof vi.fn>;
+      expect(orMock).toHaveBeenCalledWith(expect.stringMatching(/name.*ilike.*KL Rapid/i));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Combined filters — verify multiple filters are applied together
+  // -------------------------------------------------------------------------
+
+  describe("combined filters", () => {
+    it("date=upcoming + rating=fide returns upcoming FIDE-rated tournaments", async () => {
+      const upcomingFide = [T.weekFideRapidKL, T.monthClassicalPenang];
+      setTournamentsResult(upcomingFide);
+
+      const res = await GET(makeRequest({ date: "upcoming", rating: "fide" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(2);
 
       const gteMock = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
-      expect(gteMock).toHaveBeenCalledWith("start_date", expect.any(String));
+      const eqMock  = mockTournamentsBuilder.eq  as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(eqMock).toHaveBeenCalledWith("is_fide_rated", true);
+
+      const ids = json.data.map((t: { id: string }) => t.id);
+      expect(ids).toContain("t-wk-1");
+      expect(ids).toContain("t-mo-1");
     });
 
-    it("applies a past date filter via lt()", async () => {
-      setTournamentsResult([]);
+    it("date=this_week + state=Selangor returns only this week's Selangor tournaments", async () => {
+      setTournamentsResult([T.weekMcfBlitzSelangor]);
 
-      await GET(makeRequest({ date: "past" }));
+      const res = await GET(makeRequest({ date: "this_week", state: "Selangor" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(1);
+
+      const gteMock  = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
+      const lteMock  = mockTournamentsBuilder.lte as ReturnType<typeof vi.fn>;
+      const inMock   = mockTournamentsBuilder.in  as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(lteMock).toHaveBeenCalledWith("start_date", MOCK_WEEK_END);
+      expect(inMock).toHaveBeenCalledWith("venue_state", ["Selangor"]);
+
+      expect(json.data[0].id).toBe("t-wk-2");
+      expect(json.data[0].state).toBe("Selangor");
+    });
+
+    it("date=this_month + format=classical returns classical tournaments this month", async () => {
+      setTournamentsResult([T.monthClassicalPenang]);
+
+      const res = await GET(makeRequest({ date: "this_month", format: "classical" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(1);
+
+      const gteMock    = mockTournamentsBuilder.gte    as ReturnType<typeof vi.fn>;
+      const lteMock    = mockTournamentsBuilder.lte    as ReturnType<typeof vi.fn>;
+      const filterMock = mockTournamentsBuilder.filter as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(lteMock).toHaveBeenCalledWith("start_date", MOCK_MONTH_END);
+      expect(filterMock).toHaveBeenCalledWith("format->>type", "eq", "classical");
+
+      expect(json.data[0].id).toBe("t-mo-1");
+      expect(json.data[0].format).toEqual({ type: "classical", system: "swiss", rounds: 9 });
+    });
+
+    it("date=upcoming + rating=mcf + state=Selangor returns upcoming MCF Selangor tournaments", async () => {
+      setTournamentsResult([T.weekMcfBlitzSelangor]);
+
+      const res = await GET(makeRequest({ date: "upcoming", rating: "mcf", state: "Selangor" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(1);
+
+      const gteMock = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
+      const eqMock  = mockTournamentsBuilder.eq  as ReturnType<typeof vi.fn>;
+      const inMock  = mockTournamentsBuilder.in  as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(eqMock).toHaveBeenCalledWith("is_mcf_rated", true);
+      expect(inMock).toHaveBeenCalledWith("venue_state", ["Selangor"]);
+
+      expect(json.data[0].state).toBe("Selangor");
+      expect(json.data[0].is_mcf_rated).toBe(true);
+    });
+
+    it("date=past + rating=fide,mcf returns past rated tournaments", async () => {
+      setTournamentsResult(PAST);
+
+      const res = await GET(makeRequest({ date: "past", rating: "fide,mcf" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(2);
 
       const ltMock = mockTournamentsBuilder.lt as ReturnType<typeof vi.fn>;
-      expect(ltMock).toHaveBeenCalledWith("end_date", expect.any(String));
+      const orMock = mockTournamentsBuilder.or as ReturnType<typeof vi.fn>;
+      expect(ltMock).toHaveBeenCalledWith("end_date", MOCK_TODAY);
+      expect(orMock).toHaveBeenCalledWith(
+        expect.stringMatching(/is_fide_rated.*is_mcf_rated|is_mcf_rated.*is_fide_rated/)
+      );
+
+      const ids = json.data.map((t: { id: string }) => t.id);
+      expect(ids).toContain("t-pa-1");
+      expect(ids).toContain("t-pa-2");
+    });
+
+    it("search + state + date=this_week applies all three filters", async () => {
+      setTournamentsResult([T.weekFideRapidKL]);
+
+      const res = await GET(makeRequest({ search: "KL Rapid", state: "Kuala Lumpur", date: "this_week" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(1);
+
+      const orMock  = mockTournamentsBuilder.or  as ReturnType<typeof vi.fn>;
+      const inMock  = mockTournamentsBuilder.in  as ReturnType<typeof vi.fn>;
+      const gteMock = mockTournamentsBuilder.gte as ReturnType<typeof vi.fn>;
+      const lteMock = mockTournamentsBuilder.lte as ReturnType<typeof vi.fn>;
+      expect(orMock).toHaveBeenCalledWith(expect.stringMatching(/name.*ilike.*KL Rapid/i));
+      expect(inMock).toHaveBeenCalledWith("venue_state", ["Kuala Lumpur"]);
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(lteMock).toHaveBeenCalledWith("start_date", MOCK_WEEK_END);
+    });
+
+    it("date=upcoming + format=rapid + state=Kuala Lumpur returns upcoming rapid KL tournaments", async () => {
+      setTournamentsResult([T.weekFideRapidKL, T.futureRapidKL]);
+
+      const res = await GET(makeRequest({ date: "upcoming", format: "rapid", state: "Kuala Lumpur" }));
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data).toHaveLength(2);
+
+      const gteMock    = mockTournamentsBuilder.gte    as ReturnType<typeof vi.fn>;
+      const filterMock = mockTournamentsBuilder.filter as ReturnType<typeof vi.fn>;
+      const inMock     = mockTournamentsBuilder.in     as ReturnType<typeof vi.fn>;
+      expect(gteMock).toHaveBeenCalledWith("start_date", MOCK_TODAY);
+      expect(filterMock).toHaveBeenCalledWith("format->>type", "eq", "rapid");
+      expect(inMock).toHaveBeenCalledWith("venue_state", ["Kuala Lumpur"]);
+
+      expect(
+        json.data.every((t: { state: string; format: { type: string } }) =>
+          t.state === "Kuala Lumpur" && t.format.type === "rapid"
+        )
+      ).toBe(true);
     });
   });
 
