@@ -225,19 +225,7 @@ Public endpoints for browsing and viewing tournaments. No authentication require
 
 #### `GET /tournaments`
 
-**Query parameters:**
-
-| Param | Type | Description |
-|---|---|---|
-| `search` | string | Full-text search on tournament name and venue |
-| `format` | string | Comma-separated: `rapid,blitz,classical` |
-| `state` | string | Comma-separated: `selangor,penang,johor` |
-| `rating` | string | Comma-separated rating categories |
-| `date` | string | `upcoming`, `this_week`, `this_month`, `past` |
-| `sort` | string | `start_date` (default), `created_at`, `name` |
-| `order` | string | `asc` (default), `desc` |
-| `cursor` | string | Pagination cursor |
-| `limit` | integer | Results per page (default 20) |
+Returns all published tournaments ordered by `start_date` ascending. No query parameters accepted.
 
 **Response `200`:**
 ```json
@@ -265,13 +253,11 @@ Public endpoints for browsing and viewing tournaments. No authentication require
         "links": [...]
       }
     }
-  ],
-  "next_cursor": "abc123",
-  "has_more": true
+  ]
 }
 ```
 
-Note: `current_participants` is fetched from Redis cache (count of confirmed registrations). Falls back to a DB count query if cache miss.
+Note: `current_participants` is a live count of confirmed registrations queried from the database.
 
 #### `GET /tournaments/:id`
 
@@ -600,7 +586,7 @@ Uploads a file to Supabase Storage and returns a public URL. Used for tournament
 
 #### `PATCH /organizer/:orgId/tournaments/:id`
 
-Same shape as POST, but all fields optional. Only provided fields are updated. Cannot update a `completed` or `cancelled` tournament. If tournament is `published`, only certain fields can be changed (description, poster, registration deadline, max participants).
+Same shape as POST, but all fields optional. Only provided fields are updated. If tournament is `published`, only certain fields can be changed (description, poster, registration deadline, max participants).
 
 #### `POST /organizer/:orgId/tournaments/:id/publish`
 
@@ -748,7 +734,7 @@ Cannot change the `owner` role. Cannot promote someone to `owner`.
       "total_collected_cents": 138000,
       "total_refunded_cents": 6000,
       "net_payout_cents": 132000,
-      "status": "completed",
+      "status": "published",
       "paid_at": "2026-01-25T10:00:00Z"
     },
     {
@@ -789,7 +775,7 @@ Note: `total_commission_cents` is not shown to organizers in payouts (commission
     "total_players": 1247,
     "active_organizers": 18,
     "total_tournaments": 42,
-    "tournaments_breakdown": { "upcoming": 12, "completed": 28, "draft": 2 },
+    "tournaments_breakdown": { "published": 40, "draft": 2 },
     "commission_earned_cents": 842000,
     "total_volume_cents": 9262000,
     "net_revenue_cents": 757800,
@@ -954,7 +940,7 @@ The `search` parameter indexes player name and CHIP reference.
       "net_amount_cents": 3500,
       "commission_cents": 350,
       "payment_method": "fpx",
-      "status": "completed",
+      "status": "published",
       "chip_purchase_id": "CHIP-8X4K2M"
     }
   ],
