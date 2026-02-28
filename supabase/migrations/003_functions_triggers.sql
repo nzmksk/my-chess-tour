@@ -29,16 +29,15 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON payouts
 
 -- Important: This function uses SECURITY DEFINER
 -- so it can write to the users table even when RLS is enabled.
--- The full_name is pulled from the signup metadata
--- your signup form should pass it via options.data.full_name.
 -- Trigger function: create user + player_profile on auth signup
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, email, first_name, last_name, role)
+  INSERT INTO public.users (id, email, password, first_name, last_name, role)
   VALUES (
     NEW.id,
     NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'password_hash', ''),
     COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
     '{player}'
@@ -52,7 +51,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Attach to Supabase Auth
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();

@@ -104,8 +104,8 @@ DECLARE
     'The national governing body for chess in Malaysia, affiliated with FIDE.'
   ];
   org_emails  text[] := ARRAY[
-    'organizer1@example.com','organizer2@example.com','organizer3@example.com',
-    'organizer4@example.com','organizer5@example.com'
+    'organizer1@mct-seed.local','organizer2@mct-seed.local','organizer3@mct-seed.local',
+    'organizer4@mct-seed.local','organizer5@mct-seed.local'
   ];
   org_first   text[] := ARRAY['Ahmad','Mohd','Wei','Raj','Siti'];
   org_last    text[] := ARRAY['Kamaruddin','Yusof','Ming','Krishnan','Rahman'];
@@ -167,13 +167,14 @@ BEGIN
       org_emails[i], pwd_hash,
       now(),
       '{"provider":"email","providers":["email"]}',
-      json_build_object('first_name', org_first[i], 'last_name', org_last[i]),
+      json_build_object('first_name', org_first[i], 'last_name', org_last[i], 'password_hash', pwd_hash),
       now(), now()
     );
 
-    -- handle_new_user trigger fires here; ON CONFLICT handles any race
-    INSERT INTO public.users (id, email, first_name, last_name, role)
-    VALUES (new_user_id, org_emails[i], org_first[i], org_last[i], '{organizer}')
+    -- Explicit insert covers cases where the handle_new_user trigger does not
+    -- fire (e.g. direct auth.users inserts in migration context).
+    INSERT INTO public.users (id, email, password, first_name, last_name, role)
+    VALUES (new_user_id, org_emails[i], pwd_hash, org_first[i], org_last[i], '{organizer}')
     ON CONFLICT (id) DO UPDATE SET role = '{organizer}';
 
     org_user_ids := array_append(org_user_ids, new_user_id);
@@ -215,7 +216,7 @@ BEGIN
       p_last  := indian_last [((i - 1) % array_length(indian_last,  1)) + 1];
     END IF;
 
-    p_email  := lower(p_first) || '.' || lower(p_last) || i || '@example.com';
+    p_email  := lower(p_first) || '.' || lower(p_last) || i || '@mct-seed.local';
     p_state  := states[((i - 1) % array_length(states, 1)) + 1];
     p_gender := CASE WHEN i % 4 = 0 THEN 'female' ELSE 'male' END;
     -- Deterministic but varied ratings
@@ -235,13 +236,13 @@ BEGIN
       p_email, pwd_hash,
       now(),
       '{"provider":"email","providers":["email"]}',
-      json_build_object('first_name', p_first, 'last_name', p_last),
+      json_build_object('first_name', p_first, 'last_name', p_last, 'password_hash', pwd_hash),
       now() - (i || ' days')::interval,
       now() - (i || ' days')::interval
     );
 
-    INSERT INTO public.users (id, email, first_name, last_name, role)
-    VALUES (new_user_id, p_email, p_first, p_last, '{player}')
+    INSERT INTO public.users (id, email, password, first_name, last_name, role)
+    VALUES (new_user_id, p_email, pwd_hash, p_first, p_last, '{player}')
     ON CONFLICT (id) DO NOTHING;
 
     player_user_ids := array_append(player_user_ids, new_user_id);

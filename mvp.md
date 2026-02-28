@@ -113,9 +113,9 @@ Core user table linked to Supabase Auth. A single user can hold multiple roles (
 |---|---|---|---|
 | id | uuid | PK, default gen_random_uuid() | Matches Supabase Auth user ID |
 | email | varchar(255) | unique, not null | User's email address |
+| password | varchar(255) | not null | User's password |
 | first_name | varchar(255) | not null | First name |
 | last_name | varchar(255) | not null | Last name |
-| phone | varchar(20) | nullable | Contact number |
 | role | varchar(20)[] | not null, default '{player}' | Array of roles: player, organizer, admin |
 | avatar_url | text | nullable | Profile photo URL |
 | created_at | timestamptz | not null, default now() | Account creation timestamp |
@@ -150,8 +150,8 @@ Organization profile and approval data. An organization can be managed by multip
 | organization_name | varchar(255) | not null | Club or organization name |
 | description | text | nullable | About the organization |
 | links | jsonb | nullable | Social and web links (see example below) |
-| contact_email | varchar(255) | not null | Official contact email |
-| contact_phone | varchar(20) | nullable | Official contact number |
+| email | varchar(255) | not null | Official email |
+| phone | varchar(20) | nullable | Official number |
 | past_tournament_refs | text | nullable | References to previously organized tournaments |
 | approval_status | varchar(20) | not null, default 'pending' | pending, approved, rejected |
 | approved_by | uuid | FK → users.id, nullable | Admin who approved/rejected |
@@ -451,7 +451,7 @@ Interactive wireframes are provided as a companion HTML file (`player-wireframes
   - Status badge (Confirmed, Pending Payment, Completed, Cancelled)
 - Cards are clickable, linking back to the tournament detail page.
 - **Payment History screen** (sidebar nav): Table of all transactions with date, tournament name, amount, payment method, status, and a download receipt link.
-- **Profile screen** (sidebar nav): Edit personal details (name, email, phone) and chess-specific info (FIDE ID, MCF ID, ratings, date of birth, nationality, state).
+- **Profile screen** (sidebar nav): Edit personal details (name, email, password) and chess-specific info (FIDE ID, MCF ID, ratings, date of birth, nationality, state).
 
 ### Organizer Flows
 
@@ -463,7 +463,7 @@ Interactive wireframes are provided as a companion HTML file (`organizer-wirefra
 
 **Screen: Application Form**
 
-- Form fields: Organization Name, Description, Links (dynamic — user selects a platform type from a dropdown such as Website, Facebook, Instagram, X, YouTube, WhatsApp, Telegram, then enters the URL; additional links can be added with a "+" button), Contact Email, Contact Phone, Past Tournament References (optional).
+- Form fields: Organization Name, Description, Links (dynamic — user selects a platform type from a dropdown such as Website, Facebook, Instagram, X, YouTube, WhatsApp, Telegram, then enters the URL; additional links can be added with a "+" button), Email, Phone, Past Tournament References (optional).
 - On submission, the screen transitions to a pending state showing the organization name and a message that the application is under review (typically 1–2 business days).
 - Admin approval triggers an email notification and unlocks the organizer dashboard.
 
@@ -548,7 +548,7 @@ The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visua
 - **Header:** Back button, organization name, and current status badge.
 - **Action bar:** Shows who applied and when. Two action buttons: "Reject" (opens inline rejection panel) and "Approve" (primary action).
 - **Rejection panel:** Slides open inline when "Reject" is clicked. Contains a textarea for the rejection reason (sent to the applicant via email) and Cancel/Confirm buttons.
-- **Organization Details card:** Name, description, links (with platform icons), contact email, contact phone.
+- **Organization Details card:** Name, description, links (with platform icons), email, phone.
 - **Past Tournament References card:** Free-text references provided by the applicant during the application.
 - **Applicant Account card:** The user account that submitted the application — name, email, account creation date, and player profile details (FIDE ID, rating) if available.
 

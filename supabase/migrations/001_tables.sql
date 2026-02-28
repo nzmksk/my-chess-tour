@@ -9,9 +9,9 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email         varchar(255) UNIQUE NOT NULL,
+  password      varchar(255) NOT NULL,
   first_name    varchar(255) NOT NULL,
   last_name     varchar(255) NOT NULL,
-  phone         varchar(20),
   role          varchar(20)[] NOT NULL DEFAULT '{player}',
   avatar_url    text,
   created_at    timestamptz NOT NULL DEFAULT now(),
@@ -25,10 +25,11 @@ CREATE TABLE users (
 CREATE TABLE player_profiles (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         uuid UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_oku          boolean NOT NULL DEFAULT false,
   fide_id         varchar(20),
   mcf_id          varchar(20),
-  national_rating integer,
   fide_rating     integer,
+  national_rating integer,
   date_of_birth   date,
   gender          varchar(10),
   state           varchar(50),
