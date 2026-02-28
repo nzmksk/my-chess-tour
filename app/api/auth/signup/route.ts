@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 
 interface SignupRequest {
@@ -6,7 +7,6 @@ interface SignupRequest {
   password: string;
   first_name: string;
   last_name: string;
-  phone?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { email, password, first_name, last_name, phone } =
+  const { email, password, first_name, last_name } =
     body as SignupRequest;
 
   // Validate required fields
@@ -55,6 +55,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Hash the password before passing it to the auth layer.
+  // The handle_new_user trigger reads password_hash from auth metadata and
+  // stores it in public.users.password (never the plaintext value).
+  const passwordHash = await bcrypt.hash(password, 12);
+
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signUp({
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
       data: {
         first_name,
         last_name,
-        ...(phone ? { phone } : {}),
+        password_hash: passwordHash,
       },
     },
   });
