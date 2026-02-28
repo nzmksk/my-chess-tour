@@ -51,6 +51,8 @@ The most important week. Get the boring stuff out of the way so everything after
 - [x] Verify deployment pipeline works (push → build → deploy)
 - [x] Create seed script with realistic test data (5 organizers, 15 tournaments, 50 players, 200 registrations)
 - [x] Set up domain
+- [x] Create signup, login, and logout endpoints
+- [x] Add workflows for CI, Claude Code, and automatic dependency updates
 
 **Deliverable:** A deployed app at `staging.mychesstour.com` with auth working (signup, login, logout) and a seeded database.
 
