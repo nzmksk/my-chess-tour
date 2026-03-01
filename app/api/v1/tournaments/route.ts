@@ -6,7 +6,7 @@ export async function GET() {
     .from("tournaments")
     .select(
       `id, name, venue_name, venue_state, start_date, end_date, registration_deadline,
-       format, is_fide_rated, is_mcf_rated, entry_fees, max_participants, poster_url, status,
+       format, time_control, is_fide_rated, is_mcf_rated, entry_fees, max_participants, poster_url, status,
        organizer_profiles(id, organization_name, links)`
     )
     .eq("status", "published")
@@ -48,6 +48,7 @@ export async function GET() {
     end_date: string;
     registration_deadline: string;
     format: unknown;
+    time_control: unknown;
     is_fide_rated: boolean;
     is_mcf_rated: boolean;
     entry_fees: unknown;
@@ -70,6 +71,7 @@ export async function GET() {
       end_date: t.end_date,
       registration_deadline: t.registration_deadline,
       format: t.format,
+      time_control: t.time_control,
       is_fide_rated: t.is_fide_rated,
       is_mcf_rated: t.is_mcf_rated,
       entry_fees: t.entry_fees,
