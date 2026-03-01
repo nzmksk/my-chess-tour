@@ -9,17 +9,19 @@ const MALAYSIAN_STATES = [
   "Johor",
   "Kedah",
   "Kelantan",
-  "Kuala Lumpur",
   "Melaka",
   "Negeri Sembilan",
   "Pahang",
-  "Penang",
   "Perak",
   "Perlis",
+  "Pulau Pinang",
   "Sabah",
   "Sarawak",
   "Selangor",
   "Terengganu",
+  "W.P. Kuala Lumpur",
+  "W.P. Labuan",
+  "W.P. Putrajaya",
 ];
 
 interface Props {
@@ -95,44 +97,6 @@ export default function TournamentsClient({ tournaments }: Props) {
 
   return (
     <>
-      {/* Hero */}
-      <section
-        style={{
-          background:
-            "linear-gradient(180deg, var(--color-bg-sunken) 0%, var(--color-bg-base) 100%)",
-          borderBottom: "1px solid var(--color-border)",
-          padding: "56px 40px 40px",
-          textAlign: "center",
-        }}
-      >
-        <h1
-          style={{
-            fontFamily: "var(--font-cinzel)",
-            fontSize: "32px",
-            fontWeight: 600,
-            letterSpacing: "0.05em",
-            color: "var(--color-text-primary)",
-            marginBottom: "12px",
-          }}
-        >
-          Find Your Next Tournament
-        </h1>
-        <p
-          style={{
-            fontFamily: "var(--font-lato)",
-            fontSize: "16px",
-            fontWeight: 300,
-            color: "var(--color-text-secondary)",
-            maxWidth: "480px",
-            margin: "0 auto",
-            lineHeight: "1.75",
-          }}
-        >
-          Discover and register for chess tournaments across Malaysia — no more
-          Google Forms or bank transfers.
-        </p>
-      </section>
-
       {/* Filter bar */}
       <FilterBar
         search={search}

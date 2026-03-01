@@ -34,7 +34,10 @@ export default function NavBar() {
           height: "64px",
         }}
       >
-        <Link href="/tournaments" style={{ display: "flex", alignItems: "center" }}>
+        <Link
+          href="/tournaments"
+          style={{ display: "flex", alignItems: "center" }}
+        >
           <Image
             src="/mct-logo-horizontal.svg"
             alt="MY Chess Tour"
