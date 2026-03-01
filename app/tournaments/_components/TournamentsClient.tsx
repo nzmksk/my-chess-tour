@@ -43,8 +43,7 @@ export default function TournamentsClient({ tournaments }: Props) {
       if (search.trim()) {
         const q = search.toLowerCase();
         if (
-          !t.name.toLowerCase().includes(q) &&
-          !t.venue_name.toLowerCase().includes(q)
+          !t.name.toLowerCase().includes(q)
         ) {
           return false;
         }

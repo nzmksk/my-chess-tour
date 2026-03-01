@@ -24,7 +24,7 @@ function getMinFeeCents(fees: Tournament["entry_fees"]): number {
 }
 
 function formatRm(cents: number): string {
-  return `RM ${(cents / 100).toFixed(0)}`;
+  return `RM${(cents / 100).toFixed(0)}`;
 }
 
 function capitalise(s: string): string {
@@ -186,6 +186,18 @@ export default function TournamentCard({ tournament: t }: Props) {
           }}
         >
           <div>
+            {hasMultipleFees && (
+              <small
+                style={{
+                  fontSize: "12px",
+                  color: "var(--color-text-muted)",
+                  fontFamily: "var(--font-lato)",
+                  marginLeft: "4px",
+                }}
+              >
+                Starting from {" "}
+              </small>
+            )}
             <span
               style={{
                 fontFamily: "var(--font-cinzel)",
@@ -196,18 +208,6 @@ export default function TournamentCard({ tournament: t }: Props) {
             >
               {minFee > 0 ? formatRm(minFee) : "Free"}
             </span>
-            {hasMultipleFees && (
-              <small
-                style={{
-                  fontSize: "12px",
-                  color: "var(--color-text-muted)",
-                  fontFamily: "var(--font-lato)",
-                  marginLeft: "4px",
-                }}
-              >
-                from
-              </small>
-            )}
           </div>
 
           <button
