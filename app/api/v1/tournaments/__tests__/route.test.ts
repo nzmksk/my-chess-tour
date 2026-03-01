@@ -49,6 +49,7 @@ function makeTournament(overrides: Record<string, unknown> = {}) {
     end_date: "2026-03-16",
     registration_deadline: "2026-03-10T23:59:59Z",
     format: { type: "rapid", system: "swiss", rounds: 7 },
+    time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
     is_fide_rated: true,
     is_mcf_rated: false,
     entry_fees: { standard: { amount_cents: 5000 }, additional: [] },
@@ -126,6 +127,7 @@ describe("GET /api/v1/tournaments", () => {
       expect(item.end_date).toBe("2026-03-16");
       expect(item.registration_deadline).toBe("2026-03-10T23:59:59Z");
       expect(item.format).toEqual({ type: "rapid", system: "swiss", rounds: 7 });
+      expect(item.time_control).toEqual({ base_minutes: 15, increment_seconds: 10, delay_seconds: 0 });
       expect(item.is_fide_rated).toBe(true);
       expect(item.is_mcf_rated).toBe(false);
       expect(item.max_participants).toBe(120);

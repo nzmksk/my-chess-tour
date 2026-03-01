@@ -36,3 +36,173 @@ body {
   color: var(--color-text-body);
   font-family: var(--font-lato);
 }
+
+/* ── Tournament browse page ── */
+
+.tournament-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.tournament-card:hover {
+  border-color: var(--color-gold-muted);
+  box-shadow: 0 4px 20px rgba(201, 168, 76, 0.12);
+}
+
+/* Format / rating badges */
+.badge-format,
+.badge-fide,
+.badge-mcf,
+.badge-unrated {
+  font-family: var(--font-cinzel);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+.badge-format {
+  background: var(--color-bg-raised);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+.badge-fide {
+  background: rgba(59, 90, 160, 0.18);
+  color: #7ea3d9;
+  border: 1px solid rgba(59, 90, 160, 0.3);
+}
+.badge-mcf {
+  background: rgba(140, 60, 150, 0.18);
+  color: #c07fd0;
+  border: 1px solid rgba(140, 60, 150, 0.3);
+}
+.badge-unrated {
+  background: var(--color-bg-raised);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+/* Card CTA buttons */
+.card-btn-view {
+  font-family: var(--font-cinzel);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 2px;
+  border: 1px solid var(--color-gold-bright);
+  background: transparent;
+  color: var(--color-gold-bright);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.card-btn-view:hover {
+  background: rgba(201, 168, 76, 0.08);
+}
+.card-btn-full {
+  font-family: var(--font-cinzel);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 2px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+/* Filter bar */
+.search-input {
+  width: 100%;
+  font-family: var(--font-lato);
+  font-size: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  background: var(--color-bg-sunken);
+  color: var(--color-text-body);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.search-input:focus {
+  border-color: var(--color-gold-bright);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
+}
+.search-input::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.filter-btn {
+  font-family: var(--font-lato);
+  font-size: 13px;
+  padding: 10px 32px 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  background: var(--color-bg-raised)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a6e55' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E")
+    right 10px center / 12px no-repeat;
+  color: var(--color-text-body);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease;
+}
+.filter-btn:hover {
+  border-color: var(--color-gold-muted);
+}
+.filter-btn--active {
+  border-color: var(--color-gold-bright);
+  background-color: rgba(201, 168, 76, 0.08);
+  color: var(--color-gold-bright);
+}
+
+.filter-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-gold);
+  border-radius: 4px;
+  padding: 6px 0;
+  min-width: 180px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.filter-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: var(--font-lato);
+  color: var(--color-text-body);
+  cursor: pointer;
+  transition: background 0.1s;
+  user-select: none;
+}
+.filter-checkbox-item:hover {
+  background: rgba(201, 168, 76, 0.05);
+}
+
+.filter-clear-btn {
+  font-family: var(--font-lato);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  transition: color 0.15s ease;
+}
+.filter-clear-btn:hover {
+  color: var(--color-text-secondary);
+}
