@@ -32,7 +32,7 @@ This platform eliminates the back-and-forth by centralizing discovery, registrat
 
 | Feature | Description |
 |---|---|
-| Browse tournaments | View a list of upcoming tournaments with search and basic filtering (date, location, format). |
+| Browse tournaments | View a list of all published tournaments ordered by start date. |
 | Tournament details | View full tournament information including name, date, location, format, time control, entry fee, max participants, spots remaining, and registration deadline. |
 | Register and pay | One-step registration with integrated payment. Player is automatically added to the participant list upon successful payment. |
 | My tournaments | Dashboard showing upcoming registered tournaments and past participation history. |
@@ -216,7 +216,7 @@ The main event. Created by an approved organizer.
 | restrictions | jsonb | nullable | Eligibility restrictions (see example below) |
 | max_participants | integer | not null | Tournament-wide maximum capacity |
 | poster_url | text | nullable | Tournament poster image (portrait format) |
-| status | varchar(20) | not null, default 'draft' | draft, published, registration_closed, ongoing, completed, cancelled |
+| status | tournament_status enum | not null, default 'draft' | draft, published |
 | created_at | timestamptz | not null, default now() | |
 | updated_at | timestamptz | not null, default now() | |
 
@@ -475,7 +475,7 @@ Interactive wireframes are provided as a companion HTML file (`organizer-wirefra
 - **Sidebar navigation:** Dashboard (default), Create Tournament, Payouts, Members, Organization Settings.
 - **Organization header** in the sidebar showing the organization name with a green verified checkmark icon (✓) for approved organizations.
 - **Stats row:** Active Tournaments, Total Registrations, Revenue, Pending Payouts — quick overview cards.
-- **Tournaments table:** Lists all tournaments (published, draft, completed, cancelled) with columns for name, date, registration count vs. capacity, status badge, and a "Manage" button.
+- **Tournaments table:** Lists all tournaments (published, draft) with columns for name, date, registration count vs. capacity, status badge, and a "Manage" button.
 - **"Create Tournament" button** prominently placed at the top right.
 - Clicking "Manage" on any tournament navigates to the tournament management screen.
 
@@ -532,7 +532,7 @@ The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visua
 #### Screen 1: Admin Dashboard
 
 - **Dark sidebar navigation:** Dashboard, Applications (with pending count badge), Tournaments, Transactions, Users, Settings.
-- **Stats row:** Total Players (with month-over-month growth), Active Organizers, Total Tournaments (broken down by upcoming/completed/draft), Commission Earned at 10% (with growth trend).
+- **Stats row:** Total Players (with month-over-month growth), Active Organizers, Total Tournaments (broken down by published/draft), Commission Earned at 10% (with growth trend).
 - **Revenue detail row:** Total Registration Volume (all amounts charged to players) and Net Revenue (commission earned minus CHIP's transaction fee) side by side.
 - **Registrations chart:** Bar chart showing registration trend over the past 30 days.
 - **Quick action panels:** Two side-by-side tables — Pending Applications (clickable rows to review) and Recent Transactions.
@@ -555,9 +555,9 @@ The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visua
 #### Screen 4: Tournaments Overview
 
 - **Full-width search bar** on its own line, indexing by tournament name or organizer name.
-- **Status filter** below the search bar as a dropdown with checkboxes for multi-select (Published, Draft, Completed, Cancelled).
+- **Status filter** below the search bar as a dropdown with checkboxes for multi-select (Published, Draft).
 - **Table:** All tournaments across the platform with columns: Tournament name + format/rating details, Organizer name, Date, Registrations (current/max), Revenue (organizer's total), Commission (platform's 10%), and Status badge.
-- Draft and completed tournaments are visually dimmed.
+- Draft tournaments are visually dimmed.
 
 #### Screen 5: Transactions
 
