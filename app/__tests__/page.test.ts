@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockRedirect = vi.hoisted(() => vi.fn());
 
@@ -6,12 +6,35 @@ vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
 }));
 
-import RootPage from "../page";
+vi.mock("@/lib/github", () => ({
+  getIssueProgress: vi.fn().mockResolvedValue(50),
+}));
 
-describe("RootPage", () => {
-  it("redirects to /landing", () => {
-    RootPage();
-    expect(mockRedirect).toHaveBeenCalledOnce();
-    expect(mockRedirect).toHaveBeenCalledWith("/landing");
+vi.mock("@/app/_components/WaitlistForm", () => ({
+  default: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("@/app/_components/BuildProgress", () => ({
+  default: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("@/app/_components/ProgressSkeleton", () => ({
+  default: vi.fn().mockReturnValue(null),
+}));
+
+import LandingPage from "../page";
+
+describe("RootPage (landing at /)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("does not redirect", () => {
+    LandingPage();
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it("returns a non-null React element", () => {
+    const result = LandingPage();
+    expect(result).not.toBeNull();
+    expect(result).toBeDefined();
   });
 });
