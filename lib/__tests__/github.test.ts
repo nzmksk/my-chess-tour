@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getIssueProgress } from "../github";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { _clearCacheForTesting, getIssueProgress } from "../github";
 
 const mockSearch = vi.fn();
 
@@ -17,7 +17,10 @@ function mockCounts(closed: number, total: number) {
 }
 
 describe("getIssueProgress", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _clearCacheForTesting();
+  });
 
   it("returns the correct percentage", async () => {
     mockCounts(3, 10);
@@ -63,5 +66,79 @@ describe("getIssueProgress", () => {
     for (const [args] of mockSearch.mock.calls) {
       expect(args.q).toContain("repo:nzmksk/my-chess-tour");
     }
+  });
+});
+
+describe("error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _clearCacheForTesting();
+  });
+
+  it("returns 0 when the GitHub API throws", async () => {
+    mockSearch.mockRejectedValue(new Error("rate limited"));
+    expect(await getIssueProgress()).toBe(0);
+  });
+
+  it("returns 0 when only one of the two requests fails", async () => {
+    mockSearch
+      .mockResolvedValueOnce({ data: { total_count: 5 } })
+      .mockRejectedValueOnce(new Error("timeout"));
+    expect(await getIssueProgress()).toBe(0);
+  });
+});
+
+describe("in-memory cache", () => {
+  beforeEach(() => {
+    vi.resetModules(); // fresh module instance → cache = null for every test
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function freshGetIssueProgress() {
+    // vi.resetModules() was called in beforeEach; dynamic import yields a fresh
+    // module with an empty cache. The top-level vi.mock() factory for
+    // @octokit/rest persists across resetModules and applies to the fresh import.
+    const { getIssueProgress: fn } = await import("../github");
+    return fn;
+  }
+
+  it("returns the cached value on a second call without re-fetching", async () => {
+    const fn = await freshGetIssueProgress();
+    mockSearch.mockResolvedValue({ data: { total_count: 10 } });
+
+    await fn(); // first call — populates cache
+    await fn(); // second call — should hit cache
+
+    // First call fires exactly 2 API requests (closed + all); second call fires 0
+    expect(mockSearch).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-fetches after the 6-hour TTL has elapsed", async () => {
+    const fn = await freshGetIssueProgress();
+    mockSearch.mockResolvedValue({ data: { total_count: 10 } });
+
+    await fn(); // populates cache
+    vi.advanceTimersByTime(6 * 60 * 60 * 1000 + 1); // 6 h + 1 ms
+    mockSearch.mockResolvedValue({ data: { total_count: 15 } });
+    await fn(); // cache expired — should re-fetch
+
+    // 2 calls per fetch × 2 fetches = 4
+    expect(mockSearch).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not re-fetch when called just before the TTL expires", async () => {
+    const fn = await freshGetIssueProgress();
+    mockSearch.mockResolvedValue({ data: { total_count: 10 } });
+
+    await fn(); // populates cache
+    vi.advanceTimersByTime(6 * 60 * 60 * 1000 - 1); // 1 ms before TTL
+    await fn(); // still within TTL — should use cache
+
+    expect(mockSearch).toHaveBeenCalledTimes(2);
   });
 });
