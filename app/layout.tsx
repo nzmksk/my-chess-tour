@@ -1,6 +1,19 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { Cinzel, Lato } from "next/font/google";
 import "./globals.css";
+
+const cinzel = Cinzel({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-cinzel",
+});
+
+const lato = Lato({
+  subsets: ["latin"],
+  weight: ["300", "400"],
+  variable: "--font-lato",
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const headersList = await headers();
@@ -27,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${cinzel.variable} ${lato.variable}`}>
       <body>{children}</body>
     </html>
   );
