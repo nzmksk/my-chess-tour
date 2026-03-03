@@ -6,6 +6,13 @@ vi.mock("next/headers", () => ({
   headers: vi.fn().mockResolvedValue({ get: mockGet }),
 }));
 
+// next/font/google is a Next.js build-time feature that cannot run in vitest's
+// Node environment — stub it so layout.tsx can be imported.
+vi.mock("next/font/google", () => ({
+  Cinzel: () => ({ variable: "--font-cinzel" }),
+  Lato: () => ({ variable: "--font-lato" }),
+}));
+
 import { generateMetadata } from "../layout";
 
 describe("generateMetadata", () => {
