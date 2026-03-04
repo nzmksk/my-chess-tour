@@ -1,11 +1,13 @@
+import { Suspense } from "react";
 import { headers } from "next/headers";
 import NavBar from "@/app/_components/NavBar";
 import TournamentsClient from "./_components/TournamentsClient";
+import TournamentsGridSkeleton from "./_components/TournamentsGridSkeleton";
 import type { Tournament } from "./types";
 
 export const revalidate = 60;
 
-export default async function TournamentsPage() {
+async function TournamentsData() {
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";
   const protocol =
@@ -28,10 +30,16 @@ export default async function TournamentsPage() {
     // Network error — render page with empty list rather than crashing
   }
 
+  return <TournamentsClient tournaments={tournaments} />;
+}
+
+export default function TournamentsPage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-bg-base)" }}>
       <NavBar />
-      <TournamentsClient tournaments={tournaments} />
+      <Suspense fallback={<TournamentsGridSkeleton />}>
+        <TournamentsData />
+      </Suspense>
     </div>
   );
 }
