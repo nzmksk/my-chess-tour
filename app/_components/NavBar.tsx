@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const NAV_LINKS = [
   { href: "/my-tournaments", label: "My Tournaments" },
@@ -13,6 +13,7 @@ const NAV_LINKS = [
 export default function NavBar() {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   // Close drawer when route changes
   useEffect(() => {
@@ -25,6 +26,17 @@ export default function NavBar() {
     return () => {
       document.body.style.overflow = "";
     };
+  }, [drawerOpen]);
+
+  // Hide closed drawer from keyboard and assistive tech
+  useEffect(() => {
+    const el = drawerRef.current;
+    if (!el) return;
+    if (drawerOpen) {
+      el.removeAttribute("inert");
+    } else {
+      el.setAttribute("inert", "");
+    }
   }, [drawerOpen]);
 
   return (
@@ -109,6 +121,8 @@ export default function NavBar() {
             className="nav-hamburger"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation menu"
+            aria-expanded={drawerOpen}
+            aria-controls="nav-drawer"
             style={{
               background: "none",
               border: "none",
@@ -144,7 +158,13 @@ export default function NavBar() {
 
       {/* Slide-in drawer from right */}
       <div
+        id="nav-drawer"
+        ref={drawerRef}
         className={drawerOpen ? "nav-drawer nav-drawer--open" : "nav-drawer"}
+        aria-hidden={!drawerOpen}
+        aria-modal={drawerOpen ? "true" : undefined}
+        role="dialog"
+        aria-label="Navigation menu"
       >
         {/* Close button */}
         <div
