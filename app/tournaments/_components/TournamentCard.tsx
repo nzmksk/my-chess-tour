@@ -64,6 +64,7 @@ export default function TournamentCard({ tournament: t }: Props) {
     <article className="tournament-card">
       {/* Poster */}
       <div
+        className="tournament-card-poster"
         style={{
           background: "var(--color-bg-raised)",
           display: "flex",

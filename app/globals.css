@@ -257,6 +257,14 @@ body {
     display: flex;
     align-items: center;
   }
+
+  .tournament-card {
+    grid-template-columns: 1fr;
+  }
+
+  .tournament-card-poster {
+    display: none;
+  }
 }
 
 /* ── Skeleton shimmer ── */
