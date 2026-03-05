@@ -1,0 +1,2525 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MY Chess Tour — Auth Flow Wireframes v2</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lato:ital,wght@0,300;0,400;1,300&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --color-bg-base: #0e0e0e;
+        --color-bg-surface: #141414;
+        --color-bg-raised: #1a1a1a;
+        --color-bg-sunken: #0a0a0a;
+        --color-gold-bright: #c9a84c;
+        --color-gold-deep: #a07c2c;
+        --color-gold-muted: #7a6e55;
+        --color-gold-dim: #5a5040;
+        --color-gold-ghost: #2e2a1e;
+        --color-text-primary: #e8d9b4;
+        --color-text-body: #d4c5a0;
+        --color-text-secondary: #a89878;
+        --color-text-muted: #7a6e55;
+        --color-text-disabled: #4a4030;
+        --color-border: #2e2a1e;
+        --color-border-gold: #c9a84c;
+        --color-link: #8a7040;
+        --color-link-hover: #c9a84c;
+        --space-xs: 4px;
+        --space-sm: 8px;
+        --space-md: 16px;
+        --space-lg: 24px;
+        --space-xl: 40px;
+        --space-2xl: 64px;
+        --transition-base: 0.2s ease;
+        --shadow-gold-sm: 0 4px 20px rgba(201, 168, 76, 0.25);
+        --shadow-gold-md: 0 6px 28px rgba(201, 168, 76, 0.4);
+        --font-display: "Cinzel", serif;
+        --font-body: "Lato", sans-serif;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        font-family: var(--font-body);
+        background: var(--color-bg-base);
+        color: var(--color-text-body);
+        min-height: 100vh;
+        line-height: 1.75;
+      }
+      a {
+        text-decoration: none;
+      }
+
+      /* ── Chessboard Strip ───────────────────────────────── */
+      .board-strip {
+        display: flex;
+        height: 8px;
+        flex-shrink: 0;
+      }
+      .board-strip span {
+        flex: 1;
+      }
+      .board-strip span:nth-child(odd) {
+        background: var(--color-gold-bright);
+      }
+      .board-strip span:nth-child(even) {
+        background: var(--color-bg-raised);
+      }
+      .board-strip--thin {
+        height: 4px;
+      }
+
+      /* ── Navbar — Unauthenticated ───────────────────────── */
+      .nav {
+        background: var(--color-bg-sunken);
+        border-bottom: 1px solid var(--color-border);
+        padding: 0 var(--space-xl);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+      }
+      .nav-logo {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 18px;
+        letter-spacing: 0.14em;
+        color: var(--color-gold-bright);
+        text-transform: uppercase;
+        flex-shrink: 0;
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+      }
+
+      /* Ghost link style (Become an Organizer) */
+      .nav-link-ghost {
+        font-family: var(--font-body);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        padding: 0 var(--space-md);
+        height: 64px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        transition: color var(--transition-base);
+      }
+      .nav-link-ghost:hover {
+        color: var(--color-gold-bright);
+      }
+
+      /* Login — secondary button in nav */
+      .nav-btn-login {
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--color-gold-bright);
+        background: transparent;
+        border: 1px solid var(--color-gold-ghost);
+        border-radius: 2px;
+        padding: 8px 18px;
+        cursor: pointer;
+        transition:
+          border-color var(--transition-base),
+          background var(--transition-base);
+      }
+      .nav-btn-login:hover {
+        border-color: var(--color-gold-bright);
+        background: rgba(201, 168, 76, 0.06);
+      }
+
+      /* Sign Up — primary button in nav */
+      .nav-btn-signup {
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #0e0e0e;
+        background: linear-gradient(
+          135deg,
+          var(--color-gold-bright),
+          var(--color-gold-deep)
+        );
+        border: none;
+        border-radius: 2px;
+        padding: 9px 20px;
+        cursor: pointer;
+        box-shadow: var(--shadow-gold-sm);
+        transition:
+          box-shadow var(--transition-base),
+          opacity var(--transition-base);
+      }
+      .nav-btn-signup:hover {
+        box-shadow: var(--shadow-gold-md);
+        opacity: 0.92;
+      }
+
+      /* Authenticated nav items */
+      .nav-link-auth {
+        font-family: var(--font-body);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        padding: 0 var(--space-md);
+        height: 64px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        transition: color var(--transition-base);
+      }
+      .nav-link-auth:hover {
+        color: var(--color-gold-bright);
+      }
+
+      .nav-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--color-gold-ghost);
+        border: 1px solid var(--color-gold-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-display);
+        font-size: 12px;
+        color: var(--color-gold-bright);
+        cursor: pointer;
+        margin-left: var(--space-sm);
+        transition:
+          border-color var(--transition-base),
+          box-shadow var(--transition-base);
+      }
+      .nav-avatar:hover {
+        border-color: var(--color-gold-bright);
+        box-shadow: var(--shadow-gold-sm);
+      }
+
+      /* ── Flow Tab Nav ───────────────────────────────────── */
+      .flow-nav {
+        background: var(--color-bg-raised);
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        padding: 0 var(--space-xl);
+        overflow-x: auto;
+      }
+      .flow-tab {
+        font-family: var(--font-display);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        padding: 14px 24px;
+        border: none;
+        border-bottom: 2px solid transparent;
+        background: none;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all var(--transition-base);
+      }
+      .flow-tab:hover {
+        color: var(--color-text-secondary);
+      }
+      .flow-tab.active {
+        color: var(--color-gold-bright);
+        border-bottom-color: var(--color-gold-bright);
+      }
+
+      /* ── Screen wrappers ────────────────────────────────── */
+      .screens-wrapper {
+        display: none;
+        animation: fadeIn 0.25s ease forwards;
+      }
+      .screens-wrapper.active {
+        display: block;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ── Section headers ────────────────────────────────── */
+      .page-section {
+        border-bottom: 1px solid var(--color-border);
+      }
+      .section-header {
+        background: var(--color-bg-sunken);
+        padding: var(--space-sm) var(--space-xl);
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+        border-bottom: 1px solid var(--color-border);
+        flex-wrap: wrap;
+      }
+      .section-header-title {
+        font-family: var(--font-display);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+      .section-line {
+        flex: 1;
+        height: 1px;
+        background: var(--color-border);
+        min-width: 20px;
+      }
+
+      /* ── Auth page canvas ───────────────────────────────── */
+      .auth-page {
+        min-height: 70vh;
+        display: grid;
+        place-items: center;
+        padding: var(--space-2xl) var(--space-xl);
+      }
+
+      /* ── Cards ──────────────────────────────────────────── */
+      .card {
+        background: var(--color-bg-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        padding: var(--space-xl);
+      }
+      .card--featured {
+        border-top: 2px solid var(--color-gold-bright);
+      }
+      .auth-card {
+        width: 100%;
+        max-width: 460px;
+      }
+
+      /* ── Auth card header ───────────────────────────────── */
+      .auth-card-header {
+        text-align: center;
+        margin-bottom: var(--space-xl);
+      }
+      .auth-logo {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.22em;
+        color: var(--color-gold-bright);
+        text-transform: uppercase;
+        margin-bottom: var(--space-lg);
+        display: block;
+      }
+      .auth-heading {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 26px;
+        letter-spacing: 0.05em;
+        color: var(--color-text-primary);
+        line-height: 1.2;
+        margin-bottom: var(--space-sm);
+      }
+      .auth-subheading {
+        font-family: var(--font-body);
+        font-weight: 300;
+        font-size: 14px;
+        color: var(--color-text-secondary);
+      }
+
+      /* ── Dividers ───────────────────────────────────────── */
+      .divider-gold {
+        width: 48px;
+        height: 2px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--color-gold-bright),
+          transparent
+        );
+        margin: var(--space-lg) auto;
+        border: none;
+      }
+      .divider-text {
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+        margin: var(--space-lg) 0;
+        color: var(--color-text-muted);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        font-family: var(--font-display);
+        text-transform: uppercase;
+      }
+      .divider-text::before,
+      .divider-text::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--color-border);
+      }
+
+      /* ── Form ───────────────────────────────────────────── */
+      .form-group {
+        margin-bottom: var(--space-lg);
+        position: relative;
+      }
+      .form-group-last {
+        margin-bottom: 0;
+      }
+
+      .label-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+        margin-bottom: 6px;
+      }
+      .input-label {
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--color-gold-muted);
+      }
+      .label-optional {
+        font-family: var(--font-body);
+        font-weight: 300;
+        font-size: 11px;
+        color: var(--color-text-disabled);
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      /* '?' help icon */
+      .help-icon {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        border: 1px solid var(--color-gold-dim);
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-body);
+        font-size: 9px;
+        font-weight: 400;
+        color: var(--color-gold-dim);
+        cursor: pointer;
+        transition:
+          border-color var(--transition-base),
+          color var(--transition-base);
+        position: relative;
+        flex-shrink: 0;
+      }
+      .help-icon:hover {
+        border-color: var(--color-gold-bright);
+        color: var(--color-gold-bright);
+      }
+      .help-icon:hover .tooltip {
+        display: block;
+      }
+      .tooltip {
+        display: none;
+        position: absolute;
+        left: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: var(--color-bg-raised);
+        border: 1px solid var(--color-border-gold);
+        border-radius: 2px;
+        padding: var(--space-sm) var(--space-md);
+        width: 220px;
+        z-index: 50;
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 300;
+        color: var(--color-text-secondary);
+        line-height: 1.5;
+        pointer-events: none;
+        box-shadow: var(--shadow-gold-sm);
+      }
+
+      .input {
+        background: var(--color-bg-sunken);
+        border: 1px solid var(--color-border);
+        border-radius: 2px;
+        color: var(--color-text-body);
+        font-family: var(--font-body);
+        font-size: 15px;
+        padding: 12px 16px;
+        width: 100%;
+        outline: none;
+        transition:
+          border-color var(--transition-base),
+          box-shadow var(--transition-base);
+      }
+      .input:focus {
+        border-color: var(--color-gold-bright);
+        box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+      }
+      .input::placeholder {
+        color: var(--color-text-disabled);
+      }
+      .input.input-error {
+        border-color: #7a3a20;
+      }
+      /* padding-right for inputs with icon inside */
+      .input--icon {
+        padding-right: 44px;
+      }
+
+      .input-hint {
+        font-family: var(--font-body);
+        font-size: 12px;
+        color: var(--color-text-muted);
+        margin-top: var(--space-xs);
+        font-weight: 300;
+      }
+      .input-hint.error {
+        color: #e05a2b;
+      }
+
+      .input-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-md);
+      }
+      .input-row-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: var(--space-md);
+      }
+
+      /* Eye icon wrapper */
+      .input-wrap {
+        position: relative;
+      }
+      .eye-btn {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        color: var(--color-text-muted);
+        transition: color var(--transition-base);
+        display: flex;
+        align-items: center;
+      }
+      .eye-btn:hover {
+        color: var(--color-gold-bright);
+      }
+      .eye-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Password requirements box ──────────────────────── */
+      .pw-requirements {
+        background: var(--color-bg-sunken);
+        border: 1px solid var(--color-border);
+        border-radius: 2px;
+        padding: var(--space-sm) var(--space-md);
+        margin-top: var(--space-sm);
+      }
+      .pw-req-title {
+        font-family: var(--font-display);
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: var(--space-xs);
+      }
+      .pw-req-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px 12px;
+      }
+      .pw-req {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-body);
+        font-size: 11px;
+        color: var(--color-text-muted);
+      }
+      .pw-req-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: var(--color-gold-dim);
+      }
+      .pw-req.met .pw-req-dot {
+        background: var(--color-gold-bright);
+      }
+      .pw-req.met {
+        color: var(--color-text-secondary);
+      }
+
+      /* ── Password strength ──────────────────────────────── */
+      .strength-bar {
+        height: 3px;
+        border-radius: 2px;
+        background: var(--color-border);
+        margin-top: var(--space-sm);
+        overflow: hidden;
+      }
+      .strength-fill {
+        height: 100%;
+        border-radius: 2px;
+        background: linear-gradient(
+          90deg,
+          var(--color-gold-bright),
+          var(--color-gold-deep)
+        );
+        width: 60%;
+      }
+      .strength-label {
+        font-family: var(--font-body);
+        font-size: 11px;
+        color: var(--color-gold-muted);
+        margin-top: 4px;
+      }
+
+      /* ── Checkboxes ─────────────────────────────────────── */
+      .check-row {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-sm);
+      }
+      .checkbox {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        margin-top: 2px;
+        background: var(--color-bg-sunken);
+        border: 1px solid var(--color-border);
+        border-radius: 2px;
+        appearance: none;
+        cursor: pointer;
+        position: relative;
+        transition: border-color var(--transition-base);
+      }
+      .checkbox:checked {
+        border-color: var(--color-gold-bright);
+        background: rgba(201, 168, 76, 0.15);
+      }
+      .checkbox:checked::after {
+        content: "✓";
+        position: absolute;
+        top: -1px;
+        left: 2px;
+        font-size: 12px;
+        color: var(--color-gold-bright);
+      }
+      .check-label {
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--color-text-secondary);
+        line-height: 1.5;
+      }
+      .check-label a {
+        color: var(--color-link);
+        transition: color var(--transition-base);
+      }
+      .check-label a:hover {
+        color: var(--color-link-hover);
+      }
+
+      /* ── Remember + Forgot row ──────────────────────────── */
+      .remember-forgot-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--space-lg);
+      }
+      .forgot-link {
+        font-family: var(--font-body);
+        font-size: 12px;
+        color: var(--color-link);
+        cursor: pointer;
+        transition: color var(--transition-base);
+      }
+      .forgot-link:hover {
+        color: var(--color-link-hover);
+      }
+
+      /* ── Buttons ────────────────────────────────────────── */
+      .btn-primary {
+        background: linear-gradient(
+          135deg,
+          var(--color-gold-bright),
+          var(--color-gold-deep)
+        );
+        color: #0e0e0e;
+        font-family: var(--font-display);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        padding: 14px 36px;
+        border-radius: 2px;
+        border: none;
+        box-shadow: var(--shadow-gold-sm);
+        cursor: pointer;
+        width: 100%;
+        transition:
+          box-shadow var(--transition-base),
+          opacity var(--transition-base);
+      }
+      .btn-primary:hover {
+        box-shadow: var(--shadow-gold-md);
+        opacity: 0.92;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--color-gold-bright);
+        font-family: var(--font-display);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        padding: 13px 24px;
+        border-radius: 2px;
+        border: 1px solid var(--color-gold-bright);
+        cursor: pointer;
+        transition: background var(--transition-base);
+      }
+      .btn-secondary:hover {
+        background: rgba(201, 168, 76, 0.08);
+      }
+      .btn-danger {
+        background: transparent;
+        color: #e05a2b;
+        font-family: var(--font-display);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        padding: 13px 34px;
+        border-radius: 2px;
+        border: 1px solid #5a2a14;
+        cursor: pointer;
+        width: 100%;
+        transition: background var(--transition-base);
+      }
+      .btn-danger:hover {
+        background: rgba(224, 90, 43, 0.08);
+      }
+
+      /* ── Auth footer ────────────────────────────────────── */
+      .auth-footer {
+        text-align: center;
+        margin-top: var(--space-lg);
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--color-text-muted);
+      }
+      .auth-footer a {
+        color: var(--color-link);
+        transition: color var(--transition-base);
+      }
+      .auth-footer a:hover {
+        color: var(--color-link-hover);
+      }
+
+      /* ── Badges ─────────────────────────────────────────── */
+      .badge {
+        font-family: var(--font-display);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        padding: 3px 10px;
+        border-radius: 2px;
+        display: inline-block;
+      }
+      .badge--gold {
+        background: rgba(201, 168, 76, 0.15);
+        color: var(--color-gold-bright);
+        border: 1px solid rgba(201, 168, 76, 0.3);
+      }
+      .badge--neutral {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--color-text-secondary);
+        border: 1px solid var(--color-border);
+      }
+      .badge--success {
+        background: rgba(43, 122, 75, 0.15);
+        color: #5aaa7a;
+        border: 1px solid rgba(43, 122, 75, 0.3);
+      }
+
+      /* ── Step tracker ───────────────────────────────────── */
+      .step-tracker {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: var(--space-xl);
+      }
+      .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-xs);
+      }
+      .step-circle {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid var(--color-border);
+        background: var(--color-bg-sunken);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--color-text-muted);
+      }
+      .step-circle.done {
+        border-color: var(--color-gold-bright);
+        background: rgba(201, 168, 76, 0.15);
+        color: var(--color-gold-bright);
+      }
+      .step-circle.current {
+        border-color: var(--color-gold-bright);
+        background: linear-gradient(
+          135deg,
+          var(--color-gold-bright),
+          var(--color-gold-deep)
+        );
+        color: #0e0e0e;
+      }
+      .step-label {
+        font-family: var(--font-display);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+      .step-label.current {
+        color: var(--color-gold-bright);
+      }
+      .step-connector {
+        height: 1px;
+        width: 40px;
+        background: var(--color-border);
+        margin-bottom: 16px;
+      }
+      .step-connector.done {
+        background: var(--color-gold-muted);
+      }
+
+      /* ── Avatar upload ──────────────────────────────────── */
+      .avatar-upload-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-sm);
+        margin-bottom: var(--space-xl);
+      }
+      .avatar-preview {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: var(--color-gold-ghost);
+        border: 2px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-display);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--color-gold-bright);
+        position: relative;
+        cursor: pointer;
+        transition: border-color var(--transition-base);
+      }
+      .avatar-preview:hover {
+        border-color: var(--color-gold-bright);
+      }
+      .avatar-overlay {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity var(--transition-base);
+      }
+      .avatar-preview:hover .avatar-overlay {
+        opacity: 1;
+      }
+      .avatar-overlay-text {
+        font-family: var(--font-display);
+        font-size: 8px;
+        letter-spacing: 0.12em;
+        color: var(--color-gold-bright);
+        text-transform: uppercase;
+        text-align: center;
+      }
+      .avatar-hint {
+        font-family: var(--font-body);
+        font-size: 11px;
+        color: var(--color-text-muted);
+        font-style: italic;
+      }
+
+      /* ── Error banner ───────────────────────────────────── */
+      .error-banner {
+        background: rgba(160, 60, 20, 0.12);
+        border: 1px solid rgba(160, 60, 20, 0.4);
+        border-radius: 2px;
+        padding: var(--space-md);
+        margin-bottom: var(--space-lg);
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-sm);
+      }
+      .error-text {
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: #e0916e;
+        line-height: 1.5;
+      }
+
+      /* ── Confirm / logout ───────────────────────────────── */
+      .confirm-card {
+        max-width: 400px;
+        text-align: center;
+      }
+      .confirm-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 1px solid var(--color-border);
+        background: var(--color-bg-raised);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto var(--space-lg);
+        font-size: 24px;
+      }
+      .confirm-title {
+        font-family: var(--font-display);
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--color-text-primary);
+        margin-bottom: var(--space-sm);
+      }
+      .confirm-body {
+        font-family: var(--font-body);
+        font-weight: 300;
+        font-size: 14px;
+        color: var(--color-text-secondary);
+        line-height: 1.7;
+        margin-bottom: var(--space-xl);
+      }
+      .confirm-actions {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+      }
+
+      /* ── Session info ───────────────────────────────────── */
+      .success-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 1px solid rgba(201, 168, 76, 0.3);
+        background: rgba(201, 168, 76, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto var(--space-lg);
+        font-size: 24px;
+      }
+      .session-info {
+        background: var(--color-bg-sunken);
+        border: 1px solid var(--color-border);
+        border-radius: 2px;
+        padding: var(--space-md);
+        margin-bottom: var(--space-xl);
+        text-align: left;
+      }
+      .session-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-xs) 0;
+        border-bottom: 1px solid var(--color-border);
+      }
+      .session-row:last-child {
+        border-bottom: none;
+      }
+      .session-key {
+        font-family: var(--font-display);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+      .session-val {
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--color-text-secondary);
+      }
+
+      /* ── Dropdown ───────────────────────────────────────── */
+      .dropdown {
+        position: absolute;
+        top: 64px;
+        right: var(--space-xl);
+        width: 220px;
+        background: var(--color-bg-surface);
+        border: 1px solid var(--color-border-gold);
+        border-radius: 4px;
+        box-shadow: var(--shadow-gold-md);
+        z-index: 99;
+        overflow: hidden;
+      }
+      .dropdown-user {
+        padding: var(--space-md);
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+      }
+      .dropdown-item {
+        padding: 10px var(--space-md);
+        font-family: var(--font-body);
+        font-size: 13px;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+      }
+      .dropdown-item:hover {
+        background: rgba(201, 168, 76, 0.04);
+      }
+      .dropdown-item.danger {
+        color: #e0916e;
+      }
+
+      /* ── Annotations ────────────────────────────────────── */
+      .annotations {
+        max-width: 460px;
+        width: 100%;
+        margin-top: var(--space-lg);
+      }
+      .annotation {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-sm);
+        margin-bottom: var(--space-sm);
+      }
+      .annotation-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--color-gold-muted);
+        flex-shrink: 0;
+        margin-top: 6px;
+      }
+      .annotation-text {
+        font-family: var(--font-body);
+        font-size: 12px;
+        color: var(--color-text-muted);
+        font-style: italic;
+        line-height: 1.5;
+      }
+
+      /* ── Utilities ──────────────────────────────────────── */
+      .mt-sm {
+        margin-top: var(--space-sm);
+      }
+      .mt-md {
+        margin-top: var(--space-md);
+      }
+      .mt-lg {
+        margin-top: var(--space-lg);
+      }
+      .centered-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        max-width: 460px;
+      }
+      .w-full {
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ── Default Nav (Unauthenticated) ───────────────────── -->
+    <nav class="nav">
+      <span class="nav-logo">MY Chess Tour</span>
+      <div class="nav-links">
+        <span class="nav-link-ghost">Become an Organizer</span>
+        <button class="nav-btn-login">Login</button>
+        <button class="nav-btn-signup">Sign Up</button>
+      </div>
+    </nav>
+
+    <div class="board-strip">
+      <span></span><span></span><span></span><span></span><span></span
+      ><span></span><span></span><span></span> <span></span><span></span
+      ><span></span><span></span><span></span><span></span><span></span
+      ><span></span>
+    </div>
+
+    <!-- ── Flow Switcher ───────────────────────────────────── -->
+    <div class="flow-nav">
+      <button class="flow-tab active" onclick="showFlow('signup', this)">
+        ① Sign Up Flow
+      </button>
+      <button class="flow-tab" onclick="showFlow('login', this)">
+        ② Login Flow
+      </button>
+      <button class="flow-tab" onclick="showFlow('logout', this)">
+        ③ Logout Flow
+      </button>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+       FLOW 1 — SIGN UP
+  ════════════════════════════════════════════════════ -->
+    <div class="screens-wrapper active" id="flow-signup">
+      <!-- 1A: Registration Form -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 1A — Registration Form</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /register</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card card--featured">
+              <!-- Step tracker -->
+              <div class="step-tracker">
+                <div class="step">
+                  <div class="step-circle current">1</div>
+                  <span class="step-label current">Account</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                  <div class="step-circle">2</div>
+                  <span class="step-label">Profile</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                  <div class="step-circle">3</div>
+                  <span class="step-label">Verify</span>
+                </div>
+              </div>
+
+              <div class="auth-card-header">
+                <span class="auth-logo">MY Chess Tour</span>
+                <h1 class="auth-heading">Create Account</h1>
+                <p class="auth-subheading">
+                  Join Malaysia's premier competitive chess circuit
+                </p>
+                <hr class="divider-gold" />
+              </div>
+
+              <!-- First + Last name with ? icons -->
+              <div class="input-row">
+                <div class="form-group">
+                  <div class="label-row">
+                    <span class="input-label">First Name</span>
+                    <span class="help-icon"
+                      >?
+                      <div class="tooltip">
+                        Enter your legal first name as it appears on your IC or
+                        passport. This is used for tournament registration and
+                        FIDE records.
+                      </div>
+                    </span>
+                  </div>
+                  <input class="input" type="text" placeholder="Ahmad" />
+                </div>
+                <div class="form-group">
+                  <div class="label-row">
+                    <span class="input-label">Last Name</span>
+                    <span class="help-icon"
+                      >?
+                      <div class="tooltip">
+                        Enter your legal last name or family name. For names
+                        without a surname (e.g. bin/binti), you may repeat your
+                        first name.
+                      </div>
+                    </span>
+                  </div>
+                  <input class="input" type="text" placeholder="Razif" />
+                </div>
+              </div>
+
+              <!-- Email -->
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Email Address</span>
+                </div>
+                <input
+                  class="input"
+                  type="email"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <!-- Password with eye + requirements -->
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Password</span>
+                </div>
+                <div class="input-wrap">
+                  <input
+                    class="input input--icon"
+                    type="password"
+                    placeholder="Create a password"
+                  />
+                  <button class="eye-btn" title="Show password">
+                    <!-- Eye open icon -->
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+                <!-- Strength bar -->
+                <div class="strength-bar">
+                  <div class="strength-fill" style="width: 40%"></div>
+                </div>
+                <!-- Requirements checklist -->
+                <div class="pw-requirements">
+                  <p class="pw-req-title">Password must contain</p>
+                  <div class="pw-req-grid">
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      8+ characters
+                    </div>
+                    <div class="pw-req met">
+                      <div class="pw-req-dot"></div>
+                      1 uppercase letter
+                    </div>
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      1 number
+                    </div>
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      1 lowercase letter
+                    </div>
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      1 symbol (!@#$…)
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Confirm password with eye -->
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Confirm Password</span>
+                </div>
+                <div class="input-wrap">
+                  <input
+                    class="input input--icon"
+                    type="password"
+                    placeholder="Repeat password"
+                  />
+                  <button class="eye-btn" title="Show password">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Terms -->
+              <div class="check-row" style="margin-bottom: var(--space-lg)">
+                <input type="checkbox" class="checkbox" checked />
+                <label class="check-label"
+                  >I agree to the <a href="#">Terms of Service</a> and
+                  <a href="#">Privacy Policy</a></label
+                >
+              </div>
+
+              <button class="btn-primary">Create Account</button>
+              <div class="divider-text">already have an account?</div>
+              <p class="auth-footer" style="margin-top: 0">
+                <a href="#">Sign in instead</a>
+              </p>
+            </div>
+
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Hovering the ? icon reveals a tooltip with guidance on how to
+                  fill the field
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Password requirements box updates in real time — each rule
+                  turns gold as it's satisfied. Strength bar fills accordingly
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Eye icon toggles between type="password" and type="text" for
+                  both password fields independently
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  CTA is disabled until all requirements met and terms checked
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1B: Validation Errors -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 1B — Registration Form (Validation Errors)</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /register</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card card--featured">
+              <div class="step-tracker">
+                <div class="step">
+                  <div class="step-circle current">1</div>
+                  <span class="step-label current">Account</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                  <div class="step-circle">2</div>
+                  <span class="step-label">Profile</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                  <div class="step-circle">3</div>
+                  <span class="step-label">Verify</span>
+                </div>
+              </div>
+              <div class="auth-card-header">
+                <span class="auth-logo">MY Chess Tour</span>
+                <h1 class="auth-heading">Create Account</h1>
+                <hr class="divider-gold" />
+              </div>
+              <div class="error-banner">
+                <span style="font-size: 14px; flex-shrink: 0; margin-top: 1px"
+                  >⚠</span
+                >
+                <p class="error-text">
+                  Please correct the errors below before continuing.
+                </p>
+              </div>
+              <div class="input-row">
+                <div class="form-group">
+                  <div class="label-row">
+                    <span class="input-label">First Name</span
+                    ><span class="help-icon"
+                      >?
+                      <div class="tooltip">
+                        Enter your legal first name as it appears on your IC or
+                        passport.
+                      </div></span
+                    >
+                  </div>
+                  <input class="input" type="text" value="Ahmad" />
+                </div>
+                <div class="form-group">
+                  <div class="label-row">
+                    <span class="input-label">Last Name</span
+                    ><span class="help-icon"
+                      >?
+                      <div class="tooltip">
+                        Enter your legal last name or family name.
+                      </div></span
+                    >
+                  </div>
+                  <input class="input" type="text" value="Razif" />
+                </div>
+              </div>
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Email Address</span>
+                </div>
+                <input
+                  class="input input-error"
+                  type="email"
+                  value="not-a-valid-email"
+                />
+                <p class="input-hint error">
+                  Please enter a valid email address
+                </p>
+              </div>
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Password</span>
+                </div>
+                <div class="input-wrap">
+                  <input
+                    class="input input--icon input-error"
+                    type="password"
+                    value="weak"
+                  />
+                  <button class="eye-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="pw-requirements" style="border-color: #5a2a14">
+                  <p class="pw-req-title">Password must contain</p>
+                  <div class="pw-req-grid">
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      8+ characters
+                    </div>
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      1 uppercase letter
+                    </div>
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      1 number
+                    </div>
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      1 lowercase letter
+                    </div>
+                    <div class="pw-req">
+                      <div class="pw-req-dot"></div>
+                      1 symbol (!@#$…)
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Confirm Password</span>
+                </div>
+                <div class="input-wrap">
+                  <input
+                    class="input input--icon input-error"
+                    type="password"
+                    value="mismatch"
+                  />
+                  <button class="eye-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+                <p class="input-hint error">Passwords do not match</p>
+              </div>
+              <div class="check-row" style="margin-bottom: var(--space-lg)">
+                <input type="checkbox" class="checkbox" checked />
+                <label class="check-label"
+                  >I agree to the <a href="#">Terms of Service</a> and
+                  <a href="#">Privacy Policy</a></label
+                >
+              </div>
+              <button class="btn-primary">Create Account</button>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Error banner at top — non-dismissible until all errors
+                  resolved
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Requirements box border turns dark red when password is
+                  invalid and form is submitted
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1C: Player Profile (Step 2) — updated fields -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 1C — Player Profile Setup (Step 2)</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /register/profile</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card card--featured">
+              <div class="step-tracker">
+                <div class="step">
+                  <div class="step-circle done">✓</div>
+                  <span class="step-label">Account</span>
+                </div>
+                <div class="step-connector done"></div>
+                <div class="step">
+                  <div class="step-circle current">2</div>
+                  <span class="step-label current">Profile</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step">
+                  <div class="step-circle">3</div>
+                  <span class="step-label">Verify</span>
+                </div>
+              </div>
+
+              <div class="auth-card-header">
+                <h1 class="auth-heading">Player Profile</h1>
+                <p class="auth-subheading">
+                  Help us set up your chess identity
+                </p>
+                <hr class="divider-gold" />
+              </div>
+
+              <!-- Avatar upload -->
+              <div class="avatar-upload-wrap">
+                <div class="avatar-preview">
+                  AR
+                  <div class="avatar-overlay">
+                    <span class="avatar-overlay-text">Upload<br />Photo</span>
+                  </div>
+                </div>
+                <p class="avatar-hint">
+                  Tap to upload a profile photo · JPG or PNG, max 2 MB
+                </p>
+                <p class="avatar-hint" style="margin-top: 2px">
+                  Default: initials from your first and last name
+                </p>
+              </div>
+
+              <!-- Gender + Nationality -->
+              <div class="input-row" style="margin-bottom: var(--space-lg)">
+                <div class="form-group" style="margin-bottom: 0">
+                  <div class="label-row">
+                    <span class="input-label">Gender</span>
+                  </div>
+                  <input
+                    class="input"
+                    type="text"
+                    placeholder="Select…"
+                    style="cursor: pointer"
+                  />
+                </div>
+                <div class="form-group" style="margin-bottom: 0">
+                  <div class="label-row">
+                    <span class="input-label">Nationality</span>
+                  </div>
+                  <input
+                    class="input"
+                    type="text"
+                    placeholder="Malaysian"
+                    style="cursor: pointer"
+                  />
+                </div>
+              </div>
+
+              <!-- Date of birth + State -->
+              <div class="input-row" style="margin-bottom: var(--space-lg)">
+                <div class="form-group" style="margin-bottom: 0">
+                  <div class="label-row">
+                    <span class="input-label">Date of Birth</span>
+                  </div>
+                  <input
+                    class="input"
+                    type="text"
+                    placeholder="DD / MM / YYYY"
+                  />
+                </div>
+                <div class="form-group" style="margin-bottom: 0">
+                  <div class="label-row">
+                    <span class="input-label">State</span>
+                  </div>
+                  <input
+                    class="input"
+                    type="text"
+                    placeholder="Select…"
+                    style="cursor: pointer"
+                  />
+                </div>
+              </div>
+
+              <!-- FIDE ID -->
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">FIDE ID</span>
+                  <span class="label-optional">(Optional)</span>
+                  <span class="help-icon"
+                    >?
+                    <div class="tooltip">
+                      Your FIDE player ID number. Once entered, your current
+                      standard, rapid, and blitz ratings will be fetched
+                      automatically.
+                    </div></span
+                  >
+                </div>
+                <input class="input" type="text" placeholder="e.g. 36095765" />
+                <p class="input-hint">
+                  Ratings will be auto-fetched from FIDE's database
+                </p>
+              </div>
+
+              <!-- MCF ID -->
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">MCF ID</span>
+                  <span class="label-optional">(Optional)</span>
+                  <span class="help-icon"
+                    >?
+                    <div class="tooltip">
+                      Your Malaysian Chess Federation membership ID. Used for
+                      MCF-rated tournaments.
+                    </div></span
+                  >
+                </div>
+                <input
+                  class="input"
+                  type="text"
+                  placeholder="e.g. MCF-2024-001234"
+                />
+              </div>
+
+              <!-- OKU -->
+              <div class="check-row" style="margin-bottom: var(--space-xl)">
+                <input type="checkbox" class="checkbox" />
+                <label class="check-label">
+                  I am an OKU (Orang Kurang Upaya) card holder
+                  <span
+                    class="help-icon"
+                    style="vertical-align: middle; margin-left: 4px"
+                    >?
+                    <div class="tooltip" style="top: auto; bottom: 20px">
+                      Check this if you hold a valid OKU card issued by Jabatan
+                      Kebajikan Masyarakat. This may qualify you for special
+                      categories in tournaments.
+                    </div></span
+                  >
+                </label>
+              </div>
+
+              <div style="display: flex; gap: var(--space-sm)">
+                <button class="btn-secondary">Back</button>
+                <button class="btn-primary w-full">Continue</button>
+              </div>
+              <p class="auth-footer" style="font-size: 12px">
+                All fields except gender and nationality are optional — editable
+                later in settings
+              </p>
+            </div>
+
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Avatar defaults to initials (first letter of first name +
+                  first letter of last name). Hover reveals upload overlay
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Gender dropdown: Male / Female / Prefer not to say.
+                  Nationality defaults to Malaysian but is editable
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  FIDE ID triggers an API lookup on blur — single pulsing gold
+                  dot loading state, then auto-fills ratings
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  OKU checkbox stores a boolean on the player_profiles table —
+                  used for organizer-defined OKU categories
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1D: Email Verification -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 1D — Email Verification (Step 3)</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /register/verify</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card card--featured">
+              <div class="step-tracker">
+                <div class="step">
+                  <div class="step-circle done">✓</div>
+                  <span class="step-label">Account</span>
+                </div>
+                <div class="step-connector done"></div>
+                <div class="step">
+                  <div class="step-circle done">✓</div>
+                  <span class="step-label">Profile</span>
+                </div>
+                <div class="step-connector done"></div>
+                <div class="step">
+                  <div class="step-circle current">3</div>
+                  <span class="step-label current">Verify</span>
+                </div>
+              </div>
+              <div class="auth-card-header">
+                <div style="font-size: 32px; margin-bottom: var(--space-md)">
+                  📬
+                </div>
+                <h1 class="auth-heading">Check Your Email</h1>
+                <p class="auth-subheading">
+                  We sent a 6-digit code to<br /><strong
+                    style="color: var(--color-gold-muted)"
+                    >ahmad@example.com</strong
+                  >
+                </p>
+                <hr class="divider-gold" />
+              </div>
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Verification Code</span>
+                </div>
+                <input
+                  class="input"
+                  type="text"
+                  placeholder="_ _ _ _ _ _"
+                  style="
+                    font-family: var(--font-display);
+                    letter-spacing: 0.3em;
+                    font-size: 22px;
+                    text-align: center;
+                  "
+                />
+                <p class="input-hint">
+                  Code expires in
+                  <strong style="color: var(--color-gold-muted)">09:43</strong>
+                </p>
+              </div>
+              <button class="btn-primary mt-md">Verify Email</button>
+              <p class="auth-footer mt-lg">
+                Didn't receive it? <a href="#">Resend code</a> ·
+                <a href="#">Change email</a>
+              </p>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Single large OTP input — auto-submits on 6th digit, no button
+                  press needed
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Max 3 resends; after that a 30-min cooldown is applied
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1E: Success -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 1E — Registration Complete</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--success">State: Authenticated</span>
+        </div>
+        <!-- Authenticated nav -->
+        <nav class="nav" style="position: relative">
+          <span class="nav-logo">MY Chess Tour</span>
+          <div class="nav-links">
+            <span class="nav-link-ghost">Become an Organizer</span>
+            <span class="nav-link-auth">My Tournaments</span>
+            <div class="nav-avatar">AR</div>
+          </div>
+        </nav>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div
+              class="auth-card card card--featured"
+              style="text-align: center"
+            >
+              <div class="success-icon">♟</div>
+              <h1 class="auth-heading" style="margin-bottom: var(--space-sm)">
+                Welcome to the Board
+              </h1>
+              <p
+                style="
+                  font-family: var(--font-body);
+                  font-weight: 300;
+                  font-size: 14px;
+                  color: var(--color-text-secondary);
+                  margin-bottom: var(--space-xl);
+                  line-height: 1.7;
+                "
+              >
+                Account created and verified. You're now part of MY Chess Tour.
+              </p>
+              <div class="session-info">
+                <div class="session-row">
+                  <span class="session-key">Name</span
+                  ><span class="session-val">Ahmad Razif</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-key">Email</span
+                  ><span class="session-val">ahmad@example.com</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-key">Member since</span
+                  ><span class="session-val">February 2026</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-key">Role</span
+                  ><span class="session-val"
+                    ><span class="badge badge--neutral">Player</span></span
+                  >
+                </div>
+              </div>
+              <button class="btn-primary">Browse Tournaments</button>
+              <p class="auth-footer mt-sm">
+                Or <a href="#">complete your profile</a> to add your rating
+              </p>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Navbar immediately updates to authenticated state — Become an
+                  Organizer + My Tournaments + Avatar
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Primary CTA redirects to /tournaments (main discovery page)
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /flow-signup -->
+
+    <!-- ════════════════════════════════════════════════════
+       FLOW 2 — LOGIN
+  ════════════════════════════════════════════════════ -->
+    <div class="screens-wrapper" id="flow-login">
+      <!-- 2A: Login Form -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title">Screen 2A — Login Form</span>
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /login</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card card--featured">
+              <div class="auth-card-header">
+                <span class="auth-logo">MY Chess Tour</span>
+                <h1 class="auth-heading">Welcome Back</h1>
+                <p class="auth-subheading">Sign in to your account</p>
+                <hr class="divider-gold" />
+              </div>
+
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Email Address</span>
+                </div>
+                <input
+                  class="input"
+                  type="email"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Password</span>
+                </div>
+                <div class="input-wrap">
+                  <input
+                    class="input input--icon"
+                    type="password"
+                    placeholder="Your password"
+                  />
+                  <button class="eye-btn" title="Show password">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Remember me + Forgot password on same row -->
+              <div class="remember-forgot-row">
+                <div class="check-row" style="margin-bottom: 0">
+                  <input type="checkbox" class="checkbox" checked />
+                  <label class="check-label" style="font-size: 12px"
+                    >Keep me signed in</label
+                  >
+                </div>
+                <span class="forgot-link">Forgot password?</span>
+              </div>
+
+              <button class="btn-primary">Sign In</button>
+              <p class="auth-footer mt-lg">
+                Don't have an account? <a href="#">Create one</a>
+              </p>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Eye icon on password field toggles visibility — same SVG icon
+                  pattern as sign-up for consistency
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  "Keep me signed in" and "Forgot password?" are on the same
+                  horizontal line — checkbox left, link right
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  "Keep me signed in" sets a 30-day persistent cookie vs. a
+                  session cookie when unchecked
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2B: Login Error -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 2B — Login Form (Invalid Credentials)</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /login</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card card--featured">
+              <div class="auth-card-header">
+                <span class="auth-logo">MY Chess Tour</span>
+                <h1 class="auth-heading">Welcome Back</h1>
+                <hr class="divider-gold" />
+              </div>
+              <div class="error-banner">
+                <span style="font-size: 14px; flex-shrink: 0; margin-top: 1px"
+                  >⚠</span
+                >
+                <p class="error-text">
+                  Incorrect email or password.
+                  <strong>2 attempts remaining</strong> before your account is
+                  temporarily locked.
+                </p>
+              </div>
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Email Address</span>
+                </div>
+                <input class="input" type="email" value="ahmad@example.com" />
+              </div>
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Password</span>
+                </div>
+                <div class="input-wrap">
+                  <input
+                    class="input input--icon input-error"
+                    type="password"
+                    value="wrongpassword"
+                  />
+                  <button class="eye-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+                <p class="input-hint error">Password is incorrect</p>
+              </div>
+              <div class="remember-forgot-row">
+                <div class="check-row" style="margin-bottom: 0">
+                  <input type="checkbox" class="checkbox" checked />
+                  <label class="check-label" style="font-size: 12px"
+                    >Keep me signed in</label
+                  >
+                </div>
+                <span
+                  class="forgot-link"
+                  style="color: var(--color-gold-bright)"
+                  >Forgot password?</span
+                >
+              </div>
+              <button class="btn-primary">Try Again</button>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Error message intentionally vague — no distinction between
+                  wrong email vs wrong password (security best practice)
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  After 3 failures, "Forgot password?" link turns gold to guide
+                  user toward recovery
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2C: Account Locked -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 2C — Account Temporarily Locked</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /login</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card confirm-card" style="margin: 0 auto">
+              <div
+                class="confirm-icon"
+                style="
+                  border-color: #5a2a14;
+                  background: rgba(90, 30, 10, 0.15);
+                "
+              >
+                🔒
+              </div>
+              <h1 class="confirm-title">Account Locked</h1>
+              <p class="confirm-body">
+                Too many failed sign-in attempts. Your account has been
+                temporarily locked.<br /><br /><strong
+                  style="
+                    color: var(--color-gold-muted);
+                    font-family: var(--font-display);
+                    letter-spacing: 0.05em;
+                  "
+                  >Unlocks in 12:47</strong
+                >
+              </p>
+              <div class="confirm-actions">
+                <button class="btn-primary">Reset Password</button>
+                <button class="btn-secondary mt-sm w-full">
+                  Contact Support
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2D: Forgot Password -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title">Screen 2D — Forgot Password</span>
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">Route: /forgot-password</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card card--featured">
+              <div class="auth-card-header">
+                <span class="auth-logo">MY Chess Tour</span>
+                <h1 class="auth-heading">Reset Password</h1>
+                <p class="auth-subheading">
+                  Enter your email to receive a reset link
+                </p>
+                <hr class="divider-gold" />
+              </div>
+              <div class="form-group">
+                <div class="label-row">
+                  <span class="input-label">Email Address</span>
+                </div>
+                <input
+                  class="input"
+                  type="email"
+                  placeholder="you@example.com"
+                />
+                <p class="input-hint">
+                  A secure reset link will be sent — valid for 1 hour
+                </p>
+              </div>
+              <button class="btn-primary mt-md">Send Reset Link</button>
+              <p class="auth-footer mt-lg">
+                Remembered it? <a href="#">Back to sign in</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2E: Login Success -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 2E — Login Success (Authenticated State)</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--success"
+            >State: Authenticated → Redirect</span
+          >
+        </div>
+        <nav class="nav" style="position: relative">
+          <span class="nav-logo">MY Chess Tour</span>
+          <div class="nav-links">
+            <span class="nav-link-ghost">Become an Organizer</span>
+            <span class="nav-link-auth">My Tournaments</span>
+            <div
+              class="nav-avatar"
+              style="
+                border-color: var(--color-gold-bright);
+                box-shadow: var(--shadow-gold-sm);
+              "
+            >
+              AR
+            </div>
+          </div>
+        </nav>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div
+              class="auth-card card card--featured"
+              style="text-align: center"
+            >
+              <div class="success-icon">♟</div>
+              <h1 class="auth-heading" style="margin-bottom: var(--space-sm)">
+                Signed In
+              </h1>
+              <p
+                style="
+                  font-family: var(--font-body);
+                  font-weight: 300;
+                  font-size: 14px;
+                  color: var(--color-text-secondary);
+                  margin-bottom: var(--space-xl);
+                "
+              >
+                Redirecting you to your dashboard…
+              </p>
+              <div class="session-info">
+                <div class="session-row">
+                  <span class="session-key">Signed in as</span
+                  ><span class="session-val">Ahmad Razif</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-key">Session</span
+                  ><span class="session-val">30-day persistent</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-key">Last login</span
+                  ><span class="session-val">15 Jan 2026 · 10:34 AM</span>
+                </div>
+              </div>
+              <button class="btn-primary">Go to Dashboard</button>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Navbar updates to: logo → Become an Organizer → My Tournaments
+                  → Avatar initials
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Redirects to returnUrl param if present, otherwise /dashboard
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /flow-login -->
+
+    <!-- ════════════════════════════════════════════════════
+       FLOW 3 — LOGOUT
+  ════════════════════════════════════════════════════ -->
+    <div class="screens-wrapper" id="flow-logout">
+      <!-- 3A: Account Dropdown -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 3A — Account Dropdown (Logout Trigger)</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--gold">State: Authenticated</span>
+        </div>
+        <div
+          class="auth-page"
+          style="
+            align-items: flex-start;
+            padding-top: 0;
+            padding-bottom: var(--space-2xl);
+          "
+        >
+          <div style="width: 100%; position: relative">
+            <nav class="nav" style="position: relative">
+              <span class="nav-logo">MY Chess Tour</span>
+              <div class="nav-links">
+                <span class="nav-link-ghost">Become an Organizer</span>
+                <span class="nav-link-auth">My Tournaments</span>
+                <div
+                  class="nav-avatar"
+                  style="
+                    border-color: var(--color-gold-bright);
+                    box-shadow: var(--shadow-gold-sm);
+                  "
+                >
+                  AR
+                </div>
+              </div>
+            </nav>
+            <!-- Dropdown -->
+            <div class="dropdown">
+              <div class="dropdown-user">
+                <div
+                  class="nav-avatar"
+                  style="width: 36px; height: 36px; flex-shrink: 0"
+                >
+                  AR
+                </div>
+                <div>
+                  <p
+                    style="
+                      font-family: var(--font-display);
+                      font-size: 12px;
+                      font-weight: 600;
+                      color: var(--color-text-primary);
+                      letter-spacing: 0.04em;
+                    "
+                  >
+                    Ahmad Razif
+                  </p>
+                  <p
+                    style="
+                      font-family: var(--font-body);
+                      font-size: 11px;
+                      color: var(--color-text-muted);
+                      margin-top: 2px;
+                    "
+                  >
+                    Player · Selangor
+                  </p>
+                </div>
+              </div>
+              <div style="padding: var(--space-xs) 0">
+                <div class="dropdown-item">👤 My Profile</div>
+                <div class="dropdown-item">🏆 My Registrations</div>
+                <div class="dropdown-item">⚙ Settings</div>
+              </div>
+              <div style="height: 1px; background: var(--color-border)"></div>
+              <div style="padding: var(--space-xs) 0">
+                <div class="dropdown-item danger">↪ Sign Out</div>
+              </div>
+            </div>
+          </div>
+          <div class="annotations" style="margin: 130px auto 0">
+            <div class="annotation">
+              <div class="annotation-dot"></div>
+              <p class="annotation-text">
+                Dropdown opens on avatar click — gold border + glow highlights
+                active state
+              </p>
+            </div>
+            <div class="annotation">
+              <div class="annotation-dot"></div>
+              <p class="annotation-text">
+                "Sign Out" uses muted red (#e0916e) — signals a destructive
+                action without being alarming
+              </p>
+            </div>
+            <div class="annotation">
+              <div class="annotation-dot"></div>
+              <p class="annotation-text">
+                Dismisses on outside click or Escape key
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3B: Logout Confirmation -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 3B — Logout Confirmation Dialog</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">State: Confirmation required</span>
+        </div>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card confirm-card" style="margin: 0 auto">
+              <div class="confirm-icon">↪</div>
+              <h1 class="confirm-title">Sign Out?</h1>
+              <p class="confirm-body">
+                You're signing out of your MY Chess Tour account on this device.
+                Any unsaved changes will be lost.
+              </p>
+              <div class="confirm-actions">
+                <button class="btn-danger">Yes, Sign Out</button>
+                <button class="btn-secondary mt-sm w-full">Cancel</button>
+              </div>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Confirmation prevents accidental logouts. Cancel returns to
+                  previous page with no state change
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Destructive action uses .btn-danger (red ghost) — never uses
+                  the gold primary CTA
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3C: Signed Out -->
+      <div class="page-section">
+        <div class="section-header">
+          <span class="section-header-title"
+            >Screen 3C — Signed Out Confirmation</span
+          >
+          <div class="section-line"></div>
+          <span class="badge badge--neutral">State: Unauthenticated</span>
+        </div>
+        <!-- Back to unauthenticated nav -->
+        <nav class="nav" style="position: relative">
+          <span class="nav-logo">MY Chess Tour</span>
+          <div class="nav-links">
+            <span class="nav-link-ghost">Become an Organizer</span>
+            <button class="nav-btn-login">Login</button>
+            <button class="nav-btn-signup">Sign Up</button>
+          </div>
+        </nav>
+        <div class="auth-page">
+          <div class="centered-col">
+            <div class="auth-card card" style="text-align: center">
+              <div
+                style="
+                  width: 56px;
+                  height: 56px;
+                  border-radius: 50%;
+                  border: 1px solid var(--color-border);
+                  background: var(--color-bg-raised);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin: 0 auto var(--space-lg);
+                  font-size: 22px;
+                "
+              >
+                ✔
+              </div>
+              <h1 class="confirm-title">Signed Out</h1>
+              <p class="confirm-body">
+                You've been signed out of this device successfully. Your session
+                has been cleared.
+              </p>
+              <div class="session-info">
+                <div class="session-row">
+                  <span class="session-key">Session ended</span
+                  ><span class="session-val">Just now</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-key">Device</span
+                  ><span class="session-val">This device only</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-key">Session data</span
+                  ><span class="session-val">Cleared</span>
+                </div>
+              </div>
+              <div class="confirm-actions">
+                <button class="btn-primary">Sign Back In</button>
+                <button class="btn-secondary mt-sm w-full">
+                  Browse Tournaments
+                </button>
+              </div>
+            </div>
+            <div class="annotations">
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Navbar reverts to unauthenticated state — Login + Sign Up
+                  buttons reappear, avatar removed
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Session token invalidated server-side. Auth cookie cleared.
+                  localStorage wiped
+                </p>
+              </div>
+              <div class="annotation">
+                <div class="annotation-dot"></div>
+                <p class="annotation-text">
+                  Secondary CTA allows unauthenticated browsing — public
+                  tournament listings remain accessible
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /flow-logout -->
+
+    <div class="board-strip board-strip--thin">
+      <span></span><span></span><span></span><span></span><span></span
+      ><span></span><span></span><span></span> <span></span><span></span
+      ><span></span><span></span><span></span><span></span><span></span
+      ><span></span>
+    </div>
+
+    <script>
+      function showFlow(id, btn) {
+        document
+          .querySelectorAll(".screens-wrapper")
+          .forEach((el) => el.classList.remove("active"));
+        document
+          .querySelectorAll(".flow-tab")
+          .forEach((el) => el.classList.remove("active"));
+        document.getElementById("flow-" + id).classList.add("active");
+        btn.classList.add("active");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    </script>
+  </body>
+</html>
