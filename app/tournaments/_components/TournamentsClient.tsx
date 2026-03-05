@@ -152,7 +152,7 @@ export default function TournamentsClient({ tournaments }: Props) {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(400px, 100%), 1fr))",
               gap: "16px",
             }}
           >
