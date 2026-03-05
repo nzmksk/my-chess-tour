@@ -107,7 +107,6 @@ export default function NavBar() {
         id="nav-drawer"
         ref={drawerRef}
         className={drawerOpen ? "nav-drawer nav-drawer--open" : "nav-drawer"}
-        aria-hidden={!drawerOpen}
         aria-modal={drawerOpen ? "true" : undefined}
         role="dialog"
         aria-label="Navigation menu"
