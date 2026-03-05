@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
+import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 
 const NAV_LINKS = [
   { href: "/my-tournaments", label: "My Tournaments" },
@@ -12,13 +13,11 @@ const NAV_LINKS = [
 
 export default function NavBar() {
   const pathname = usePathname();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerState, setDrawerState] = useState(() =>
+    closeDrawer(openDrawer(pathname ?? "")),
+  );
   const drawerRef = useRef<HTMLDivElement>(null);
-
-  // Close drawer when route changes
-  useEffect(() => {
-    setDrawerOpen(false);
-  }, [pathname]);
+  const drawerOpen = getIsDrawerOpen(drawerState, pathname ?? "");
 
   // Prevent body scroll when drawer is open
   useEffect(() => {
@@ -73,7 +72,7 @@ export default function NavBar() {
           {/* Hamburger button — visible on small screens only */}
           <button
             className="flex md:hidden items-center bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => setDrawerState(openDrawer(pathname ?? ""))}
             aria-label="Open navigation menu"
             aria-expanded={drawerOpen}
             aria-controls="nav-drawer"
@@ -100,7 +99,7 @@ export default function NavBar() {
         className={
           drawerOpen ? "nav-backdrop nav-backdrop--open" : "nav-backdrop"
         }
-        onClick={() => setDrawerOpen(false)}
+        onClick={() => setDrawerState((current) => closeDrawer(current))}
       />
 
       {/* Slide-in drawer from right */}
@@ -116,7 +115,7 @@ export default function NavBar() {
         {/* Close button */}
         <div className="flex justify-end mb-8">
           <button
-            onClick={() => setDrawerOpen(false)}
+            onClick={() => setDrawerState((current) => closeDrawer(current))}
             aria-label="Close navigation menu"
             className="bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
           >
@@ -141,7 +140,7 @@ export default function NavBar() {
             <Link
               key={href}
               href={href}
-              onClick={() => setDrawerOpen(false)}
+              onClick={() => setDrawerState((current) => closeDrawer(current))}
               className={`nav-drawer-link${pathname === href ? " nav-drawer-link--active" : ""}`}
             >
               {label}
@@ -149,8 +148,8 @@ export default function NavBar() {
           ))}
           <Link
             href="/become-organizer"
-            onClick={() => setDrawerOpen(false)}
             className="nav-drawer-link-organizer"
+            onClick={() => setDrawerState((current) => closeDrawer(current))}
           >
             Become an Organizer
           </Link>
