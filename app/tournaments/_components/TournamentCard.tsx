@@ -53,22 +53,19 @@ export default function TournamentCard({ tournament: t }: Props) {
   const timeInc = t.time_control?.increment_seconds;
 
   let spotsLabel = `${spotsLeft} spot${spotsLeft !== 1 ? "s" : ""} left`;
-  let spotsBg = "rgba(201,168,76,0.10)";
-  let spotsColor = "var(--color-gold-bright)";
+  let spotsClass = "spots-available";
 
   if (spotsLeft === 0) {
     spotsLabel = "Full";
-    spotsBg = "rgba(180,60,50,0.15)";
-    spotsColor = "#c05040";
+    spotsClass = "spots-full";
   } else if (spotsRatio <= 0.2) {
-    spotsBg = "rgba(200,130,40,0.15)";
-    spotsColor = "#c8883a";
+    spotsClass = "spots-low";
   }
 
   return (
-    <article className="tournament-card">
+    <article className="tournament-card grid-cols-1 md:grid-cols-[160px_1fr]">
       {/* Poster */}
-      <div className="tournament-card-poster hidden md:flex items-center justify-center min-h-50 relative shrink-0 bg-(--color-bg-raised)">
+      <div className="hidden md:flex items-center justify-center min-h-50 relative shrink-0 bg-(--color-bg-raised)">
         {t.poster_url ? (
           <Image
             src={t.poster_url}
@@ -80,8 +77,7 @@ export default function TournamentCard({ tournament: t }: Props) {
         )}
 
         <span
-          className="absolute top-2.5 right-2.5 text-[11px] [font-family:var(--font-lato)] font-semibold py-0.75 px-2 rounded-xs"
-          style={{ background: spotsBg, color: spotsColor }}
+          className={`absolute top-2.5 right-2.5 text-[11px] [font-family:var(--font-lato)] font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
         >
           {spotsLabel}
         </span>
@@ -125,7 +121,7 @@ export default function TournamentCard({ tournament: t }: Props) {
           <div>
             {hasMultipleFees && (
               <small className="text-xs text-(--color-text-muted) [font-family:var(--font-lato)] ml-1">
-                Starting from{" "}
+                starting from{" "}
               </small>
             )}
             <span className="[font-family:var(--font-cinzel)] text-[18px] font-bold text-(--color-text-primary)">
