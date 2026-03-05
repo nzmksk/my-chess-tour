@@ -42,16 +42,23 @@ describe("generateMetadata", () => {
     expect(meta.robots).toEqual({ index: true, follow: true });
   });
 
-  it("returns title containing 'MY Chess Tour'", async () => {
+  it("returns the exact title", async () => {
     mockGet.mockReturnValue("example.com");
     const meta = await generateMetadata();
-    expect(String(meta.title)).toContain("MY Chess Tour");
+    expect(meta.title).toBe("MY Chess Tour — Coming Soon");
   });
 
-  it("returns a non-empty description", async () => {
+  it("returns the exact description", async () => {
     mockGet.mockReturnValue("example.com");
     const meta = await generateMetadata();
-    expect(typeof meta.description).toBe("string");
-    expect((meta.description as string).length).toBeGreaterThan(0);
+    expect(meta.description).toBe(
+      "Malaysia's premier competitive chess circuit. Join the waitlist.",
+    );
+  });
+
+  it("includes the svg icon path", async () => {
+    mockGet.mockReturnValue("example.com");
+    const meta = await generateMetadata();
+    expect((meta.icons as { icon: string }).icon).toBe("/mct-logo-square.svg");
   });
 });
