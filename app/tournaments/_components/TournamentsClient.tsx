@@ -112,50 +112,18 @@ export default function TournamentsClient({ tournaments }: Props) {
       />
 
       {/* Tournament grid */}
-      <div
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          padding: "24px 40px",
-        }}
-      >
+      <div className="max-w-300 mx-auto px-10 py-6">
         {filtered.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "80px 20px",
-              color: "var(--color-text-muted)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "40px",
-                marginBottom: "16px",
-                opacity: 0.3,
-              }}
-            >
-              ♟
-            </div>
-            <p
-              style={{
-                fontFamily: "var(--font-lato)",
-                fontSize: "15px",
-                lineHeight: "1.6",
-              }}
-            >
+          <div className="text-center py-20 px-5 text-(--color-text-muted)">
+            <div className="text-[40px] mb-4 opacity-30">♟</div>
+            <p className="text-[15px] leading-[1.6]">
               {tournaments.length === 0
                 ? "No published tournaments at the moment. Check back soon."
                 : "No tournaments match your filters."}
             </p>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(min(400px, 100%), 1fr))",
-              gap: "16px",
-            }}
-          >
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(400px,100%),1fr))] gap-4">
             {filtered.map((t) => (
               <TournamentCard key={t.id} tournament={t} />
             ))}

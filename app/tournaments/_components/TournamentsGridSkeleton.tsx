@@ -6,60 +6,23 @@ export default function TournamentsGridSkeleton() {
   return (
     <>
       {/* Filter bar skeleton */}
-      <div
-        style={{
-          background: "var(--color-bg-surface)",
-          borderBottom: "1px solid var(--color-border)",
-          padding: "16px 0",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            padding: "0 40px",
-          }}
-        >
+      <div className="bg-(--color-bg-surface) border-b border-(--color-border) py-4">
+        <div className="max-w-300 mx-auto px-10">
           {/* Search bar */}
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "100%", height: "42px", borderRadius: "2px" }}
-          />
+          <div className="skeleton-shimmer w-full h-10.5 rounded-xs" />
 
           {/* Filter buttons */}
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              marginTop: "12px",
-            }}
-          >
-            {[80, 68, 72, 84].map((w, i) => (
-              <div
-                key={i}
-                className="skeleton-shimmer"
-                style={{ width: `${w}px`, height: "40px", borderRadius: "2px" }}
-              />
+          <div className="flex gap-2.5 mt-3">
+            {["w-20", "w-17", "w-18", "w-21"].map((w, i) => (
+              <div key={i} className={`skeleton-shimmer ${w} h-10 rounded-xs`} />
             ))}
           </div>
         </div>
       </div>
 
       {/* Card grid */}
-      <div
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          padding: "24px 40px",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(min(400px, 100%), 1fr))",
-            gap: "16px",
-          }}
-        >
+      <div className="max-w-300 mx-auto px-10 py-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(400px,100%),1fr))] gap-4">
           {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
             <TournamentCardSkeleton key={i} />
           ))}

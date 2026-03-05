@@ -1,88 +1,31 @@
 export default function TournamentCardSkeleton() {
   return (
-    <article className="tournament-card" aria-hidden="true">
+    <article className="tournament-card grid-cols-1 sm:grid-cols-[160px_1fr]" aria-hidden="true">
       {/* Poster placeholder */}
-      <div className="skeleton-shimmer" style={{ minHeight: "200px" }} />
+      <div className="skeleton-shimmer hidden sm:block min-h-50 shrink-0" />
 
       {/* Body */}
-      <div
-        style={{
-          padding: "16px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-        }}
-      >
+      <div className="p-4 flex flex-col justify-center">
         {/* Badge row */}
-        <div
-          style={{
-            display: "flex",
-            gap: "6px",
-            marginBottom: "12px",
-          }}
-        >
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "62px", height: "18px", borderRadius: "2px" }}
-          />
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "44px", height: "18px", borderRadius: "2px" }}
-          />
+        <div className="flex gap-1.5 mb-3">
+          <div className="skeleton-shimmer w-15.5 h-4.5 rounded-xs" />
+          <div className="skeleton-shimmer w-11 h-4.5 rounded-xs" />
         </div>
 
         {/* Title */}
-        <div
-          className="skeleton-shimmer"
-          style={{
-            width: "80%",
-            height: "20px",
-            borderRadius: "2px",
-            marginBottom: "12px",
-          }}
-        />
+        <div className="skeleton-shimmer w-4/5 h-5 rounded-xs mb-3" />
 
         {/* Meta rows */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            marginBottom: "16px",
-          }}
-        >
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "55%", height: "13px", borderRadius: "2px" }}
-          />
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "65%", height: "13px", borderRadius: "2px" }}
-          />
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "45%", height: "13px", borderRadius: "2px" }}
-          />
+        <div className="flex flex-col gap-2 mb-4">
+          <div className="skeleton-shimmer w-[55%] h-3.25 rounded-xs" />
+          <div className="skeleton-shimmer w-[65%] h-3.25 rounded-xs" />
+          <div className="skeleton-shimmer w-[45%] h-3.25 rounded-xs" />
         </div>
 
         {/* Footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingTop: "12px",
-            borderTop: "1px solid var(--color-border)",
-          }}
-        >
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "48px", height: "22px", borderRadius: "2px" }}
-          />
-          <div
-            className="skeleton-shimmer"
-            style={{ width: "72px", height: "34px", borderRadius: "2px" }}
-          />
+        <div className="flex justify-between items-center pt-3 border-t border-(--color-border)">
+          <div className="skeleton-shimmer w-12 h-5.5 rounded-xs" />
+          <div className="skeleton-shimmer w-18 h-8.5 rounded-xs" />
         </div>
       </div>
     </article>

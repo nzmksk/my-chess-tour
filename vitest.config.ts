@@ -9,13 +9,6 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text"],
-      exclude: [
-        "node_modules/**",
-        ".next/**",
-        "**/__tests__/**",
-        "**/*.config.*",
-        "**/migrations/**",
-      ],
     },
   },
 });

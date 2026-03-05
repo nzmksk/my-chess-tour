@@ -32,7 +32,7 @@ function MultiSelectDropdown({
     onChange(
       selected.includes(value)
         ? selected.filter((v) => v !== value)
-        : [...selected, value]
+        : [...selected, value],
     );
   }
 
@@ -47,10 +47,12 @@ function MultiSelectDropdown({
     : label;
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={hasSelection ? "filter-btn filter-btn--active" : "filter-btn"}
+        className={
+          hasSelection ? "filter-btn filter-btn--active" : "filter-btn"
+        }
       >
         {displayLabel}
       </button>
@@ -63,12 +65,7 @@ function MultiSelectDropdown({
                 type="checkbox"
                 checked={selected.includes(opt.value)}
                 onChange={() => toggle(opt.value)}
-                style={{
-                  accentColor: "var(--color-gold-bright)",
-                  width: "15px",
-                  height: "15px",
-                  flexShrink: 0,
-                }}
+                className="accent-(--color-gold-bright) size-3.75 shrink-0"
               />
               {opt.label}
             </label>
@@ -144,20 +141,8 @@ export default function FilterBar({
   }
 
   return (
-    <div
-      style={{
-        background: "var(--color-bg-surface)",
-        borderBottom: "1px solid var(--color-border)",
-        padding: "16px 0",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          padding: "0 40px",
-        }}
-      >
+    <div className="bg-(--color-bg-surface) border-b border-(--color-border) py-4">
+      <div className="max-w-300 mx-auto px-10">
         {/* Search */}
         <input
           type="text"
@@ -168,15 +153,7 @@ export default function FilterBar({
         />
 
         {/* Filter row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            flexWrap: "wrap",
-            marginTop: "12px",
-          }}
-        >
+        <div className="flex items-center gap-2.5 flex-wrap mt-3">
           <MultiSelectDropdown
             label="Format"
             options={FORMAT_OPTIONS}
@@ -204,7 +181,6 @@ export default function FilterBar({
                 ? "filter-btn filter-btn--active"
                 : "filter-btn"
             }
-            style={{ appearance: "none", cursor: "pointer" }}
           >
             {DATE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -213,7 +189,7 @@ export default function FilterBar({
             ))}
           </select>
 
-          <div style={{ flex: 1 }} />
+          <div className="flex-1" />
 
           {hasActiveFilters && (
             <button onClick={handleReset} className="filter-clear-btn">

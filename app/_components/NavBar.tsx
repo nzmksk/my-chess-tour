@@ -41,31 +41,10 @@ export default function NavBar() {
 
   return (
     <>
-      <nav
-        style={{
-          background: "var(--color-bg-sunken)",
-          borderBottom: "1px solid var(--color-border)",
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            padding: "0 40px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            height: "64px",
-          }}
-        >
+      <nav className="bg-(--color-bg-sunken) border-b border-(--color-border) sticky top-0 z-50">
+        <div className="max-w-300 mx-auto px-10 flex items-center justify-between h-16">
           {/* Brand logo — always redirects to /tournaments, never shrinks */}
-          <Link
-            href="/tournaments"
-            style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
-          >
+          <Link href="/tournaments" className="flex items-center shrink-0">
             <Image
               src="/mct-logo-horizontal.svg"
               alt="MY Chess Tour"
@@ -75,61 +54,29 @@ export default function NavBar() {
             />
           </Link>
 
-          {/* Desktop nav — hidden on small screens via CSS */}
-          <div className="nav-desktop">
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center">
             {NAV_LINKS.map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
-                style={{
-                  fontFamily: "var(--font-lato)",
-                  fontSize: "13px",
-                  letterSpacing: "0.08em",
-                  color:
-                    pathname === href
-                      ? "var(--color-gold-bright)"
-                      : "var(--color-text-secondary)",
-                  textTransform: "uppercase",
-                  textDecoration: "none",
-                  padding: "0 16px",
-                  transition: "color 0.15s ease",
-                }}
+                className={`nav-link${pathname === href ? " nav-link--active" : ""}`}
               >
                 {label}
               </Link>
             ))}
-            <Link
-              href="/become-organizer"
-              style={{
-                fontFamily: "var(--font-lato)",
-                fontSize: "13px",
-                letterSpacing: "0.08em",
-                color: "var(--color-gold-bright)",
-                textTransform: "uppercase",
-                textDecoration: "none",
-                padding: "0 0 0 16px",
-                marginLeft: "8px",
-                transition: "opacity 0.15s ease",
-              }}
-            >
+            <Link href="/become-organizer" className="nav-link-organizer">
               Become an Organizer
             </Link>
           </div>
 
           {/* Hamburger button — visible on small screens only */}
           <button
-            className="nav-hamburger"
+            className="flex md:hidden items-center bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation menu"
             aria-expanded={drawerOpen}
             aria-controls="nav-drawer"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "8px",
-              color: "var(--color-text-secondary)",
-            }}
           >
             <svg
               width="24"
@@ -167,23 +114,11 @@ export default function NavBar() {
         aria-label="Navigation menu"
       >
         {/* Close button */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: "32px",
-          }}
-        >
+        <div className="flex justify-end mb-8">
           <button
             onClick={() => setDrawerOpen(false)}
             aria-label="Close navigation menu"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "8px",
-              color: "var(--color-text-secondary)",
-            }}
+            className="bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
           >
             <svg
               width="24"
@@ -201,30 +136,13 @@ export default function NavBar() {
         </div>
 
         {/* Drawer nav links */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div className="flex flex-col gap-1">
           {NAV_LINKS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
               onClick={() => setDrawerOpen(false)}
-              style={{
-                fontFamily: "var(--font-lato)",
-                fontSize: "14px",
-                letterSpacing: "0.08em",
-                color:
-                  pathname === href
-                    ? "var(--color-gold-bright)"
-                    : "var(--color-text-secondary)",
-                textTransform: "uppercase",
-                textDecoration: "none",
-                padding: "12px 16px",
-                borderRadius: "2px",
-                background:
-                  pathname === href
-                    ? "rgba(201, 168, 76, 0.08)"
-                    : "transparent",
-                transition: "color 0.15s ease, background 0.15s ease",
-              }}
+              className={`nav-drawer-link${pathname === href ? " nav-drawer-link--active" : ""}`}
             >
               {label}
             </Link>
@@ -232,20 +150,7 @@ export default function NavBar() {
           <Link
             href="/become-organizer"
             onClick={() => setDrawerOpen(false)}
-            style={{
-              fontFamily: "var(--font-lato)",
-              fontSize: "14px",
-              letterSpacing: "0.08em",
-              color: "var(--color-gold-bright)",
-              textTransform: "uppercase",
-              textDecoration: "none",
-              padding: "12px 16px",
-              marginTop: "16px",
-              border: "1px solid var(--color-gold-bright)",
-              borderRadius: "2px",
-              textAlign: "center",
-              transition: "background 0.15s ease",
-            }}
+            className="nav-drawer-link-organizer"
           >
             Become an Organizer
           </Link>

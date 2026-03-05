@@ -15,10 +15,7 @@ export default function WaitlistForm() {
   return (
     <form action={formAction} className="flex w-full max-w-md flex-col gap-3">
       {success ? (
-        <p
-          className="text-center text-sm"
-          style={{ color: "var(--color-gold-bright)" }}
-        >
+        <p className="text-center text-sm text-(--color-gold-bright)">
           You&apos;re on the list. We&apos;ll be in touch.
         </p>
       ) : (
@@ -30,30 +27,18 @@ export default function WaitlistForm() {
               required
               placeholder="your@email.com"
               disabled={pending}
-              className="flex-1 rounded border px-4 py-3 text-sm outline-none transition-colors focus:border-(--color-gold-bright) disabled:opacity-50"
-              style={{
-                background: "var(--color-bg-raised)",
-                borderColor: "var(--color-border)",
-                color: "var(--color-text-body)",
-              }}
+              className="flex-1 rounded border px-4 py-3 text-sm outline-none transition-colors focus:border-(--color-gold-bright) disabled:opacity-50 bg-(--color-bg-raised) border-(--color-border) text-(--color-text-body)"
             />
             <button
               type="submit"
               disabled={pending}
-              className="cursor-pointer rounded px-6 py-3 text-sm font-semibold tracking-widest transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep))",
-                color: "#0e0e0e",
-                fontFamily: "var(--font-cinzel)",
-                letterSpacing: "0.1em",
-              }}
+              className="cursor-pointer rounded px-6 py-3 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 btn-gold"
             >
               {pending ? "Joining…" : "Join the Waitlist"}
             </button>
           </div>
           {state.error && (
-            <p className="text-center text-xs" style={{ color: "#e87070" }}>
+            <p className="text-center text-xs text-(--color-error)">
               {state.error}
             </p>
           )}
