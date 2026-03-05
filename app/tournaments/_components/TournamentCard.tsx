@@ -63,9 +63,9 @@ export default function TournamentCard({ tournament: t }: Props) {
   }
 
   return (
-    <article className="tournament-card grid-cols-1 md:grid-cols-[160px_1fr]">
+    <article className="tournament-card grid-cols-1 sm:grid-cols-[160px_1fr]">
       {/* Poster */}
-      <div className="hidden md:flex items-center justify-center min-h-50 relative shrink-0 bg-(--color-bg-raised)">
+      <div className="hidden sm:flex items-center justify-center min-h-50 relative shrink-0 bg-(--color-bg-raised)">
         {t.poster_url ? (
           <Image
             src={t.poster_url}
