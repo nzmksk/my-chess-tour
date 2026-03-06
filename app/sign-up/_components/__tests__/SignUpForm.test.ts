@@ -13,7 +13,7 @@ vi.mock("../StepTracker", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-import RegisterForm from "../RegisterForm";
+import RegisterForm from "../SignUpForm";
 
 describe("RegisterForm", () => {
   it("is defined as a function", () => {

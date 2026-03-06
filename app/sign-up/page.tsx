@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import NavBar from "@/app/_components/NavBar";
-import RegisterForm from "./_components/RegisterForm";
+import RegisterForm from "./_components/SignUpForm";
 import AuthCardSkeleton from "./_components/AuthCardSkeleton";
 
 export const metadata = {
