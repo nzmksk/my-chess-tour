@@ -598,6 +598,22 @@
   .eye-btn:hover {
     color: var(--color-gold-bright);
   }
+  .eye-icon,
+  .eye-off-icon {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+    mask-position: center;
+    background-color: currentColor;
+  }
+  .eye-icon {
+    mask-image: url('/eye-icon.svg');
+  }
+  .eye-off-icon {
+    mask-image: url('/eye-off-icon.svg');
+  }
 
   /* ── Password requirements ── */
   .pw-requirements {
