@@ -46,14 +46,14 @@ export default function NavBar() {
             <Image
               src="/mct-logo-horizontal.svg"
               alt="MY Chess Tour"
-              width={220}
+              width={148}
               height={60}
               priority
             />
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2">
             {NAV_LINKS.map(({ href, label, ghost }) => (
               <Link
                 key={href}
@@ -73,7 +73,7 @@ export default function NavBar() {
 
           {/* Hamburger button — visible on small screens only */}
           <button
-            className="flex md:hidden items-center bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
+            className="flex sm:hidden items-center bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
             onClick={() => setDrawerState(openDrawer(pathname ?? ""))}
             aria-label="Open navigation menu"
             aria-expanded={drawerOpen}
