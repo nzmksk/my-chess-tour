@@ -43,7 +43,7 @@ export default function VerifyForm({ email = "user@example.com" }: VerifyFormPro
     setCode(value);
     if (value.length === CODE_LENGTH) {
       // Auto-submit on 6th digit
-      window.location.href = "/register/success";
+      window.location.href = "/sign-up/success";
     }
   }
 
@@ -125,7 +125,7 @@ export default function VerifyForm({ email = "user@example.com" }: VerifyFormPro
 
           <button
             className="btn-primary mt-md"
-            onClick={() => window.location.href = "/register/success"}
+            onClick={() => window.location.href = "/sign-up/success"}
             disabled={code.length !== CODE_LENGTH || expired}
             aria-disabled={code.length !== CODE_LENGTH || expired}
           >
@@ -147,7 +147,7 @@ export default function VerifyForm({ email = "user@example.com" }: VerifyFormPro
                 Resend code
               </a>
             )}{" "}
-            · <a href="/register">Change email</a>
+            · <a href="/sign-up">Change email</a>
           </p>
         </div>
       </div>

@@ -35,11 +35,11 @@ export default function ProfileForm() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    window.location.href = "/register/verify";
+    window.location.href = "/sign-up/verify";
   }
 
   function handleBack() {
-    window.location.href = "/register";
+    window.location.href = "/sign-up";
   }
 
   return (

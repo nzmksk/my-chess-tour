@@ -66,7 +66,7 @@ export default function NavBar() {
             <Link href="/login" className="nav-btn-login">
               Login
             </Link>
-            <Link href="/register" className="nav-btn-signup">
+            <Link href="/sign-up" className="nav-btn-signup">
               Sign Up
             </Link>
           </div>
@@ -155,7 +155,7 @@ export default function NavBar() {
             Login
           </Link>
           <Link
-            href="/register"
+            href="/sign-up"
             className="nav-drawer-btn-signup"
             onClick={() => setDrawerState((current) => closeDrawer(current))}
           >

@@ -4,7 +4,7 @@ vi.mock("@/app/_components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("../_components/RegisterForm", () => ({
+vi.mock("../_components/SignUpForm", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
