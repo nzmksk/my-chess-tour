@@ -12,45 +12,34 @@ import {
 import StepTracker from "./StepTracker";
 
 export default function RegisterForm() {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    termsAccepted: false,
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [submitted, setSubmitted] = useState(false);
 
-  const passwordReqs = checkPasswordRequirements(password);
-  const passwordStrength = getPasswordStrength(password);
+  const passwordReqs = checkPasswordRequirements(form.password);
+  const passwordStrength = getPasswordStrength(form.password);
   const strengthPercent = (passwordStrength / 5) * 100;
 
-  const submittable = isRegistrationFormSubmittable({
-    firstName,
-    lastName,
-    email,
-    password,
-    confirmPassword,
-    termsAccepted,
-  });
+  const submittable = isRegistrationFormSubmittable(form);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitted(true);
-    const { errors: validationErrors, isValid } = validateRegistrationForm({
-      firstName,
-      lastName,
-      email,
-      password,
-      confirmPassword,
-      termsAccepted,
-    });
+    const { errors: validationErrors, isValid } =
+      validateRegistrationForm(form);
     setErrors(validationErrors);
     if (isValid) {
       // Navigate to next step
-      window.location.href = "/register/profile";
+      window.location.href = "/sign-up/profile";
     }
   }
 
@@ -94,12 +83,16 @@ export default function RegisterForm() {
                   <label className="input-label" htmlFor="firstName">
                     First Name
                   </label>
-                  <span className="help-icon" tabIndex={0} aria-label="First name help">
+                  <span
+                    className="help-icon"
+                    tabIndex={0}
+                    aria-label="First name help"
+                  >
                     ?
                     <div className="tooltip" role="tooltip">
                       Enter your legal first name as it appears on your IC or
-                      passport. This is used for tournament registration and FIDE
-                      records.
+                      passport. This is used for tournament registration and
+                      FIDE records.
                     </div>
                   </span>
                 </div>
@@ -108,11 +101,15 @@ export default function RegisterForm() {
                   className={`input${errors.firstName ? " input-error" : ""}`}
                   type="text"
                   placeholder="Ahmad"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
+                  value={form.firstName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, firstName: e.target.value }))
+                  }
                   autoComplete="given-name"
                   aria-invalid={!!errors.firstName}
-                  aria-describedby={errors.firstName ? "firstName-error" : undefined}
+                  aria-describedby={
+                    errors.firstName ? "firstName-error" : undefined
+                  }
                 />
                 {errors.firstName && (
                   <p id="firstName-error" className="input-hint error">
@@ -126,7 +123,11 @@ export default function RegisterForm() {
                   <label className="input-label" htmlFor="lastName">
                     Last Name
                   </label>
-                  <span className="help-icon" tabIndex={0} aria-label="Last name help">
+                  <span
+                    className="help-icon"
+                    tabIndex={0}
+                    aria-label="Last name help"
+                  >
                     ?
                     <div className="tooltip" role="tooltip">
                       Enter your legal last name or family name. For names
@@ -140,11 +141,15 @@ export default function RegisterForm() {
                   className={`input${errors.lastName ? " input-error" : ""}`}
                   type="text"
                   placeholder="Razif"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
+                  value={form.lastName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, lastName: e.target.value }))
+                  }
                   autoComplete="family-name"
                   aria-invalid={!!errors.lastName}
-                  aria-describedby={errors.lastName ? "lastName-error" : undefined}
+                  aria-describedby={
+                    errors.lastName ? "lastName-error" : undefined
+                  }
                 />
                 {errors.lastName && (
                   <p id="lastName-error" className="input-hint error">
@@ -166,8 +171,10 @@ export default function RegisterForm() {
                 className={`input${errors.email ? " input-error" : ""}`}
                 type="email"
                 placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={form.email}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, email: e.target.value }))
+                }
                 autoComplete="email"
                 aria-invalid={!!errors.email}
                 aria-describedby={errors.email ? "email-error" : undefined}
@@ -192,8 +199,10 @@ export default function RegisterForm() {
                   className={`input input--icon${errors.password ? " input-error" : ""}`}
                   type={showPassword ? "text" : "password"}
                   placeholder="Create a password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, password: e.target.value }))
+                  }
                   autoComplete="new-password"
                   aria-invalid={!!errors.password}
                   aria-describedby="password-requirements"
@@ -204,7 +213,10 @@ export default function RegisterForm() {
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  <span className={showPassword ? "eye-off-icon" : "eye-icon"} aria-hidden="true" />
+                  <span
+                    className={showPassword ? "eye-off-icon" : "eye-icon"}
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
 
@@ -230,25 +242,31 @@ export default function RegisterForm() {
               >
                 <p className="pw-req-title">Password must contain</p>
                 <div className="pw-req-grid">
-                  <div className={`pw-req${passwordReqs.minLength ? " pw-req--met" : ""}`}>
+                  <div
+                    className={`pw-req${passwordReqs.minLength ? " pw-req--met" : ""}`}
+                  >
                     <div className="pw-req-dot" />
                     8+ characters
                   </div>
-                  <div className={`pw-req${passwordReqs.hasUppercase ? " pw-req--met" : ""}`}>
-                    <div className="pw-req-dot" />
-                    1 uppercase letter
+                  <div
+                    className={`pw-req${passwordReqs.hasUppercase ? " pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 uppercase letter
                   </div>
-                  <div className={`pw-req${passwordReqs.hasNumber ? " pw-req--met" : ""}`}>
-                    <div className="pw-req-dot" />
-                    1 number
+                  <div
+                    className={`pw-req${passwordReqs.hasNumber ? " pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 number
                   </div>
-                  <div className={`pw-req${passwordReqs.hasLowercase ? " pw-req--met" : ""}`}>
-                    <div className="pw-req-dot" />
-                    1 lowercase letter
+                  <div
+                    className={`pw-req${passwordReqs.hasLowercase ? " pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 lowercase letter
                   </div>
-                  <div className={`pw-req${passwordReqs.hasSymbol ? " pw-req--met" : ""}`}>
-                    <div className="pw-req-dot" />
-                    1 symbol (!@#$…)
+                  <div
+                    className={`pw-req${passwordReqs.hasSymbol ? " pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 symbol (!@#$…)
                   </div>
                 </div>
               </div>
@@ -267,19 +285,32 @@ export default function RegisterForm() {
                   className={`input input--icon${errors.confirmPassword ? " input-error" : ""}`}
                   type={showConfirmPassword ? "text" : "password"}
                   placeholder="Repeat password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  value={form.confirmPassword}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, confirmPassword: e.target.value }))
+                  }
                   autoComplete="new-password"
                   aria-invalid={!!errors.confirmPassword}
-                  aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
+                  aria-describedby={
+                    errors.confirmPassword ? "confirmPassword-error" : undefined
+                  }
                 />
                 <button
                   type="button"
                   className="eye-btn"
                   onClick={() => setShowConfirmPassword((v) => !v)}
-                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  aria-label={
+                    showConfirmPassword
+                      ? "Hide confirm password"
+                      : "Show confirm password"
+                  }
                 >
-                  <span className={showConfirmPassword ? "eye-off-icon" : "eye-icon"} aria-hidden="true" />
+                  <span
+                    className={
+                      showConfirmPassword ? "eye-off-icon" : "eye-icon"
+                    }
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
               {errors.confirmPassword && (
@@ -290,18 +321,22 @@ export default function RegisterForm() {
             </div>
 
             {/* Terms */}
-            <div className="check-row" style={{ marginBottom: "var(--space-lg)" }}>
+            <div
+              className="check-row"
+              style={{ marginBottom: "var(--space-lg)" }}
+            >
               <input
                 id="terms"
                 type="checkbox"
                 className="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
+                checked={form.termsAccepted}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, termsAccepted: e.target.checked }))
+                }
                 aria-describedby={errors.terms ? "terms-error" : undefined}
               />
               <label className="check-label" htmlFor="terms">
-                I agree to the{" "}
-                <Link href="/terms">Terms of Service</Link> and{" "}
+                I agree to the <Link href="/terms">Terms of Service</Link> and{" "}
                 <Link href="/privacy">Privacy Policy</Link>
               </label>
             </div>
