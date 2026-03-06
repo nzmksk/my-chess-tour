@@ -358,7 +358,7 @@ export default function RegisterForm() {
 
           <div className="divider-text">already have an account?</div>
           <p className="auth-footer" style={{ marginTop: 0 }}>
-            <Link href="/login">Sign in instead</Link>
+            <Link href="/login">Log in instead</Link>
           </p>
         </div>
       </div>
