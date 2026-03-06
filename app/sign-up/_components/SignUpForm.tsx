@@ -11,7 +11,7 @@ import {
 } from "@/lib/auth-validation";
 import StepTracker from "./StepTracker";
 
-export default function RegisterForm() {
+export default function SignUpForm() {
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",

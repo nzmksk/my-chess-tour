@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import NavBar from "@/app/_components/NavBar";
-import RegisterForm from "./_components/SignUpForm";
+import SignUpForm from "./_components/SignUpForm";
 import AuthCardSkeleton from "./_components/AuthCardSkeleton";
 
 export const metadata = {
@@ -14,7 +14,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-(--color-bg-base)">
       <NavBar />
       <Suspense fallback={<AuthCardSkeleton rows={4} />}>
-        <RegisterForm />
+        <SignUpForm />
       </Suspense>
     </div>
   );

@@ -13,18 +13,18 @@ vi.mock("../StepTracker", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-import RegisterForm from "../SignUpForm";
+import SignUpForm from "../SignUpForm";
 
-describe("RegisterForm", () => {
+describe("SignUpForm", () => {
   it("is defined as a function", () => {
-    expect(typeof RegisterForm).toBe("function");
+    expect(typeof SignUpForm).toBe("function");
   });
 
   it("has a default export", () => {
-    expect(RegisterForm).toBeDefined();
+    expect(SignUpForm).toBeDefined();
   });
 
-  it("is named RegisterForm", () => {
-    expect(RegisterForm.name).toBe("RegisterForm");
+  it("is named SignUpForm", () => {
+    expect(SignUpForm.name).toBe("SignUpForm");
   });
 });
