@@ -32,7 +32,7 @@ export default function SignUpForm() {
 
   const submittable = isRegistrationFormSubmittable(form);
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitted(true);
     const { errors: validationErrors, isValid } =
@@ -336,13 +336,13 @@ export default function SignUpForm() {
                 }
                 aria-describedby={errors.terms ? "terms-error" : undefined}
               />
-              <label className="check-label" htmlFor="terms">
+              <label className={`check-label ${errors.terms ? "" : "mb-2"}`} htmlFor="terms">
                 I agree to the <Link href="/terms">Terms of Service</Link> and{" "}
                 <Link href="/privacy">Privacy Policy</Link>
               </label>
             </div>
             {errors.terms && (
-              <p id="terms-error" className="input-hint error mb-4">
+              <p id="terms-error" className="input-hint error mb-2">
                 {errors.terms}
               </p>
             )}
