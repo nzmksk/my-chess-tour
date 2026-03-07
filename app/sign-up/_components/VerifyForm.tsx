@@ -25,6 +25,8 @@ export default function VerifyForm() {
   const [timeLeft, setTimeLeft] = useState(CODE_EXPIRY_SECONDS);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [isResending, setIsResending] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const expiryRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -65,14 +67,37 @@ export default function VerifyForm() {
     };
   }, []);
 
+  async function submitCode(value: string) {
+    setVerifyError(null);
+    setIsVerifying(true);
+    try {
+      const res = await fetch("/api/v1/auth/signup/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setVerifyError(data.error ?? "Verification failed. Please try again.");
+        return;
+      }
+      router.push("/sign-up/success");
+    } catch {
+      setVerifyError("Network error. Please try again.");
+    } finally {
+      setIsVerifying(false);
+    }
+  }
+
   function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value
       .replace(/[^A-Za-z0-9]/g, "")
       .toUpperCase()
       .slice(0, CODE_LENGTH);
     setCode(value);
+    setVerifyError(null);
     if (value.length === CODE_LENGTH) {
-      router.push("/sign-up/success");
+      submitCode(value);
     }
   }
 
@@ -108,6 +133,7 @@ export default function VerifyForm() {
 
   const expired = timeLeft === 0;
   const canResend = cooldownLeft === 0 && !isResending;
+  const canVerify = code.length === CODE_LENGTH && !expired && !isVerifying;
 
   return (
     <div className="auth-page">
@@ -179,15 +205,18 @@ export default function VerifyForm() {
                 </>
               )}
             </p>
+            {verifyError && (
+              <p className="input-hint error">{verifyError}</p>
+            )}
           </div>
 
           <button
             className="btn-primary mt-md"
-            onClick={() => router.push("/sign-up/success")}
-            disabled={code.length !== CODE_LENGTH || expired}
-            aria-disabled={code.length !== CODE_LENGTH || expired}
+            onClick={() => submitCode(code)}
+            disabled={!canVerify}
+            aria-disabled={!canVerify}
           >
-            Verify Email
+            {isVerifying ? "Verifying…" : "Verify Email"}
           </button>
 
           <p className="auth-footer mt-6">
