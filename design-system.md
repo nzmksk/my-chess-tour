@@ -1,7 +1,7 @@
 # MY Chess Tour — Design System
 
 > **Version:** 1.1
-> **Last updated:** February 2026
+> **Last updated:** 7 March 2026
 > **Scope:** Web UI, transactional emails, and marketing communications
 
 ---
@@ -74,7 +74,7 @@ All colors are defined as CSS custom properties to be declared on `:root`.
 
 | Role | Family | Weight | Size | Letter-spacing |
 |---|---|---|---|---|
-| Brand wordmark | Cinzel | 700 | 1.375rem (email) / 1.75–2.25rem (web) | 0.14em |
+| Brand wordmark | Cinzel | 700 | 22px (email) / 1.75–2.25rem (web) | 0.14em |
 | Page / section headings (H1) | Cinzel | 600 | 1.75–2rem | 0.05em |
 | Sub-headings (H2, H3) | Cinzel | 400 | 1.125–1.375rem | 0.04em |
 | Body copy | Lato | 300–400 | 0.9375–1rem | 0 |
@@ -103,7 +103,7 @@ A base-8 spacing scale keeps all layouts consistent.
 | `--space-xl`  | 2.5rem   | Card / panel padding |
 | `--space-2xl` | 4rem     | Page section separation |
 
-**Max content width:** 75rem (web), 35rem (email).
+**Max content width:** 75rem (web), 560px (email).
 **Gutter (web):** 1.5rem on mobile, 2.5rem on desktop.
 
 ### CSS unit guidelines
