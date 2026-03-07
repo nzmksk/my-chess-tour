@@ -1,62 +1,113 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
 
 const CODE_LENGTH = 6;
-const EXPIRY_SECONDS = 10 * 60; // 10 minutes
+const CODE_EXPIRY_SECONDS = 10 * 60; // 10 minutes
+const RESEND_COOLDOWN_SECONDS = 30 * 60; // 30 minutes
 
 function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+  const m = Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, "0");
   const s = (seconds % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 }
 
 export default function VerifyForm() {
   const { form } = useSignUpForm();
-  const email = form.email || "user@example.com";
+  const router = useRouter();
+  const email = form.email;
   const [code, setCode] = useState("");
-  const [timeLeft, setTimeLeft] = useState(EXPIRY_SECONDS);
-  const [resendCount, setResendCount] = useState(0);
-  const [cooldown, setCooldown] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [timeLeft, setTimeLeft] = useState(CODE_EXPIRY_SECONDS);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+  const expiryRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Code expiry countdown
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
+    expiryRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(intervalRef.current!);
+          clearInterval(expiryRef.current!);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (expiryRef.current) clearInterval(expiryRef.current);
+    };
+  }, []);
+
+  // Cooldown countdown — restarts whenever cooldownLeft is seeded
+  const startCooldown = useCallback(() => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    setCooldownLeft(RESEND_COOLDOWN_SECONDS);
+    cooldownRef.current = setInterval(() => {
+      setCooldownLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
     };
   }, []);
 
   function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const value = e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH);
+    const value = e.target.value
+      .replace(/[^A-Za-z0-9]/g, "")
+      .toUpperCase()
+      .slice(0, CODE_LENGTH);
     setCode(value);
     if (value.length === CODE_LENGTH) {
-      // Auto-submit on 6th digit
-      window.location.href = "/sign-up/success";
+      router.push("/sign-up/success");
     }
   }
 
-  function handleResend(e: React.MouseEvent) {
+  async function handleResend(e: React.MouseEvent) {
     e.preventDefault();
-    if (resendCount >= 3 || cooldown) return;
-    setResendCount((c) => c + 1);
-    setTimeLeft(EXPIRY_SECONDS);
-    if (resendCount + 1 >= 3) {
-      setCooldown(true);
+    if (cooldownLeft > 0 || isResending) return;
+
+    setIsResending(true);
+    try {
+      await fetch("/api/v1/auth/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } finally {
+      setIsResending(false);
     }
+
+    // Reset code expiry timer
+    if (expiryRef.current) clearInterval(expiryRef.current);
+    setTimeLeft(CODE_EXPIRY_SECONDS);
+    expiryRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(expiryRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    startCooldown();
   }
 
   const expired = timeLeft === 0;
+  const canResend = cooldownLeft === 0 && !isResending;
 
   return (
     <div className="auth-page">
@@ -71,14 +122,20 @@ export default function VerifyForm() {
           />
 
           <div className="auth-card-header">
-            <div style={{ fontSize: 32, marginBottom: "var(--space-md)" }} role="img" aria-label="Email">
+            <div
+              style={{ fontSize: 32, marginBottom: "var(--space-md)" }}
+              role="img"
+              aria-label="Email"
+            >
               &#128236;
             </div>
             <h1 className="auth-heading">Check Your Email</h1>
             <p className="auth-subheading">
               We sent a 6-digit code to
               <br />
-              <strong style={{ color: "var(--color-gold-muted)" }}>{email}</strong>
+              <strong style={{ color: "var(--color-gold-muted)" }}>
+                {email}
+              </strong>
             </p>
             <hr className="divider-gold" />
           </div>
@@ -93,8 +150,8 @@ export default function VerifyForm() {
               id="verificationCode"
               className="input"
               type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
+              inputMode="text"
+              autoCapitalize="characters"
               placeholder="_ _ _ _ _ _"
               value={code}
               onChange={handleCodeChange}
@@ -110,7 +167,9 @@ export default function VerifyForm() {
             />
             <p className="input-hint">
               {expired ? (
-                <span style={{ color: "var(--color-error)" }}>Code has expired</span>
+                <span style={{ color: "var(--color-error)" }}>
+                  Code has expired
+                </span>
               ) : (
                 <>
                   Code expires in{" "}
@@ -124,29 +183,34 @@ export default function VerifyForm() {
 
           <button
             className="btn-primary mt-md"
-            onClick={() => window.location.href = "/sign-up/success"}
+            onClick={() => router.push("/sign-up/success")}
             disabled={code.length !== CODE_LENGTH || expired}
             aria-disabled={code.length !== CODE_LENGTH || expired}
           >
             Verify Email
           </button>
 
-          <p className="auth-footer mt-lg">
+          <p className="auth-footer mt-6">
             Didn&apos;t receive it?{" "}
-            {cooldown ? (
+            {cooldownLeft > 0 ? (
               <span style={{ color: "var(--color-text-disabled)" }}>
-                Resend unavailable (30-min cooldown)
+                Resend again in{" "}
+                <span className="text-(--color-text-muted)">
+                  {formatTime(cooldownLeft)}
+                </span>
               </span>
             ) : (
               <a
                 href="#"
                 onClick={handleResend}
-                aria-disabled={resendCount >= 3}
+                aria-disabled={!canResend}
               >
-                Resend code
+                {isResending ? "Sending…" : "Resend code"}
               </a>
-            )}{" "}
-            · <a href="/sign-up">Change email</a>
+            )}
+          </p>
+          <p className="auth-footer">
+            <a href="/sign-up">Change email</a>
           </p>
         </div>
       </div>
