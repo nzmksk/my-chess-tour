@@ -1,7 +1,7 @@
 # MY Chess Tour — Design System
 
-> **Version:** 1.0  
-> **Last updated:** February 2026  
+> **Version:** 1.1
+> **Last updated:** February 2026
 > **Scope:** Web UI, transactional emails, and marketing communications
 
 ---
@@ -74,12 +74,12 @@ All colors are defined as CSS custom properties to be declared on `:root`.
 
 | Role | Family | Weight | Size | Letter-spacing |
 |---|---|---|---|---|
-| Brand wordmark | Cinzel | 700 | 22px (email) / 28–36px (web) | 0.14em |
-| Page / section headings (H1) | Cinzel | 600 | 28–32px | 0.05em |
-| Sub-headings (H2, H3) | Cinzel | 400 | 18–22px | 0.04em |
-| Body copy | Lato | 300–400 | 15–16px | 0 |
-| UI labels / buttons | Cinzel | 700 | 12–14px | 0.15em (uppercase) |
-| Captions / meta | Lato | 300 | 11–12px | 0.06–0.3em |
+| Brand wordmark | Cinzel | 700 | 1.375rem (email) / 1.75–2.25rem (web) | 0.14em |
+| Page / section headings (H1) | Cinzel | 600 | 1.75–2rem | 0.05em |
+| Sub-headings (H2, H3) | Cinzel | 400 | 1.125–1.375rem | 0.04em |
+| Body copy | Lato | 300–400 | 0.9375–1rem | 0 |
+| UI labels / buttons | Cinzel | 700 | 0.75–0.875rem | 0.15em (uppercase) |
+| Captions / meta | Lato | 300 | 0.6875–0.75rem | 0.06–0.3em |
 
 ### Rules
 
@@ -96,15 +96,28 @@ A base-8 spacing scale keeps all layouts consistent.
 
 | Token | Value | Usage |
 |---|---|---|
-| `--space-xs`  | 4px  | Icon gap, tight inline spacing |
-| `--space-sm`  | 8px  | Between small elements |
-| `--space-md`  | 16px | Component internal padding |
-| `--space-lg`  | 24px | Between sections within a component |
-| `--space-xl`  | 40px | Card / panel padding |
-| `--space-2xl` | 64px | Page section separation |
+| `--space-xs`  | 0.25rem  | Icon gap, tight inline spacing |
+| `--space-sm`  | 0.5rem   | Between small elements |
+| `--space-md`  | 1rem     | Component internal padding |
+| `--space-lg`  | 1.5rem   | Between sections within a component |
+| `--space-xl`  | 2.5rem   | Card / panel padding |
+| `--space-2xl` | 4rem     | Page section separation |
 
-**Max content width:** 1200px (web), 560px (email).  
-**Gutter (web):** 24px on mobile, 40px on desktop.
+**Max content width:** 75rem (web), 35rem (email).
+**Gutter (web):** 1.5rem on mobile, 2.5rem on desktop.
+
+### CSS unit guidelines
+
+| Use case | Unit |
+|---|---|
+| Font size | `rem` or `em` |
+| Layout spacing | `rem` |
+| Borders, border-radius | `px` |
+| Icons, decorative strip heights | `px` |
+| Fine adjustments (shadows, small offsets) | `px` |
+| Component scaling | `%` / `rem` |
+
+> **Email templates:** use `px` throughout — email clients do not reliably support `rem` or CSS custom properties.
 
 ---
 
@@ -118,11 +131,11 @@ A base-8 spacing scale keeps all layouts consistent.
   background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
   color: #0e0e0e;
   font-family: 'Cinzel', serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  padding: 14px 36px;
+  padding: 0.875rem 2.25rem;
   border-radius: 2px;
   border: none;
   box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
@@ -139,11 +152,11 @@ A base-8 spacing scale keeps all layouts consistent.
   background: transparent;
   color: var(--color-gold-bright);
   font-family: 'Cinzel', serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  padding: 13px 34px;
+  padding: 0.8125rem 2.125rem;
   border-radius: 2px;
   border: 1px solid var(--color-gold-bright);
   cursor: pointer;
@@ -174,7 +187,7 @@ A base-8 spacing scale keeps all layouts consistent.
 
 ```css
 .divider-gold {
-  width: 48px;
+  width: 3rem;
   height: 2px;
   background: linear-gradient(90deg, transparent, var(--color-gold-bright), transparent);
   margin: 0 auto var(--space-lg);
@@ -207,13 +220,13 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
   padding: 0 var(--space-xl);
   display: flex;
   align-items: center;
-  height: 64px;
+  height: 4rem;
 }
 
 .nav-logo {
   font-family: 'Cinzel', serif;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 1.125rem;
   letter-spacing: 0.14em;
   color: var(--color-gold-bright);
   text-transform: uppercase;
@@ -222,7 +235,7 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
 
 .nav-link {
   font-family: 'Lato', sans-serif;
-  font-size: 13px;
+  font-size: 0.8125rem;
   letter-spacing: 0.08em;
   color: var(--color-text-secondary);
   text-transform: uppercase;
@@ -243,8 +256,8 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
   border-radius: 2px;
   color: var(--color-text-body);
   font-family: 'Lato', sans-serif;
-  font-size: 15px;
-  padding: 12px 16px;
+  font-size: 0.9375rem;
+  padding: 0.75rem 1rem;
   width: 100%;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -257,7 +270,7 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
 
 .input-label {
   font-family: 'Cinzel', serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -274,22 +287,22 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
   width: 100%;
   border-collapse: collapse;
   font-family: 'Lato', sans-serif;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .table th {
   font-family: 'Cinzel', serif;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-gold-muted);
   border-bottom: 1px solid var(--color-border-gold);
-  padding: 10px 16px;
+  padding: 0.625rem 1rem;
   text-align: left;
 }
 .table td {
   color: var(--color-text-body);
-  padding: 12px 16px;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--color-border);
 }
 .table tr:hover td { background: rgba(201, 168, 76, 0.04); }
@@ -300,7 +313,7 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
 ```css
 .badge {
   font-family: 'Cinzel', serif;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -350,6 +363,7 @@ All email templates share the same structural shell. Use the following base layo
 
 - Max width: **560px**. Always center in the email client viewport.
 - Use inline styles **or** `<style>` in `<head>` — avoid external CSS.
+- Use `px` for all sizes and spacing — email clients do not reliably support `rem` or CSS custom properties.
 - The `{{ .ConfirmationURL }}` token must appear in **both** the CTA button `href` and a plain-text fallback link.
 - Chessboard strip at top: **8px tall**. Footer strip: **4px tall, muted** (`#2e2a1e` / `#0a0a0a`).
 - CTA button: gradient gold, Cinzel, dark text (`#0e0e0e`), `border-radius: 2px`.
@@ -442,16 +456,18 @@ Paste this block into your root stylesheet:
   --color-link:        #8a7040;
   --color-link-hover:  #c9a84c;
 
-  /* Spacing */
-  --space-xs:  4px;
-  --space-sm:  8px;
-  --space-md:  16px;
-  --space-lg:  24px;
-  --space-xl:  40px;
-  --space-2xl: 64px;
+  /* Spacing (rem — scales with root font size) */
+  --space-xs:  0.25rem;
+  --space-sm:  0.5rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2.5rem;
+  --space-2xl: 4rem;
 
   /* Motion */
   --transition-base: 0.2s ease;
+
+  /* Shadows (px — fine adjustments, not scaled) */
   --shadow-gold-sm:  0 4px 20px rgba(201, 168, 76, 0.25);
   --shadow-gold-md:  0 6px 28px rgba(201, 168, 76, 0.40);
 
