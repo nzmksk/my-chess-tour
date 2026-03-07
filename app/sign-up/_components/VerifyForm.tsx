@@ -107,7 +107,7 @@ export default function VerifyForm() {
 
     setIsResending(true);
     try {
-      await fetch("/api/v1/auth/signup/verify", {
+      await fetch("/api/v1/auth/signup/request-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
