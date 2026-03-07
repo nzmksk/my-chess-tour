@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getVerificationCode, deleteVerificationCode } from "@/lib/redis";
+import { getVerificationCode } from "@/lib/redis";
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -120,8 +120,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-
-  await deleteVerificationCode(email);
 
   return NextResponse.json({ message: "Account created successfully" }, { status: 201 });
 }

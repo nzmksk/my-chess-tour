@@ -6,7 +6,7 @@ export const redis = new Redis({
 });
 
 const VERIFY_PREFIX = "verify:";
-const VERIFY_TTL_SECONDS = 600; // 10 minutes
+const VERIFY_TTL_SECONDS = 10 * 60; // 10 minutes
 
 export function verifyKey(email: string) {
   return `${VERIFY_PREFIX}${email.toLowerCase()}`;
@@ -18,8 +18,4 @@ export async function storeVerificationCode(email: string, code: string) {
 
 export async function getVerificationCode(email: string) {
   return redis.get<string>(verifyKey(email));
-}
-
-export async function deleteVerificationCode(email: string) {
-  await redis.del(verifyKey(email));
 }
