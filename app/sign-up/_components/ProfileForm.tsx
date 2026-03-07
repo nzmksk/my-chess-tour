@@ -33,7 +33,7 @@ export default function ProfileForm() {
   const [isOku, setIsOku] = useState(false);
   const [avatarInitials] = useState("AR"); // Will be derived from user data in real impl
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     window.location.href = "/sign-up/verify";
   }
@@ -74,10 +74,10 @@ export default function ProfileForm() {
               </div>
             </div>
             <p className="avatar-hint">
-              Tap to upload a profile photo · JPG or PNG, max 2 MB
+              Tap to upload a profile photo
             </p>
-            <p className="avatar-hint" style={{ marginTop: 2 }}>
-              Default: initials from your first and last name
+            <p className="avatar-hint">
+              JPG or PNG, max 2 MB
             </p>
           </div>
 
