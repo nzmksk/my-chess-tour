@@ -64,6 +64,7 @@ export default function ProfileForm() {
         return;
       }
 
+      document.cookie = "signup_step=verify; path=/; max-age=3600; SameSite=Lax";
       router.push("/sign-up/verify");
     } catch {
       setSubmitError({

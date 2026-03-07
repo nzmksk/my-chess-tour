@@ -34,6 +34,7 @@ export default function SignUpForm() {
       validateRegistrationForm(form);
     setErrors(validationErrors);
     if (isValid) {
+      document.cookie = "signup_step=profile; path=/; max-age=3600; SameSite=Lax";
       router.push("/sign-up/profile");
     }
   }

@@ -94,6 +94,7 @@ export default function VerifyForm() {
         setVerifyError(data.error ?? "Verification failed. Please try again.");
         return;
       }
+      document.cookie = "signup_step=; path=/; max-age=0; SameSite=Lax";
       router.push("/sign-up/success");
     } catch {
       setVerifyError("Network error. Please try again.");
