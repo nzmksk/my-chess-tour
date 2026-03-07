@@ -12,17 +12,17 @@ vi.mock("../_components/AuthCardSkeleton", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-import RegisterVerifyPage from "../verify/page";
+import SignUpVerifyPage from "../verify/page";
 
-describe("RegisterVerifyPage", () => {
+describe("SignUpVerifyPage", () => {
   it("returns a non-null React element", () => {
-    const result = RegisterVerifyPage();
+    const result = SignUpVerifyPage();
     expect(result).not.toBeNull();
     expect(result).toBeDefined();
   });
 
   it("has a min-h-screen container", () => {
-    const result = RegisterVerifyPage() as Record<string, unknown>;
+    const result = SignUpVerifyPage() as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
     expect(props.className).toContain("min-h-screen");
   });

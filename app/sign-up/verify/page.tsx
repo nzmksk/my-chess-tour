@@ -8,7 +8,7 @@ export const metadata = {
   description: "Verify your email address to complete registration.",
 };
 
-export default function RegisterVerifyPage() {
+export default function SignUpVerifyPage() {
   return (
     <div className="min-h-screen bg-(--color-bg-base)">
       <NavBar />
