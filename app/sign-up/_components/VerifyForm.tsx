@@ -74,7 +74,20 @@ export default function VerifyForm() {
       const res = await fetch("/api/v1/auth/signup/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: value }),
+        body: JSON.stringify({
+          email,
+          code: value,
+          password: form.password,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          gender: form.gender,
+          nationality: form.nationality,
+          dateOfBirth: form.dateOfBirth,
+          state: form.state,
+          fideId: form.fideId,
+          mcfId: form.mcfId,
+          isOku: form.isOku,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
