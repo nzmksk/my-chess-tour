@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import StepTracker from "./StepTracker";
+import { useSignUpForm } from "./SignUpContext";
 
 const GENDERS = ["Male", "Female", "Prefer not to say"] as const;
 const STATES = [
@@ -24,13 +25,7 @@ const STATES = [
 ] as const;
 
 export default function ProfileForm() {
-  const [gender, setGender] = useState("");
-  const [nationality, setNationality] = useState("Malaysian");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [state, setState] = useState("");
-  const [fideId, setFideId] = useState("");
-  const [mcfId, setMcfId] = useState("");
-  const [isOku, setIsOku] = useState(false);
+  const { form, setForm } = useSignUpForm();
   const [avatarInitials] = useState("AR"); // Will be derived from user data in real impl
 
   function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
@@ -91,8 +86,8 @@ export default function ProfileForm() {
                 <select
                   id="gender"
                   className="input"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
+                  value={form.gender ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
                   required
                   aria-required="true"
                 >
@@ -112,8 +107,8 @@ export default function ProfileForm() {
                   className="input"
                   type="text"
                   placeholder="Malaysian"
-                  value={nationality}
-                  onChange={(e) => setNationality(e.target.value)}
+                  value={form.nationality ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))}
                   required
                   aria-required="true"
                 />
@@ -131,8 +126,8 @@ export default function ProfileForm() {
                   className="input"
                   type="date"
                   placeholder="DD / MM / YYYY"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  value={form.dateOfBirth ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
                 />
               </div>
 
@@ -143,8 +138,8 @@ export default function ProfileForm() {
                 <select
                   id="state"
                   className="input"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
+                  value={form.state ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
                 >
                   <option value="">Select…</option>
                   {STATES.map((s) => (
@@ -173,8 +168,8 @@ export default function ProfileForm() {
                 className="input"
                 type="text"
                 placeholder="e.g. 36095765"
-                value={fideId}
-                onChange={(e) => setFideId(e.target.value)}
+                value={form.fideId ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, fideId: e.target.value }))}
               />
               <p className="input-hint">
                 Ratings will be auto-fetched from FIDE&apos;s database
@@ -199,8 +194,8 @@ export default function ProfileForm() {
                 className="input"
                 type="text"
                 placeholder="e.g. MCF-2024-001234"
-                value={mcfId}
-                onChange={(e) => setMcfId(e.target.value)}
+                value={form.mcfId ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, mcfId: e.target.value }))}
               />
             </div>
 
@@ -210,8 +205,8 @@ export default function ProfileForm() {
                 id="oku"
                 type="checkbox"
                 className="checkbox"
-                checked={isOku}
-                onChange={(e) => setIsOku(e.target.checked)}
+                checked={form.isOku ?? false}
+                onChange={(e) => setForm((f) => ({ ...f, isOku: e.target.checked }))}
               />
               <label className="check-label" htmlFor="oku">
                 I am an OKU (Orang Kurang Upaya) card holder{" "}

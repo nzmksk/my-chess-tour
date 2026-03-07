@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import StepTracker from "./StepTracker";
+import { useSignUpForm } from "./SignUpContext";
 
 const CODE_LENGTH = 6;
 const EXPIRY_SECONDS = 10 * 60; // 10 minutes
@@ -12,11 +13,9 @@ function formatTime(seconds: number): string {
   return `${m}:${s}`;
 }
 
-type VerifyFormProps = {
-  email?: string;
-};
-
-export default function VerifyForm({ email = "user@example.com" }: VerifyFormProps) {
+export default function VerifyForm() {
+  const { form } = useSignUpForm();
+  const email = form.email || "user@example.com";
   const [code, setCode] = useState("");
   const [timeLeft, setTimeLeft] = useState(EXPIRY_SECONDS);
   const [resendCount, setResendCount] = useState(0);

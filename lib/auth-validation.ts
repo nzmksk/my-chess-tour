@@ -38,12 +38,21 @@ export type RegistrationErrors = {
 };
 
 export type RegistrationFields = {
+  // Step 1 — Account
   firstName: string;
   lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
   termsAccepted: boolean;
+  // Step 2 — Profile
+  gender?: string;
+  nationality?: string;
+  dateOfBirth?: string;
+  state?: string;
+  fideId?: string;
+  mcfId?: string;
+  isOku?: boolean;
 };
 
 export function validateRegistrationForm(

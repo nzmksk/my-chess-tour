@@ -8,19 +8,12 @@ import {
   isRegistrationFormSubmittable,
   validateRegistrationForm,
   type RegistrationErrors,
-  type RegistrationFields,
 } from "@/lib/auth-validation";
 import StepTracker from "./StepTracker";
+import { useSignUpForm } from "./SignUpContext";
 
 export default function SignUpForm() {
-  const [form, setForm] = useState<RegistrationFields>({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    termsAccepted: false,
-  });
+  const { form, setForm } = useSignUpForm();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<RegistrationErrors>({});
