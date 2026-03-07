@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   checkPasswordRequirements,
   getPasswordStrength,
@@ -14,6 +15,7 @@ import { useSignUpForm } from "./SignUpContext";
 
 export default function SignUpForm() {
   const { form, setForm } = useSignUpForm();
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<RegistrationErrors>({});
@@ -32,8 +34,7 @@ export default function SignUpForm() {
       validateRegistrationForm(form);
     setErrors(validationErrors);
     if (isValid) {
-      // Navigate to next step
-      window.location.href = "/sign-up/profile";
+      router.push("/sign-up/profile");
     }
   }
 
