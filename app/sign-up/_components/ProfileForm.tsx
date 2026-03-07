@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
+import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 const GENDERS = ["Male", "Female", "Prefer not to say"] as const;
 const STATES = [
@@ -64,7 +65,7 @@ export default function ProfileForm() {
         return;
       }
 
-      document.cookie = "signup_step=verify; path=/; max-age=3600; SameSite=Lax";
+      document.cookie = `${SIGNUP_STEP_COOKIE}=verify; path=/; max-age=${SIGNUP_STEP_MAX_AGE}; SameSite=Lax`;
       router.push("/sign-up/verify");
     } catch {
       setSubmitError({

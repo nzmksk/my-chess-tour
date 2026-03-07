@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
+import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
 
 const CODE_LENGTH = 6;
 const CODE_EXPIRY_SECONDS = 10 * 60; // 10 minutes
@@ -94,7 +95,7 @@ export default function VerifyForm() {
         setVerifyError(data.error ?? "Verification failed. Please try again.");
         return;
       }
-      document.cookie = "signup_step=; path=/; max-age=0; SameSite=Lax";
+      document.cookie = `${SIGNUP_STEP_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
       router.push("/sign-up/success");
     } catch {
       setVerifyError("Network error. Please try again.");

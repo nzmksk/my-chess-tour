@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth-validation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
+import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 export default function SignUpForm() {
   const { form, setForm } = useSignUpForm();
@@ -34,7 +35,7 @@ export default function SignUpForm() {
       validateRegistrationForm(form);
     setErrors(validationErrors);
     if (isValid) {
-      document.cookie = "signup_step=profile; path=/; max-age=3600; SameSite=Lax";
+      document.cookie = `${SIGNUP_STEP_COOKIE}=profile; path=/; max-age=${SIGNUP_STEP_MAX_AGE}; SameSite=Lax`;
       router.push("/sign-up/profile");
     }
   }
