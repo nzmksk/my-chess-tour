@@ -10,7 +10,7 @@ type SuccessPageProps = {
   searchParams?: Promise<{ name?: string; email?: string; since?: string }>;
 };
 
-export default async function RegisterSuccessPage({
+export default async function SignUpSuccessPage({
   searchParams,
 }: SuccessPageProps) {
   const params = searchParams ? await searchParams : {};

@@ -9,7 +9,7 @@ export const metadata = {
     "Sign up for MY Chess Tour — Malaysia's premier competitive chess circuit.",
 };
 
-export default function RegisterPage() {
+export default function SignUpPage() {
   return (
     <div className="min-h-screen bg-(--color-bg-base)">
       <NavBar />
