@@ -147,7 +147,7 @@ describe("poster", () => {
   it("renders image when poster URL is provided", () => {
     const html = render({ poster_url: "https://example.com/poster.jpg" });
     expect(html).toContain("<img");
-    expect(html).not.toContain("text-[32px]");
+    expect(html).not.toContain("text-[2rem]");
   });
 });
 

@@ -59,9 +59,9 @@ describe("TournamentCardSkeleton mirrors TournamentCard layout", () => {
     const skeletonClasses = getClasses(skeletonHtml, "article");
 
     expect(cardClasses).toContain("grid-cols-1");
-    expect(cardClasses).toContain("sm:grid-cols-[160px_1fr]");
+    expect(cardClasses).toContain("sm:grid-cols-[10rem_1fr]");
     expect(skeletonClasses).toContain("grid-cols-1");
-    expect(skeletonClasses).toContain("sm:grid-cols-[160px_1fr]");
+    expect(skeletonClasses).toContain("sm:grid-cols-[10rem_1fr]");
   });
 
   it("poster column is hidden below sm on both", () => {

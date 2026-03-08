@@ -42,9 +42,7 @@ export default function TournamentsClient({ tournaments }: Props) {
       // Search
       if (search.trim()) {
         const q = search.toLowerCase();
-        if (
-          !t.name.toLowerCase().includes(q)
-        ) {
+        if (!t.name.toLowerCase().includes(q)) {
           return false;
         }
       }
@@ -115,15 +113,15 @@ export default function TournamentsClient({ tournaments }: Props) {
       <div className="max-w-300 mx-auto px-10 py-6">
         {filtered.length === 0 ? (
           <div className="text-center py-20 px-5 text-(--color-text-muted)">
-            <div className="text-[40px] mb-4 opacity-30">♟</div>
-            <p className="text-[15px] leading-[1.6]">
+            <div className="text-[2.5rem] mb-4 opacity-30">♟</div>
+            <p className="text-[0.9375rem] leading-[1.6]">
               {tournaments.length === 0
                 ? "No published tournaments at the moment. Check back soon."
                 : "No tournaments match your filters."}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(400px,100%),1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(25rem,100%),1fr))] gap-4">
             {filtered.map((t) => (
               <TournamentCard key={t.id} tournament={t} />
             ))}

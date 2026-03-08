@@ -63,7 +63,7 @@ export default function TournamentCard({ tournament: t }: Props) {
   }
 
   return (
-    <article className="tournament-card grid-cols-1 sm:grid-cols-[160px_1fr]">
+    <article className="tournament-card grid-cols-1 sm:grid-cols-[10rem_1fr]">
       {/* Poster */}
       <div className="hidden sm:flex items-center justify-center min-h-50 relative shrink-0 bg-(--color-bg-raised)">
         {t.poster_url ? (
@@ -73,11 +73,11 @@ export default function TournamentCard({ tournament: t }: Props) {
             className="w-full h-full object-cover"
           />
         ) : (
-          <span className="text-[32px] text-(--color-gold-dim)">♟</span>
+          <span className="text-[2rem] text-(--color-gold-dim)">♟</span>
         )}
 
         <span
-          className={`absolute top-2.5 right-2.5 text-[11px] [font-family:var(--font-lato)] font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
+          className={`absolute top-2.5 right-2.5 text-[0.6875rem] [font-family:var(--font-lato)] font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
         >
           {spotsLabel}
         </span>
@@ -96,12 +96,12 @@ export default function TournamentCard({ tournament: t }: Props) {
         </div>
 
         {/* Title */}
-        <h3 className="[font-family:var(--font-cinzel)] text-[15px] font-semibold text-(--color-text-primary) mb-2 leading-[1.3]">
+        <h3 className="[font-family:var(--font-cinzel)] text-[0.9375rem] font-semibold text-(--color-text-primary) mb-2 leading-[1.3]">
           {t.name}
         </h3>
 
         {/* Meta */}
-        <div className="flex flex-col gap-1 text-[13px] text-(--color-text-secondary) [font-family:var(--font-lato)] mb-3">
+        <div className="flex flex-col gap-1 text-[0.8125rem] text-(--color-text-secondary) [font-family:var(--font-lato)] mb-3">
           <span>📅 {formatDateRange(t.start_date, t.end_date)}</span>
           <span>
             📍 {t.venue_name}, {t.state}
@@ -124,7 +124,7 @@ export default function TournamentCard({ tournament: t }: Props) {
                 starting from{" "}
               </small>
             )}
-            <span className="[font-family:var(--font-cinzel)] text-[18px] font-bold text-(--color-text-primary)">
+            <span className="[font-family:var(--font-cinzel)] text-[1.125rem] font-bold text-(--color-text-primary)">
               {minFee > 0 ? formatRm(minFee) : "Free"}
             </span>
           </div>
