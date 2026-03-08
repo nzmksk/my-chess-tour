@@ -16,36 +16,27 @@ export default async function SignUpSuccessPage({
   const params = searchParams ? await searchParams : {};
   const name = params?.name ?? "Player";
   const email = params?.email ?? "";
-  const since = params?.since ?? new Date().toLocaleDateString("en-MY", { month: "long", year: "numeric" });
+  const since =
+    params?.since ??
+    new Date().toLocaleDateString("en-MY", { month: "long", year: "numeric" });
 
   return (
     <div className="min-h-screen bg-(--color-bg-base)">
       <NavBar />
       <div className="auth-page">
         <div className="centered-col">
-          <div
-            className="auth-card card card--featured"
-            style={{ textAlign: "center" }}
-          >
+          <div className="auth-card card card--featured text-center">
             <div className="success-icon" role="img" aria-label="Chess piece">
               &#9823;
             </div>
 
-            <h1 className="auth-heading" style={{ marginBottom: "var(--space-sm)" }}>
+            <h1 className="auth-heading mb-(--space-sm)">
               Welcome to the Board
             </h1>
 
-            <p
-              style={{
-                fontFamily: "var(--font-lato)",
-                fontWeight: 300,
-                fontSize: 14,
-                color: "var(--color-text-secondary)",
-                marginBottom: "var(--space-xl)",
-                lineHeight: 1.7,
-              }}
-            >
-              Account created and verified. You&apos;re now part of MY Chess Tour.
+            <p className="font-(--font-lato) text-sm text-(--color-text-secondary) mb-(--space-xl) leading-[1.7]">
+              Account created and verified. You&apos;re now part of MY Chess
+              Tour.
             </p>
 
             <div className="session-info" aria-label="Account summary">

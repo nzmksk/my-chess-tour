@@ -318,10 +318,7 @@ export default function SignUpForm() {
             </div>
 
             {/* Terms */}
-            <div
-              className="check-row"
-              style={{ marginBottom: "var(--space-lg)" }}
-            >
+            <div className="check-row mb-(--space-lg)">
               <input
                 id="terms"
                 type="checkbox"
@@ -332,7 +329,10 @@ export default function SignUpForm() {
                 }
                 aria-describedby={errors.terms ? "terms-error" : undefined}
               />
-              <label className={`check-label ${errors.terms ? "" : "mb-2"}`} htmlFor="terms">
+              <label
+                className={`check-label ${errors.terms ? "" : "mb-2"}`}
+                htmlFor="terms"
+              >
                 I agree to the <Link href="/terms">Terms of Service</Link> and{" "}
                 <Link href="/privacy">Privacy Policy</Link>
               </label>
@@ -354,7 +354,7 @@ export default function SignUpForm() {
           </form>
 
           <div className="divider-text">already have an account?</div>
-          <p className="auth-footer" style={{ marginTop: 0 }}>
+          <p className="auth-footer mt-0">
             <Link href="/login">Log in instead</Link>
           </p>
         </div>
