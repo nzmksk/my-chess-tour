@@ -7,8 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 
 const NAV_LINKS = [
-  { href: "/my-tournaments", label: "My Tournaments" },
-  { href: "/profile", label: "Profile" },
+  { href: "/become-organizer", label: "Become an Organizer", ghost: true },
 ];
 
 export default function NavBar() {
@@ -47,31 +46,34 @@ export default function NavBar() {
             <Image
               src="/mct-logo-horizontal.svg"
               alt="MY Chess Tour"
-              width={220}
+              width={148}
               height={60}
               priority
             />
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden md:flex items-center">
-            {NAV_LINKS.map(({ href, label }) => (
+          <div className="hidden sm:flex items-center gap-2">
+            {NAV_LINKS.map(({ href, label, ghost }) => (
               <Link
                 key={href}
                 href={href}
-                className={`nav-link${pathname === href ? " nav-link--active" : ""}`}
+                className={ghost ? "nav-link" : `nav-link${pathname === href ? " nav-link--active" : ""}`}
               >
                 {label}
               </Link>
             ))}
-            <Link href="/become-organizer" className="nav-link-organizer">
-              Become an Organizer
+            <Link href="/login" className="nav-btn-login">
+              Login
+            </Link>
+            <Link href="/sign-up" className="nav-btn-signup">
+              Sign Up
             </Link>
           </div>
 
           {/* Hamburger button — visible on small screens only */}
           <button
-            className="flex md:hidden items-center bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
+            className="flex sm:hidden items-center bg-transparent border-0 cursor-pointer p-2 text-(--color-text-secondary)"
             onClick={() => setDrawerState(openDrawer(pathname ?? ""))}
             aria-label="Open navigation menu"
             aria-expanded={drawerOpen}
@@ -146,11 +148,18 @@ export default function NavBar() {
             </Link>
           ))}
           <Link
-            href="/become-organizer"
-            className="nav-drawer-link-organizer"
+            href="/login"
+            className="nav-drawer-btn-login"
             onClick={() => setDrawerState((current) => closeDrawer(current))}
           >
-            Become an Organizer
+            Login
+          </Link>
+          <Link
+            href="/sign-up"
+            className="nav-drawer-btn-signup"
+            onClick={() => setDrawerState((current) => closeDrawer(current))}
+          >
+            Sign Up
           </Link>
         </div>
       </div>

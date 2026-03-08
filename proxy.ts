@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { SIGNUP_STEP_COOKIE } from '@/lib/signup-cookie';
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -29,6 +30,22 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Prevent sign-up step-skipping
+  const { pathname } = request.nextUrl;
+  const signupStep = request.cookies.get(SIGNUP_STEP_COOKIE)?.value;
+
+  if (pathname.startsWith("/sign-up/profile")) {
+    if (signupStep !== "profile" && signupStep !== "verify") {
+      return NextResponse.redirect(new URL("/sign-up", request.url));
+    }
+  }
+
+  if (pathname.startsWith("/sign-up/verify")) {
+    if (signupStep !== "verify") {
+      return NextResponse.redirect(new URL("/sign-up", request.url));
+    }
+  }
 
   // Protect routes that require auth
   const protectedPaths = ['/dashboard', '/player', '/organizer', '/admin'];

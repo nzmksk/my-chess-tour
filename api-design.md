@@ -314,12 +314,12 @@ The `commission_rate` is included so the client can compute and display "Player 
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/tournaments/:id/register` | Player | Start registration + initiate payment |
+| POST | `/tournaments/:id/sign-up` | Player | Start registration + initiate payment |
 | GET | `/player/registrations` | Player | List own registrations |
 | GET | `/player/registrations/:id` | Player | Get single registration detail |
 | POST | `/player/registrations/:id/cancel` | Player | Cancel a registration |
 
-#### `POST /tournaments/:id/register`
+#### `POST /tournaments/:id/sign-up`
 
 Creates a registration and initiates a CHIP payment session. The client redirects the player to the CHIP payment URL.
 

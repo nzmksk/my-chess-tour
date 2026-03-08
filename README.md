@@ -98,7 +98,7 @@ The core money flow. This is the most critical milestone — if this doesn't wor
 
 **Week 5 — Registration flow:**
 
-- [ ] `POST /tournaments/:id/register` API route with fee tier validation
+- [ ] `POST /tournaments/:id/sign-up` API route with fee tier validation
 - [ ] Register page: fee tier selection with player-pays breakdown
 - [ ] Server-side validation: eligibility checks (title, rating, age, deadline, capacity)
 - [ ] Create registration + payment records in a transaction
