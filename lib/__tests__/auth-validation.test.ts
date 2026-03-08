@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   checkPasswordRequirements,
   getPasswordStrength,
+  isLoginFormSubmittable,
   isRegistrationFormSubmittable,
   validateEmail,
+  validateForgotPasswordForm,
+  validateLoginForm,
   validateRegistrationForm,
 } from "../auth-validation";
 
@@ -203,5 +206,99 @@ describe("isRegistrationFormSubmittable", () => {
 
   it("returns false when terms not accepted", () => {
     expect(isRegistrationFormSubmittable({ ...validFields, termsAccepted: false })).toBe(false);
+  });
+});
+
+describe("validateLoginForm", () => {
+  const validFields = {
+    email: "ahmad@example.com",
+    password: "anypassword",
+    keepSignedIn: true,
+  };
+
+  it("returns isValid true for valid fields", () => {
+    const { isValid } = validateLoginForm(validFields);
+    expect(isValid).toBe(true);
+  });
+
+  it("returns no errors for valid fields", () => {
+    const { errors } = validateLoginForm(validFields);
+    expect(Object.keys(errors)).toHaveLength(0);
+  });
+
+  it("returns email error when email is empty", () => {
+    const { errors } = validateLoginForm({ ...validFields, email: "" });
+    expect(errors.email).toBeDefined();
+  });
+
+  it("returns email error when email is invalid", () => {
+    const { errors } = validateLoginForm({ ...validFields, email: "not-valid" });
+    expect(errors.email).toBeDefined();
+  });
+
+  it("returns password error when password is empty", () => {
+    const { errors } = validateLoginForm({ ...validFields, password: "" });
+    expect(errors.password).toBeDefined();
+  });
+
+  it("returns isValid false when any field is invalid", () => {
+    const { isValid } = validateLoginForm({ ...validFields, email: "bad" });
+    expect(isValid).toBe(false);
+  });
+
+  it("accepts keepSignedIn as false", () => {
+    const { isValid } = validateLoginForm({ ...validFields, keepSignedIn: false });
+    expect(isValid).toBe(true);
+  });
+});
+
+describe("isLoginFormSubmittable", () => {
+  const validFields = {
+    email: "ahmad@example.com",
+    password: "anypassword",
+    keepSignedIn: true,
+  };
+
+  it("returns true for valid complete fields", () => {
+    expect(isLoginFormSubmittable(validFields)).toBe(true);
+  });
+
+  it("returns false when email is invalid", () => {
+    expect(isLoginFormSubmittable({ ...validFields, email: "bad" })).toBe(false);
+  });
+
+  it("returns false when email is empty", () => {
+    expect(isLoginFormSubmittable({ ...validFields, email: "" })).toBe(false);
+  });
+
+  it("returns false when password is empty", () => {
+    expect(isLoginFormSubmittable({ ...validFields, password: "" })).toBe(false);
+  });
+});
+
+describe("validateForgotPasswordForm", () => {
+  it("returns isValid true for a valid email", () => {
+    const { isValid } = validateForgotPasswordForm("user@example.com");
+    expect(isValid).toBe(true);
+  });
+
+  it("returns no errors for a valid email", () => {
+    const { errors } = validateForgotPasswordForm("user@example.com");
+    expect(Object.keys(errors)).toHaveLength(0);
+  });
+
+  it("returns email error when email is empty", () => {
+    const { errors } = validateForgotPasswordForm("");
+    expect(errors.email).toBeDefined();
+  });
+
+  it("returns email error when email is invalid", () => {
+    const { errors } = validateForgotPasswordForm("not-valid");
+    expect(errors.email).toBeDefined();
+  });
+
+  it("returns isValid false when email is invalid", () => {
+    const { isValid } = validateForgotPasswordForm("not-valid");
+    expect(isValid).toBe(false);
   });
 });

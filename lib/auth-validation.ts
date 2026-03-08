@@ -105,3 +105,58 @@ export function isRegistrationFormSubmittable(fields: RegistrationFields): boole
     fields.termsAccepted
   );
 }
+
+// ── Login ──────────────────────────────────────────────────────────────────
+
+export type LoginFields = {
+  email: string;
+  password: string;
+  keepSignedIn: boolean;
+};
+
+export type LoginErrors = {
+  email?: string;
+  password?: string;
+};
+
+export function validateLoginForm(
+  fields: LoginFields,
+): { errors: LoginErrors; isValid: boolean } {
+  const errors: LoginErrors = {};
+
+  if (!fields.email.trim()) {
+    errors.email = "Email address is required";
+  } else if (!validateEmail(fields.email)) {
+    errors.email = "Please enter a valid email address";
+  }
+
+  if (!fields.password) {
+    errors.password = "Password is required";
+  }
+
+  return { errors, isValid: Object.keys(errors).length === 0 };
+}
+
+export function isLoginFormSubmittable(fields: LoginFields): boolean {
+  return validateEmail(fields.email) && fields.password.length > 0;
+}
+
+// ── Forgot Password ────────────────────────────────────────────────────────
+
+export type ForgotPasswordErrors = {
+  email?: string;
+};
+
+export function validateForgotPasswordForm(
+  email: string,
+): { errors: ForgotPasswordErrors; isValid: boolean } {
+  const errors: ForgotPasswordErrors = {};
+
+  if (!email.trim()) {
+    errors.email = "Email address is required";
+  } else if (!validateEmail(email)) {
+    errors.email = "Please enter a valid email address";
+  }
+
+  return { errors, isValid: Object.keys(errors).length === 0 };
+}

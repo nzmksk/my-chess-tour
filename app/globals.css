@@ -1113,6 +1113,47 @@
     box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
   }
 
+  /* ── Confirm / locked screens ── */
+  .confirm-icon {
+    width: 3.75rem;
+    height: 3.75rem;
+    border-radius: 50%;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-raised);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    font-size: 1.5rem;
+  }
+  .confirm-icon--danger {
+    border-color: #5a2a14;
+    background: rgba(90, 30, 10, 0.15);
+  }
+  .confirm-title {
+    font-family: var(--font-cinzel);
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-text-primary);
+    margin-bottom: 0.5rem;
+    text-align: center;
+  }
+  .confirm-body {
+    font-family: var(--font-lato);
+    font-weight: 300;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    margin-bottom: 2.5rem;
+    text-align: center;
+  }
+  .confirm-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
   /* ── Skeleton shimmer ── */
   .skeleton-shimmer {
     background: linear-gradient(
