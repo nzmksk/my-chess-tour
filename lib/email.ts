@@ -3,8 +3,7 @@ import path from "path";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
-
-const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL ?? "noreply@mychesstour.com";
+const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL!;
 
 function loadTemplate(name: string): string {
   return fs.readFileSync(
