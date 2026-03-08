@@ -22,12 +22,13 @@ let mockState = {
   submitted: false,
 };
 const mockFormAction = vi.fn();
+let mockPending = false;
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
-    useActionState: (_action: unknown, _initial: unknown) => [mockState, mockFormAction, false],
+    useActionState: (_action: unknown, _initial: unknown) => [mockState, mockFormAction, mockPending],
   };
 });
 
@@ -42,10 +43,12 @@ const CLEAN_STATE = { error: null, submitted: false };
 afterEach(() => {
   cleanup();
   Object.assign(mockState, CLEAN_STATE);
+  mockPending = false;
 });
 
 beforeEach(() => {
   Object.assign(mockState, CLEAN_STATE);
+  mockPending = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -119,5 +122,15 @@ describe("ForgotPasswordForm", () => {
     render(<ForgotPasswordForm />);
     expect(screen.queryByRole("button", { name: "Send Reset Link" })).toBeNull();
     expect(screen.queryByLabelText("Email Address")).toBeNull();
+  });
+
+  // --- Pending state --------------------------------------------------------
+
+  it("shows Sending text and disables button when pending", () => {
+    mockPending = true;
+    render(<ForgotPasswordForm />);
+    const button = screen.getByRole("button", { name: /Sending/i });
+    expect(button).toBeDefined();
+    expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 });

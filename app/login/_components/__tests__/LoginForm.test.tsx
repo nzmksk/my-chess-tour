@@ -25,12 +25,13 @@ let mockState = {
   lockedSeconds: null as number | null,
 };
 const mockFormAction = vi.fn();
+let mockPending = false;
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
-    useActionState: (_action: unknown, _initial: unknown) => [mockState, mockFormAction, false],
+    useActionState: (_action: unknown, _initial: unknown) => [mockState, mockFormAction, mockPending],
   };
 });
 
@@ -50,10 +51,12 @@ const CLEAN_STATE = {
 afterEach(() => {
   cleanup();
   Object.assign(mockState, CLEAN_STATE);
+  mockPending = false;
 });
 
 beforeEach(() => {
   Object.assign(mockState, CLEAN_STATE);
+  mockPending = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -185,5 +188,40 @@ describe("LoginForm", () => {
       fireEvent.click(screen.getByLabelText("Hide password"));
     });
     expect(input.type).toBe("password");
+  });
+
+  // --- Locked state with null lockedSeconds (2C fallback) -------------------
+
+  it("shows ~15 minutes when lockedSeconds is null", () => {
+    mockState.locked = true;
+    mockState.lockedSeconds = null;
+    render(<LoginForm />);
+    expect(screen.getByText(/~15 minute/)).toBeDefined();
+  });
+
+  it("shows Contact Support link on locked screen", () => {
+    mockState.locked = true;
+    mockState.lockedSeconds = 900;
+    render(<LoginForm />);
+    expect(screen.getByText("Contact Support")).toBeDefined();
+  });
+
+  // --- Pending state ---------------------------------------------------------
+
+  it("shows Signing In text and disables button when pending", () => {
+    mockPending = true;
+    render(<LoginForm />);
+    const button = screen.getByRole("button", { name: /Signing In/i });
+    expect(button).toBeDefined();
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // --- Error hint on password input -----------------------------------------
+
+  it("shows password incorrect hint when error is set", () => {
+    mockState.error = "Incorrect email or password.";
+    mockState.attemptsRemaining = 3;
+    render(<LoginForm />);
+    expect(screen.getByText("Password is incorrect")).toBeDefined();
   });
 });
