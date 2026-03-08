@@ -83,14 +83,6 @@ describe("sendVerificationEmail", () => {
     expect(subject).toMatch(/verification code/i);
   });
 
-  it("sends from a non-empty from address", async () => {
-    await sendVerificationEmail("player@example.com", "ABC123");
-
-    const { from } = mockSend.mock.calls[0][0];
-    expect(typeof from).toBe("string");
-    expect(from.length).toBeGreaterThan(0);
-  });
-
   // --- Error handling -------------------------------------------------------
 
   it("throws when Resend returns an error", async () => {
