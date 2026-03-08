@@ -8,7 +8,7 @@ export const metadata = {
   description: "Set up your chess identity on MY Chess Tour.",
 };
 
-export default function RegisterProfilePage() {
+export default function SignUpProfilePage() {
   return (
     <div className="min-h-screen bg-(--color-bg-base)">
       <NavBar />

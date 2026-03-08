@@ -1,6 +1,9 @@
 export default function TournamentCardSkeleton() {
   return (
-    <article className="tournament-card grid-cols-1 sm:grid-cols-[160px_1fr]" aria-hidden="true">
+    <article
+      className="tournament-card grid-cols-1 sm:grid-cols-[10rem_1fr]"
+      aria-hidden="true"
+    >
       {/* Poster placeholder */}
       <div className="skeleton-shimmer hidden sm:block min-h-50 shrink-0" />
 

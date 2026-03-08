@@ -45,7 +45,10 @@ export default function ProfileForm() {
 
     try {
       if (process.env.NEXT_PUBLIC_ENVIRONMENT !== "production") {
-        console.log(`Currently in ${process.env.NEXT_PUBLIC_ENVIRONMENT} environment. Skipping email sending.`, form);
+        console.log(
+          `Currently in ${process.env.NEXT_PUBLIC_ENVIRONMENT} environment. Skipping email sending.`,
+          form,
+        );
         return;
       }
 
@@ -139,11 +142,8 @@ export default function ProfileForm() {
 
           <form onSubmit={handleSubmit} noValidate>
             {/* Gender + Nationality */}
-            <div
-              className="input-row"
-              style={{ marginBottom: "var(--space-lg)" }}
-            >
-              <div className="form-group" style={{ marginBottom: 0 }}>
+            <div className="input-row mb-(--space-lg)">
+              <div className="form-group mb-0">
                 <div className="label-row">
                   <label className="input-label" htmlFor="gender">
                     Gender
@@ -168,7 +168,7 @@ export default function ProfileForm() {
                 </select>
               </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
+              <div className="form-group mb-0">
                 <div className="label-row">
                   <label className="input-label" htmlFor="nationality">
                     Nationality
@@ -190,11 +190,8 @@ export default function ProfileForm() {
             </div>
 
             {/* Date of Birth + State */}
-            <div
-              className="input-row"
-              style={{ marginBottom: "var(--space-lg)" }}
-            >
-              <div className="form-group" style={{ marginBottom: 0 }}>
+            <div className="input-row mb-(--space-lg)">
+              <div className="form-group mb-0">
                 <div className="label-row">
                   <label className="input-label" htmlFor="dateOfBirth">
                     Date of Birth
@@ -212,7 +209,7 @@ export default function ProfileForm() {
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
+              <div className="form-group mb-0">
                 <div className="label-row">
                   <label className="input-label" htmlFor="state">
                     State
@@ -303,10 +300,7 @@ export default function ProfileForm() {
             </div>
 
             {/* OKU checkbox */}
-            <div
-              className="check-row"
-              style={{ marginBottom: "var(--space-xl)" }}
-            >
+            <div className="check-row mb-(--space-xl)">
               <input
                 id="oku"
                 type="checkbox"
@@ -319,17 +313,12 @@ export default function ProfileForm() {
               <label className="check-label" htmlFor="oku">
                 I am an OKU (Orang Kurang Upaya) card holder{" "}
                 <span
-                  className="help-icon"
-                  style={{ verticalAlign: "middle", marginLeft: 4 }}
+                  className="help-icon align-middle ml-1"
                   tabIndex={0}
                   aria-label="OKU help"
                 >
                   ?
-                  <div
-                    className="tooltip"
-                    style={{ top: "auto", bottom: 20 }}
-                    role="tooltip"
-                  >
+                  <div className="tooltip top-auto bottom-5" role="tooltip">
                     Check this if you hold a valid OKU card issued by Jabatan
                     Kebajikan Masyarakat. This may qualify you for special
                     categories in tournaments.
@@ -338,7 +327,7 @@ export default function ProfileForm() {
               </label>
             </div>
 
-            <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+            <div className="flex gap-(--space-sm)">
               <button
                 type="button"
                 className="btn-secondary"
@@ -358,7 +347,7 @@ export default function ProfileForm() {
             </div>
           </form>
 
-          <p className="auth-footer" style={{ fontSize: 12 }}>
+          <p className="auth-footer text-xs">
             All fields except gender and nationality are optional — editable
             later in settings
           </p>

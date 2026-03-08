@@ -164,7 +164,7 @@ export default function VerifyForm() {
 
           <div className="auth-card-header">
             <div
-              style={{ fontSize: 32, marginBottom: "var(--space-md)" }}
+              className="text-[2rem] mb-(--space-md)"
               role="img"
               aria-label="Email"
             >
@@ -174,9 +174,7 @@ export default function VerifyForm() {
             <p className="auth-subheading">
               We sent a 6-digit code to
               <br />
-              <strong style={{ color: "var(--color-gold-muted)" }}>
-                {email}
-              </strong>
+              <strong className="text-(--color-gold-muted)">{email}</strong>
             </p>
             <hr className="divider-gold" />
           </div>
@@ -189,7 +187,7 @@ export default function VerifyForm() {
             </div>
             <input
               id="verificationCode"
-              className="input"
+              className="input text-center tracking-[0.3em] text-[1.375rem] font-(--font-cinzel)"
               type="text"
               inputMode="text"
               autoCapitalize="characters"
@@ -199,30 +197,20 @@ export default function VerifyForm() {
               maxLength={CODE_LENGTH}
               autoComplete="one-time-code"
               aria-label="6-digit verification code"
-              style={{
-                fontFamily: "var(--font-cinzel)",
-                letterSpacing: "0.3em",
-                fontSize: 22,
-                textAlign: "center",
-              }}
             />
             <p className="input-hint">
               {expired ? (
-                <span style={{ color: "var(--color-error)" }}>
-                  Code has expired
-                </span>
+                <span className="text-(--color-error)">Code has expired</span>
               ) : (
                 <>
                   Code expires in{" "}
-                  <strong style={{ color: "var(--color-gold-muted)" }}>
+                  <strong className="text-(--color-gold-muted)">
                     {formatTime(timeLeft)}
                   </strong>
                 </>
               )}
             </p>
-            {verifyError && (
-              <p className="input-hint error">{verifyError}</p>
-            )}
+            {verifyError && <p className="input-hint error">{verifyError}</p>}
           </div>
 
           <button
@@ -237,18 +225,14 @@ export default function VerifyForm() {
           <p className="auth-footer mt-6">
             Didn&apos;t receive it?{" "}
             {cooldownLeft > 0 ? (
-              <span style={{ color: "var(--color-text-disabled)" }}>
+              <span className="text-(--color-text-disabled)">
                 Resend again in{" "}
                 <span className="text-(--color-text-muted)">
                   {formatTime(cooldownLeft)}
                 </span>
               </span>
             ) : (
-              <a
-                href="#"
-                onClick={handleResend}
-                aria-disabled={!canResend}
-              >
+              <a href="#" onClick={handleResend} aria-disabled={!canResend}>
                 {isResending ? "Sending…" : "Resend code"}
               </a>
             )}
