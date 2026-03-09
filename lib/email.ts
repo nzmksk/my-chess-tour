@@ -27,3 +27,19 @@ export async function sendVerificationEmail(email: string, code: string) {
     throw new Error(`Failed to send verification email: ${error.message}`);
   }
 }
+
+export async function sendPasswordResetEmail(email: string, resetLink: string) {
+  const html = loadTemplate("reset-password.html").replace(/\{\{resetLink\}\}/g, resetLink);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: "Reset your MY Chess Tour password",
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send password reset email:", error);
+    throw new Error(`Failed to send password reset email: ${error.message}`);
+  }
+}

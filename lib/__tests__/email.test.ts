@@ -18,7 +18,7 @@ vi.mock("resend", () => ({
   Resend: vi.fn(function () { return { emails: { send: mockSend } }; }),
 }));
 
-import { sendVerificationEmail } from "../email";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../email";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -96,6 +96,70 @@ describe("sendVerificationEmail", () => {
   it("resolves without a value when send succeeds", async () => {
     await expect(
       sendVerificationEmail("player@example.com", "ABC123")
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("sendPasswordResetEmail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue('<html><a href="{{resetLink}}">reset</a>{{resetLink}}</html>');
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  // --- Template loading -----------------------------------------------------
+
+  it("loads the reset-password.html template from the filesystem", async () => {
+    await sendPasswordResetEmail("player@example.com", "https://example.com/reset");
+
+    expect(mockReadFileSync).toHaveBeenCalledOnce();
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("reset-password.html"),
+      "utf-8"
+    );
+  });
+
+  // --- Link injection -------------------------------------------------------
+
+  it("replaces all {{resetLink}} placeholders with the actual link", async () => {
+    const link = "https://example.com/reset?token=abc";
+    await sendPasswordResetEmail("player@example.com", link);
+
+    const { html } = mockSend.mock.calls[0][0];
+    expect(html).not.toContain("{{resetLink}}");
+    expect(html).toContain(link);
+  });
+
+  // --- Email fields ---------------------------------------------------------
+
+  it("sends to the correct email address", async () => {
+    await sendPasswordResetEmail("player@example.com", "https://example.com/reset");
+
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "player@example.com" })
+    );
+  });
+
+  it("includes a subject mentioning reset (case-insensitive)", async () => {
+    await sendPasswordResetEmail("player@example.com", "https://example.com/reset");
+
+    const { subject } = mockSend.mock.calls[0][0];
+    expect(subject).toMatch(/reset/i);
+  });
+
+  // --- Error handling -------------------------------------------------------
+
+  it("throws when Resend returns an error", async () => {
+    mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
+
+    await expect(
+      sendPasswordResetEmail("player@example.com", "https://example.com/reset")
+    ).rejects.toThrow(/sending failed/i);
+  });
+
+  it("resolves without a value when send succeeds", async () => {
+    await expect(
+      sendPasswordResetEmail("player@example.com", "https://example.com/reset")
     ).resolves.toBeUndefined();
   });
 });
