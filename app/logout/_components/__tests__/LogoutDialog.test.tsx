@@ -15,11 +15,12 @@ import {
 
 const mocks = vi.hoisted(() => ({
   back: vi.fn(),
+  push: vi.fn(),
   logout: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ back: mocks.back }),
+  useRouter: () => ({ back: mocks.back, push: mocks.push }),
 }));
 
 vi.mock("../../actions", () => ({
@@ -109,12 +110,33 @@ describe("LogoutDialog", () => {
     expect(mocks.logout).toHaveBeenCalledOnce();
   });
 
-  it("calls router.back() when Cancel is clicked", async () => {
+  it("navigates away when Cancel is clicked", async () => {
+    render(<LogoutDialog />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    });
+    // jsdom history.length === 1, so the fallback push("/tournaments") is used
+    expect(mocks.back).toHaveBeenCalledTimes(0);
+    expect(mocks.push).toHaveBeenCalledWith("/tournaments");
+  });
+
+  it("calls router.back() when Cancel is clicked and history has entries", async () => {
+    Object.defineProperty(window, "history", {
+      value: { ...window.history, length: 3 },
+      writable: true,
+      configurable: true,
+    });
     render(<LogoutDialog />);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     });
     expect(mocks.back).toHaveBeenCalledOnce();
+    // restore
+    Object.defineProperty(window, "history", {
+      value: { ...window.history, length: 1 },
+      writable: true,
+      configurable: true,
+    });
   });
 
   // --- Pending state ---------------------------------------------------------
