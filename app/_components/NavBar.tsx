@@ -2,21 +2,87 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
+import { createClient } from "@/lib/supabase/client";
 
 const NAV_LINKS = [
   { href: "/become-organizer", label: "Become an Organizer", ghost: true },
 ];
 
+type AuthUser = {
+  email: string;
+  fullName: string;
+  initials: string;
+};
+
 export default function NavBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [drawerState, setDrawerState] = useState(() =>
     closeDrawer(openDrawer(pathname ?? "")),
   );
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerOpen = getIsDrawerOpen(drawerState, pathname ?? "");
+
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch auth state on every route change
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        setAuthUser(null);
+        return;
+      }
+      const meta = data.user.user_metadata ?? {};
+      const firstName: string = meta.first_name ?? meta.firstName ?? "";
+      const lastName: string = meta.last_name ?? meta.lastName ?? "";
+      const initials =
+        [firstName[0], lastName[0]].filter(Boolean).join("").toUpperCase() ||
+        (data.user.email?.[0]?.toUpperCase() ?? "?");
+      setAuthUser({
+        email: data.user.email ?? "",
+        fullName:
+          [firstName, lastName].filter(Boolean).join(" ") ||
+          (data.user.email ?? ""),
+        initials,
+      });
+    });
+  }, [pathname]);
+
+  // Close dropdown on outside click or Escape
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    function onMouseDown(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setDropdownOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [dropdownOpen]);
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setAuthUser(null);
+    setDropdownOpen(false);
+    router.push("/login");
+  }
 
   // Prevent body scroll when drawer is open
   useEffect(() => {
@@ -41,7 +107,7 @@ export default function NavBar() {
     <>
       <nav className="bg-(--color-bg-sunken) border-b border-(--color-border) sticky top-0 z-50">
         <div className="max-w-300 mx-auto px-10 flex items-center justify-between h-16">
-          {/* Brand logo — always redirects to /tournaments, never shrinks */}
+          {/* Brand logo */}
           <Link href="/tournaments" className="flex items-center shrink-0">
             <Image
               src="/mct-logo-horizontal.svg"
@@ -58,17 +124,86 @@ export default function NavBar() {
               <Link
                 key={href}
                 href={href}
-                className={ghost ? "nav-link" : `nav-link${pathname === href ? " nav-link--active" : ""}`}
+                className={
+                  ghost
+                    ? "nav-link"
+                    : `nav-link${pathname === href ? " nav-link--active" : ""}`
+                }
               >
                 {label}
               </Link>
             ))}
-            <Link href="/login" className="nav-btn-login">
-              Login
-            </Link>
-            <Link href="/sign-up" className="nav-btn-signup">
-              Sign Up
-            </Link>
+
+            {authUser ? (
+              <>
+                <Link
+                  href="/tournaments"
+                  className={`nav-link${pathname === "/tournaments" ? " nav-link--active" : ""}`}
+                >
+                  My Tournaments
+                </Link>
+
+                {/* Avatar + dropdown */}
+                <div className="relative ml-2" ref={dropdownRef}>
+                  <button
+                    className={`nav-avatar${dropdownOpen ? " nav-avatar--open" : ""}`}
+                    onClick={() => setDropdownOpen((v) => !v)}
+                    aria-label="Account menu"
+                    aria-expanded={dropdownOpen}
+                  >
+                    {authUser.initials}
+                  </button>
+
+                  {dropdownOpen && (
+                    <div className="nav-dropdown">
+                      <div className="nav-dropdown-user">
+                        <p className="nav-dropdown-name">{authUser.fullName}</p>
+                        <p className="nav-dropdown-email">{authUser.email}</p>
+                      </div>
+                      <div>
+                        <Link
+                          href="/profile"
+                          className="nav-dropdown-item"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          My Profile
+                        </Link>
+                        <Link
+                          href="/tournaments"
+                          className="nav-dropdown-item"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          My Registrations
+                        </Link>
+                        <Link
+                          href="/settings"
+                          className="nav-dropdown-item"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          Settings
+                        </Link>
+                      </div>
+                      <div className="nav-dropdown-divider" />
+                      <button
+                        className="nav-dropdown-item nav-dropdown-item--danger"
+                        onClick={handleSignOut}
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="nav-btn-login">
+                  Login
+                </Link>
+                <Link href="/sign-up" className="nav-btn-signup">
+                  Sign Up
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Hamburger button — visible on small screens only */}
@@ -147,20 +282,50 @@ export default function NavBar() {
               {label}
             </Link>
           ))}
-          <Link
-            href="/login"
-            className="nav-drawer-btn-login"
-            onClick={() => setDrawerState((current) => closeDrawer(current))}
-          >
-            Login
-          </Link>
-          <Link
-            href="/sign-up"
-            className="nav-drawer-btn-signup"
-            onClick={() => setDrawerState((current) => closeDrawer(current))}
-          >
-            Sign Up
-          </Link>
+
+          {authUser ? (
+            <>
+              <Link
+                href="/tournaments"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+                className={`nav-drawer-link${pathname === "/tournaments" ? " nav-drawer-link--active" : ""}`}
+              >
+                My Tournaments
+              </Link>
+              <button
+                className="nav-drawer-btn-login mt-4"
+                onClick={async () => {
+                  setDrawerState((current) => closeDrawer(current));
+                  await handleSignOut();
+                }}
+              >
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="nav-drawer-btn-login"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+              >
+                Login
+              </Link>
+              <Link
+                href="/sign-up"
+                className="nav-drawer-btn-signup"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+              >
+                Sign Up
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </>
