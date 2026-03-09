@@ -1,7 +1,8 @@
 "use server";
 
 import { validateForgotPasswordForm } from "@/lib/auth-validation";
-import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { sendPasswordResetEmail } from "@/lib/email";
 import { ForgotPasswordState } from "./types";
 
 export async function forgotPassword(
@@ -17,12 +18,17 @@ export async function forgotPassword(
     return { error: firstError, submitted: false };
   }
 
-  const supabase = await createClient();
+  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?type=recovery`;
+  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo },
+  });
 
   // Always succeed to prevent email enumeration attacks
-  await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?type=recovery`,
-  });
+  if (!error && data.properties.action_link) {
+    await sendPasswordResetEmail(email, data.properties.action_link);
+  }
 
   return { error: null, submitted: true };
 }
