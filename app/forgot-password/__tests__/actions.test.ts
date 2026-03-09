@@ -4,17 +4,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks — hoisted so they run before imports
 // ---------------------------------------------------------------------------
 
-const mockResetPasswordForEmail = vi.fn();
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() =>
-    Promise.resolve({
-      auth: { resetPasswordForEmail: mockResetPasswordForEmail },
-    }),
-  ),
+const mocks = vi.hoisted(() => ({
+  generateLink: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
 }));
 
-import { forgotPassword, INITIAL_FORGOT_PASSWORD_STATE } from "../actions";
+vi.mock("@/lib/supabase/admin", () => ({
+  supabaseAdmin: {
+    auth: {
+      admin: {
+        generateLink: mocks.generateLink,
+      },
+    },
+  },
+}));
+
+vi.mock("@/lib/email", () => ({
+  sendPasswordResetEmail: mocks.sendPasswordResetEmail,
+}));
+
+import { forgotPassword } from "../actions";
+import { INITIAL_FORGOT_PASSWORD_STATE } from "../types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,7 +38,11 @@ function makeFormData(data: Record<string, string>): FormData {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockResetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
+  mocks.generateLink.mockResolvedValue({
+    data: { properties: { action_link: "https://supabase.example.com/auth/v1/verify?token=abc" } },
+    error: null,
+  });
+  mocks.sendPasswordResetEmail.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -53,7 +67,7 @@ describe("forgotPassword action", () => {
 
     expect(result.error).toBeDefined();
     expect(result.submitted).toBe(false);
-    expect(mockResetPasswordForEmail).not.toHaveBeenCalled();
+    expect(mocks.generateLink).not.toHaveBeenCalled();
   });
 
   it("returns error when email is invalid", async () => {
@@ -62,10 +76,46 @@ describe("forgotPassword action", () => {
 
     expect(result.error).toMatch(/email/i);
     expect(result.submitted).toBe(false);
-    expect(mockResetPasswordForEmail).not.toHaveBeenCalled();
+    expect(mocks.generateLink).not.toHaveBeenCalled();
+  });
+
+  // --- generateLink params --------------------------------------------------
+
+  it("calls generateLink with correct params", async () => {
+    const fd = makeFormData({ email: "user@example.com" });
+    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+
+    expect(mocks.generateLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "recovery",
+        email: "user@example.com",
+        options: expect.objectContaining({
+          redirectTo: expect.stringContaining("/auth/callback"),
+        }),
+      }),
+    );
+  });
+
+  it("redirectTo contains /auth/callback and /update-password", async () => {
+    const fd = makeFormData({ email: "user@example.com" });
+    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+
+    const callArg = mocks.generateLink.mock.calls[0][0];
+    expect(callArg.options.redirectTo).toContain("/auth/callback");
+    expect(callArg.options.redirectTo).toContain("/update-password");
   });
 
   // --- Success cases --------------------------------------------------------
+
+  it("sends email on success", async () => {
+    const fd = makeFormData({ email: "user@example.com" });
+    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+
+    expect(mocks.sendPasswordResetEmail).toHaveBeenCalledWith(
+      "user@example.com",
+      "https://supabase.example.com/auth/v1/verify?token=abc",
+    );
+  });
 
   it("returns submitted=true for a valid email", async () => {
     const fd = makeFormData({ email: "user@example.com" });
@@ -75,28 +125,10 @@ describe("forgotPassword action", () => {
     expect(result.submitted).toBe(true);
   });
 
-  it("calls supabase resetPasswordForEmail with correct email", async () => {
-    const fd = makeFormData({ email: "user@example.com" });
-    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+  // --- Silent error (email enumeration protection) -------------------------
 
-    expect(mockResetPasswordForEmail).toHaveBeenCalledWith(
-      "user@example.com",
-      expect.objectContaining({ redirectTo: expect.stringContaining("/auth/callback") }),
-    );
-  });
-
-  it("trims whitespace from email", async () => {
-    const fd = makeFormData({ email: "  user@example.com  " });
-    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
-
-    expect(mockResetPasswordForEmail).toHaveBeenCalledWith(
-      "user@example.com",
-      expect.any(Object),
-    );
-  });
-
-  it("returns submitted=true even when supabase returns an error (prevents email enumeration)", async () => {
-    mockResetPasswordForEmail.mockResolvedValue({
+  it("silently ignores generateLink errors (enum protection)", async () => {
+    mocks.generateLink.mockResolvedValue({
       data: null,
       error: { message: "User not found" },
     });
@@ -106,5 +138,49 @@ describe("forgotPassword action", () => {
 
     expect(result.submitted).toBe(true);
     expect(result.error).toBeNull();
+  });
+
+  it("does not send email when generateLink errors", async () => {
+    mocks.generateLink.mockResolvedValue({
+      data: null,
+      error: { message: "User not found" },
+    });
+
+    const fd = makeFormData({ email: "unknown@example.com" });
+    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+
+    expect(mocks.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not send email when action_link is missing", async () => {
+    mocks.generateLink.mockResolvedValue({
+      data: { properties: { action_link: undefined } },
+      error: null,
+    });
+
+    const fd = makeFormData({ email: "user@example.com" });
+    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+
+    expect(mocks.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
+  // --- Whitespace trimming --------------------------------------------------
+
+  it("trims whitespace from email", async () => {
+    const fd = makeFormData({ email: "  user@example.com  " });
+    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+
+    expect(mocks.generateLink).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "user@example.com" }),
+    );
+  });
+
+  // --- Always submitted=true for valid email --------------------------------
+
+  it("always returns submitted=true for valid email", async () => {
+    const fd = makeFormData({ email: "user@example.com" });
+    const result = await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
+
+    expect(result.submitted).toBe(true);
   });
 });

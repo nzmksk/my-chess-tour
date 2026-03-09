@@ -9,6 +9,7 @@ import {
   validateForgotPasswordForm,
   validateLoginForm,
   validateRegistrationForm,
+  validateUpdatePasswordForm,
 } from "../auth-validation";
 
 describe("validateEmail", () => {
@@ -300,5 +301,37 @@ describe("validateForgotPasswordForm", () => {
   it("returns isValid false when email is invalid", () => {
     const { isValid } = validateForgotPasswordForm("not-valid");
     expect(isValid).toBe(false);
+  });
+});
+
+describe("validateUpdatePasswordForm", () => {
+  it("returns error when password is empty", () => {
+    const { errors } = validateUpdatePasswordForm("", "");
+    expect(errors.password).toBeDefined();
+  });
+
+  it("returns error when password does not meet requirements", () => {
+    const { errors } = validateUpdatePasswordForm("weak", "weak");
+    expect(errors.password).toBeDefined();
+  });
+
+  it("returns error when confirmPassword is empty but password is strong", () => {
+    const { errors } = validateUpdatePasswordForm("Strong1!", "");
+    expect(errors.confirmPassword).toBeDefined();
+  });
+
+  it("returns error when passwords do not match", () => {
+    const { errors } = validateUpdatePasswordForm("Strong1!", "Different1!");
+    expect(errors.confirmPassword).toBeDefined();
+  });
+
+  it("returns isValid=true when password meets all requirements and confirmPassword matches", () => {
+    const { isValid } = validateUpdatePasswordForm("Strong1!", "Strong1!");
+    expect(isValid).toBe(true);
+  });
+
+  it("returns no errors when all requirements met", () => {
+    const { errors } = validateUpdatePasswordForm("Strong1!", "Strong1!");
+    expect(Object.keys(errors)).toHaveLength(0);
   });
 });

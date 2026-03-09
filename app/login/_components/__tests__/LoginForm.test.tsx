@@ -218,10 +218,11 @@ describe("LoginForm", () => {
 
   // --- Error hint on password input -----------------------------------------
 
-  it("shows password incorrect hint when error is set", () => {
+  it("adds input-error class to password input when error is set", () => {
     mockState.error = "Incorrect email or password.";
     mockState.attemptsRemaining = 3;
     render(<LoginForm />);
-    expect(screen.getByText("Password is incorrect")).toBeDefined();
+    const input = screen.getByLabelText("Password") as HTMLInputElement;
+    expect(input.className).toContain("input-error");
   });
 });

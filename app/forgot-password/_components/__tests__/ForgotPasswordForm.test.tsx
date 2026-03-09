@@ -13,6 +13,16 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/lib/supabase/admin", () => ({
+  supabaseAdmin: {
+    auth: { admin: { generateLink: vi.fn() } },
+  },
+}));
+
+vi.mock("@/lib/email", () => ({
+  sendPasswordResetEmail: vi.fn(),
+}));
+
 vi.mock("../actions", () => ({
   forgotPassword: vi.fn(),
 }));
