@@ -142,10 +142,103 @@ These are handled primarily by Supabase's client-side SDK. The API layer provide
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/signup` | Public | Supabase signup (email + password). Also creates a `player_profiles` row. |
-| POST | `/auth/login` | Public | Supabase login. Returns session. |
+| POST | `/auth/signup/request-code` | Public | Step 1: Send a 6-character email verification code |
+| POST | `/auth/signup/verify-code` | Public | Step 2: Verify code and create account + player profile |
+| POST | `/auth/login` | Public | Supabase login. Returns `user_id`. |
 | POST | `/auth/logout` | Authenticated | Destroys session. |
 | GET | `/auth/me` | Authenticated | Returns current user with all roles. |
+
+> **Note:** Signup is a two-step email verification flow. The client first requests a code, then submits the code along with all registration fields to complete account creation.
+
+#### `POST /auth/signup/request-code`
+
+Validates the email is not already registered, generates a 6-character alphanumeric code, stores it in Redis with a TTL, and sends a verification email.
+
+**Request:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response `200`:**
+```json
+{ "message": "Verification code sent" }
+```
+
+**Error responses:**
+- `400` — Email missing or invalid format
+- `409` — `{ "error": "An account with this email already exists", "code": "EMAIL_EXISTS" }`
+- `500` — Failed to store code or send email
+
+#### `POST /auth/signup/verify-code`
+
+Verifies the code against the Redis-stored value, creates the Supabase auth user (with `email_confirm: true`), and updates the player profile row created by the `handle_new_user` DB trigger.
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "code": "A3K7XZ",
+  "password": "securepassword",
+  "firstName": "Wei Hao",
+  "lastName": "Lee",
+  "gender": "male",
+  "nationality": "Malaysian",
+  "dateOfBirth": "1995-06-15",
+  "state": "Penang",
+  "fideId": "5834567",
+  "mcfId": null,
+  "isOku": false
+}
+```
+
+Required: `email`, `code`, `password`, `firstName`, `lastName`. All other fields are optional.
+
+**Response `201`:**
+```json
+{ "message": "Account created successfully" }
+```
+
+**Error responses:**
+- `400` — Missing required fields
+- `409` — `{ "error": "An account with this email already exists", "code": "EMAIL_EXISTS" }`
+- `410` — `{ "error": "Code has expired. Please request a new one.", "code": "CODE_EXPIRED" }`
+- `422` — `{ "error": "Incorrect code. Please try again.", "code": "CODE_INVALID" }`
+- `500` — Account created but failed to save player profile
+
+#### `POST /auth/login`
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword"
+}
+```
+
+**Response `200`:**
+```json
+{
+  "message": "Login successful",
+  "user_id": "uuid"
+}
+```
+
+Session is set via HTTP-only cookie by Supabase SSR.
+
+**Error responses:**
+- `401` — Invalid email or password
+- `403` — Email not confirmed
+
+#### `POST /auth/logout`
+
+No request body required.
+
+**Response `200`:**
+```json
+{ "message": "Logged out successfully" }
+```
 
 #### `GET /auth/me`
 
@@ -240,6 +333,7 @@ Returns all published tournaments ordered by `start_date` ascending. No query pa
       "end_date": "2026-03-16",
       "registration_deadline": "2026-03-10T23:59:59Z",
       "format": { "type": "rapid", "system": "swiss", "rounds": 7 },
+      "time_control": { "base_minutes": 10, "increment_seconds": 5, "delay_seconds": 0 },
       "is_fide_rated": true,
       "is_mcf_rated": false,
       "entry_fees": { "standard": { "amount_cents": 5000 }, "additional": [...] },
@@ -257,7 +351,7 @@ Returns all published tournaments ordered by `start_date` ascending. No query pa
 }
 ```
 
-Note: `current_participants` is a live count of confirmed registrations queried from the database.
+Note: `current_participants` is a live count of confirmed registrations queried from the database. `state` maps to the `venue_state` column in the database.
 
 #### `GET /tournaments/:id`
 
@@ -1048,7 +1142,7 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 
 | Area | Endpoints | Auth Level |
 |---|---|---|
-| Auth | 4 | Public / Authenticated |
+| Auth | 5 | Public / Authenticated |
 | Player Profile | 2 | Player |
 | Tournaments (Public) | 2 | Public |
 | Registration & Payments | 4 | Player |
@@ -1062,4 +1156,4 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 | Admin Tournaments | 2 | Platform admin |
 | Admin Transactions | 2 | Platform admin |
 | Webhooks | 1 | CHIP signature |
-| **Total** | **42** | |
+| **Total** | **43** | |
