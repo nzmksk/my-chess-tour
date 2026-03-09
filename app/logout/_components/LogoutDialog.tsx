@@ -14,6 +14,14 @@ export default function LogoutDialog() {
     });
   }
 
+  function handleCancel() {
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/tournaments");
+    }
+  }
+
   return (
     <div className="auth-page">
       <div className="centered-col">
@@ -38,7 +46,7 @@ export default function LogoutDialog() {
             <button
               type="button"
               className="btn-secondary mt-2 w-full"
-              onClick={() => router.back()}
+              onClick={handleCancel}
               disabled={pending}
             >
               Cancel
