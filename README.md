@@ -53,6 +53,9 @@ The most important week. Get the boring stuff out of the way so everything after
 - [x] Set up domain
 - [x] Create signup, login, and logout endpoints
 - [x] Add workflows for CI, Claude Code, and automatic dependency updates
+- [x] Basic landing page with waitlist
+- [x] Set up Upstash for serverless Redis
+- [x] Set up Resend for email communication
 
 **Deliverable:** A deployed app at `staging.mychesstour.com` with auth working (signup, login, logout) and a seeded database.
 
@@ -66,17 +69,20 @@ The player's first impression. This is also the public face of the platform — 
 
 **Week 2 — Browse tournaments:**
 
-- [ ] `GET /tournaments` API route with search, filtering, pagination
-- [ ] Browse page layout: search bar, filter dropdowns (format, state, rating, date)
-- [ ] Tournament card component (poster, name, date, venue, format badge, spots indicator)
-- [ ] Empty states and loading skeletons
-- [ ] Mobile-responsive card grid
+- [x] `GET /tournaments` API route with search, filtering, pagination
+- [x] Browse page layout: search bar, filter dropdowns (format, state, rating, date)
+- [x] Tournament card component (poster, name, date, venue, format badge, spots indicator)
+- [x] Empty states and loading skeletons
+- [x] Mobile-responsive card grid
+- [x] Signup with verification code
+- [x] Login and forgot password
+- [x] Logout
 
 **Week 3 — Tournament detail + player nav:**
 
 - [ ] `GET /tournaments/:id` API route
 - [ ] Detail page: poster, full info, entry fees with player-pays breakdown, prizes, restrictions, organizer info
-- [ ] Top navigation bar (Tournaments, My Tournaments, Profile, Become an Organizer)
+- [x] Top and drawer navigation bar (Tournaments, My Tournaments, Profile, Become an Organizer)
 - [ ] Registration CTA button (links to register flow, or "Login to register" if not authenticated)
 
 **Week 4 (buffer) — Polish and edge cases:**
