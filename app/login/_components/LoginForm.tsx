@@ -39,7 +39,7 @@ export default function LoginForm() {
               </strong>
             </p>
             <div className="confirm-actions">
-              <Link href="/forgot-password" className="btn-primary">
+              <Link href="/auth/forgot-password" className="btn-primary">
                 Reset Password
               </Link>
               <a
@@ -156,7 +156,7 @@ export default function LoginForm() {
                   Keep me signed in
                 </label>
               </div>
-              <Link href="/forgot-password" className="forgot-link">
+              <Link href="/auth/forgot-password" className="forgot-link">
                 Forgot password?
               </Link>
             </div>
