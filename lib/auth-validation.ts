@@ -143,6 +143,36 @@ export function isLoginFormSubmittable(fields: LoginFields): boolean {
 
 // ── Forgot Password ────────────────────────────────────────────────────────
 
+export type UpdatePasswordErrors = {
+  password?: string;
+  confirmPassword?: string;
+};
+
+export function validateUpdatePasswordForm(
+  password: string,
+  confirmPassword: string,
+): { errors: UpdatePasswordErrors; isValid: boolean } {
+  const errors: UpdatePasswordErrors = {};
+
+  const reqs = checkPasswordRequirements(password);
+  const allReqsMet = Object.values(reqs).every(Boolean);
+  if (!password) {
+    errors.password = "Password is required";
+  } else if (!allReqsMet) {
+    errors.password = "Password does not meet the requirements";
+  }
+
+  if (!confirmPassword) {
+    errors.confirmPassword = "Please confirm your password";
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = "Passwords do not match";
+  }
+
+  return { errors, isValid: Object.keys(errors).length === 0 };
+}
+
+// ── Forgot Password ────────────────────────────────────────────────────────
+
 export type ForgotPasswordErrors = {
   email?: string;
 };
