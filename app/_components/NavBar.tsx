@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 import { createClient } from "@/lib/supabase/client";
@@ -19,7 +19,6 @@ type AuthUser = {
 
 export default function NavBar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [drawerState, setDrawerState] = useState(() =>
     closeDrawer(openDrawer(pathname ?? "")),
   );
@@ -75,14 +74,6 @@ export default function NavBar() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [dropdownOpen]);
-
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    setAuthUser(null);
-    setDropdownOpen(false);
-    router.push("/login");
-  }
 
   // Prevent body scroll when drawer is open
   useEffect(() => {
@@ -184,12 +175,13 @@ export default function NavBar() {
                         </Link>
                       </div>
                       <div className="nav-dropdown-divider" />
-                      <button
+                      <Link
+                        href="/logout"
                         className="nav-dropdown-item nav-dropdown-item--danger"
-                        onClick={handleSignOut}
+                        onClick={() => setDropdownOpen(false)}
                       >
                         Sign Out
-                      </button>
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -294,15 +286,15 @@ export default function NavBar() {
               >
                 My Tournaments
               </Link>
-              <button
+              <Link
+                href="/logout"
                 className="nav-drawer-btn-login mt-4"
-                onClick={async () => {
-                  setDrawerState((current) => closeDrawer(current));
-                  await handleSignOut();
-                }}
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
               >
                 Sign Out
-              </button>
+              </Link>
             </>
           ) : (
             <>

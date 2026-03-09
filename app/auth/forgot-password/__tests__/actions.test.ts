@@ -96,13 +96,13 @@ describe("forgotPassword action", () => {
     );
   });
 
-  it("redirectTo contains /auth/callback and /update-password", async () => {
+  it("redirectTo contains /auth/callback and /auth/update-password", async () => {
     const fd = makeFormData({ email: "user@example.com" });
     await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
 
     const callArg = mocks.generateLink.mock.calls[0][0];
     expect(callArg.options.redirectTo).toContain("/auth/callback");
-    expect(callArg.options.redirectTo).toContain("/update-password");
+    expect(callArg.options.redirectTo).toContain("/auth/update-password");
   });
 
   // --- Success cases --------------------------------------------------------

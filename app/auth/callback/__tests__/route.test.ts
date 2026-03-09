@@ -32,7 +32,7 @@ describe("GET /auth/callback", () => {
     await GET(makeRequest("/auth/callback"));
 
     expect(mocks.redirect).toHaveBeenCalledWith(
-      expect.stringContaining("/forgot-password?error=invalid_link"),
+      expect.stringContaining("/auth/forgot-password?error=invalid_link"),
     );
   });
 
@@ -43,10 +43,10 @@ describe("GET /auth/callback", () => {
   });
 
   it("redirects to next param on successful session exchange", async () => {
-    await GET(makeRequest("/auth/callback?code=abc123&next=/update-password"));
+    await GET(makeRequest("/auth/callback?code=abc123&next=/auth/update-password"));
 
     expect(mocks.redirect).toHaveBeenCalledWith(
-      expect.stringContaining("/update-password"),
+      expect.stringContaining("/auth/update-password"),
     );
   });
 
@@ -64,7 +64,7 @@ describe("GET /auth/callback", () => {
     await GET(makeRequest("/auth/callback?code=badcode"));
 
     expect(mocks.redirect).toHaveBeenCalledWith(
-      expect.stringContaining("/forgot-password?error=invalid_link"),
+      expect.stringContaining("/auth/forgot-password?error=invalid_link"),
     );
   });
 });

@@ -88,10 +88,10 @@ describe("LoginForm", () => {
     expect(checkbox.defaultChecked).toBe(true);
   });
 
-  it("renders Forgot password link pointing to /forgot-password", () => {
+  it("renders Forgot password link pointing to /auth/forgot-password", () => {
     render(<LoginForm />);
     const link = screen.getByText("Forgot password?") as HTMLAnchorElement;
-    expect(link.href).toContain("/forgot-password");
+    expect(link.href).toContain("/auth/forgot-password");
   });
 
   it("renders create account link pointing to /sign-up", () => {
