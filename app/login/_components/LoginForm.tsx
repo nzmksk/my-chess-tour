@@ -2,23 +2,30 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { login, INITIAL_LOGIN_STATE } from "../actions";
+import { login } from "../actions";
+import { INITIAL_LOGIN_STATE } from "../types";
 
 export default function LoginForm() {
-  const [state, formAction, pending] = useActionState(login, INITIAL_LOGIN_STATE);
+  const [state, formAction, pending] = useActionState(
+    login,
+    INITIAL_LOGIN_STATE,
+  );
   const [showPassword, setShowPassword] = useState(false);
 
   // Screen 2C — Account Locked
   if (state.locked) {
-    const minutes = state.lockedSeconds ? Math.ceil(state.lockedSeconds / 60) : 15;
+    const minutes = state.lockedSeconds
+      ? Math.ceil(state.lockedSeconds / 60)
+      : 15;
     return (
       <div className="auth-page">
         <div className="centered-col">
-          <div
-            className="auth-card card"
-            style={{ textAlign: "center", maxWidth: "25rem", margin: "0 auto" }}
-          >
-            <div className="confirm-icon confirm-icon--danger" role="img" aria-label="Account locked">
+          <div className="auth-card card text-center max-w-100 mx-0 my-auto">
+            <div
+              className="confirm-icon confirm-icon--danger"
+              role="img"
+              aria-label="Account locked"
+            >
               🔒
             </div>
             <h1 className="confirm-title">Account Locked</h1>
@@ -27,13 +34,7 @@ export default function LoginForm() {
               temporarily locked.
               <br />
               <br />
-              <strong
-                style={{
-                  fontFamily: "var(--font-cinzel)",
-                  color: "var(--color-gold-muted)",
-                  letterSpacing: "0.05em",
-                }}
-              >
+              <strong className="font-(--font-cinzel) text-(--color-gold-muted) tracking-wider">
                 Unlocks in ~{minutes} minute{minutes !== 1 ? "s" : ""}
               </strong>
             </p>
@@ -43,8 +44,7 @@ export default function LoginForm() {
               </Link>
               <a
                 href="mailto:mychesstour@gmail.com"
-                className="btn-secondary"
-                style={{ marginTop: "0.5rem", display: "block", textAlign: "center" }}
+                className="btn-secondary mt-2 block text-center"
               >
                 Contact Support
               </a>
@@ -74,16 +74,17 @@ export default function LoginForm() {
               </span>
               <p className="error-text">
                 {state.error}
-                {state.attemptsRemaining !== null && state.attemptsRemaining > 0 && (
-                  <>
-                    {" "}
-                    <strong>
-                      {state.attemptsRemaining} attempt
-                      {state.attemptsRemaining !== 1 ? "s" : ""} remaining
-                    </strong>{" "}
-                    before your account is temporarily locked.
-                  </>
-                )}
+                {state.attemptsRemaining !== null &&
+                  state.attemptsRemaining > 0 && (
+                    <>
+                      {" "}
+                      <strong>
+                        {state.attemptsRemaining} attempt
+                        {state.attemptsRemaining !== 1 ? "s" : ""} remaining
+                      </strong>{" "}
+                      before your account is temporarily locked.
+                    </>
+                  )}
               </p>
             </div>
           )}
@@ -136,14 +137,11 @@ export default function LoginForm() {
                   />
                 </button>
               </div>
-              {state.error && (
-                <p className="input-hint error">Password is incorrect</p>
-              )}
             </div>
 
             {/* Remember me + Forgot password */}
             <div className="remember-forgot-row">
-              <div className="check-row" style={{ marginBottom: 0 }}>
+              <div className="check-row mb-0">
                 <input
                   id="keepSignedIn"
                   name="keepSignedIn"
@@ -153,8 +151,7 @@ export default function LoginForm() {
                 />
                 <label
                   htmlFor="keepSignedIn"
-                  className="check-label"
-                  style={{ fontSize: "0.75rem" }}
+                  className="check-label font-[0.75rem]"
                 >
                   Keep me signed in
                 </label>
@@ -175,8 +172,7 @@ export default function LoginForm() {
           </form>
 
           <p className="auth-footer mt-lg">
-            Don&apos;t have an account?{" "}
-            <Link href="/sign-up">Create one</Link>
+            Don&apos;t have an account? <Link href="/sign-up">Create one</Link>
           </p>
         </div>
       </div>

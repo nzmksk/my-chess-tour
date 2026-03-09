@@ -4,23 +4,10 @@ import { redirect } from "next/navigation";
 import { validateLoginForm } from "@/lib/auth-validation";
 import { createClient } from "@/lib/supabase/server";
 import { redis } from "@/lib/redis";
+import type { LoginState } from "./types";
 
 const MAX_ATTEMPTS = 5;
 const LOCK_DURATION_SECONDS = 15 * 60; // 15 minutes
-
-export type LoginState = {
-  error: string | null;
-  attemptsRemaining: number | null;
-  locked: boolean;
-  lockedSeconds: number | null;
-};
-
-export const INITIAL_LOGIN_STATE: LoginState = {
-  error: null,
-  attemptsRemaining: null,
-  locked: false,
-  lockedSeconds: null,
-};
 
 export async function login(
   _prevState: LoginState,

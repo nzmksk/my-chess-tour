@@ -2,16 +2,7 @@
 
 import { validateForgotPasswordForm } from "@/lib/auth-validation";
 import { createClient } from "@/lib/supabase/server";
-
-export type ForgotPasswordState = {
-  error: string | null;
-  submitted: boolean;
-};
-
-export const INITIAL_FORGOT_PASSWORD_STATE: ForgotPasswordState = {
-  error: null,
-  submitted: false,
-};
+import { ForgotPasswordState } from "./types";
 
 export async function forgotPassword(
   _prevState: ForgotPasswordState,

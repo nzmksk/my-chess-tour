@@ -36,7 +36,8 @@ vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
 }));
 
-import { login, INITIAL_LOGIN_STATE } from "../actions";
+import { login } from "../actions";
+import { INITIAL_LOGIN_STATE } from "../types";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { forgotPassword, INITIAL_FORGOT_PASSWORD_STATE } from "../actions";
+import { forgotPassword } from "../actions";
+import { INITIAL_FORGOT_PASSWORD_STATE } from "../types";
 
 export default function ForgotPasswordForm() {
   const [state, formAction, pending] = useActionState(
@@ -15,18 +16,16 @@ export default function ForgotPasswordForm() {
     return (
       <div className="auth-page">
         <div className="centered-col">
-          <div className="auth-card card card--featured" style={{ textAlign: "center" }}>
+          <div className="auth-card card card--featured text-center">
             <div
-              style={{ fontSize: "2rem", marginBottom: "1rem" }}
+              className="font-[2rem] mb-4"
               role="img"
               aria-label="Email sent"
             >
               📬
             </div>
-            <h1 className="auth-heading" style={{ marginBottom: "0.5rem" }}>
-              Check Your Email
-            </h1>
-            <p className="auth-subheading" style={{ marginBottom: "2.5rem" }}>
+            <h1 className="auth-heading mb-2">Check Your Email</h1>
+            <p className="auth-subheading mb-10">
               If an account with that email exists, we&apos;ve sent a password
               reset link. It expires in 1 hour.
             </p>
@@ -85,8 +84,7 @@ export default function ForgotPasswordForm() {
 
             <button
               type="submit"
-              className="btn-primary"
-              style={{ marginTop: "1rem" }}
+              className="btn-primary mt-4"
               disabled={pending}
               aria-disabled={pending}
             >
