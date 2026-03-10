@@ -27,9 +27,9 @@ beforeEach(() => {
   mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
 });
 
-describe("GET /auth/callback", () => {
+describe("GET /v1/auth/callback", () => {
   it("redirects to error page when no code is present", async () => {
-    await GET(makeRequest("/auth/callback"));
+    await GET(makeRequest("/v1/auth/callback"));
 
     expect(mocks.redirect).toHaveBeenCalledWith(
       expect.stringContaining("/auth/forgot-password?error=invalid_link"),
@@ -37,13 +37,13 @@ describe("GET /auth/callback", () => {
   });
 
   it("calls exchangeCodeForSession with the code", async () => {
-    await GET(makeRequest("/auth/callback?code=abc123"));
+    await GET(makeRequest("/v1/auth/callback?code=abc123"));
 
     expect(mocks.exchangeCodeForSession).toHaveBeenCalledWith("abc123");
   });
 
   it("redirects to next param on successful session exchange", async () => {
-    await GET(makeRequest("/auth/callback?code=abc123&next=/auth/update-password"));
+    await GET(makeRequest("/v1/auth/callback?code=abc123&next=/auth/update-password"));
 
     expect(mocks.redirect).toHaveBeenCalledWith(
       expect.stringContaining("/auth/update-password"),
@@ -51,7 +51,7 @@ describe("GET /auth/callback", () => {
   });
 
   it("redirects to / when next param is absent (default)", async () => {
-    await GET(makeRequest("/auth/callback?code=abc123"));
+    await GET(makeRequest("/v1/auth/callback?code=abc123"));
 
     expect(mocks.redirect).toHaveBeenCalledWith(
       "https://mychessstour.com/",
@@ -61,7 +61,7 @@ describe("GET /auth/callback", () => {
   it("redirects to error page when exchange fails", async () => {
     mocks.exchangeCodeForSession.mockResolvedValue({ error: { message: "Invalid code" } });
 
-    await GET(makeRequest("/auth/callback?code=badcode"));
+    await GET(makeRequest("/v1/auth/callback?code=badcode"));
 
     expect(mocks.redirect).toHaveBeenCalledWith(
       expect.stringContaining("/auth/forgot-password?error=invalid_link"),
