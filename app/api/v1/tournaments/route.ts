@@ -6,7 +6,7 @@ export async function GET() {
     .from("tournaments")
     .select(
       `id, name, venue_name, venue_state, start_date, end_date, registration_deadline,
-       format, time_control, is_fide_rated, is_mcf_rated, entry_fees, max_participants, poster_url, status,
+       format, time_control, is_fide_rated, is_mcf_rated, entry_fees, max_participants, status,
        organizer_profiles(id, organization_name, links)`
     )
     .eq("status", "published")
@@ -53,7 +53,6 @@ export async function GET() {
     is_mcf_rated: boolean;
     entry_fees: unknown;
     max_participants: number;
-    poster_url: string | null;
     status: string;
     organizer_profiles: OrganizerProfile | OrganizerProfile[] | null;
   }
@@ -77,7 +76,6 @@ export async function GET() {
       entry_fees: t.entry_fees,
       max_participants: t.max_participants,
       current_participants: participantCounts[t.id] ?? 0,
-      poster_url: t.poster_url,
       status: t.status,
       organizer: org
         ? { id: org.id, organization_name: org.organization_name, links: org.links }

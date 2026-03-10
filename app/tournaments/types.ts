@@ -36,7 +36,6 @@ export interface Tournament {
   entry_fees: EntryFees;
   max_participants: number;
   current_participants: number;
-  poster_url: string | null;
   status: string;
   organizer: {
     id: string;

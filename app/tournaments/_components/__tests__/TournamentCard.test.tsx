@@ -1,20 +1,7 @@
-/* eslint-disable @next/next/no-img-element */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import TournamentCard from "../TournamentCard";
 import type { Tournament } from "../../types";
-
-vi.mock("next/image", () => ({
-  default: ({
-    src,
-    alt,
-    className,
-  }: {
-    src: string;
-    alt: string;
-    className?: string;
-  }) => <img src={src} alt={alt} className={className} />,
-}));
 
 const base: Tournament = {
   id: "1",
@@ -31,7 +18,6 @@ const base: Tournament = {
   entry_fees: { standard: { amount_cents: 5000 } },
   max_participants: 100,
   current_participants: 50,
-  poster_url: null,
   status: "published",
   organizer: null,
 };
@@ -132,22 +118,6 @@ describe("rating badges", () => {
   it("shows unrated badge when neither FIDE nor MCF", () => {
     const html = render({ is_fide_rated: false, is_mcf_rated: false });
     expect(html).toContain("badge-unrated");
-  });
-});
-
-// ── Poster ───────────────────────────────────────────────────
-
-describe("poster", () => {
-  it("renders chess piece fallback when no poster URL", () => {
-    const html = render({ poster_url: null });
-    expect(html).toContain("♟");
-    expect(html).not.toContain("<img");
-  });
-
-  it("renders image when poster URL is provided", () => {
-    const html = render({ poster_url: "https://example.com/poster.jpg" });
-    expect(html).toContain("<img");
-    expect(html).not.toContain("text-[2rem]");
   });
 });
 

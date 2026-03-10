@@ -121,7 +121,7 @@ export default function TournamentsClient({ tournaments }: Props) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(25rem,100%),1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
             {filtered.map((t) => (
               <TournamentCard key={t.id} tournament={t} />
             ))}

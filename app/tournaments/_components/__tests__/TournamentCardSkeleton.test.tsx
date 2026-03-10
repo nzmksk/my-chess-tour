@@ -1,21 +1,8 @@
-/* eslint-disable @next/next/no-img-element */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import TournamentCardSkeleton from "../TournamentCardSkeleton";
 import TournamentCard from "../TournamentCard";
 import type { Tournament } from "../../types";
-
-vi.mock("next/image", () => ({
-  default: ({
-    src,
-    alt,
-    className,
-  }: {
-    src: string;
-    alt: string;
-    className?: string;
-  }) => <img src={src} alt={alt} className={className} />,
-}));
 
 const mockTournament: Tournament = {
   id: "1",
@@ -32,7 +19,6 @@ const mockTournament: Tournament = {
   entry_fees: { standard: { amount_cents: 5000 } },
   max_participants: 100,
   current_participants: 50,
-  poster_url: null,
   status: "published",
   organizer: null,
 };
@@ -52,27 +38,6 @@ describe("TournamentCardSkeleton mirrors TournamentCard layout", () => {
   it("article uses tournament-card class", () => {
     expect(getClasses(cardHtml, "article")).toContain("tournament-card");
     expect(getClasses(skeletonHtml, "article")).toContain("tournament-card");
-  });
-
-  it("article has matching responsive grid columns", () => {
-    const cardClasses = getClasses(cardHtml, "article");
-    const skeletonClasses = getClasses(skeletonHtml, "article");
-
-    expect(cardClasses).toContain("grid-cols-1");
-    expect(cardClasses).toContain("sm:grid-cols-[10rem_1fr]");
-    expect(skeletonClasses).toContain("grid-cols-1");
-    expect(skeletonClasses).toContain("sm:grid-cols-[10rem_1fr]");
-  });
-
-  it("poster column is hidden below sm on both", () => {
-    // Real card uses hidden sm:flex, skeleton uses hidden sm:block
-    const cardPosterClasses = getClasses(cardHtml, "div", 0);
-    const skeletonPosterClasses = getClasses(skeletonHtml, "div", 0);
-
-    expect(cardPosterClasses).toContain("hidden");
-    expect(cardPosterClasses.some((c) => c.startsWith("sm:"))).toBe(true);
-    expect(skeletonPosterClasses).toContain("hidden");
-    expect(skeletonPosterClasses.some((c) => c.startsWith("sm:"))).toBe(true);
   });
 
   it("body column has matching layout", () => {

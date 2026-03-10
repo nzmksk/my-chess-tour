@@ -25,7 +25,7 @@ export default function TournamentsGridSkeleton() {
 
       {/* Card grid */}
       <div className="max-w-300 mx-auto px-10 py-6">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(25rem,100%),1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
           {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
             <TournamentCardSkeleton key={i} />
           ))}
