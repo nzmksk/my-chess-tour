@@ -69,9 +69,13 @@ export default function TournamentsClient({ tournaments }: Props) {
         if (!matchFide && !matchMcf && !matchUnrated) return false;
       }
 
-      // Date
-      const start = new Date(t.start_date);
-      const end = new Date(t.end_date);
+      // Date — append T00:00:00 (no Z) so strings parse as local midnight,
+      // matching how windowStart/windowEnd are constructed via `new Date(y,m,d)`.
+      // Without this, date-only strings parse as UTC midnight, which in UTC+
+      // timezones (e.g. Malaysia UTC+08) falls after local midnight and causes
+      // boundary-day tournaments to be incorrectly excluded.
+      const start = new Date(t.start_date + "T00:00:00");
+      const end = new Date(t.end_date + "T00:00:00");
       if (dateFilter === "this-week") {
         const windowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const windowEnd = new Date(windowStart);
