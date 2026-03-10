@@ -90,18 +90,18 @@ describe("forgotPassword action", () => {
         type: "recovery",
         email: "user@example.com",
         options: expect.objectContaining({
-          redirectTo: expect.stringContaining("/auth/callback"),
+          redirectTo: expect.stringContaining("/v1/auth/callback"),
         }),
       }),
     );
   });
 
-  it("redirectTo contains /auth/callback and /auth/update-password", async () => {
+  it("redirectTo contains /v1/auth/callback and /auth/update-password", async () => {
     const fd = makeFormData({ email: "user@example.com" });
     await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
 
     const callArg = mocks.generateLink.mock.calls[0][0];
-    expect(callArg.options.redirectTo).toContain("/auth/callback");
+    expect(callArg.options.redirectTo).toContain("/v1/auth/callback");
     expect(callArg.options.redirectTo).toContain("/auth/update-password");
   });
 

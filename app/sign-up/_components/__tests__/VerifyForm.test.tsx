@@ -223,4 +223,120 @@ describe("VerifyForm", () => {
       expect.objectContaining({ method: "POST" })
     );
   });
+
+  // --- Verify Email button direct click (covers line 218) -------------------
+
+  it("calls verify-code API when Verify Email button is clicked directly", async () => {
+    // Use a deferred promise so we can control when the first (auto-submit)
+    // fetch resolves, leaving the button enabled for a second click.
+    let resolveFirst!: (v: unknown) => void;
+    const firstFetch = new Promise((res) => { resolveFirst = res; });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        // First call: auto-submit triggered by typing 6 chars — we hold it
+        // open so that isVerifying stays true initially, then resolve it so
+        // the component resets isVerifying to false before we click the button.
+        .mockReturnValueOnce(firstFetch)
+        // Second call: the direct button click
+        .mockResolvedValue({
+          ok: true,
+          json: async () => ({ message: "ok" }),
+        }),
+    );
+
+    render(<VerifyForm />);
+
+    // Type 6 chars → triggers auto-submit (first fetch call)
+    await act(async () => {
+      fireEvent.change(getCodeInput(), { target: { value: VALID_CODE } });
+    });
+
+    // Resolve the first fetch so isVerifying resets and button is re-enabled
+    await act(async () => {
+      resolveFirst({
+        ok: false,
+        json: async () => ({ error: "invalid" }),
+      });
+    });
+
+    // Now click the button directly
+    const btn = screen.getAllByRole("button").find(
+      (b) => b.textContent?.includes("Verify Email"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+
+    // fetch should have been called at least twice (auto-submit + button click)
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetch)).toHaveBeenLastCalledWith(
+      "/api/v1/auth/signup/verify-code",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  // --- Cooldown timer counts down to zero (covers lines 55-60) --------------
+
+  it("shows Resend code link again after cooldown timer reaches zero", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    }));
+
+    render(<VerifyForm />);
+
+    const resendLink = screen
+      .getAllByText(/resend code/i)
+      .find((el) => el.tagName === "A")!;
+
+    await act(async () => {
+      fireEvent.click(resendLink);
+    });
+
+    // Advance 30 minutes + 1 second to exhaust the cooldown
+    await act(async () => {
+      vi.advanceTimersByTime(30 * 60 * 1000 + 1000);
+    });
+
+    const resendLinks = screen
+      .getAllByText(/resend code/i)
+      .filter((el) => el.tagName === "A");
+    expect(resendLinks.length).toBeGreaterThan(0);
+
+    vi.useRealTimers();
+  });
+
+  // --- Resend resets expiry timer (covers lines 138-143) --------------------
+
+  it("shows Code has expired after resend resets the expiry timer and time elapses", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    }));
+
+    render(<VerifyForm />);
+
+    // Click resend — this resets the expiry timer
+    const resendLink = screen
+      .getAllByText(/resend code/i)
+      .find((el) => el.tagName === "A")!;
+
+    await act(async () => {
+      fireEvent.click(resendLink);
+    });
+
+    // Advance 10 minutes + 1 second to expire the new timer
+    await act(async () => {
+      vi.advanceTimersByTime(10 * 60 * 1000 + 1000);
+    });
+
+    expect(screen.getByText(/code has expired/i)).toBeDefined();
+
+    vi.useRealTimers();
+  });
 });

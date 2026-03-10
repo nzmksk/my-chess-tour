@@ -69,23 +69,26 @@ export default function TournamentsClient({ tournaments }: Props) {
         if (!matchFide && !matchMcf && !matchUnrated) return false;
       }
 
-      // Date
-      const start = new Date(t.start_date);
+      // Date — append T00:00:00 (no Z) so strings parse as local midnight,
+      // matching how windowStart/windowEnd are constructed via `new Date(y,m,d)`.
+      // Without this, date-only strings parse as UTC midnight, which in UTC+
+      // timezones (e.g. Malaysia UTC+08) falls after local midnight and causes
+      // boundary-day tournaments to be incorrectly excluded.
+      const start = new Date(t.start_date + "T00:00:00");
+      const end = new Date(t.end_date + "T00:00:00");
       if (dateFilter === "this-week") {
-        const limit = new Date(now);
-        limit.setDate(limit.getDate() + 7);
-        if (start > limit) return false;
+        const windowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const windowEnd = new Date(windowStart);
+        windowEnd.setDate(windowEnd.getDate() + 7);
+        if (start > windowEnd || end < windowStart) return false;
       } else if (dateFilter === "this-month") {
-        if (
-          start.getMonth() !== now.getMonth() ||
-          start.getFullYear() !== now.getFullYear()
-        ) {
-          return false;
-        }
+        const windowStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const windowEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        if (start > windowEnd || end < windowStart) return false;
       } else if (dateFilter === "next-month") {
-        const nextStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const nextEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-        if (start < nextStart || start > nextEnd) return false;
+        const windowStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const windowEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+        if (start > windowEnd || end < windowStart) return false;
       }
 
       return true;

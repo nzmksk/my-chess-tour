@@ -18,7 +18,7 @@ export async function forgotPassword(
     return { error: firstError, submitted: false };
   }
 
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/auth/update-password`;
+  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/v1/auth/callback?next=/auth/update-password`;
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: "recovery",
     email,
