@@ -71,21 +71,20 @@ export default function TournamentsClient({ tournaments }: Props) {
 
       // Date
       const start = new Date(t.start_date);
+      const end = new Date(t.end_date);
       if (dateFilter === "this-week") {
-        const limit = new Date(now);
-        limit.setDate(limit.getDate() + 7);
-        if (start > limit) return false;
+        const windowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const windowEnd = new Date(windowStart);
+        windowEnd.setDate(windowEnd.getDate() + 7);
+        if (start > windowEnd || end < windowStart) return false;
       } else if (dateFilter === "this-month") {
-        if (
-          start.getMonth() !== now.getMonth() ||
-          start.getFullYear() !== now.getFullYear()
-        ) {
-          return false;
-        }
+        const windowStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const windowEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        if (start > windowEnd || end < windowStart) return false;
       } else if (dateFilter === "next-month") {
-        const nextStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const nextEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-        if (start < nextStart || start > nextEnd) return false;
+        const windowStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const windowEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+        if (start > windowEnd || end < windowStart) return false;
       }
 
       return true;
