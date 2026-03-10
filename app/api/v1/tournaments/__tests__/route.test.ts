@@ -54,7 +54,6 @@ function makeTournament(overrides: Record<string, unknown> = {}) {
     is_mcf_rated: false,
     entry_fees: { standard: { amount_cents: 5000 }, additional: [] },
     max_participants: 120,
-    poster_url: null,
     status: "published",
     organizer_profiles: mockOrganizer,
     ...overrides,
@@ -131,7 +130,6 @@ describe("GET /api/v1/tournaments", () => {
       expect(item.is_fide_rated).toBe(true);
       expect(item.is_mcf_rated).toBe(false);
       expect(item.max_participants).toBe(120);
-      expect(item.poster_url).toBeNull();
       expect(item.status).toBe("published");
     });
 

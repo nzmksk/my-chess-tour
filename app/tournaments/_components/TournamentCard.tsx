@@ -1,4 +1,3 @@
-import Image from "next/image";
 import type { Tournament } from "../types";
 
 function formatDateRange(start: string, end: string): string {
@@ -63,29 +62,10 @@ export default function TournamentCard({ tournament: t }: Props) {
   }
 
   return (
-    <article className="tournament-card grid-cols-1 sm:grid-cols-[10rem_1fr]">
-      {/* Poster */}
-      <div className="hidden sm:flex items-center justify-center min-h-50 relative shrink-0 bg-(--color-bg-raised)">
-        {t.poster_url ? (
-          <Image
-            src={t.poster_url}
-            alt={`${t.name} poster`}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <span className="text-[2rem] text-(--color-gold-dim)">♟</span>
-        )}
-
-        <span
-          className={`absolute top-2.5 right-2.5 text-[0.6875rem] [font-family:var(--font-lato)] font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
-        >
-          {spotsLabel}
-        </span>
-      </div>
-
+    <article className="tournament-card">
       {/* Body */}
       <div className="p-4 flex flex-col justify-center">
-        {/* Format + rating badges */}
+        {/* Format + rating + spots badges */}
         <div className="flex flex-wrap gap-1.5 mb-2">
           <span className="badge-format">{capitalise(formatType) || "—"}</span>
           {t.is_fide_rated && <span className="badge-fide">FIDE</span>}
@@ -93,6 +73,11 @@ export default function TournamentCard({ tournament: t }: Props) {
           {!t.is_fide_rated && !t.is_mcf_rated && (
             <span className="badge-unrated">Unrated</span>
           )}
+          <span
+            className={`text-[0.6875rem] [font-family:var(--font-lato)] font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
+          >
+            {spotsLabel}
+          </span>
         </div>
 
         {/* Title */}

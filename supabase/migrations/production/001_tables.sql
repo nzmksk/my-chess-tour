@@ -97,7 +97,6 @@ CREATE TABLE tournaments (
   prizes                  jsonb,
   restrictions            jsonb,
   max_participants        integer NOT NULL,
-  poster_url              text,
   status                  tournament_status NOT NULL DEFAULT 'draft',
   created_at              timestamptz NOT NULL DEFAULT now(),
   updated_at              timestamptz NOT NULL DEFAULT now()

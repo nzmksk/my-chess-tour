@@ -1,18 +1,16 @@
 export default function TournamentCardSkeleton() {
   return (
     <article
-      className="tournament-card grid-cols-1 sm:grid-cols-[10rem_1fr]"
+      className="tournament-card"
       aria-hidden="true"
     >
-      {/* Poster placeholder */}
-      <div className="skeleton-shimmer hidden sm:block min-h-50 shrink-0" />
-
       {/* Body */}
       <div className="p-4 flex flex-col justify-center">
         {/* Badge row */}
         <div className="flex gap-1.5 mb-3">
           <div className="skeleton-shimmer w-15.5 h-4.5 rounded-xs" />
           <div className="skeleton-shimmer w-11 h-4.5 rounded-xs" />
+          <div className="skeleton-shimmer w-16 h-4.5 rounded-xs" />
         </div>
 
         {/* Title */}
