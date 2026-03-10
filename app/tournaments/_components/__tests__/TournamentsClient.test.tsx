@@ -4,6 +4,41 @@ import { renderToStaticMarkup } from "react-dom/server";
 import TournamentsClient from "../TournamentsClient";
 import type { Tournament } from "../../types";
 
+// ── React useState interception for component-level date filter tests ──
+//
+// vi.hoisted creates module-level state accessible inside vi.mock factories.
+// When `__dateFilterOverride` is non-null, the 5th useState call in each
+// TournamentsClient render receives that value instead of "any".
+// `__useStateCallCount` is reset to 0 before each controlled render so the
+// counter stays in sync with the component's call order.
+vi.mock("react", async () => {
+  const actual = await vi.importActual<typeof import("react")>("react");
+  // Shadow the closure variables so the mock factory can use them:
+  let _callCount = 0;
+  let _override: string | null = null;
+  // Expose setters so tests can drive the behavior:
+  (globalThis as Record<string, unknown>).__setReactUseStateOverride = (v: string | null) => {
+    _override = v;
+    _callCount = 0;
+  };
+  (globalThis as Record<string, unknown>).__resetReactUseStateCounter = () => { _callCount = 0; };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wrappedUseState = (initial: any) => {
+    _callCount += 1;
+    if (_callCount === 5 && _override !== null) {
+      const injected = _override;
+      _callCount = 0; // reset after the component's 5 useState calls are done
+      return actual.useState(injected);
+    }
+    return actual.useState(initial);
+  };
+
+  return { ...actual, useState: wrappedUseState };
+});
+
+import * as React from "react";
+
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -363,6 +398,112 @@ describe("date filter — any", () => {
     ];
     const result = filterTournaments(tournaments, { dateFilter: "any", now: NOW });
     expect(result).toHaveLength(3);
+  });
+});
+
+// ── date filter branches — component level ────────────────────
+//
+// These tests exercise the filter branches inside TournamentsClient's useMemo
+// at the component level (not just the pure helper above) by spying on
+// React.useState to inject a specific dateFilter initial value and by using
+// fake timers to fix `new Date()` inside the useMemo.
+
+describe("date filter branches — component level", () => {
+  // Fixed "now": 2026-03-10 (month is 0-indexed → 2 = March)
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 10));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Renders TournamentsClient with a pre-injected dateFilter state value.
+   *
+   * Uses the globalThis setter installed by the React mock factory above to
+   * intercept the 5th useState call (dateFilter) in TournamentsClient and
+   * replace its initial value with the given dateFilter string.
+   *
+   * useState call order in TournamentsClient:
+   *   1. search     → ""
+   *   2. formats    → []
+   *   3. states     → []
+   *   4. ratings    → []
+   *   5. dateFilter → injected value  ← intercepted
+   */
+  function renderWithDateFilter(
+    dateFilter: string,
+    tournaments: Tournament[],
+  ): string {
+    // Arm the intercept
+    (globalThis as Record<string, unknown>).__setReactUseStateOverride(dateFilter);
+    try {
+      return renderToStaticMarkup(
+        <TournamentsClient tournaments={tournaments} />,
+      );
+    } finally {
+      // Disarm for subsequent tests
+      (globalThis as Record<string, unknown>).__setReactUseStateOverride(null);
+    }
+  }
+
+  it("this-week filter hides tournaments outside the 7-day window", () => {
+    // now = 2026-03-10; window = Mar 10 – Mar 17
+    const inside = makeTournament({
+      id: "w1",
+      name: "Inside Week",
+      start_date: "2026-03-12",
+      end_date: "2026-03-14",
+    });
+    const outside = makeTournament({
+      id: "w2",
+      name: "Outside Week",
+      start_date: "2026-03-20",
+      end_date: "2026-03-22",
+    });
+    const html = renderWithDateFilter("this-week", [inside, outside]);
+    expect(html).toContain("Inside Week");
+    expect(html).not.toContain("Outside Week");
+  });
+
+  it("this-month filter hides tournaments outside March", () => {
+    // now = 2026-03-10; month window = Mar 1 – Mar 31
+    const inside = makeTournament({
+      id: "m1",
+      name: "Inside Month",
+      start_date: "2026-03-15",
+      end_date: "2026-03-20",
+    });
+    const outside = makeTournament({
+      id: "m2",
+      name: "Outside Month",
+      start_date: "2026-04-01",
+      end_date: "2026-04-05",
+    });
+    const html = renderWithDateFilter("this-month", [inside, outside]);
+    expect(html).toContain("Inside Month");
+    expect(html).not.toContain("Outside Month");
+  });
+
+  it("next-month filter hides tournaments not in April", () => {
+    // now = 2026-03-10; next month window = Apr 1 – Apr 30
+    const inside = makeTournament({
+      id: "n1",
+      name: "Inside Next Month",
+      start_date: "2026-04-10",
+      end_date: "2026-04-15",
+    });
+    const outside = makeTournament({
+      id: "n2",
+      name: "Outside Next Month",
+      start_date: "2026-03-15",
+      end_date: "2026-03-20",
+    });
+    const html = renderWithDateFilter("next-month", [inside, outside]);
+    expect(html).toContain("Inside Next Month");
+    expect(html).not.toContain("Outside Next Month");
   });
 });
 

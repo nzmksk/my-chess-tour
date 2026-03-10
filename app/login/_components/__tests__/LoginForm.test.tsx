@@ -225,4 +225,14 @@ describe("LoginForm", () => {
     const input = screen.getByLabelText("Password") as HTMLInputElement;
     expect(input.className).toContain("input-error");
   });
+
+  // --- Singular minute in locked state ---------------------------------------
+
+  it("shows singular 'minute' when locked for exactly 1 minute", () => {
+    mockState.locked = true;
+    mockState.lockedSeconds = 60;
+    render(<LoginForm />);
+    // Math.ceil(60/60) = 1 → "~1 minute" (no trailing "s")
+    expect(screen.getByText(/Unlocks in ~1 minute$/)).toBeDefined();
+  });
 });

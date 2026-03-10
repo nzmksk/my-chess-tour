@@ -152,3 +152,23 @@ describe("time control", () => {
     expect(html).toContain("Swiss · 7 rounds");
   });
 });
+
+// ── Format fallback ───────────────────────────────────────────
+describe("format fallback", () => {
+  it("shows '—' when format type is empty string", () => {
+    const html = render({ format: { type: "", system: "swiss", rounds: 7 } });
+    expect(html).toContain("—");
+  });
+});
+
+// ── Time control null fallback ────────────────────────────────
+describe("time control null fallback", () => {
+  it("renders nothing for time/rounds when both time_control and rounds are absent", () => {
+    const html = render({
+      time_control: undefined,
+      format: { type: "rapid", system: "swiss", rounds: 0 },
+    });
+    expect(html).not.toContain("Swiss ·");
+    expect(html).not.toContain("min");
+  });
+});
