@@ -275,7 +275,7 @@ describe("GET /api/v1/tournaments/:id", () => {
       expect(json.data.current_participants).toBe(0);
     });
 
-    it("queries registrations filtered by tournament_id and status=registered", async () => {
+    it("queries registrations filtered by tournament_id and status=confirmed", async () => {
       setTournamentResult(makeTournament());
       setRegistrationsResult([]);
 
@@ -285,7 +285,7 @@ describe("GET /api/v1/tournaments/:id", () => {
 
       const eqMock = mockRegistrationsBuilder.eq as ReturnType<typeof vi.fn>;
       expect(eqMock).toHaveBeenCalledWith("tournament_id", "tournament-1");
-      expect(eqMock).toHaveBeenCalledWith("status", "registered");
+      expect(eqMock).toHaveBeenCalledWith("status", "confirmed");
     });
   });
 

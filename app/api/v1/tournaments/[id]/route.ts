@@ -68,7 +68,7 @@ export async function GET(
     .from("registrations")
     .select("tournament_id")
     .eq("tournament_id", id)
-    .eq("status", "registered");
+    .eq("status", "confirmed");
 
   const currentParticipants = regData ? regData.length : 0;
 
