@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Tournament } from "../types";
 
 function formatDateRange(start: string, end: string): string {
@@ -114,12 +115,15 @@ export default function TournamentCard({ tournament: t }: Props) {
             </span>
           </div>
 
-          <button
-            className={`${spotsLeft === 0 ? "card-btn-full" : "card-btn-view"}`}
-            disabled={spotsLeft === 0}
-          >
-            {spotsLeft === 0 ? "Full" : "View →"}
-          </button>
+          {spotsLeft === 0 ? (
+            <button className="card-btn-full" disabled>
+              Full
+            </button>
+          ) : (
+            <Link href={`/tournaments/${t.id}`} className="card-btn-view">
+              View →
+            </Link>
+          )}
         </div>
       </div>
     </article>
