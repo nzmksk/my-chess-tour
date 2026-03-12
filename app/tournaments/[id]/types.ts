@@ -1,8 +1,15 @@
 import type { EntryFees, TournamentFormat, TimeControl } from "../types";
 
+const enum NonMonetaryPrize {
+  Trophy = "Trophy",
+  Medal = "Medal",
+  Certificate = "Certificate",
+}
+
 export interface PrizeEntry {
   place: string;
   amount_cents: number;
+  non_monetary_prize?: NonMonetaryPrize | null;
 }
 
 export interface PrizeCategory {
@@ -10,8 +17,14 @@ export interface PrizeCategory {
   entries: PrizeEntry[];
 }
 
+export interface PrizeSubCategory {
+  name: string;
+  entries: PrizeEntry[];
+  conditions: unknown;
+}
 export interface PrizesData {
   categories: PrizeCategory[];
+  subcategories?: PrizeSubCategory[] | null;
 }
 
 export interface Restrictions {

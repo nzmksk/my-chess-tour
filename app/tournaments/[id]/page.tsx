@@ -29,6 +29,7 @@ export async function TournamentDetailData({ id }: { id: string }) {
     }
 
     const json = await res.json();
+    console.log(json);
     tournament = json.data ?? null;
   } catch {
     notFound();

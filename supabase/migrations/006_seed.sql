@@ -345,13 +345,30 @@ BEGIN
         ),
         json_build_object(
           'categories', json_build_array(
-            json_build_object('place', 1, 'amount_cents', t_fee * 20),
-            json_build_object('place', 2, 'amount_cents', t_fee * 12),
-            json_build_object('place', 3, 'amount_cents', t_fee * 8)
+            json_build_object(
+              'name', 'Open',
+              'entries', json_build_array(
+                json_build_object('place', '1st', 'amount_cents', t_fee * 20),
+                json_build_object('place', '2nd', 'amount_cents', t_fee * 12),
+                json_build_object('place', '3rd', 'amount_cents', t_fee * 8)
+              )
+            )
           ),
-          'special', json_build_array(
-            json_build_object('title', 'Best Under-1500', 'amount_cents', t_fee * 5),
-            json_build_object('title', 'Best Female Player', 'amount_cents', t_fee * 5)
+          'subcategories', json_build_array(
+            json_build_object(
+              'name', 'Best Under-1500',
+              'entries', json_build_array(
+                json_build_object('place', '1st', 'amount_cents', t_fee * 5)
+              ),
+              'conditions', json_build_object('max_rating', 1499)
+            ),
+            json_build_object(
+              'name', 'Best Female Player',
+              'entries', json_build_array(
+                json_build_object('place', '1st', 'amount_cents', t_fee * 5)
+              ),
+              'conditions', json_build_object('gender', 'female')
+            )
           )
         ),
         '[{"type":"nationality","value":"Malaysian"}]'::jsonb,
