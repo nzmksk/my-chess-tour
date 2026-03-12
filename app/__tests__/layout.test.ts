@@ -45,7 +45,10 @@ describe("generateMetadata", () => {
   it("returns the exact title", async () => {
     mockGet.mockReturnValue("example.com");
     const meta = await generateMetadata();
-    expect(meta.title).toBe("MY Chess Tour — Coming Soon");
+    expect(meta.title).toEqual({
+      default: "MY Chess Tour — Coming Soon",
+      template: "%s | MY Chess Tour",
+    });
   });
 
   it("returns the exact description", async () => {
