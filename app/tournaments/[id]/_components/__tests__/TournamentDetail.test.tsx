@@ -56,9 +56,9 @@ const base: TournamentDetailType = {
   },
 };
 
-function render(overrides: Partial<TournamentDetailType> = {}): string {
+function render(overrides: Partial<TournamentDetailType> = {}, isAuthenticated = false): string {
   return renderToStaticMarkup(
-    <TournamentDetail tournament={{ ...base, ...overrides }} />,
+    <TournamentDetail tournament={{ ...base, ...overrides }} isAuthenticated={isAuthenticated} />,
   );
 }
 
@@ -335,5 +335,33 @@ describe("register card", () => {
   it("shows registration deadline", () => {
     const html = render();
     expect(html).toContain("28 May");
+  });
+});
+
+// ── CTA button auth states ────────────────────────────────────
+
+describe("CTA button auth states", () => {
+  it("shows 'Register Now' when authenticated and spots available", () => {
+    const html = render({}, true);
+    expect(html).toContain("Register Now");
+  });
+
+  it("shows 'Log In / Sign Up to Register' when not authenticated and spots available", () => {
+    const html = render({}, false);
+    expect(html).toContain("Log In / Sign Up to Register");
+  });
+
+  it("disables CTA button when not authenticated", () => {
+    const html = render({}, false);
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Full' and disables button when no spots remain, regardless of auth", () => {
+    const htmlAuth = render({ max_participants: 100, current_participants: 100 }, true);
+    const htmlNoAuth = render({ max_participants: 100, current_participants: 100 }, false);
+    expect(htmlAuth).toContain("Full");
+    expect(htmlAuth).toContain("disabled");
+    expect(htmlNoAuth).toContain("Full");
+    expect(htmlNoAuth).toContain("disabled");
   });
 });

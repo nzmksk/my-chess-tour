@@ -30,6 +30,14 @@ vi.mock("@/app/_components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn().mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+    },
+  }),
+}));
+
 // ── Helpers ───────────────────────────────────────────────────
 
 const mockFetch = vi.fn();
