@@ -6,6 +6,7 @@ import NavBar from "@/app/_components/NavBar";
 import TournamentDetail from "./_components/TournamentDetail";
 import DetailSkeleton from "./_components/DetailSkeleton";
 import type { TournamentDetail as TournamentDetailType } from "./types";
+import { createClient } from "@/lib/supabase/server";
 
 export const revalidate = 60;
 
@@ -86,7 +87,10 @@ export async function TournamentDetailData({ id }: { id: string }) {
     return null;
   }
 
-  return <TournamentDetail tournament={tournament} />;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  return <TournamentDetail tournament={tournament} isAuthenticated={!!user} />;
 }
 
 export default async function TournamentDetailPage({
