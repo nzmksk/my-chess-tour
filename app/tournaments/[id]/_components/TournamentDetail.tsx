@@ -89,9 +89,10 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 interface Props {
   tournament: TournamentDetailType;
+  isAuthenticated: boolean;
 }
 
-export default function TournamentDetail({ tournament: t }: Props) {
+export default function TournamentDetail({ tournament: t, isAuthenticated }: Props) {
   const spotsLeft = t.max_participants - t.current_participants;
   const spotsRatio = t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
   const minFee = getMinFeeCents(t.entry_fees);
@@ -389,11 +390,15 @@ export default function TournamentDetail({ tournament: t }: Props) {
               </div>
 
               {/* CTA */}
-              {spotsLeft > 0 ? (
+              {spotsLeft === 0 ? (
+                <button className="btn-primary w-full opacity-50" disabled>
+                  Full
+                </button>
+              ) : isAuthenticated ? (
                 <button className="btn-primary w-full">Register Now</button>
               ) : (
                 <button className="btn-primary w-full opacity-50" disabled>
-                  Full
+                  Log In / Sign Up to Register
                 </button>
               )}
 
