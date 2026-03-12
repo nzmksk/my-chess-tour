@@ -368,7 +368,7 @@ export default function TournamentDetail({ tournament: t }: Props) {
           </div>
 
           {/* ── Right: sticky register card ── */}
-          <aside className="md:sticky md:top-6">
+          <aside className="md:sticky md:top-24">
             <div className="card card--featured p-6 flex flex-col gap-4">
               <h3 className="[font-family:var(--font-cinzel)] text-[1rem] font-semibold text-(--color-text-primary) tracking-[0.05em]">
                 Register for this tournament
