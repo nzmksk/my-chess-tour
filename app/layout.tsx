@@ -22,7 +22,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const noindex = host.startsWith("admin.") || host.startsWith("staging");
 
   return {
-    title: "MY Chess Tour — Coming Soon",
+    title: {
+      default: "MY Chess Tour — Coming Soon",
+      template: "%s | MY Chess Tour",
+    },
     description:
       "Malaysia's premier competitive chess circuit. Join the waitlist.",
     robots: noindex
@@ -30,6 +33,19 @@ export async function generateMetadata(): Promise<Metadata> {
       : { index: true, follow: true },
     icons: {
       icon: "/mct-logo-square.svg",
+    },
+    openGraph: {
+      title: "MY Chess Tour — Coming Soon",
+      description:
+        "Malaysia's premier competitive chess circuit. Join the waitlist.",
+      type: "website",
+      siteName: "MY Chess Tour",
+    },
+    twitter: {
+      card: "summary",
+      title: "MY Chess Tour — Coming Soon",
+      description:
+        "Malaysia's premier competitive chess circuit. Join the waitlist.",
     },
   };
 }

@@ -1,11 +1,31 @@
 import { Suspense } from "react";
 import { headers } from "next/headers";
+import type { Metadata } from "next";
 import NavBar from "@/app/_components/NavBar";
 import TournamentsClient from "./_components/TournamentsClient";
 import TournamentsGridSkeleton from "./_components/TournamentsGridSkeleton";
 import type { Tournament } from "./types";
 
 export const revalidate = 60;
+
+export const metadata: Metadata = {
+  title: "Tournaments",
+  description:
+    "Browse upcoming and ongoing chess tournaments across Malaysia. Find events by date, location, and format.",
+  openGraph: {
+    title: "Tournaments | MY Chess Tour",
+    description:
+      "Browse upcoming and ongoing chess tournaments across Malaysia. Find events by date, location, and format.",
+    type: "website",
+    siteName: "MY Chess Tour",
+  },
+  twitter: {
+    card: "summary",
+    title: "Tournaments | MY Chess Tour",
+    description:
+      "Browse upcoming and ongoing chess tournaments across Malaysia. Find events by date, location, and format.",
+  },
+};
 
 async function TournamentsData() {
   const headersList = await headers();
