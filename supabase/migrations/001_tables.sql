@@ -55,18 +55,18 @@ CREATE TABLE organizations (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name                  varchar(255) NOT NULL,
   description           text,
+  avatar_url            text,
   links                 jsonb,  -- {"website": "https://...", "facebook": "...", "twitter": "..."}
   email                 varchar(255) NOT NULL,
   phone                 varchar(20),
+  bank_name             varchar(100),
+  bank_account_holder   varchar(255),
+  bank_account_number   varchar(50),
   past_tournament_refs  text,
   approval_status       approval_status NOT NULL DEFAULT 'pending',
   reviewed_by           uuid REFERENCES users(id),
   reviewed_at           timestamptz,
   rejection_reason      text,
-  avatar_url            text,
-  bank_name             varchar(100),
-  bank_account_holder   varchar(255),
-  bank_account_number   varchar(50),
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
@@ -104,9 +104,9 @@ CREATE TABLE tournaments (
   end_date                    date NOT NULL,
   registration_deadline       timestamptz NOT NULL,
   format                      jsonb NOT NULL, -- {"type": "classical", "rounds": 9, "system": "swiss"}
+  time_control                jsonb NOT NULL, -- {"base_minutes": 90,"delay_seconds": 0,"increment_seconds": 30}
   is_fide_rated               boolean NOT NULL DEFAULT false,
   is_mcf_rated                boolean NOT NULL DEFAULT false,
-  time_control                jsonb NOT NULL, -- {"base_minutes": 90,"delay_seconds": 0,"increment_seconds": 30}
   entry_fees                  jsonb NOT NULL, -- {"standard": {"amount_cents": 4000},"additional": [{"type": "early_bird","valid_until": "2026-02-19T00:00:00+00:00","valid_for":20,"amount_cents": 3200},{"type": "age_based","age_max": 12,"age_min": 0,"amount_cents": 2400}]}
   prizes                      jsonb,          -- {"categories": [{"name": "Open","entries": [{"place": "1st","amount_cents": 80000},{"place": "2nd","amount_cents": 48000},{"place": "3rd","amount_cents": 32000}]}],"subcategories": [{"name": "Best Under-1500","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"max_rating": 1499}},{"name": "Best Female Player","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"gender": "female"}}]}
   restrictions                jsonb,          -- {"age_max": 18} or {"gender": "female"}
@@ -114,6 +114,7 @@ CREATE TABLE tournaments (
   commission_rate             smallint NOT NULL DEFAULT 10, -- platform's cut (%)
   organizer_commission_pct    smallint NOT NULL DEFAULT 0,  -- % organizer absorbs (0=pass all to player, 10=absorb all, 3=split 3%/7%)
   status                      tournament_status NOT NULL DEFAULT 'draft',
+  published_at                timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now()
 );

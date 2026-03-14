@@ -1,4 +1,3 @@
-
 -- Function to auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -15,16 +14,13 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON users
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON organizer_profiles
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON organizations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON organizer_members
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON organization_members
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournaments
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON payouts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Important: This function uses SECURITY DEFINER
@@ -56,3 +52,14 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- Returns confirmed registration counts for a set of tournament IDs.
+-- Used by the tournaments list API to avoid fetching all rows and counting in JS.
+CREATE OR REPLACE FUNCTION get_participant_counts(tournament_ids uuid[])
+RETURNS TABLE(tournament_id uuid, count bigint) AS $$
+  SELECT tournament_id, COUNT(*)
+  FROM registrations
+  WHERE tournament_id = ANY(tournament_ids)
+    AND status = 'confirmed'
+  GROUP BY tournament_id;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;

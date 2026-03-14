@@ -1,19 +1,20 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
-interface OrganizerProfile {
+interface Organization {
   id: string;
-  organization_name: string;
-  description: string | null;
+  name: string;
+  description?: string;
+  avatar_url?: string;
   links: unknown;
   email: string;
-  phone: string | null;
+  phone?: string;
 }
 
 interface TournamentRow {
   id: string;
   name: string;
-  description: string | null;
+  description?: string;
   venue_name: string;
   venue_state: string;
   venue_address: string;
@@ -29,9 +30,9 @@ interface TournamentRow {
   restrictions: unknown;
   max_participants: number;
   status: string;
-  created_at: string;
+  published_at: string;
   updated_at: string;
-  organizer_profiles: OrganizerProfile | OrganizerProfile[] | null;
+  organizations: Organization[] | Organization;
 }
 
 export async function GET(
@@ -40,19 +41,27 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const { data: row, error } = await supabaseAdmin
-    .from("tournaments")
-    .select(
-      `id, name, description, venue_name, venue_state, venue_address,
-       start_date, end_date, registration_deadline,
-       format, time_control, is_fide_rated, is_mcf_rated,
-       entry_fees, prizes, restrictions, max_participants, status,
-       created_at, updated_at,
-       organizer_profiles(id, organization_name, description, links, email, phone)`,
-    )
-    .eq("id", id)
-    .eq("status", "published")
-    .single();
+  const [{ data: row, error }, { count: currentParticipants }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("tournaments")
+        .select(
+          `id, name, description, venue_name, venue_state, venue_address,
+           start_date, end_date, registration_deadline, format,
+           time_control, is_fide_rated, is_mcf_rated, entry_fees, prizes,
+           restrictions, max_participants, status, published_at, updated_at,
+           organizations(id, name, description, avatar_url, links, email, phone)`,
+        )
+        .eq("id", id)
+        .eq("status", "published")
+        .single(),
+
+      supabaseAdmin
+        .from("registrations")
+        .select("*", { count: "exact", head: true })
+        .eq("tournament_id", id)
+        .eq("status", "confirmed"),
+    ]);
 
   if (error) {
     if (error.code === "PGRST116") {
@@ -64,25 +73,19 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data: regData } = await supabaseAdmin
-    .from("registrations")
-    .select("tournament_id")
-    .eq("tournament_id", id)
-    .eq("status", "confirmed");
-
-  const currentParticipants = regData ? regData.length : 0;
-
   const t = row as TournamentRow;
-  const orgRaw = t.organizer_profiles;
+  const orgRaw = t.organizations;
   const org = Array.isArray(orgRaw) ? orgRaw[0] : orgRaw;
 
   const data = {
     id: t.id,
     name: t.name,
     description: t.description,
-    venue_name: t.venue_name,
-    state: t.venue_state,
-    venue_address: t.venue_address,
+    venue: {
+      name: t.venue_name,
+      state: t.venue_state,
+      address: t.venue_address,
+    },
     start_date: t.start_date,
     end_date: t.end_date,
     registration_deadline: t.registration_deadline,
@@ -94,20 +97,11 @@ export async function GET(
     prizes: t.prizes,
     restrictions: t.restrictions,
     max_participants: t.max_participants,
-    current_participants: currentParticipants,
+    current_participants: currentParticipants ?? 0,
     status: t.status,
-    created_at: t.created_at,
+    published_at: t.published_at,
     updated_at: t.updated_at,
-    organizer: org
-      ? {
-          id: org.id,
-          organization_name: org.organization_name,
-          description: org.description,
-          links: org.links,
-          email: org.email,
-          phone: org.phone,
-        }
-      : null,
+    organization: org,
   };
 
   return NextResponse.json({ data });
