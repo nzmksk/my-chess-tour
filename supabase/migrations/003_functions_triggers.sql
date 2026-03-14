@@ -53,6 +53,39 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
+-- Enforces max_participants capacity at the DB level to prevent race conditions.
+-- Runs as a BEFORE INSERT trigger on registrations.
+-- Uses SELECT ... FOR UPDATE to lock the tournament row, ensuring concurrent
+-- inserts are serialized and the count is always accurate.
+CREATE OR REPLACE FUNCTION check_tournament_capacity()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_max  integer;
+  v_current integer;
+BEGIN
+  SELECT max_participants INTO v_max
+  FROM tournaments
+  WHERE id = NEW.tournament_id
+  FOR UPDATE;
+
+  SELECT COUNT(*) INTO v_current
+  FROM registrations
+  WHERE tournament_id = NEW.tournament_id
+    AND status IN ('pending_payment', 'confirmed');
+
+  IF v_current >= v_max THEN
+    RAISE EXCEPTION 'Tournament is full (% / % participants)', v_current, v_max
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER enforce_tournament_capacity
+  BEFORE INSERT ON registrations
+  FOR EACH ROW EXECUTE FUNCTION check_tournament_capacity();
+
 -- Returns confirmed registration counts for a set of tournament IDs.
 -- Used by the tournaments list API to avoid fetching all rows and counting in JS.
 CREATE OR REPLACE FUNCTION get_participant_counts(tournament_ids uuid[])
