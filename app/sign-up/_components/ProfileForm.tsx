@@ -44,14 +44,6 @@ export default function ProfileForm() {
     setIsSubmitting(true);
 
     try {
-      if (process.env.NEXT_PUBLIC_ENVIRONMENT !== "production") {
-        console.log(
-          `Currently in ${process.env.NEXT_PUBLIC_ENVIRONMENT} environment. Skipping email sending.`,
-          form,
-        );
-        return;
-      }
-
       const res = await fetch("/api/v1/auth/signup/request-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
