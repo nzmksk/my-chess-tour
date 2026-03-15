@@ -3,6 +3,9 @@ CREATE INDEX idx_permissions_key ON permissions (key);
 CREATE INDEX idx_role_permissions_permission ON role_permissions (permission_id);
 CREATE INDEX idx_user_global_roles_role ON user_global_roles (role_id);
 
+-- Users (partial unique: allows email reuse after soft delete)
+CREATE UNIQUE INDEX idx_users_email_active ON users (email) WHERE deleted_at IS NULL;
+
 -- Organization memberships
 CREATE INDEX idx_org_memberships_user ON organization_memberships (user_id);
 CREATE INDEX idx_org_memberships_role ON organization_memberships (role_id);

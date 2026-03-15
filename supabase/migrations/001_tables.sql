@@ -32,19 +32,20 @@ CREATE TABLE role_permissions (
 -- =============================================
 CREATE TABLE users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  email         varchar(255) UNIQUE NOT NULL,
+  email         varchar(255) NOT NULL,  -- uniqueness enforced via partial index in 002_indexes.sql
   password      varchar(255) NOT NULL,
   first_name    varchar(255) NOT NULL,
   last_name     varchar(255) NOT NULL,
   avatar_url    varchar(255),
   created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  deleted_at    timestamptz
 );
 
 -- Global roles (e.g. platform admin)
 CREATE TABLE user_global_roles (
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role_id integer NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
+  role_id integer NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
   PRIMARY KEY (user_id, role_id)
 );
 
@@ -92,12 +93,13 @@ CREATE TABLE organizations (
   bank_account_number   varchar(50),
   past_tournament_refs  text,
   approval_status       approval_status NOT NULL DEFAULT 'pending',
-  reviewed_by           uuid REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
+  reviewed_by           uuid REFERENCES users(id) ON DELETE SET NULL,
   reviewed_at           timestamptz,
   rejection_reason      text,
-  created_by            uuid NOT NULL REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
+  created_by            uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at            timestamptz NOT NULL DEFAULT now(),
-  updated_at            timestamptz NOT NULL DEFAULT now()
+  updated_at            timestamptz NOT NULL DEFAULT now(),
+  deleted_at            timestamptz
 );
 
 -- =============================================
@@ -120,7 +122,7 @@ CREATE TYPE tournament_status AS ENUM ('draft', 'published', 'cancelled');
 
 CREATE TABLE tournaments (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id             uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  organization_id             uuid REFERENCES organizations(id) ON DELETE SET NULL,
   name                        varchar(255) NOT NULL,
   description                 text,
   venue_name                  varchar(255) NOT NULL,
@@ -140,7 +142,7 @@ CREATE TABLE tournaments (
   commission_rate             smallint NOT NULL DEFAULT 10, -- platform's cut (%)
   organizer_commission_pct    smallint NOT NULL DEFAULT 0,  -- % organizer absorbs (0=pass all to player, 10=absorb all, 3=split 3%/7%)
   status                      tournament_status NOT NULL DEFAULT 'draft',
-  published_by                uuid REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
+  published_by                uuid REFERENCES users(id) ON DELETE SET NULL,
   published_at                timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now(),
@@ -170,8 +172,8 @@ CREATE TYPE registration_status AS ENUM ('pending_payment', 'failed_payment', 'c
 
 CREATE TABLE registrations (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id               uuid NOT NULL REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
-  tournament_id         uuid NOT NULL REFERENCES tournaments(id) ON DELETE SET DEFAULT 'deleted-tournament',
+  user_id               uuid REFERENCES users(id)                ON DELETE SET NULL,
+  tournament_id         uuid NOT NULL REFERENCES tournaments(id) ON DELETE RESTRICT,
   fee_tier              varchar(50) NOT NULL,
   status                registration_status NOT NULL DEFAULT 'pending_payment',
   registered_at         timestamptz NOT NULL DEFAULT now(), -- imply when player initiates registration (payment could be pending)
@@ -201,10 +203,10 @@ CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed');
 CREATE TABLE payments (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   type                        payment_type NOT NULL,
-  tournament_id               uuid NOT NULL REFERENCES tournaments(id) ON DELETE SET DEFAULT 'deleted-tournament',
-  registration_id             uuid REFERENCES registrations(id)        ON DELETE SET NULL,                       -- for registration/refund types
-  user_id                     uuid REFERENCES users(id)                ON DELETE SET DEFAULT 'deleted-user',  -- player paying or receiving prize/refund
-  organization_id             uuid REFERENCES organizations(id)        ON DELETE SET DEFAULT 'deleted-org',  -- org paying or receiving payout
+  tournament_id               uuid NOT NULL REFERENCES tournaments(id) ON DELETE RESTRICT,
+  registration_id             uuid REFERENCES registrations(id)        ON DELETE RESTRICT,                          -- for registration/refund types
+  user_id                     uuid REFERENCES users(id)                ON DELETE SET NULL,                          -- player paying or receiving prize/refund
+  organization_id             uuid REFERENCES organizations(id)        ON DELETE SET NULL,                          -- org paying or receiving payout
   gross_amount_cents          integer NOT NULL,                   -- what the payer actually paid
   platform_fee_cents          integer NOT NULL DEFAULT 0,         -- platform's cut. platform_fee = organizer_commission + player_commission
   organizer_commission_cents  integer NOT NULL DEFAULT 0,         -- organizer's absorbed share of commission
@@ -227,13 +229,13 @@ CREATE TYPE refund_status AS ENUM ('pending', 'approved', 'rejected');
 
 CREATE TABLE refunds (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  registration_id       uuid NOT NULL REFERENCES registrations(id) ON DELETE SET NULL,
+  registration_id       uuid NOT NULL REFERENCES registrations(id) ON DELETE RESTRICT,
   refund_amount_cents   integer NOT NULL,
   reason                text NOT NULL,
   status                refund_status NOT NULL DEFAULT 'pending',
-  requested_by          uuid NOT NULL REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
+  requested_by          uuid REFERENCES users(id) ON DELETE SET NULL,
   requested_at          timestamptz NOT NULL DEFAULT now(),
-  reviewed_by           uuid REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
+  reviewed_by           uuid REFERENCES users(id) ON DELETE SET NULL,
   reviewed_at           timestamptz,
   chip_refund_id        varchar(255),
   processed_at          timestamptz,
@@ -253,8 +255,8 @@ CREATE TABLE audit_logs (
   table_name       varchar(50)  NOT NULL,
   record_id        text         NOT NULL,  -- text to support composite PKs
   action           varchar(10)  NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
-  changed_by       uuid         REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
-  organization_id  uuid         REFERENCES organizations(id) ON DElETE SET DEFAULT 'deleted-org',
+  changed_by       uuid         REFERENCES users(id)         ON DELETE SET NULL,
+  organization_id  uuid         REFERENCES organizations(id) ON DELETE SET NULL,
   context          varchar(100) NOT NULL DEFAULT 'trigger',
   old_data         jsonb,
   new_data         jsonb,
