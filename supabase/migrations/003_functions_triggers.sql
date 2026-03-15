@@ -94,6 +94,94 @@ RETURNS boolean AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- =============================================
+-- AUDIT TRAIL TRIGGER
+-- Generic trigger for all audited tables.
+-- TG_ARGV[0]: column name for record_id (defaults to 'id')
+-- Resolves organization_id from source table for RLS scoping.
+-- Reads app.audit_context session var for context tagging.
+-- =============================================
+CREATE OR REPLACE FUNCTION audit_trigger_func()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_record_id  text;
+  v_org_id     uuid;
+  v_old        jsonb;
+  v_new        jsonb;
+  v_pk_col     text := COALESCE(TG_ARGV[0], 'id');
+BEGIN
+  -- Build row snapshots
+  IF TG_OP IN ('UPDATE', 'DELETE') THEN
+    v_old := row_to_json(OLD)::jsonb;
+  END IF;
+  IF TG_OP IN ('INSERT', 'UPDATE') THEN
+    v_new := row_to_json(NEW)::jsonb;
+  END IF;
+
+  -- Extract record_id from the appropriate column
+  v_record_id := COALESCE(v_new, v_old) ->> v_pk_col;
+
+  -- Resolve organization_id based on source table
+  IF TG_TABLE_NAME = 'organizations' THEN
+    v_org_id := v_record_id::uuid;
+  ELSIF TG_TABLE_NAME IN ('organization_memberships', 'tournaments', 'payments') THEN
+    v_org_id := (COALESCE(v_new, v_old) ->> 'organization_id')::uuid;
+  ELSIF TG_TABLE_NAME = 'registrations' THEN
+    SELECT t.organization_id INTO v_org_id
+    FROM tournaments t
+    WHERE t.id = (COALESCE(v_new, v_old) ->> 'tournament_id')::uuid;
+  ELSIF TG_TABLE_NAME = 'refunds' THEN
+    SELECT t.organization_id INTO v_org_id
+    FROM registrations r JOIN tournaments t ON t.id = r.tournament_id
+    WHERE r.id = (COALESCE(v_new, v_old) ->> 'registration_id')::uuid;
+  END IF;
+  -- users, player_profiles, user_global_roles → v_org_id stays NULL
+
+  INSERT INTO audit_logs (table_name, record_id, action, changed_by, organization_id, context, old_data, new_data)
+  VALUES (
+    TG_TABLE_NAME,
+    v_record_id,
+    TG_OP,
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid,
+    v_org_id,
+    COALESCE(NULLIF(current_setting('app.audit_context', true), ''), 'trigger'),
+    v_old,
+    v_new
+  );
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Strictly required: personal data, financial, access control
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON users
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON player_profiles
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organizations
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_memberships
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON user_global_roles
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON payments
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON refunds
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+-- Good practice: status transitions
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON registrations
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+-- =============================================
 -- TOURNAMENT CAPACITY ENFORCEMENT
 -- Prevents over-registration via row-level lock.
 -- =============================================

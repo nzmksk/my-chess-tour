@@ -9,6 +9,9 @@
 -- Password for all seed accounts: Password123!
 -- =============================================================================
 
+-- Tag all audit log entries created during seeding
+SET LOCAL app.audit_context = 'seed';
+
 -- =============================================
 -- RBAC: Roles, Permissions, Role-Permission Mappings
 -- =============================================
@@ -557,3 +560,5 @@ BEGIN
 
 END;
 $$;
+
+RESET app.audit_context;

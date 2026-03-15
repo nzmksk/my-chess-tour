@@ -13,6 +13,7 @@ ALTER TABLE tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- =============================================
 -- RBAC REFERENCE TABLES (read-only for all authenticated)
@@ -252,3 +253,26 @@ USING (
 CREATE POLICY "Platform admins full access to refunds"
 ON refunds FOR ALL
 USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+-- =============================================
+-- AUDIT LOGS
+-- Read-only. Only triggers write to this table.
+-- Tiered visibility: platform admins > org admins > individual users.
+-- =============================================
+CREATE POLICY "Platform admins can view all audit logs"
+ON audit_logs FOR SELECT
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+CREATE POLICY "Org admins can view org-scoped audit logs"
+ON audit_logs FOR SELECT
+USING (
+  organization_id IS NOT NULL
+  AND has_org_permission(auth.uid(), organization_id, 'org.manage')
+);
+
+CREATE POLICY "Users can view own account audit logs"
+ON audit_logs FOR SELECT
+USING (
+  table_name IN ('users', 'player_profiles')
+  AND record_id = auth.uid()::text
+);

@@ -224,6 +224,25 @@ CREATE TABLE refunds (
 );
 
 -- =============================================
+-- AUDIT LOGS
+-- Trigger-based audit trail for PDPA compliance.
+-- Captures full row snapshots for regulated tables.
+-- organization_id denormalized for efficient RLS scoping.
+-- =============================================
+CREATE TABLE audit_logs (
+  id               bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  table_name       varchar(50)  NOT NULL,
+  record_id        text         NOT NULL,  -- text to support composite PKs
+  action           varchar(10)  NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
+  changed_by       uuid         REFERENCES users(id),
+  organization_id  uuid         REFERENCES organizations(id),
+  context          varchar(100) NOT NULL DEFAULT 'trigger',
+  old_data         jsonb,
+  new_data         jsonb,
+  created_at       timestamptz  NOT NULL DEFAULT now()
+);
+
+-- =============================================
 -- TOURNAMENT PAYOUT SUMMARY
 -- Computed on demand from payments table.
 -- net_payout = total_collected - total_platform_fees - total_prizes
