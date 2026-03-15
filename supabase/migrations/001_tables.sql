@@ -85,17 +85,17 @@ CREATE TABLE organizations (
   description           text,
   avatar_url            varchar(255),
   links                 jsonb,  -- {"website": "https://...", "facebook": "...", "twitter": "..."}
-  email                 varchar(255) NOT NULL,
+  email                 varchar(255),
   phone                 varchar(20),
   bank_name             varchar(100),
   bank_account_holder   varchar(255),
   bank_account_number   varchar(50),
   past_tournament_refs  text,
   approval_status       approval_status NOT NULL DEFAULT 'pending',
-  reviewed_by           uuid REFERENCES users(id),
+  reviewed_by           uuid REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
   reviewed_at           timestamptz,
   rejection_reason      text,
-  created_by            uuid NOT NULL REFERENCES users(id),
+  created_by            uuid NOT NULL REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
@@ -107,7 +107,7 @@ CREATE TABLE organizations (
 CREATE TABLE organization_memberships (
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role_id         integer NOT NULL REFERENCES roles(id),
+  role_id         integer NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
   joined_at       timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (organization_id, user_id)
 );
@@ -140,10 +140,21 @@ CREATE TABLE tournaments (
   commission_rate             smallint NOT NULL DEFAULT 10, -- platform's cut (%)
   organizer_commission_pct    smallint NOT NULL DEFAULT 0,  -- % organizer absorbs (0=pass all to player, 10=absorb all, 3=split 3%/7%)
   status                      tournament_status NOT NULL DEFAULT 'draft',
-  published_by                uuid REFERENCES users(id),
+  published_by                uuid REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
   published_at                timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
-  updated_at                  timestamptz NOT NULL DEFAULT now()
+  updated_at                  timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_dates_order
+    CHECK (end_date >= start_date),
+  CONSTRAINT chk_registration_deadline
+    CHECK (registration_deadline <= start_date::timestamptz),
+  CONSTRAINT chk_commission_rate
+    CHECK (commission_rate BETWEEN 0 AND 10),
+  CONSTRAINT chk_organizer_commission_pct
+    CHECK (organizer_commission_pct BETWEEN 0 AND 10),
+  CONSTRAINT chk_published_at
+    CHECK (published_at IS NULL OR (published_at <= registration_deadline AND published_at <= start_date::timestamptz))
 );
 
 -- =============================================
@@ -159,15 +170,20 @@ CREATE TYPE registration_status AS ENUM ('pending_payment', 'failed_payment', 'c
 
 CREATE TABLE registrations (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id               uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  tournament_id         uuid NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  user_id               uuid NOT NULL REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
+  tournament_id         uuid NOT NULL REFERENCES tournaments(id) ON DELETE SET DEFAULT 'deleted-tournament',
   fee_tier              varchar(50) NOT NULL,
   status                registration_status NOT NULL DEFAULT 'pending_payment',
-  registered_at         timestamptz NOT NULL DEFAULT now(),
-  confirmed_at          timestamptz,
-  cancelled_at          timestamptz,
+  registered_at         timestamptz NOT NULL DEFAULT now(), -- imply when player initiates registration (payment could be pending)
+  confirmed_at          timestamptz,                        -- when payment is confirmed and registration is finalized
+  cancelled_at          timestamptz,                        -- when the system cancels the registration due to timeout or player cancels (before payment) or forfeiture (after payment)
   cancellation_reason   text,
-  UNIQUE (user_id, tournament_id)
+  UNIQUE (user_id, tournament_id),
+
+  CONSTRAINT chk_confirmed_at
+    CHECK (confirmed_at IS NULL OR confirmed_at >= registered_at),
+  CONSTRAINT chk_cancelled_at
+    CHECK (cancelled_at IS NULL OR cancelled_at >= registered_at)
 );
 
 -- =============================================
@@ -179,16 +195,16 @@ CREATE TABLE registrations (
 -- player_commission = player's share of platform fee
 -- net = gross - platform_fee
 -- =============================================
-CREATE TYPE payment_type AS ENUM ('registration', 'refund', 'organizer_payout', 'player_prize');
+CREATE TYPE payment_type AS ENUM ('registration', 'refund', 'organizer_payout', 'player_prize', 'adjustment');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed');
 
 CREATE TABLE payments (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   type                        payment_type NOT NULL,
-  tournament_id               uuid NOT NULL REFERENCES tournaments(id),
-  registration_id             uuid REFERENCES registrations(id),  -- for registration/refund types
-  user_id                     uuid REFERENCES users(id),          -- player paying or receiving prize/refund
-  organization_id             uuid REFERENCES organizations(id),  -- org receiving payout
+  tournament_id               uuid NOT NULL REFERENCES tournaments(id) ON DELETE SET DEFAULT 'deleted-tournament',
+  registration_id             uuid REFERENCES registrations(id)        ON DELETE SET NULL,                       -- for registration/refund types
+  user_id                     uuid REFERENCES users(id)                ON DELETE SET DEFAULT 'deleted-user',  -- player paying or receiving prize/refund
+  organization_id             uuid REFERENCES organizations(id)        ON DELETE SET DEFAULT 'deleted-org',  -- org paying or receiving payout
   gross_amount_cents          integer NOT NULL,                   -- what the payer actually paid
   platform_fee_cents          integer NOT NULL DEFAULT 0,         -- platform's cut. platform_fee = organizer_commission + player_commission
   organizer_commission_cents  integer NOT NULL DEFAULT 0,         -- organizer's absorbed share of commission
@@ -211,16 +227,19 @@ CREATE TYPE refund_status AS ENUM ('pending', 'approved', 'rejected');
 
 CREATE TABLE refunds (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  registration_id       uuid NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+  registration_id       uuid NOT NULL REFERENCES registrations(id) ON DELETE SET NULL,
   refund_amount_cents   integer NOT NULL,
   reason                text NOT NULL,
   status                refund_status NOT NULL DEFAULT 'pending',
-  requested_by          uuid NOT NULL REFERENCES users(id),
-  reviewed_by           uuid REFERENCES users(id),
+  requested_by          uuid NOT NULL REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
   requested_at          timestamptz NOT NULL DEFAULT now(),
+  reviewed_by           uuid REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
   reviewed_at           timestamptz,
   chip_refund_id        varchar(255),
-  processed_at          timestamptz
+  processed_at          timestamptz,
+
+  CONSTRAINT chk_reviewed_at
+    CHECK (reviewed_at IS NULL OR reviewed_at >= requested_at)
 );
 
 -- =============================================
@@ -234,8 +253,8 @@ CREATE TABLE audit_logs (
   table_name       varchar(50)  NOT NULL,
   record_id        text         NOT NULL,  -- text to support composite PKs
   action           varchar(10)  NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
-  changed_by       uuid         REFERENCES users(id),
-  organization_id  uuid         REFERENCES organizations(id),
+  changed_by       uuid         REFERENCES users(id) ON DELETE SET DEFAULT 'deleted-user',
+  organization_id  uuid         REFERENCES organizations(id) ON DElETE SET DEFAULT 'deleted-org',
   context          varchar(100) NOT NULL DEFAULT 'trigger',
   old_data         jsonb,
   new_data         jsonb,
