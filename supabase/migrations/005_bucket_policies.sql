@@ -34,32 +34,22 @@ USING (
   AND (storage.foldername(name))[2] = auth.uid()::text
 );
 
--- Organization owners/admins can upload org avatar
-CREATE POLICY "Org admins can manage org avatar"
+-- Org members with org.manage permission can upload org avatar
+CREATE POLICY "Org managers can manage org avatar"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
   bucket_id = 'avatars'
   AND (storage.foldername(name))[1] = 'organizations'
-  AND EXISTS (
-    SELECT 1 FROM organization_members
-    WHERE organization_id = ((storage.foldername(name))[2])::uuid
-      AND user_id = auth.uid()
-      AND role IN ('owner', 'admin')
-  )
+  AND has_org_permission(auth.uid(), ((storage.foldername(name))[2])::uuid, 'org.manage')
 );
 
--- Organization owners/admins can delete org avatar
-CREATE POLICY "Org admins can delete org avatar"
+-- Org members with org.manage permission can delete org avatar
+CREATE POLICY "Org managers can delete org avatar"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (
   bucket_id = 'avatars'
   AND (storage.foldername(name))[1] = 'organizations'
-  AND EXISTS (
-    SELECT 1 FROM organization_members
-    WHERE organization_id = ((storage.foldername(name))[2])::uuid
-      AND user_id = auth.uid()
-      AND role IN ('owner', 'admin')
-  )
+  AND has_org_permission(auth.uid(), ((storage.foldername(name))[2])::uuid, 'org.manage')
 );

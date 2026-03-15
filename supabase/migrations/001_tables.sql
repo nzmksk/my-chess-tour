@@ -2,22 +2,50 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- =============================================
+-- ROLES & PERMISSIONS (RBAC)
+-- Data-driven roles instead of enums.
+-- Scopes: 'global' (platform-wide), 'organization' (per-org)
+-- =============================================
+CREATE TYPE role_scope AS ENUM ('global', 'organization');
+
+CREATE TABLE roles (
+  id    integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  name  varchar(50) UNIQUE NOT NULL,
+  scope role_scope NOT NULL
+);
+
+CREATE TABLE permissions (
+  id   integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  key  varchar(50) UNIQUE NOT NULL
+);
+
+CREATE TABLE role_permissions (
+  role_id       integer NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  permission_id integer NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+  PRIMARY KEY (role_id, permission_id)
+);
+
+-- =============================================
 -- USERS
 -- Core user table linked to Supabase Auth.
 -- The id matches auth.users.id
 -- =============================================
-CREATE TYPE user_role AS ENUM ('player', 'organizer', 'admin');
-
 CREATE TABLE users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email         varchar(255) UNIQUE NOT NULL,
   password      varchar(255) NOT NULL,
   first_name    varchar(255) NOT NULL,
   last_name     varchar(255) NOT NULL,
-  role          user_role[] NOT NULL DEFAULT '{player}',
-  avatar_url    text,
+  avatar_url    varchar(255),
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Global roles (e.g. platform admin)
+CREATE TABLE user_global_roles (
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id integer NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, role_id)
 );
 
 -- =============================================
@@ -55,7 +83,7 @@ CREATE TABLE organizations (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name                  varchar(255) NOT NULL,
   description           text,
-  avatar_url            text,
+  avatar_url            varchar(255),
   links                 jsonb,  -- {"website": "https://...", "facebook": "...", "twitter": "..."}
   email                 varchar(255) NOT NULL,
   phone                 varchar(20),
@@ -67,22 +95,20 @@ CREATE TABLE organizations (
   reviewed_by           uuid REFERENCES users(id),
   reviewed_at           timestamptz,
   rejection_reason      text,
+  created_by            uuid NOT NULL REFERENCES users(id),
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
 
 -- =============================================
--- ORGANIZATION MEMBERS
--- Links users to organizations with roles.
+-- ORGANIZATION MEMBERSHIPS
+-- Links users to organizations with data-driven roles.
 -- =============================================
-CREATE TYPE organization_role AS ENUM ('owner', 'admin', 'member');
-
-CREATE TABLE organization_members (
+CREATE TABLE organization_memberships (
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role            organization_role NOT NULL DEFAULT 'member',
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now(),
+  role_id         integer NOT NULL REFERENCES roles(id),
+  joined_at       timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (organization_id, user_id)
 );
 
@@ -114,6 +140,7 @@ CREATE TABLE tournaments (
   commission_rate             smallint NOT NULL DEFAULT 10, -- platform's cut (%)
   organizer_commission_pct    smallint NOT NULL DEFAULT 0,  -- % organizer absorbs (0=pass all to player, 10=absorb all, 3=split 3%/7%)
   status                      tournament_status NOT NULL DEFAULT 'draft',
+  published_by                uuid REFERENCES users(id),
   published_at                timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now()
@@ -201,6 +228,15 @@ CREATE TABLE refunds (
 -- Computed on demand from payments table.
 -- net_payout = total_collected - total_platform_fees - total_prizes
 -- =============================================
+
+-- Why view is preferred over materialized view:
+-- 1. Financial accuracy matters: Always up-to-date with latest payments/refunds. No risk of stale data.
+-- 2. Small dataset: payments per tournament are bounded by max_participants (typically hundreds).
+-- The SUM aggregation is cheap.
+-- 3. Infrequent reads: this is a dashboard/admin query, not a hot path hit on every page load.
+-- There's no read performance problem to solve.
+-- 4. Refresh complexity: we'd need a trigger on payments to keep it fresh,
+-- which adds complexity for no real gain.
 CREATE VIEW tournament_payout_summary AS
 WITH totals AS (
   SELECT

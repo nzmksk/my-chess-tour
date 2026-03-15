@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getCurrentUser,
-  getUserOrgRole,
-  requireAdmin,
-  requireOrgRole,
+  hasOrgPermission,
+  hasGlobalPermission,
+  requireOrgPermission,
+  requireGlobalPermission,
 } from "../permission";
 
 vi.mock("next/headers", () => ({
@@ -20,28 +21,15 @@ const createClient = vi.mocked(supabaseServer.createClient);
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Builds a chainable Supabase query mock that resolves .single() with result. */
-function makeQueryChain(result: { data: unknown; error: unknown }) {
-  const single = vi.fn().mockResolvedValue(result);
-  const chain = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single,
-  };
-  return chain;
-}
-
 function makeClient({
   authUser = null as unknown,
-  queryResult = { data: null, error: null } as { data: unknown; error: unknown },
+  rpcResult = null as unknown,
 } = {}) {
-  const chain = makeQueryChain(queryResult);
   return {
-    from: vi.fn().mockReturnValue(chain),
+    rpc: vi.fn().mockResolvedValue({ data: rpcResult }),
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: authUser } }),
     },
-    _chain: chain, // exposed for assertion
   };
 }
 
@@ -55,7 +43,6 @@ describe("getCurrentUser", () => {
   it("returns the authenticated user", async () => {
     const user = { id: "u1", email: "alice@example.com" };
     createClient.mockResolvedValue(makeClient({ authUser: user }) as never);
-
     expect(await getCurrentUser()).toEqual(user);
   });
 
@@ -65,113 +52,79 @@ describe("getCurrentUser", () => {
   });
 });
 
-describe("getUserOrgRole", () => {
+describe("hasOrgPermission", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns the user's role in the organisation", async () => {
-    createClient.mockResolvedValue(
-      makeClient({ queryResult: { data: { role: "admin" }, error: null } }) as never
-    );
-    expect(await getUserOrgRole("u1", "org1")).toBe("admin");
-  });
-
-  it("returns null when the user is not a member", async () => {
-    createClient.mockResolvedValue(
-      makeClient({ queryResult: { data: null, error: null } }) as never
-    );
-    expect(await getUserOrgRole("u1", "org1")).toBeNull();
-  });
-
-  it("queries the organizer_members table with correct filters", async () => {
-    const client = makeClient({
-      queryResult: { data: { role: "member" }, error: null },
-    });
+  it("returns true when user has the permission", async () => {
+    const client = makeClient({ rpcResult: true });
     createClient.mockResolvedValue(client as never);
 
-    await getUserOrgRole("u1", "org1");
+    expect(await hasOrgPermission("u1", "org1", "tournament.edit")).toBe(true);
+    expect(client.rpc).toHaveBeenCalledWith("has_org_permission", {
+      p_user_id: "u1",
+      p_org_id: "org1",
+      p_permission: "tournament.edit",
+    });
+  });
 
-    expect(client.from).toHaveBeenCalledWith("organizer_members");
-    expect(client._chain.eq).toHaveBeenCalledWith("user_id", "u1");
-    expect(client._chain.eq).toHaveBeenCalledWith("organizer_id", "org1");
+  it("returns false when user lacks the permission", async () => {
+    createClient.mockResolvedValue(makeClient({ rpcResult: false }) as never);
+    expect(await hasOrgPermission("u1", "org1", "org.manage")).toBe(false);
   });
 });
 
-describe("requireOrgRole", () => {
+describe("hasGlobalPermission", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it.each([
-    ["owner", "owner"],
-    ["owner", "admin"],
-    ["owner", "member"],
-    ["admin", "admin"],
-    ["admin", "member"],
-    ["member", "member"],
-  ] as const)(
-    "does not throw when role=%s satisfies minRole=%s",
-    async (role, minRole) => {
-      createClient.mockResolvedValue(
-        makeClient({ queryResult: { data: { role }, error: null } }) as never
-      );
-      await expect(requireOrgRole("u1", "org1", minRole)).resolves.toBeUndefined();
-    }
-  );
+  it("returns true for platform admin", async () => {
+    const client = makeClient({ rpcResult: true });
+    createClient.mockResolvedValue(client as never);
 
-  it.each([
-    ["member", "admin"],
-    ["member", "owner"],
-    ["admin", "owner"],
-  ] as const)(
-    "throws when role=%s is below minRole=%s",
-    async (role, minRole) => {
-      createClient.mockResolvedValue(
-        makeClient({ queryResult: { data: { role }, error: null } }) as never
-      );
-      await expect(requireOrgRole("u1", "org1", minRole)).rejects.toThrow(
-        "Insufficient permissions"
-      );
-    }
-  );
+    expect(await hasGlobalPermission("u1", "platform.manage")).toBe(true);
+    expect(client.rpc).toHaveBeenCalledWith("has_global_permission", {
+      p_user_id: "u1",
+      p_permission: "platform.manage",
+    });
+  });
 
-  it("throws when user has no role in the organisation", async () => {
-    createClient.mockResolvedValue(
-      makeClient({ queryResult: { data: null, error: null } }) as never
-    );
-    await expect(requireOrgRole("u1", "org1", "member")).rejects.toThrow(
-      "Insufficient permissions"
-    );
+  it("returns false for non-admin user", async () => {
+    createClient.mockResolvedValue(makeClient({ rpcResult: false }) as never);
+    expect(await hasGlobalPermission("u1", "platform.manage")).toBe(false);
   });
 });
 
-describe("requireAdmin", () => {
+describe("requireOrgPermission", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("does not throw when user has the admin role", async () => {
-    createClient.mockResolvedValue(
-      makeClient({ queryResult: { data: { role: ["admin"] }, error: null } }) as never
-    );
-    await expect(requireAdmin("u1")).resolves.toBeUndefined();
+  it("does not throw when user has the permission", async () => {
+    createClient.mockResolvedValue(makeClient({ rpcResult: true }) as never);
+    await expect(
+      requireOrgPermission("u1", "org1", "tournament.create")
+    ).resolves.toBeUndefined();
   });
 
-  it("does not throw when user has admin among multiple roles", async () => {
-    createClient.mockResolvedValue(
-      makeClient({
-        queryResult: { data: { role: ["player", "admin"] }, error: null },
-      }) as never
-    );
-    await expect(requireAdmin("u1")).resolves.toBeUndefined();
+  it("throws when user lacks the permission", async () => {
+    createClient.mockResolvedValue(makeClient({ rpcResult: false }) as never);
+    await expect(
+      requireOrgPermission("u1", "org1", "tournament.create")
+    ).rejects.toThrow("Insufficient permissions");
+  });
+});
+
+describe("requireGlobalPermission", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("does not throw when user has the permission", async () => {
+    createClient.mockResolvedValue(makeClient({ rpcResult: true }) as never);
+    await expect(
+      requireGlobalPermission("u1", "platform.manage")
+    ).resolves.toBeUndefined();
   });
 
-  it("throws when user only has the player role", async () => {
-    createClient.mockResolvedValue(
-      makeClient({ queryResult: { data: { role: ["player"] }, error: null } }) as never
-    );
-    await expect(requireAdmin("u1")).rejects.toThrow("Admin access required");
-  });
-
-  it("throws when user record is not found", async () => {
-    createClient.mockResolvedValue(
-      makeClient({ queryResult: { data: null, error: null } }) as never
-    );
-    await expect(requireAdmin("u1")).rejects.toThrow("Admin access required");
+  it("throws when user lacks the permission", async () => {
+    createClient.mockResolvedValue(makeClient({ rpcResult: false }) as never);
+    await expect(
+      requireGlobalPermission("u1", "platform.manage")
+    ).rejects.toThrow("Insufficient permissions");
   });
 });
