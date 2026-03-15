@@ -25,6 +25,6 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at);
 CREATE INDEX idx_payments_chip_transaction ON payments (chip_transaction_id);
 CREATE INDEX idx_payments_registration ON payments (registration_id);
 CREATE INDEX idx_payments_payout_summary ON payments (tournament_id, organization_id, type)
-  INCLUDE (gross_amount_cents, platform_fee_cents)
+  INCLUDE (gross_amount_cents)
   WHERE status = 'paid'
-  AND type IN ('registration', 'player_prize');
+  AND type IN ('registration', 'player_prize', 'refund');

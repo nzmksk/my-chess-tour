@@ -264,7 +264,7 @@ CREATE TABLE audit_logs (
 -- =============================================
 -- TOURNAMENT PAYOUT SUMMARY
 -- Computed on demand from payments table.
--- net_payout = total_collected - total_platform_fees - total_prizes
+-- net_payout = (total_registrations - total_refunds) - effective_platform_fee - total_prizes
 -- =============================================
 
 -- Why view is preferred over materialized view:
@@ -276,33 +276,21 @@ CREATE TABLE audit_logs (
 -- 4. Refresh complexity: we'd need a trigger on payments to keep it fresh,
 -- which adds complexity for no real gain.
 CREATE VIEW tournament_payout_summary AS
-WITH totals AS (
+WITH payment_totals AS (
   SELECT
     tournament_id,
     organization_id,
 
-    SUM(
-      CASE
-        WHEN type = 'registration' AND status = 'paid'
-        THEN gross_amount_cents
-        ELSE 0
-      END
-    ) AS total_collected_cents,
+    SUM(CASE WHEN type = 'registration' AND status = 'paid'
+        THEN gross_amount_cents ELSE 0 END
+    ) AS total_registration_cents,
 
-    SUM(
-      CASE
-        WHEN type = 'registration' AND status = 'paid'
-        THEN platform_fee_cents
-        ELSE 0
-      END
-    ) AS total_platform_fees_cents,
+    SUM(CASE WHEN type = 'refund' AND status = 'paid'
+        THEN gross_amount_cents ELSE 0 END
+    ) AS total_refunded_cents,
 
-    SUM(
-      CASE
-        WHEN type = 'player_prize' AND status = 'paid'
-        THEN gross_amount_cents
-        ELSE 0
-      END
+    SUM(CASE WHEN type = 'player_prize' AND status = 'paid'
+        THEN gross_amount_cents ELSE 0 END
     ) AS total_prizes_cents
 
   FROM payments
@@ -310,8 +298,32 @@ WITH totals AS (
 )
 
 SELECT
-  *,
-  total_collected_cents
-    - total_platform_fees_cents
-    - total_prizes_cents AS net_payout_cents
-FROM totals;
+  x.tournament_id,
+  x.organization_id,
+  x.total_registration_cents,
+  x.total_refunded_cents,
+  x.net_collected_cents,
+  x.effective_platform_fee_cents,
+  x.total_prizes_cents,
+  x.net_collected_cents
+    - x.effective_platform_fee_cents
+    - x.total_prizes_cents AS net_payout_cents
+FROM (
+  SELECT
+    pt.tournament_id,
+    pt.organization_id,
+    pt.total_registration_cents,
+    pt.total_refunded_cents,
+    pt.total_prizes_cents,
+
+    pt.total_registration_cents - pt.total_refunded_cents
+      AS net_collected_cents,
+
+    FLOOR(
+      (pt.total_registration_cents - pt.total_refunded_cents)
+      * t.commission_rate / 100.0
+    )::integer AS effective_platform_fee_cents
+
+  FROM payment_totals pt
+  JOIN tournaments t ON t.id = pt.tournament_id
+) x;
