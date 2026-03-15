@@ -8,7 +8,7 @@ import { NextRequest } from "next/server";
 
 const { mockTournamentBuilder, mockRegistrationsBuilder, mockFrom } =
   vi.hoisted(() => {
-    function makeBuilder(finalResult: { data: unknown; error: unknown }) {
+    function makeBuilder(finalResult: { data?: unknown; count?: unknown; error: unknown }) {
       const chain: Record<string, unknown> = {};
       const methods = ["select", "eq", "single", "in"];
       for (const m of methods) {
@@ -21,7 +21,7 @@ const { mockTournamentBuilder, mockRegistrationsBuilder, mockFrom } =
       return chain;
     }
     const mockTournamentBuilder = makeBuilder({ data: null, error: null });
-    const mockRegistrationsBuilder = makeBuilder({ data: [], error: null });
+    const mockRegistrationsBuilder = makeBuilder({ count: 0, error: null });
     const mockFrom = vi.fn((table: string) => {
       if (table === "registrations") return mockRegistrationsBuilder;
       return mockTournamentBuilder;
@@ -37,10 +37,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const mockOrganizer = {
+const mockOrganization = {
   id: "org-1",
-  organization_name: "KL Chess Association",
+  name: "KL Chess Association",
   description: "Premier chess org in KL",
+  avatar_url: null,
   links: [{ url: "https://klchess.org", label: "Website" }],
   email: "info@klchess.org",
   phone: "+60123456789",
@@ -71,7 +72,9 @@ function makeTournament(overrides: Record<string, unknown> = {}) {
     },
     max_participants: 120,
     status: "published",
-    organizer_profiles: mockOrganizer,
+    published_at: "2026-03-01T00:00:00Z",
+    updated_at: "2026-03-01T12:00:00Z",
+    organizations: mockOrganization,
     ...overrides,
   };
 }
@@ -92,8 +95,8 @@ function setTournamentResult(data: unknown, error: unknown = null) {
   ) => Promise.resolve(result).then(onfulfilled, onrejected);
 }
 
-function setRegistrationsResult(data: unknown, error: unknown = null) {
-  const result = { data, error };
+function setRegistrationsCount(count: number | null, error: unknown = null) {
+  const result = { count, error };
   (mockRegistrationsBuilder as Record<string, unknown>).then = (
     onfulfilled: (v: unknown) => unknown,
     onrejected?: (r: unknown) => unknown,
@@ -108,7 +111,7 @@ describe("GET /api/v1/tournaments/:id", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setTournamentResult(null);
-    setRegistrationsResult([]);
+    setRegistrationsCount(0);
   });
 
   afterEach(() => {
@@ -146,9 +149,11 @@ describe("GET /api/v1/tournaments/:id", () => {
       expect(item.id).toBe("tournament-1");
       expect(item.name).toBe("KL Open Rapid 2026");
       expect(item.description).toBe("Annual rapid chess championship");
-      expect(item.venue_name).toBe("Kuala Lumpur Convention Centre");
-      expect(item.state).toBe("Kuala Lumpur");
-      expect(item.venue_address).toBe("Jalan Pinang, 50450 Kuala Lumpur");
+      expect(item.venue).toEqual({
+        name: "Kuala Lumpur Convention Centre",
+        state: "Kuala Lumpur",
+        address: "Jalan Pinang, 50450 Kuala Lumpur",
+      });
       expect(item.start_date).toBe("2026-03-15");
       expect(item.end_date).toBe("2026-03-16");
       expect(item.registration_deadline).toBe("2026-03-10T23:59:59Z");
@@ -177,26 +182,28 @@ describe("GET /api/v1/tournaments/:id", () => {
       });
       expect(item.max_participants).toBe(120);
       expect(item.status).toBe("published");
+      expect(item.published_at).toBe("2026-03-01T00:00:00Z");
+      expect(item.updated_at).toBe("2026-03-01T12:00:00Z");
     });
 
-    it("includes a nested organizer object with full info", async () => {
+    it("includes a nested organization object with full info", async () => {
       setTournamentResult(makeTournament());
 
       const res = await GET(makeRequest("tournament-1"), {
         params: Promise.resolve({ id: "tournament-1" }),
       });
       const json = await res.json();
-      const org = json.data.organizer;
+      const org = json.data.organization;
 
       expect(org.id).toBe("org-1");
-      expect(org.organization_name).toBe("KL Chess Association");
+      expect(org.name).toBe("KL Chess Association");
       expect(org.description).toBe("Premier chess org in KL");
-      expect(org.links).toEqual(mockOrganizer.links);
+      expect(org.links).toEqual(mockOrganization.links);
       expect(org.email).toBe("info@klchess.org");
       expect(org.phone).toBe("+60123456789");
     });
 
-    it("does not expose organizer_profiles or organizer_id on the tournament item", async () => {
+    it("does not expose raw organizations join or organization_id on the tournament item", async () => {
       setTournamentResult(makeTournament());
 
       const res = await GET(makeRequest("tournament-1"), {
@@ -204,19 +211,19 @@ describe("GET /api/v1/tournaments/:id", () => {
       });
       const json = await res.json();
 
-      expect(json.data).not.toHaveProperty("organizer_profiles");
-      expect(json.data).not.toHaveProperty("organizer_id");
+      expect(json.data).not.toHaveProperty("organizations");
+      expect(json.data).not.toHaveProperty("organization_id");
     });
 
-    it("sets organizer to null when organizer_profiles is null", async () => {
-      setTournamentResult(makeTournament({ organizer_profiles: null }));
+    it("sets organization to null when organizations join is null", async () => {
+      setTournamentResult(makeTournament({ organizations: null }));
 
       const res = await GET(makeRequest("tournament-1"), {
         params: Promise.resolve({ id: "tournament-1" }),
       });
       const json = await res.json();
 
-      expect(json.data.organizer).toBeNull();
+      expect(json.data.organization).toBeNull();
     });
 
     it("sets prizes to null when prizes is null", async () => {
@@ -247,13 +254,9 @@ describe("GET /api/v1/tournaments/:id", () => {
   // -------------------------------------------------------------------------
 
   describe("current_participants", () => {
-    it("counts confirmed registrations for this tournament", async () => {
-      setTournamentResult(makeTournament({ id: "tournament-1" }));
-      setRegistrationsResult([
-        { tournament_id: "tournament-1" },
-        { tournament_id: "tournament-1" },
-        { tournament_id: "tournament-1" },
-      ]);
+    it("uses count aggregate for confirmed registrations", async () => {
+      setTournamentResult(makeTournament());
+      setRegistrationsCount(3);
 
       const res = await GET(makeRequest("tournament-1"), {
         params: Promise.resolve({ id: "tournament-1" }),
@@ -263,9 +266,9 @@ describe("GET /api/v1/tournaments/:id", () => {
       expect(json.data.current_participants).toBe(3);
     });
 
-    it("defaults current_participants to 0 when there are no confirmed registrations", async () => {
+    it("defaults current_participants to 0 when count is null", async () => {
       setTournamentResult(makeTournament());
-      setRegistrationsResult([]);
+      setRegistrationsCount(null);
 
       const res = await GET(makeRequest("tournament-1"), {
         params: Promise.resolve({ id: "tournament-1" }),
@@ -277,7 +280,7 @@ describe("GET /api/v1/tournaments/:id", () => {
 
     it("queries registrations filtered by tournament_id and status=confirmed", async () => {
       setTournamentResult(makeTournament());
-      setRegistrationsResult([]);
+      setRegistrationsCount(0);
 
       await GET(makeRequest("tournament-1"), {
         params: Promise.resolve({ id: "tournament-1" }),

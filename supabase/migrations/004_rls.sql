@@ -1,232 +1,278 @@
+-- =============================================
+-- ENABLE RLS
+-- =============================================
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_global_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE organizer_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE organizer_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Check if a user is a platform admin
-CREATE OR REPLACE FUNCTION is_admin(user_id uuid)
-RETURNS boolean AS $$
-  SELECT 'admin' = ANY(role) FROM users WHERE id = user_id;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+-- =============================================
+-- RBAC REFERENCE TABLES (read-only for all authenticated)
+-- =============================================
+CREATE POLICY "Anyone can read roles"
+ON roles FOR SELECT
+TO authenticated
+USING (true);
 
--- Check user's role in an organization
-CREATE OR REPLACE FUNCTION get_org_role(p_user_id uuid, p_org_id uuid)
-RETURNS varchar AS $$
-  SELECT role FROM organizer_members
-  WHERE user_id = p_user_id AND organizer_id = p_org_id;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+CREATE POLICY "Anyone can read permissions"
+ON permissions FOR SELECT
+TO authenticated
+USING (true);
 
--- Users can read their own row
+CREATE POLICY "Anyone can read role_permissions"
+ON role_permissions FOR SELECT
+TO authenticated
+USING (true);
+
+-- Only platform admins can modify RBAC reference data
+CREATE POLICY "Platform admins manage roles"
+ON roles FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+CREATE POLICY "Platform admins manage permissions"
+ON permissions FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+CREATE POLICY "Platform admins manage role_permissions"
+ON role_permissions FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+-- =============================================
+-- USER GLOBAL ROLES
+-- =============================================
+CREATE POLICY "Users can view own global roles"
+ON user_global_roles FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Platform admins manage global roles"
+ON user_global_roles FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+-- =============================================
+-- USERS
+-- =============================================
 CREATE POLICY "Users can view own profile"
 ON users FOR SELECT
 USING (auth.uid() = id);
 
--- Users can update their own row
 CREATE POLICY "Users can update own profile"
 ON users FOR UPDATE
 USING (auth.uid() = id);
 
--- Admins can view all users
-CREATE POLICY "Admins can view all users"
+CREATE POLICY "Platform admins can view all users"
 ON users FOR SELECT
-USING (is_admin(auth.uid()));
+USING (has_global_permission(auth.uid(), 'platform.manage'));
 
--- Players can read their own profile
+-- =============================================
+-- PLAYER PROFILES
+-- =============================================
 CREATE POLICY "Players can view own profile"
 ON player_profiles FOR SELECT
 USING (auth.uid() = user_id);
 
--- Players can update their own profile
+CREATE POLICY "Players can insert own profile"
+ON player_profiles FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Players can update own profile"
 ON player_profiles FOR UPDATE
 USING (auth.uid() = user_id);
 
--- Organizer members can view player profiles (for participant lists)
+-- Org members can view player profiles (for participant lists)
 CREATE POLICY "Org members can view player profiles"
 ON player_profiles FOR SELECT
 USING (
   EXISTS (
-    SELECT 1 FROM organizer_members WHERE user_id = auth.uid()
+    SELECT 1 FROM organization_memberships WHERE user_id = auth.uid()
   )
 );
 
--- Anyone can view approved organizers (public tournament pages show organizer info)
-CREATE POLICY "Public can view approved organizers"
-ON organizer_profiles FOR SELECT
+CREATE POLICY "Platform admins full access to player profiles"
+ON player_profiles FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+-- =============================================
+-- ORGANIZATIONS
+-- =============================================
+CREATE POLICY "Public can view approved organizations"
+ON organizations FOR SELECT
 USING (approval_status = 'approved');
 
--- Org members can view their own organization (even if pending)
+-- Org members can view their own org (even if pending/rejected)
 CREATE POLICY "Members can view own org"
-ON organizer_profiles FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM organizer_members
-    WHERE organizer_id = id AND user_id = auth.uid()
-  )
-);
+ON organizations FOR SELECT
+USING (is_org_member(auth.uid(), id));
 
--- Authenticated users can insert (apply as organizer)
-CREATE POLICY "Authenticated users can apply"
-ON organizer_profiles FOR INSERT
+CREATE POLICY "Authenticated users can apply as organizer"
+ON organizations FOR INSERT
 WITH CHECK (auth.role() = 'authenticated');
 
--- Org owners can update their organization
-CREATE POLICY "Owners can update org"
-ON organizer_profiles FOR UPDATE
-USING (
-  get_org_role(auth.uid(), id) = 'owner'
-);
+-- Org managers can update their organization
+CREATE POLICY "Org managers can update org"
+ON organizations FOR UPDATE
+USING (has_org_permission(auth.uid(), id, 'org.manage'));
 
--- Admins have full access
-CREATE POLICY "Admins full access to orgs"
-ON organizer_profiles FOR ALL
-USING (is_admin(auth.uid()));
+CREATE POLICY "Platform admins full access to organizations"
+ON organizations FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
 
--- Members can view their own org's members
-CREATE POLICY "Members can view org members"
-ON organizer_members FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM organizer_members om
-    WHERE om.organizer_id = organizer_members.organizer_id
-    AND om.user_id = auth.uid()
-  )
-);
+-- =============================================
+-- ORGANIZATION MEMBERSHIPS
+-- =============================================
 
--- Owners can manage members
-CREATE POLICY "Owners can manage members"
-ON organizer_members FOR ALL
-USING (
-  get_org_role(auth.uid(), organizer_id) = 'owner'
-);
+-- Members can view all members of their own org
+-- Uses is_org_member() (SECURITY DEFINER) to avoid infinite recursion
+CREATE POLICY "Members can view org memberships"
+ON organization_memberships FOR SELECT
+USING (is_org_member(auth.uid(), organization_id));
 
--- Allow insert for new applications (user creates their own owner row)
+-- Users can insert their own membership when creating an org
 CREATE POLICY "Users can create own membership"
-ON organizer_members FOR INSERT
+ON organization_memberships FOR INSERT
 WITH CHECK (auth.uid() = user_id);
 
--- Anyone can view published tournaments
+-- Org inviters can manage members
+CREATE POLICY "Org inviters can manage memberships"
+ON organization_memberships FOR ALL
+USING (has_org_permission(auth.uid(), organization_id, 'org.invite'));
+
+CREATE POLICY "Platform admins full access to memberships"
+ON organization_memberships FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+-- =============================================
+-- TOURNAMENTS
+-- =============================================
 CREATE POLICY "Public can view published tournaments"
 ON tournaments FOR SELECT
 USING (status = 'published');
 
--- Org members can view all their org's tournaments (including drafts)
+-- Org members with tournament.view can see drafts
 CREATE POLICY "Org members can view own tournaments"
 ON tournaments FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM organizer_members
-    WHERE organizer_id = tournaments.organizer_id
-    AND user_id = auth.uid()
-  )
-);
+USING (has_org_permission(auth.uid(), organization_id, 'tournament.view'));
 
--- Org admins/owners can create tournaments
-CREATE POLICY "Org admins can create tournaments"
+CREATE POLICY "Org members can create tournaments"
 ON tournaments FOR INSERT
-WITH CHECK (
-  get_org_role(auth.uid(), organizer_id) IN ('admin', 'owner')
-);
+WITH CHECK (has_org_permission(auth.uid(), organization_id, 'tournament.create'));
 
--- Org admins/owners can update tournaments
-CREATE POLICY "Org admins can update tournaments"
+CREATE POLICY "Org members can update tournaments"
 ON tournaments FOR UPDATE
-USING (
-  get_org_role(auth.uid(), organizer_id) IN ('admin', 'owner')
-);
+USING (has_org_permission(auth.uid(), organization_id, 'tournament.edit'));
 
--- Admins have full access
-CREATE POLICY "Admins full access to tournaments"
+CREATE POLICY "Platform admins full access to tournaments"
 ON tournaments FOR ALL
-USING (is_admin(auth.uid()));
+USING (has_global_permission(auth.uid(), 'platform.manage'));
 
--- Players can view their own registrations
+-- =============================================
+-- REGISTRATIONS
+-- =============================================
 CREATE POLICY "Players can view own registrations"
 ON registrations FOR SELECT
 USING (auth.uid() = user_id);
 
--- Players can create registrations
 CREATE POLICY "Players can register"
 ON registrations FOR INSERT
 WITH CHECK (auth.uid() = user_id);
 
--- Players can cancel their own registrations
 CREATE POLICY "Players can cancel own registration"
 ON registrations FOR UPDATE
 USING (auth.uid() = user_id);
 
--- Org members can view registrations for their tournaments
+-- Org members with registration.view can see their tournament's registrations
 CREATE POLICY "Org members can view tournament registrations"
 ON registrations FOR SELECT
 USING (
   EXISTS (
     SELECT 1 FROM tournaments t
-    JOIN organizer_members om ON om.organizer_id = t.organizer_id
     WHERE t.id = registrations.tournament_id
-    AND om.user_id = auth.uid()
+      AND has_org_permission(auth.uid(), t.organization_id, 'registration.view')
   )
 );
 
--- Admins full access
-CREATE POLICY "Admins full access to registrations"
+CREATE POLICY "Platform admins full access to registrations"
 ON registrations FOR ALL
-USING (is_admin(auth.uid()));
+USING (has_global_permission(auth.uid(), 'platform.manage'));
 
--- Players can view their own payments
+-- =============================================
+-- PAYMENTS
+-- Note: creation and status updates happen server-side
+-- via service_role key through API routes and Chip webhooks.
+-- =============================================
 CREATE POLICY "Players can view own payments"
 ON payments FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM registrations r
-    WHERE r.id = payments.registration_id
-    AND r.user_id = auth.uid()
-  )
-);
+USING (auth.uid() = user_id);
 
--- Org members can view payments for their tournaments
+-- Org members with payment.view can see their tournament's payments
 CREATE POLICY "Org members can view tournament payments"
 ON payments FOR SELECT
 USING (
   EXISTS (
-    SELECT 1 FROM registrations r
-    JOIN tournaments t ON t.id = r.tournament_id
-    JOIN organizer_members om ON om.organizer_id = t.organizer_id
-    WHERE r.id = payments.registration_id
-    AND om.user_id = auth.uid()
+    SELECT 1 FROM tournaments t
+    WHERE t.id = payments.tournament_id
+      AND has_org_permission(auth.uid(), t.organization_id, 'payment.view')
   )
 );
 
--- Admins full access
-CREATE POLICY "Admins full access to payments"
+CREATE POLICY "Platform admins full access to payments"
 ON payments FOR ALL
-USING (is_admin(auth.uid()));
+USING (has_global_permission(auth.uid(), 'platform.manage'));
 
--- Note: Payment creation and status updates
--- should happen server-side (via service_role key)
--- through your API routes and CHIP webhooks,
--- not directly from the client.
--- The RLS policies below are primarily for reads.
--- Similar patterns — admins and relevant org members can view
-CREATE POLICY "Admins full access to refunds"
-ON refunds FOR ALL
-USING (is_admin(auth.uid()));
+-- =============================================
+-- REFUNDS
+-- =============================================
+CREATE POLICY "Players can view own refunds"
+ON refunds FOR SELECT
+USING (auth.uid() = requested_by);
 
-CREATE POLICY "Admins full access to payouts"
-ON payouts FOR ALL
-USING (is_admin(auth.uid()));
+CREATE POLICY "Players can request refund"
+ON refunds FOR INSERT
+WITH CHECK (auth.uid() = requested_by);
 
--- Org admins/owners can view payouts for their org
-CREATE POLICY "Org members can view own payouts"
-ON payouts FOR SELECT
+-- Org members with refund.manage can view/manage refunds for their tournaments
+CREATE POLICY "Org refund managers can view tournament refunds"
+ON refunds FOR SELECT
 USING (
   EXISTS (
-    SELECT 1 FROM organizer_members
-    WHERE organizer_id = payouts.organizer_id
-    AND user_id = auth.uid()
+    SELECT 1 FROM registrations r
+    JOIN tournaments t ON t.id = r.tournament_id
+    WHERE r.id = refunds.registration_id
+      AND has_org_permission(auth.uid(), t.organization_id, 'refund.manage')
   )
+);
+
+CREATE POLICY "Platform admins full access to refunds"
+ON refunds FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+-- =============================================
+-- AUDIT LOGS
+-- Read-only. Only triggers write to this table.
+-- Tiered visibility: platform admins > org admins > individual users.
+-- =============================================
+CREATE POLICY "Platform admins can view all audit logs"
+ON audit_logs FOR SELECT
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+CREATE POLICY "Org admins can view org-scoped audit logs"
+ON audit_logs FOR SELECT
+USING (
+  organization_id IS NOT NULL
+  AND has_org_permission(auth.uid(), organization_id, 'org.manage')
+);
+
+CREATE POLICY "Users can view own account audit logs"
+ON audit_logs FOR SELECT
+USING (
+  table_name IN ('users', 'player_profiles')
+  AND record_id = auth.uid()::text
 );
