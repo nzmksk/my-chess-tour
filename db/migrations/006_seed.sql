@@ -18,22 +18,22 @@ SET LOCAL app.audit_context = 'seed';
 DO $$
 DECLARE
   -- Role IDs
-  r_platform_admin uuid;
-  r_owner          uuid;
-  r_admin          uuid;
-  r_member         uuid;
+  r_platform_admin integer;
+  r_owner          integer;
+  r_admin          integer;
+  r_member         integer;
 
   -- Permission IDs
-  p_platform_manage  uuid;
-  p_org_manage       uuid;
-  p_org_invite       uuid;
-  p_tournament_create uuid;
-  p_tournament_edit   uuid;
-  p_tournament_delete uuid;
-  p_tournament_view   uuid;
-  p_registration_view uuid;
-  p_payment_view      uuid;
-  p_refund_manage     uuid;
+  p_platform_manage  integer;
+  p_org_manage       integer;
+  p_org_invite       integer;
+  p_tournament_create integer;
+  p_tournament_edit   integer;
+  p_tournament_delete integer;
+  p_tournament_view   integer;
+  p_registration_view integer;
+  p_payment_view      integer;
+  p_refund_manage     integer;
 BEGIN
   -- Roles
   INSERT INTO roles (name, scope) VALUES ('platform_admin', 'global') RETURNING id INTO r_platform_admin;
@@ -99,7 +99,7 @@ DECLARE
   tourney_ids      uuid[] := '{}';
 
   -- RBAC role IDs (look them up)
-  r_owner_id       uuid;
+  r_owner_id       integer;
 
   -- Loop / temp vars
   i            integer;
@@ -136,9 +136,10 @@ DECLARE
   t_start      date;
   t_end        date;
   t_deadline   timestamptz;
-  t_status     text;
-  t_fee        integer;
-  v_idx        integer;
+  t_status     tournament_status;
+  t_fee          integer;
+  v_idx          integer;
+  t_restrictions jsonb;
 
   -- Name pools
   malay_first  text[] := ARRAY[
@@ -373,12 +374,22 @@ BEGIN
       t_deadline := (t_start - '7 days'::interval)::timestamptz;
 
       t_status := CASE
-        WHEN t_offset_wk < 4 THEN 'published'
-        ELSE                      'draft'
+        WHEN t_offset_wk < 4 THEN 'published'::tournament_status
+        ELSE                      'draft'::tournament_status
       END;
 
       t_fee := fee_opts[((idx - 1) % 5) + 1];
       v_idx := ((idx - 1) % 8) + 1;
+
+      -- Vary restrictions: open, nationality, age, gender, rating, combined
+      t_restrictions := CASE (idx % 6)
+        WHEN 0 THEN NULL                                                                            -- open
+        WHEN 1 THEN '[{"type":"nationality","value":"Malaysian"}]'::jsonb                           -- nationals only
+        WHEN 2 THEN '[{"type":"age","max":18}]'::jsonb                                             -- under 18
+        WHEN 3 THEN '[{"type":"gender","value":"female"}]'::jsonb                                  -- women only
+        WHEN 4 THEN '[{"type":"rating","max":1799}]'::jsonb                                        -- under 1800
+        WHEN 5 THEN '[{"type":"nationality","value":"Malaysian"},{"type":"age","max":20}]'::jsonb   -- nationals + under 21
+      END;
 
       INSERT INTO public.tournaments (
         organization_id, name, description,
@@ -452,10 +463,10 @@ BEGIN
             )
           )
         ),
-        '[{"type":"nationality","value":"Malaysian"}]'::jsonb,
+        t_restrictions,
         max_parts[(idx % 5) + 1],
         t_status::tournament_status,
-        CASE WHEN t_status = 'published' THEN now() ELSE NULL END
+        CASE WHEN t_status = 'published'::tournament_status THEN (t_start - interval '14 days')::timestamptz ELSE NULL END
       ) RETURNING id INTO new_t_id;
 
       tourney_ids := array_append(tourney_ids, new_t_id);
