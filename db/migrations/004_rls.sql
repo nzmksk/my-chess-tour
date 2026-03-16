@@ -276,3 +276,16 @@ USING (
   table_name IN ('users', 'player_profiles')
   AND record_id = auth.uid()::text
 );
+
+-- =============================================
+-- TOURNAMENT PAYOUT SUMMARY VIEW
+-- Views don't support RLS directly. security_invoker makes the view
+-- run with the caller's identity, so the RLS policies on the underlying
+-- payments and tournaments tables apply automatically.
+-- Access is therefore governed by the existing "payment.view" permission:
+--   - Org members with payment.view see only their own tournaments.
+--   - Platform admins see all rows (via their unrestricted payments policy).
+-- =============================================
+ALTER VIEW tournament_payout_summary SET (security_invoker = true);
+
+GRANT SELECT ON tournament_payout_summary TO authenticated;
