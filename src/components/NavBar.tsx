@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 import { createClient } from "@/services/supabase/client";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_LINKS = [
   { href: "/become-organizer", label: "Become an Organizer", ghost: true },
@@ -124,6 +125,8 @@ export default function NavBar() {
                 {label}
               </Link>
             ))}
+
+            <ThemeToggle />
 
             {authUser ? (
               <>
@@ -260,6 +263,14 @@ export default function NavBar() {
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
+        </div>
+
+        {/* Theme toggle in drawer */}
+        <div className="flex items-center gap-3 mb-4 px-1">
+          <ThemeToggle />
+          <span className="text-sm text-(--color-text-muted) font-(family-name:--font-lato) uppercase tracking-widest">
+            Theme
+          </span>
         </div>
 
         {/* Drawer nav links */}

@@ -1,57 +1,109 @@
 @import "tailwindcss";
 
+@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --font-cinzel: "Cinzel", serif;
+  --font-lato: "Lato", sans-serif;
+
+  --color-bg-base: #0e0e0e;
+  --color-bg-surface: #141414;
+  --color-bg-raised: #1a1a1a;
+  --color-bg-sunken: #0a0a0a;
+
+  /* Gold */
+  --color-gold-bright: #c9a84c;
+  --color-gold-deep: #a07c2c;
+  --color-gold-muted: #7a6e55;
+  --color-gold-dim: #5a5040;
+  --color-gold-ghost: #2e2a1e;
+
+  /* Text */
+  --color-text-primary: #e8d9b4;
+  --color-text-body: #d4c5a0;
+  --color-text-secondary: #a89878;
+  --color-text-muted: #7a6e55;
+  --color-text-disabled: #4a4030;
+
+  /* Semantic */
+  --color-border: #2e2a1e;
+  --color-border-gold: #c9a84c;
+  --color-error: #e87070;
+
+  /* Status */
+  --color-success: #6db86d;
+  --color-success-bg: rgba(80, 160, 80, 0.1);
+  --color-warning: #c8883a;
+  --color-warning-bg: rgba(200, 130, 40, 0.15);
+  --color-danger: #c05040;
+  --color-danger-bg: rgba(180, 60, 50, 0.15);
+
+  /* Danger / error UI */
+  --color-danger-text: #e0916e;
+  --color-danger-border: #7a3a20;
+  --color-danger-deep: #5a2a14;
+  --color-error-text: #e05a2b;
+  --color-error-banner-bg: rgba(160, 60, 20, 0.12);
+  --color-error-banner-border: rgba(160, 60, 20, 0.4);
+  --color-danger-icon-bg: rgba(90, 30, 10, 0.15);
+  --color-badge-neutral-bg: rgba(255, 255, 255, 0.05);
+  --color-skeleton-highlight: #222222;
+}
+
+[data-theme="light"] {
+  /* Backgrounds */
+  --color-bg-base: #f5f1ea;
+  --color-bg-surface: #ffffff;
+  --color-bg-raised: #faf7f2;
+  --color-bg-sunken: #ebe5db;
+
+  /* Gold — darker for contrast on light backgrounds */
+  --color-gold-bright: #8a6e24;
+  --color-gold-deep: #6e5818;
+  --color-gold-muted: #6e5d38;
+  --color-gold-dim: #c4b490;
+  --color-gold-ghost: #f0ead8;
+
+  /* Text */
+  --color-text-primary: #1c1810;
+  --color-text-body: #3a3428;
+  --color-text-secondary: #5a5040;
+  --color-text-muted: #8a7e68;
+  --color-text-disabled: #c0b8a8;
+
+  /* Semantic */
+  --color-border: #d8d0c0;
+  --color-border-gold: #8a6e24;
+  --color-error: #c03030;
+
+  /* Status */
+  --color-success: #2d7a3e;
+  --color-success-bg: rgba(45, 122, 62, 0.08);
+  --color-warning: #9a6820;
+  --color-warning-bg: rgba(154, 104, 32, 0.1);
+  --color-danger: #a03830;
+  --color-danger-bg: rgba(160, 56, 48, 0.08);
+
+  /* Danger / error UI */
+  --color-danger-text: #b04030;
+  --color-danger-border: #e0a090;
+  --color-danger-deep: #d0a090;
+  --color-error-text: #c04020;
+  --color-error-banner-bg: rgba(180, 60, 20, 0.06);
+  --color-error-banner-border: rgba(180, 60, 20, 0.2);
+  --color-danger-icon-bg: rgba(180, 60, 20, 0.06);
+  --color-badge-neutral-bg: rgba(0, 0, 0, 0.04);
+  --color-skeleton-highlight: #e8e4dc;
+}
+
 @layer base {
-  :root {
-    /* Backgrounds */
-    --color-bg-base: #0e0e0e;
-    --color-bg-surface: #141414;
-    --color-bg-raised: #1a1a1a;
-    --color-bg-sunken: #0a0a0a;
-
-    /* Gold */
-    --color-gold-bright: #c9a84c;
-    --color-gold-deep: #a07c2c;
-    --color-gold-muted: #7a6e55;
-    --color-gold-dim: #5a5040;
-    --color-gold-ghost: #2e2a1e;
-
-    /* Text */
-    --color-text-primary: #e8d9b4;
-    --color-text-body: #d4c5a0;
-    --color-text-secondary: #a89878;
-    --color-text-muted: #7a6e55;
-    --color-text-disabled: #4a4030;
-
-    /* Semantic */
-    --color-border: #2e2a1e;
-    --color-border-gold: #c9a84c;
-    --color-error: #e87070;
-
-    /* Status */
-    --color-success: #6db86d;
-    --color-success-bg: rgba(80, 160, 80, 0.1);
-    --color-warning: #c8883a;
-    --color-warning-bg: rgba(200, 130, 40, 0.15);
-    --color-danger: #c05040;
-    --color-danger-bg: rgba(180, 60, 50, 0.15);
-
-    /* Spacing */
-    --space-xs: 0.25rem;
-    --space-sm: 0.5rem;
-    --space-md: 1rem;
-    --space-lg: 1.5rem;
-    --space-xl: 2.5rem;
-    --space-2xl: 4rem;
-
-    /* Fonts */
-    --font-cinzel: "Cinzel", serif;
-    --font-lato: "Lato", sans-serif;
+  html,
+  body {
+    @apply min-h-screen;
   }
 
   body {
-    background: var(--color-bg-base);
-    color: var(--color-text-body);
-    font-family: var(--font-lato);
+    @apply bg-bg-base text-text-body font-lato antialiased;
   }
 }
 
@@ -561,7 +613,7 @@
     color: var(--color-text-disabled);
   }
   .input-error {
-    border-color: #7a3a20;
+    border-color: var(--color-danger-border);
   }
   .input--icon {
     padding-right: 2.75rem;
@@ -575,7 +627,7 @@
     font-weight: 300;
   }
   .input-hint.error {
-    color: #e05a2b;
+    color: var(--color-error-text);
   }
 
   .input-row {
@@ -631,7 +683,7 @@
     margin-top: 0.5rem;
   }
   .pw-requirements--error {
-    border-color: #5a2a14;
+    border-color: var(--color-danger-deep);
   }
   .pw-req-title {
     font-family: var(--font-cinzel);
@@ -810,7 +862,7 @@
 
   .btn-danger {
     background: transparent;
-    color: #e0916e;
+    color: var(--color-danger-text);
     font-family: var(--font-cinzel);
     font-size: 0.8125rem;
     font-weight: 700;
@@ -818,7 +870,7 @@
     text-transform: uppercase;
     padding: 0.875rem 2.25rem;
     border-radius: 2px;
-    border: 1px solid #e0916e;
+    border: 1px solid var(--color-danger-text);
     cursor: pointer;
     width: 100%;
     transition:
@@ -838,8 +890,8 @@
 
   /* ── Error banner ── */
   .error-banner {
-    background: rgba(160, 60, 20, 0.12);
-    border: 1px solid rgba(160, 60, 20, 0.4);
+    background: var(--color-error-banner-bg);
+    border: 1px solid var(--color-error-banner-border);
     border-radius: 2px;
     padding: 1rem;
     margin-bottom: 1.5rem;
@@ -850,7 +902,7 @@
   .error-text {
     font-family: var(--font-lato);
     font-size: 0.8125rem;
-    color: #e0916e;
+    color: var(--color-danger-text);
     line-height: 1.5;
   }
 
@@ -1035,7 +1087,7 @@
     border: 1px solid rgba(201, 168, 76, 0.3);
   }
   .badge--neutral {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-badge-neutral-bg);
     color: var(--color-text-secondary);
     border: 1px solid var(--color-border);
   }
@@ -1124,7 +1176,7 @@
     background: rgba(201, 168, 76, 0.04);
   }
   .nav-dropdown-item--danger {
-    color: #e0916e;
+    color: var(--color-danger-text);
   }
   .nav-dropdown-divider {
     height: 1px;
@@ -1241,8 +1293,8 @@
     font-size: 1.5rem;
   }
   .confirm-icon--danger {
-    border-color: #5a2a14;
-    background: rgba(90, 30, 10, 0.15);
+    border-color: var(--color-danger-deep);
+    background: var(--color-danger-icon-bg);
   }
   .confirm-title {
     font-family: var(--font-cinzel);
@@ -1273,7 +1325,7 @@
     background: linear-gradient(
       90deg,
       var(--color-bg-raised) 25%,
-      #222222 50%,
+      var(--color-skeleton-highlight) 50%,
       var(--color-bg-raised) 75%
     );
     background-size: 1200px 100%;
