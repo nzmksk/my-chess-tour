@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { createClient } from "@/services/supabase/server";
 import { getVerificationCode } from "@/services/redis/redis";
 
 export async function POST(request: NextRequest) {
@@ -120,6 +121,13 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  // Sign the user in so the SSR client writes session cookies to the response
+  const supabase = await createClient();
+  await supabase.auth.signInWithPassword({
+    email: email.toLowerCase().trim(),
+    password,
+  });
 
   return NextResponse.json({ message: "Account created successfully" }, { status: 201 });
 }

@@ -5,17 +5,34 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks — must be hoisted so vi.mock factories can reference them
 // ---------------------------------------------------------------------------
 
-const { mockGetVerificationCode, mockCreateUser, mockEq, mockUpdate, mockFrom } =
-  vi.hoisted(() => {
-    const mockGetVerificationCode = vi.fn();
-    const mockCreateUser = vi.fn();
-    const mockEq = vi.fn();
-    const mockUpdate = vi.fn(() => ({ eq: mockEq }));
-    const mockFrom = vi.fn(() => ({ update: mockUpdate }));
-    return { mockGetVerificationCode, mockCreateUser, mockEq, mockUpdate, mockFrom };
-  });
+const {
+  mockGetVerificationCode,
+  mockCreateUser,
+  mockEq,
+  mockUpdate,
+  mockFrom,
+  mockSignInWithPassword,
+  mockGetUser,
+} = vi.hoisted(() => {
+  const mockGetVerificationCode = vi.fn();
+  const mockCreateUser = vi.fn();
+  const mockEq = vi.fn();
+  const mockUpdate = vi.fn(() => ({ eq: mockEq }));
+  const mockFrom = vi.fn(() => ({ update: mockUpdate }));
+  const mockSignInWithPassword = vi.fn();
+  const mockGetUser = vi.fn();
+  return {
+    mockGetVerificationCode,
+    mockCreateUser,
+    mockEq,
+    mockUpdate,
+    mockFrom,
+    mockSignInWithPassword,
+    mockGetUser,
+  };
+});
 
-vi.mock("@/lib/redis", () => ({
+vi.mock("@/services/redis/redis", () => ({
   getVerificationCode: mockGetVerificationCode,
 }));
 
@@ -23,11 +40,27 @@ vi.mock("bcryptjs", () => ({
   default: { hash: vi.fn().mockResolvedValue("$2b$12$mockedhash") },
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
     auth: { admin: { createUser: mockCreateUser } },
     from: mockFrom,
   },
+}));
+
+vi.mock("@/services/supabase/server", () => ({
+  createClient: vi.fn().mockResolvedValue({
+    auth: {
+      signInWithPassword: mockSignInWithPassword,
+      getUser: mockGetUser,
+    },
+  }),
+}));
+
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({
+    getAll: vi.fn().mockReturnValue([]),
+    set: vi.fn(),
+  }),
 }));
 
 import { POST } from "../route";
@@ -86,6 +119,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     mockEq.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockFrom.mockReturnValue({ update: mockUpdate });
+    mockSignInWithPassword.mockResolvedValue({ data: {}, error: null });
   });
 
   // --- Success --------------------------------------------------------------
@@ -96,6 +130,15 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
 
     expect(res.status).toBe(201);
     expect(json.message).toMatch(/account created/i);
+  });
+
+  it("signs the user in after account creation", async () => {
+    await POST(makeRequest(validBody));
+
+    expect(mockSignInWithPassword).toHaveBeenCalledWith({
+      email: "player@example.com",
+      password: "securepass",
+    });
   });
 
   it("calls createUser with email_confirm: true", async () => {
@@ -305,5 +348,13 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
 
     expect(res.status).toBe(500);
     expect(json.error).toMatch(/failed to save profile/i);
+  });
+
+  it("does not sign in when profile update fails", async () => {
+    mockEq.mockResolvedValue({ error: { message: "Profile update failed" } });
+
+    await POST(makeRequest(validBody));
+
+    expect(mockSignInWithPassword).not.toHaveBeenCalled();
   });
 });
