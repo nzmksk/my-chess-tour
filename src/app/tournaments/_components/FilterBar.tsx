@@ -141,12 +141,12 @@ export default function FilterBar({
   }
 
   return (
-    <div className="bg-(--color-bg-surface) border-b border-(--color-border) py-4">
+    <div className="bg-bg-surface border-b border-(--color-border) py-4">
       <div className="max-w-300 mx-auto px-10">
         {/* Search */}
         <input
           type="text"
-          placeholder="Search tournaments..."
+          placeholder="Search tournaments…"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           className="search-input"

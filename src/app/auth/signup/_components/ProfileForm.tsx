@@ -125,7 +125,7 @@ export default function ProfileForm() {
                 {submitError.emailExists && (
                   <>
                     {" "}
-                    <Link href="/login">Log in instead</Link>
+                    <Link href="/login">Sign in instead</Link>
                   </>
                 )}
               </p>

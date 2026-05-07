@@ -18,11 +18,11 @@ export default function ForgotPasswordForm() {
         <div className="centered-col">
           <div className="auth-card card card--featured text-center">
             <div
-              className="font-[2rem] mb-4"
+              className="text-[2rem] text-(--color-gold-bright) mb-4"
               role="img"
               aria-label="Email sent"
             >
-              📬
+              ♖
             </div>
             <h1 className="auth-heading mb-2">Check Your Email</h1>
             <p className="auth-subheading mb-10">
@@ -93,7 +93,7 @@ export default function ForgotPasswordForm() {
           </form>
 
           <p className="auth-footer mt-lg">
-            Remembered it? <Link href="/login">Back to sign in</Link>
+            Remembered it? <Link href="/login">Return to sign in</Link>
           </p>
         </div>
       </div>

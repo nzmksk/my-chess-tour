@@ -119,8 +119,8 @@ export default function TournamentsClient({ tournaments }: Props) {
             <div className="text-[2.5rem] mb-4 opacity-30">♟</div>
             <p className="text-[0.9375rem] leading-[1.6]">
               {tournaments.length === 0
-                ? "No published tournaments at the moment. Check back soon."
-                : "No tournaments match your filters."}
+                ? "No tournaments are currently published. Check back soon."
+                : "No tournaments match your current filters."}
             </p>
           </div>
         ) : (

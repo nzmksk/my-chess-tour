@@ -353,9 +353,9 @@ export default function SignUpForm() {
             </button>
           </form>
 
-          <div className="divider-text">already have an account?</div>
+          <div className="divider-text">Already have an account?</div>
           <p className="auth-footer mt-0">
-            <Link href="/login">Log in instead</Link>
+            <Link href="/login">Sign in instead</Link>
           </p>
         </div>
       </div>

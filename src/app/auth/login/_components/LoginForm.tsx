@@ -26,7 +26,7 @@ export default function LoginForm() {
               role="img"
               aria-label="Account locked"
             >
-              🔒
+              ♙
             </div>
             <h1 className="confirm-title">Account Locked</h1>
             <p className="confirm-body">
@@ -63,7 +63,7 @@ export default function LoginForm() {
           <div className="auth-card-header">
             <span className="auth-logo">MY Chess Tour</span>
             <h1 className="auth-heading">Welcome Back</h1>
-            <p className="auth-subheading">Sign in to your account</p>
+            <p className="auth-subheading">Enter your credentials to continue</p>
             <hr className="divider-gold" />
           </div>
 
@@ -172,7 +172,7 @@ export default function LoginForm() {
           </form>
 
           <p className="auth-footer mt-lg">
-            Don&apos;t have an account? <Link href="/sign-up">Create one</Link>
+            New to MY Chess Tour? <Link href="/sign-up">Create an account</Link>
           </p>
         </div>
       </div>

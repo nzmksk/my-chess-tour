@@ -8,34 +8,34 @@ export const metadata = {
 
 export default function SignedOutPage() {
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <div className="auth-page">
         <div className="centered-col">
           <div className="auth-card card text-center">
             <div
-              className="w-14 h-14 rounded-full border border-(--color-border) bg-(--color-bg-raised) flex items-center justify-center mx-auto mb-6 text-[1.375rem]"
+              className="w-14 h-14 rounded-full border border-(--color-border) bg-(--color-bg-raised) flex items-center justify-center mx-auto mb-6 text-[1.375rem] text-(--color-gold-bright)"
               role="img"
               aria-label="Signed out"
             >
-              ✔
+              ♔
             </div>
             <h1 className="confirm-title">Signed Out</h1>
             <p className="confirm-body">
-              You&apos;ve been signed out of this device successfully. Your
-              session has been cleared.
+              Your session has ended. You&apos;ve been signed out of this
+              device.
             </p>
             <div className="session-info">
               <div className="session-row">
-                <span className="session-key">Session ended</span>
+                <span className="session-key">Signed out</span>
                 <span className="session-val">Just now</span>
               </div>
               <div className="session-row">
-                <span className="session-key">Device</span>
+                <span className="session-key">Scope</span>
                 <span className="session-val">This device only</span>
               </div>
               <div className="session-row">
-                <span className="session-key">Session data</span>
+                <span className="session-key">Session</span>
                 <span className="session-val">Cleared</span>
               </div>
             </div>

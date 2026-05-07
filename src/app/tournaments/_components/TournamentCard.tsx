@@ -75,30 +75,30 @@ export default function TournamentCard({ tournament: t }: Props) {
             <span className="badge-unrated">Unrated</span>
           )}
           <span
-            className={`text-[0.6875rem] [font-family:var(--font-lato)] font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
+            className={`text-[0.6875rem] font-lato font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
           >
             {spotsLabel}
           </span>
         </div>
 
         {/* Title */}
-        <h3 className="[font-family:var(--font-cinzel)] text-[0.9375rem] font-semibold text-(--color-text-primary) mb-2 leading-[1.3]">
+        <h3 className="font-cinzel text-[0.9375rem] font-semibold text-text-primary mb-2 leading-[1.3]">
           {t.name}
         </h3>
 
         {/* Meta */}
-        <div className="flex flex-col gap-1 text-[0.8125rem] text-(--color-text-secondary) [font-family:var(--font-lato)] mb-3">
-          <span>📅 {formatDateRange(t.start_date, t.end_date)}</span>
+        <div className="flex flex-col gap-1 text-[0.8125rem] text-text-secondary font-lato mb-3">
+          <span>{formatDateRange(t.start_date, t.end_date)}</span>
           <span>
-            📍 {t.venue_name}, {t.state}
+            {t.venue_name}, {t.state}
           </span>
           {timeBase !== undefined ? (
             <span>
-              ⏱ {timeBase} min{timeInc ? ` + ${timeInc} sec` : ""}
+              {timeBase} min{timeInc ? ` + ${timeInc} sec` : ""}
               {rounds ? ` · ${rounds} rounds` : ""}
             </span>
           ) : rounds ? (
-            <span>♟ Swiss · {rounds} rounds</span>
+            <span>Swiss · {rounds} rounds</span>
           ) : null}
         </div>
 
@@ -106,11 +106,11 @@ export default function TournamentCard({ tournament: t }: Props) {
         <div className="flex justify-between items-center pt-3 border-t border-(--color-border)">
           <div>
             {hasMultipleFees && (
-              <small className="text-xs text-(--color-text-muted) [font-family:var(--font-lato)] ml-1">
+              <small className="text-xs text-(--color-text-muted) font-lato ml-1">
                 starting from{" "}
               </small>
             )}
-            <span className="[font-family:var(--font-cinzel)] text-[1.125rem] font-bold text-(--color-text-primary)">
+            <span className="font-cinzel text-[1.125rem] font-bold text-text-primary">
               {minFee > 0 ? formatRm(minFee) : "Free"}
             </span>
           </div>

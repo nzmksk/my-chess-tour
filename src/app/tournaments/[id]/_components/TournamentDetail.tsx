@@ -404,7 +404,7 @@ export default function TournamentDetail({
                 <button className="btn-primary w-full">Register Now</button>
               ) : (
                 <button className="btn-primary w-full opacity-50" disabled>
-                  Log In / Sign Up to Register
+                  Sign In to Register
                 </button>
               )}
 
