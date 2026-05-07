@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { storeVerificationCode } from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
+import { validateEmail } from "@/services/auth/auth-validation";
 
 function generateCode(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -9,8 +10,6 @@ function generateCode(): string {
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
-
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -35,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const normalized = email.toLowerCase().trim();
 
-  if (!emailRegex.test(normalized)) {
+  if (!validateEmail(normalized)) {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid email format" } },
       { status: 400 }

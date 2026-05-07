@@ -25,7 +25,7 @@ export function getPasswordStrength(password: string): PasswordStrength {
 }
 
 export function validateEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email.trim());
 }
 
 export type RegistrationErrors = {

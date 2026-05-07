@@ -1,6 +1,7 @@
 import { createClient } from "@/services/supabase/server";
 import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
+import { validateEmail } from "@/services/auth/auth-validation";
 
 interface SignupRequest {
   email: string;
@@ -39,8 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Basic email format validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!validateEmail(email)) {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid email format" } },
       { status: 400 }
