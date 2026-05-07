@@ -1,4 +1,7 @@
-import type { TournamentDetail as TournamentDetailType, Restrictions } from "../types";
+import type {
+  TournamentDetail as TournamentDetailType,
+  Restrictions,
+} from "../types";
 
 // ── Formatting helpers ────────────────────────────────────────
 
@@ -13,7 +16,10 @@ function formatDateRange(start: string, end: string): string {
   if (s.toDateString() === e.toDateString()) {
     return s.toLocaleDateString("en-MY", opts);
   }
-  const sStr = s.toLocaleDateString("en-MY", { day: "numeric", month: "short" });
+  const sStr = s.toLocaleDateString("en-MY", {
+    day: "numeric",
+    month: "short",
+  });
   const eStr = e.toLocaleDateString("en-MY", opts);
   return `${sStr} – ${eStr}`;
 }
@@ -64,7 +70,7 @@ function Section({
 }) {
   return (
     <section className="pt-6 border-t border-(--color-border)">
-      <h2 className="[font-family:var(--font-cinzel)] text-[1.125rem] font-semibold text-(--color-text-primary) tracking-[0.04em] mb-4">
+      <h2 className="font-cinzel text-[1.125rem] font-semibold text-text-primary tracking-[0.04em] mb-4">
         {title}
       </h2>
       {children}
@@ -75,12 +81,10 @@ function Section({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="[font-family:var(--font-cinzel)] text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-(--color-text-muted)">
+      <dt className="font-cinzel text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-(--color-text-muted)">
         {label}
       </dt>
-      <dd className="[font-family:var(--font-lato)] text-[0.9375rem] text-(--color-text-body)">
-        {value}
-      </dd>
+      <dd className="font-lato text-[0.9375rem] text-text-body">{value}</dd>
     </div>
   );
 }
@@ -92,9 +96,13 @@ interface Props {
   isAuthenticated: boolean;
 }
 
-export default function TournamentDetail({ tournament: t, isAuthenticated }: Props) {
+export default function TournamentDetail({
+  tournament: t,
+  isAuthenticated,
+}: Props) {
   const spotsLeft = t.max_participants - t.current_participants;
-  const spotsRatio = t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
+  const spotsRatio =
+    t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
   const minFee = getMinFeeCents(t.entry_fees);
   const lowestFeeEntry =
     t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
@@ -109,21 +117,19 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
       : [];
 
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
-      <main className="max-w-[75rem] mx-auto px-6 md:px-10 py-8">
+    <div className="min-h-screen bg-bg-base">
+      <main className="max-w-300 mx-auto px-6 md:px-10 py-8">
         {/* Two-column layout */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-8 items-start">
-
           {/* ── Left: scrollable detail ── */}
           <div className="flex flex-col gap-6">
-
             {/* Header */}
             <div>
-              <h1 className="[font-family:var(--font-cinzel)] text-[1.75rem] font-semibold text-(--color-text-primary) tracking-[0.05em] leading-[1.2] mb-2">
+              <h1 className="font-cinzel text-[1.75rem] font-semibold text-text-primary tracking-[0.05em] leading-[1.2] mb-2">
                 {t.name}
               </h1>
               {t.organizer && (
-                <p className="[font-family:var(--font-lato)] text-[0.875rem] text-(--color-text-secondary)">
+                <p className="font-lato text-[0.875rem] text-text-secondary">
                   Organized by{" "}
                   <span className="text-(--color-gold-bright)">
                     {t.organizer.organization_name}
@@ -230,14 +236,14 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
                           </span>
                         )}
                       </td>
-                      <td className="text-right [font-family:var(--font-cinzel)] font-semibold text-(--color-text-primary)">
+                      <td className="text-right font-cinzel font-semibold text-text-primary">
                         {formatRm(fee.amount_cents)}
                       </td>
                     </tr>
                   ))}
                   <tr>
                     <td>Standard</td>
-                    <td className="text-right [font-family:var(--font-cinzel)] font-semibold text-(--color-text-primary)">
+                    <td className="text-right font-cinzel font-semibold text-text-primary">
                       {formatRm(t.entry_fees.standard.amount_cents)}
                     </td>
                   </tr>
@@ -251,17 +257,17 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
                 <ul className="flex flex-col gap-3">
                   {t.prizes.categories.map((cat, ci) => (
                     <li key={ci}>
-                      <p className="[font-family:var(--font-cinzel)] text-[0.75rem] font-semibold uppercase tracking-[0.1em] text-(--color-gold-muted) mb-2">
+                      <p className="font-cinzel text-[0.75rem] font-semibold uppercase tracking-widest text-(--color-gold-muted) mb-2">
                         {cat.name}
                       </p>
                       <ul className="flex flex-col gap-1">
                         {cat.entries.map((entry, ei) => (
                           <li
                             key={ei}
-                            className="flex justify-between [font-family:var(--font-lato)] text-[0.9375rem] text-(--color-text-body)"
+                            className="flex justify-between font-lato text-[0.9375rem] text-text-body"
                           >
                             <span>{entry.place}</span>
-                            <span className="[font-family:var(--font-cinzel)] font-semibold text-(--color-text-primary)">
+                            <span className="font-cinzel font-semibold text-text-primary">
                               {formatRm(entry.amount_cents)}
                             </span>
                           </li>
@@ -308,7 +314,7 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
                     )}
                   </dl>
                 ) : (
-                  <p className="[font-family:var(--font-lato)] text-[0.9375rem] text-(--color-text-body)">
+                  <p className="font-lato text-[0.9375rem] text-text-body">
                     Open to all players — no rating or age restrictions apply.
                   </p>
                 )}
@@ -318,7 +324,7 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
             {/* Description */}
             {t.description && (
               <Section title="Description">
-                <p className="[font-family:var(--font-lato)] text-[0.9375rem] text-(--color-text-body) leading-[1.75]">
+                <p className="font-lato text-[0.9375rem] text-text-body leading-[1.75]">
                   {t.description}
                 </p>
               </Section>
@@ -328,15 +334,15 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
             {t.organizer && (
               <Section title="Organizer">
                 <div className="flex flex-col gap-3">
-                  <h3 className="[font-family:var(--font-cinzel)] text-[1rem] font-semibold text-(--color-text-primary)">
+                  <h3 className="font-cinzel text-[1rem] font-semibold text-text-primary">
                     {t.organizer.organization_name}
                   </h3>
                   {t.organizer.description && (
-                    <p className="[font-family:var(--font-lato)] text-[0.9375rem] text-(--color-text-body) leading-[1.7]">
+                    <p className="font-lato text-[0.9375rem] text-text-body leading-[1.7]">
                       {t.organizer.description}
                     </p>
                   )}
-                  <div className="flex flex-col gap-1 [font-family:var(--font-lato)] text-[0.875rem] text-(--color-text-secondary)">
+                  <div className="flex flex-col gap-1 font-lato text-[0.875rem] text-text-secondary">
                     <a
                       href={`mailto:${t.organizer.email}`}
                       className="hover:text-(--color-gold-bright) transition-colors"
@@ -371,17 +377,17 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
           {/* ── Right: sticky register card ── */}
           <aside className="md:sticky md:top-24">
             <div className="card card--featured p-6 flex flex-col gap-4">
-              <h3 className="[font-family:var(--font-cinzel)] text-[1rem] font-semibold text-(--color-text-primary) tracking-[0.05em]">
+              <h3 className="font-cinzel text-[1rem] font-semibold text-text-primary tracking-[0.05em]">
                 Register for this tournament
               </h3>
 
               {/* Price */}
               <div>
-                <div className="[font-family:var(--font-cinzel)] text-[2rem] font-bold text-(--color-text-primary)">
+                <div className="font-cinzel text-[2rem] font-bold text-text-primary">
                   {minFee > 0 ? formatRm(minFee) : "Free"}
                 </div>
                 {lowestFeeEntry && (
-                  <p className="[font-family:var(--font-lato)] text-[0.8125rem] text-(--color-text-muted) mt-0.5">
+                  <p className="font-lato text-[0.8125rem] text-(--color-text-muted) mt-0.5">
                     {lowestFeeEntry.type} price
                     {lowestFeeEntry.valid_until &&
                       ` (ends ${formatDeadline(lowestFeeEntry.valid_until)})`}
@@ -403,7 +409,7 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
               )}
 
               {/* Spots */}
-              <div className="[font-family:var(--font-lato)] text-[0.875rem] text-(--color-text-secondary)">
+              <div className="font-lato text-[0.875rem] text-text-secondary">
                 <span className={`font-semibold ${spotsClass}`}>
                   {spotsLeft}
                 </span>{" "}
@@ -411,7 +417,7 @@ export default function TournamentDetail({ tournament: t, isAuthenticated }: Pro
               </div>
 
               {/* Deadline */}
-              <p className="[font-family:var(--font-lato)] text-[0.8125rem] text-(--color-text-muted)">
+              <p className="font-lato text-[0.8125rem] text-(--color-text-muted)">
                 ⏰ Registration closes {formatDeadline(t.registration_deadline)}
               </p>
             </div>

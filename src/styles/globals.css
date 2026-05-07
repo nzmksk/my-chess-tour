@@ -28,6 +28,16 @@
   /* Semantic */
   --color-border: #2e2a1e;
   --color-border-gold: #c9a84c;
+  --color-grandiose-hover: rgba(201, 168, 76, 0.08);
+  --color-raftsman-bg: rgba(59, 90, 160, 0.18);
+  --color-raftsman-border: rgba(59, 90, 160, 0.3);
+  --color-murasaki-purple-bg: rgba(140, 60, 150, 0.18);
+  --color-murasaki-purple-border: rgba(140, 60, 150, 0.3);
+  --color-bold-irish-bg: rgba(43, 122, 75, 0.15);
+  --color-bold-irish-border: rgba(43, 122, 75, 0.3);
+  --color-shiny-shamrock: #5aaa7a;
+  --color-blue-cue: #7ea3d9;
+  --color-purception: #c07fd0;
   --color-error: #e87070;
 
   /* Status */
@@ -48,6 +58,8 @@
   --color-danger-icon-bg: rgba(90, 30, 10, 0.15);
   --color-badge-neutral-bg: rgba(255, 255, 255, 0.05);
   --color-skeleton-highlight: #222222;
+
+  --text-2xs: 0.625rem;
 }
 
 [data-theme="light"] {
@@ -117,21 +129,17 @@
 }
 
 @layer components {
-  /* ── Tournament card ── */
-  .tournament-card {
-    background: var(--color-bg-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    overflow: hidden;
-    display: grid;
-    cursor: pointer;
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease;
+  .card {
+    @apply bg-bg-surface border border-border rounded-sm;
   }
+
+  .tournament-card {
+    @apply transition duration-200 cursor-pointer;
+  }
+
   .tournament-card:hover {
-    border-color: var(--color-gold-muted);
-    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.12);
+    @apply border-gold-muted;
+    box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
 
   /* Format / rating badges */
@@ -139,77 +147,40 @@
   .badge-fide,
   .badge-mcf,
   .badge-unrated {
-    font-family: var(--font-cinzel);
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.125rem 0.5rem;
-    border-radius: 2px;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-0.5 rounded-xs;
   }
   .badge-format {
-    background: var(--color-bg-raised);
-    color: var(--color-text-secondary);
-    border: 1px solid var(--color-border);
+    @apply bg-bg-raised text-text-secondary border-border;
   }
   .badge-fide {
-    background: rgba(59, 90, 160, 0.18);
-    color: #7ea3d9;
-    border: 1px solid rgba(59, 90, 160, 0.3);
+    @apply bg-raftsman-bg text-blue-cue border-raftsman-border;
   }
   .badge-mcf {
-    background: rgba(140, 60, 150, 0.18);
-    color: #c07fd0;
-    border: 1px solid rgba(140, 60, 150, 0.3);
+    @apply bg-murasaki-purple-bg text-purception border-murasaki-purple-border;
   }
   .badge-unrated {
-    background: var(--color-bg-raised);
-    color: var(--color-text-muted);
-    border: 1px solid var(--color-border);
+    @apply bg-bg-raised text-text-muted border-border;
   }
 
   /* Card CTA buttons */
   .card-btn-view {
-    font-family: var(--font-cinzel);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 0.5rem 1rem;
-    border-radius: 2px;
-    border: 1px solid var(--color-gold-bright);
-    background: transparent;
-    color: var(--color-gold-bright);
-    cursor: pointer;
-    transition: background 0.15s ease;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-0.5 rounded-xs border-gold-bright bg-transparent text-gold-bright cursor-pointer transition duration-150;
   }
   .card-btn-view:hover {
-    background: rgba(201, 168, 76, 0.08);
+    @apply bg-grandiose-hover;
   }
   .card-btn-full {
-    font-family: var(--font-cinzel);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 0.5rem 1rem;
-    border-radius: 2px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-text-muted);
-    cursor: default;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-0.5 rounded-xs border-border bg-transparent text-text-muted;
   }
 
   /* Gold gradient CTA button */
   .btn-gold {
+    @apply text-bg-base font-cinzel tracking-widest;
     background: linear-gradient(
       135deg,
       var(--color-gold-bright),
       var(--color-gold-deep)
     );
-    color: var(--color-bg-base);
-    font-family: var(--font-cinzel);
-    letter-spacing: 0.1em;
   }
 
   /* Gold gradient progress bar fill */
@@ -223,445 +194,222 @@
 
   /* ── Filter bar ── */
   .search-input {
-    width: 100%;
-    font-family: var(--font-lato);
-    font-size: 0.875rem;
-    padding: 0.625rem 0.875rem;
-    border: 1px solid var(--color-border);
-    border-radius: 2px;
-    background: var(--color-bg-sunken);
-    color: var(--color-text-body);
-    outline: none;
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease;
+    @apply font-lato text-sm px-2.5 py-3.5 border-border rounded-xs bg-bg-sunken text-text-body outline-none transition duration-200 w-full;
   }
   .search-input:focus {
-    border-color: var(--color-gold-bright);
-    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
+    @apply border-gold-bright;
+    box-shadow: 0 0 0 3px var(--color-grandiose-hover);
   }
   .search-input::placeholder {
-    color: var(--color-text-disabled);
+    @apply text-text-disabled;
   }
 
   .filter-btn {
-    font-family: var(--font-lato);
-    font-size: 0.8125rem;
-    padding: 0.625rem 2rem 0.625rem 0.75rem;
-    border: 1px solid var(--color-border);
-    border-radius: 2px;
+    @apply font-lato text-sm pt-2.5 pr-8 pb-2.5 pl-3 border-border rounded-xs text-text-body cursor-pointer whitespace-nowrap appearance-none transition duration-150;
     background: var(--color-bg-raised)
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a6e55' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E")
       right 10px center / 12px no-repeat;
-    color: var(--color-text-body);
-    cursor: pointer;
-    white-space: nowrap;
-    appearance: none;
-    transition: border-color 0.15s ease;
   }
   .filter-btn:hover {
-    border-color: var(--color-gold-muted);
+    @apply border-gold-muted;
   }
   .filter-btn--active {
-    border-color: var(--color-gold-bright);
-    background-color: rgba(201, 168, 76, 0.08);
-    color: var(--color-gold-bright);
+    @apply border-gold-bright text-gold-bright bg-grandiose-hover;
   }
 
   .filter-panel {
-    position: absolute;
+    @apply absolute left-0 bg-bg-raised border border-border-gold rounded z-100 py-1.5 min-w-45;
     top: calc(100% + 0.25rem);
-    left: 0;
-    background: var(--color-bg-raised);
-    border: 1px solid var(--color-border-gold);
-    border-radius: 4px;
-    padding: 0.375rem 0;
-    min-width: 11.25rem;
-    z-index: 100;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   }
 
   .filter-checkbox-item {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    padding: 0.5rem 0.875rem;
-    font-size: 0.8125rem;
-    font-family: var(--font-lato);
-    color: var(--color-text-body);
-    cursor: pointer;
-    transition: background 0.1s;
-    user-select: none;
+    @apply flex items-center gap-2.5 px-3.5 py-2 font-lato text-sm text-text-body cursor-pointer transition-colors select-none;
   }
   .filter-checkbox-item:hover {
-    background: rgba(201, 168, 76, 0.05);
+    @apply bg-grandiose-hover;
   }
 
   .filter-clear-btn {
-    font-family: var(--font-lato);
-    font-size: 0.8125rem;
-    color: var(--color-text-muted);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0.625rem 0.75rem;
-    transition: color 0.15s ease;
+    @apply font-lato text-sm text-text-muted bg-none border-none cursor-pointer px-3 py-2.5 transition-colors duration-150;
   }
   .filter-clear-btn:hover {
-    color: var(--color-text-secondary);
+    @apply text-text-secondary;
   }
 
   /* ── Navbar ── */
   .nav-backdrop {
-    display: none;
-    position: fixed;
-    inset: 0;
+    @apply hidden fixed inset-0 z-100;
     background: rgba(0, 0, 0, 0.6);
-    z-index: 100;
   }
   .nav-backdrop--open {
-    display: block;
+    @apply block;
   }
 
   .nav-drawer {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 17.5rem;
-    background: var(--color-bg-sunken);
-    border-left: 1px solid var(--color-border);
-    z-index: 101;
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
+    @apply fixed top-0 right-0 bottom-0 flex flex-col z-101 p-6 bg-bg-sunken border-l border-border translate-x-full w-70 transition-transform duration-300;
   }
   .nav-drawer--open {
-    transform: translateX(0);
+    @apply translate-x-0;
   }
 
   .nav-link {
-    font-size: 0.8125rem;
-    letter-spacing: 0.08em;
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    text-decoration: none;
-    padding: 0 1rem;
-    transition: color 0.15s ease;
+    @apply text-sm tracking-widest text-text-secondary uppercase no-underline px-4 transition-colors duration-150;
   }
   .nav-link--active {
-    color: var(--color-gold-bright);
+    @apply text-gold-bright;
   }
   .nav-link-organizer {
-    font-size: 0.8125rem;
-    letter-spacing: 0.08em;
-    color: var(--color-gold-bright);
-    text-transform: uppercase;
-    text-decoration: none;
-    padding: 0 0 0 1rem;
-    margin-left: 0.5rem;
-    transition: opacity 0.15s ease;
+    @apply text-sm tracking-widest text-gold-bright uppercase no-underline pl-4 ml-2 transition-opacity duration-150;
   }
 
   .nav-drawer-link {
-    font-size: 0.875rem;
-    letter-spacing: 0.08em;
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    text-decoration: none;
-    padding: 0.75rem 1rem;
-    border-radius: 2px;
-    transition:
-      color 0.15s ease,
-      background 0.15s ease;
+    @apply text-sm tracking-widest text-text-secondary uppercase no-underline py-3 px-4 rounded-xs transition duration-150;
   }
   .nav-drawer-link--active {
-    color: var(--color-gold-bright);
-    background: rgba(201, 168, 76, 0.08);
+    @apply text-gold-bright bg-grandiose-hover;
   }
   .nav-drawer-link-organizer {
-    font-size: 0.875rem;
-    letter-spacing: 0.08em;
-    color: var(--color-gold-bright);
-    text-transform: uppercase;
-    text-decoration: none;
-    padding: 0.75rem 1rem;
-    margin-top: 1rem;
-    border: 1px solid var(--color-gold-bright);
-    border-radius: 2px;
-    text-align: center;
-    transition: background 0.15s ease;
+    @apply text-sm tracking-widest text-gold-bright uppercase no-underline py-3 px-4 mt-4 border border-gold-bright rounded-xs text-center transition-colors duration-150;
   }
 
   /* ── Auth pages ── */
   .auth-page {
-    min-height: 70vh;
-    display: grid;
-    place-items: center;
-    padding: 4rem 2.5rem;
+    @apply grid place-items-center px-10 py-16 min-h-8/12;
   }
 
   .auth-card {
-    width: 100%;
-    max-width: 28.75rem;
+    @apply w-full max-w-115;
   }
 
   .auth-card-header {
-    text-align: center;
-    margin-bottom: 1.5rem;
+    @apply text-center mb-6;
   }
 
   .auth-logo {
-    font-family: var(--font-cinzel);
-    font-weight: 700;
-    font-size: 0.8125rem;
-    letter-spacing: 0.22em;
-    color: var(--color-gold-bright);
-    text-transform: uppercase;
-    margin-bottom: 0.75rem;
-    display: block;
+    @apply font-cinzel font-bold text-sm tracking-widest text-gold-bright uppercase mb-3 block;
   }
 
   .auth-heading {
-    font-family: var(--font-cinzel);
-    font-weight: 600;
-    font-size: 1.625rem;
-    letter-spacing: 0.05em;
-    color: var(--color-text-primary);
-    line-height: 1.2;
-    margin-bottom: 0.5rem;
+    @apply font-cinzel font-semibold text-2xl tracking-wider text-text-primary leading-[1.2] mb-2;
   }
 
   .auth-subheading {
-    font-family: var(--font-lato);
-    font-weight: 300;
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
+    @apply font-lato font-light text-sm text-text-secondary;
   }
 
   .auth-footer {
-    text-align: center;
-    font-family: var(--font-lato);
-    font-size: 0.8125rem;
-    color: var(--color-text-muted);
+    @apply text-center font-lato text-sm text-text-muted;
   }
   .auth-footer a {
-    color: var(--color-gold-muted);
-    text-decoration: none;
-    transition: color 0.2s ease;
+    @apply text-gold-muted no-underline transition-colors duration-200;
   }
   .auth-footer a:hover {
-    color: var(--color-gold-bright);
+    @apply text-gold-bright;
   }
 
   /* ── Auth card variant ── */
   .card {
-    background: var(--color-bg-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 2.5rem;
+    @apply bg-bg-surface border border-border rounded;
+    /* padding: 2.5rem; */
   }
   .card--featured {
-    border-top: 2px solid var(--color-gold-bright);
+    @apply border-t-2 border-t-gold-bright;
   }
 
   .centered-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    max-width: 28.75rem;
+    @apply flex flex-col items-center w-full max-w-115;
   }
 
   /* ── Dividers ── */
   .divider-gold {
-    width: 48px;
-    height: 2px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--color-gold-bright),
-      transparent
-    );
-    margin: 1.5rem auto;
-    border: none;
+    @apply w-12 h-0.5;
+    background: linear-gradient(90deg, transparent, var(--color-gold-bright), transparent);
   }
 
   .divider-text {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 1.5rem 0;
-    color: var(--color-text-muted);
-    font-size: 0.6875rem;
-    letter-spacing: 0.1em;
-    font-family: var(--font-cinzel);
-    text-transform: uppercase;
+    @apply flex items-center gap-4 my-6 text-text-muted text-xs tracking-widest font-cinzel uppercase;
   }
   .divider-text::before,
   .divider-text::after {
     content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--color-border);
+    @apply flex-1 h-px bg-border;
   }
 
   /* ── Forms ── */
   .form-group {
-    margin-bottom: 1.5rem;
-    position: relative;
+    @apply mb-6 relative;
   }
 
   .label-row {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    margin-bottom: 0.375rem;
+    @apply flex items-center gap-1 mb-1.5;
   }
 
   .input-label {
-    font-family: var(--font-cinzel);
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color-gold-muted);
+    @apply font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted;
   }
 
   .label-optional {
-    font-family: var(--font-lato);
-    font-weight: 300;
-    font-size: 0.6875rem;
-    color: var(--color-text-disabled);
-    letter-spacing: 0;
-    text-transform: none;
+    @apply font-lato font-light text-sm text-text-disabled tracking-normal normal-case;
   }
 
   .help-icon {
-    width: 0.9375rem;
-    height: 0.9375rem;
-    border-radius: 50%;
-    border: 1px solid var(--color-gold-dim);
-    background: transparent;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-lato);
-    font-size: 0.5625rem;
-    font-weight: 400;
-    color: var(--color-gold-dim);
-    cursor: pointer;
-    transition:
-      border-color 0.2s ease,
-      color 0.2s ease;
-    position: relative;
-    flex-shrink: 0;
+    @apply w-4 h-4 rounded-full border border-gold-dim bg-transparent inline-flex items-center justify-center font-lato text-sm font-normal text-gold-dim cursor-pointer transition duration-200 relative shrink-0;
   }
   .help-icon:hover,
   .help-icon:focus {
-    border-color: var(--color-gold-bright);
-    color: var(--color-gold-bright);
-    outline: none;
+    @apply border-gold-bright text-gold-bright outline-none;
   }
   .help-icon:hover .tooltip,
   .help-icon:focus .tooltip {
-    display: block;
+    @apply block;
   }
   .tooltip {
-    display: none;
-    position: absolute;
-    left: 1.25rem;
-    top: 50%;
-    transform: translateY(-50%);
-    background: var(--color-bg-raised);
-    border: 1px solid var(--color-border-gold);
-    border-radius: 2px;
-    padding: 0.5rem 1rem;
-    width: 13.75rem;
-    z-index: 50;
-    font-family: var(--font-lato);
-    font-size: 0.75rem;
-    font-weight: 300;
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-    pointer-events: none;
-    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
+    @apply hidden absolute left-5 w-55 top-1/2 -translate-y-1/2 bg-bg-raised border border-border-gold rounded-xs px-4 py-2 z-50 font-lato text-sm font-light text-text-secondary leading-relaxed pointer-events-none;
+    box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
 
   .input {
-    background: var(--color-bg-sunken);
-    border: 1px solid var(--color-border);
-    border-radius: 2px;
-    color: var(--color-text-body);
-    font-family: var(--font-lato);
-    font-size: 0.9375rem;
-    padding: 0.75rem 1rem;
-    width: 100%;
-    outline: none;
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease;
-    appearance: none;
+    @apply bg-bg-sunken border border-border rounded-xs text-text-body font-lato text-sm px-4 py-3 w-full outline-none transition duration-200 appearance-none;
   }
   .input:focus {
-    border-color: var(--color-gold-bright);
-    box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+    @apply border-gold-bright;
+    box-shadow: 0 0 0 3px var(--color-grandiose-hover);
   }
   .input::placeholder {
-    color: var(--color-text-disabled);
+    @apply text-text-disabled;
   }
   .input-error {
-    border-color: var(--color-danger-border);
+    @apply border-danger-border;
   }
   .input--icon {
-    padding-right: 2.75rem;
+    @apply pr-11;
   }
 
   .input-hint {
-    font-family: var(--font-lato);
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
-    margin-top: 0.25rem;
-    font-weight: 300;
+    @apply font-lato text-xs text-text-muted mt-1 font-light;
   }
   .input-hint.error {
-    color: var(--color-error-text);
+    @apply text-error-text;
   }
 
   .input-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    @apply grid grid-cols-2 gap-4;
   }
 
   /* Eye icon wrapper */
   .input-wrap {
-    position: relative;
+    @apply relative;
   }
   .eye-btn {
-    position: absolute;
-    right: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0.25rem;
-    color: var(--color-text-muted);
-    transition: color 0.2s ease;
-    display: flex;
-    align-items: center;
+    @apply absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-0 cursor-pointer p-1 text-text-muted transition-colors duration-200 flex items-center;
   }
   .eye-btn:hover {
-    color: var(--color-gold-bright);
+    @apply text-gold-bright;
   }
   .eye-icon,
   .eye-off-icon {
-    display: block;
-    width: 1rem;
-    height: 1rem;
+    @apply block w-4 h-4;
     mask-repeat: no-repeat;
     mask-size: contain;
     mask-position: center;
@@ -676,648 +424,294 @@
 
   /* ── Password requirements ── */
   .pw-requirements {
-    background: var(--color-bg-sunken);
-    border: 1px solid var(--color-border);
-    border-radius: 2px;
-    padding: 0.5rem 1rem;
-    margin-top: 0.5rem;
+    @apply bg-bg-sunken border border-border rounded-xs px-4 py-2 mt-2;
   }
   .pw-requirements--error {
-    border-color: var(--color-danger-deep);
+    @apply border-danger-deep;
   }
   .pw-req-title {
-    font-family: var(--font-cinzel);
-    font-size: 0.5625rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
-    margin-bottom: 0.25rem;
+    @apply font-cinzel text-sm font-semibold tracking-widest uppercase text-text-muted mb-1;
   }
   .pw-req-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.25rem 0.75rem;
+    @apply grid grid-cols-2 gap-x-3 gap-y-1;
   }
   .pw-req {
-    display: flex;
-    align-items: center;
-    gap: 0.3125rem;
-    font-family: var(--font-lato);
-    font-size: 0.6875rem;
-    color: var(--color-text-muted);
+    @apply flex items-center gap-1.25 font-lato text-sm text-text-muted;
   }
   .pw-req-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: var(--color-gold-dim);
+    @apply rounded-full shrink-0 bg-gold-dim w-1.5 h-1.5;
   }
   .pw-req--met .pw-req-dot {
-    background: var(--color-gold-bright);
+    @apply bg-gold-bright;
   }
   .pw-req--met {
-    color: var(--color-text-secondary);
+    @apply text-text-secondary;
   }
 
   /* ── Password strength bar ── */
   .strength-bar {
-    height: 3px;
-    border-radius: 2px;
-    background: var(--color-border);
-    margin-top: 0.5rem;
-    overflow: hidden;
+    @apply h-0.75 rounded-xs bg-border mt-2 overflow-hidden;
   }
   .strength-fill {
-    height: 100%;
-    border-radius: 2px;
-    background: linear-gradient(
-      90deg,
-      var(--color-gold-bright),
-      var(--color-gold-deep)
-    );
-    transition: width 0.2s ease;
+    @apply h-full rounded-xs transition-[width] duration-200;
+    background: linear-gradient(90deg, var(--color-gold-bright), var(--color-gold-deep));
   }
 
   /* ── Checkboxes ── */
   .check-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
+    @apply flex items-start gap-2;
   }
   .checkbox {
-    width: 1rem;
-    height: 1rem;
-    flex-shrink: 0;
-    margin-top: 0.125rem;
-    background: var(--color-bg-sunken);
-    border: 1px solid var(--color-border);
-    border-radius: 2px;
-    appearance: none;
-    cursor: pointer;
-    position: relative;
-    transition: border-color 0.2s ease;
+    @apply w-4 h-4 shrink-0 mt-0.5 bg-bg-sunken border border-border rounded-xs appearance-none cursor-pointer relative transition-colors duration-200;
   }
   .checkbox:checked {
-    border-color: var(--color-gold-bright);
-    background: rgba(201, 168, 76, 0.15);
+    @apply border-gold-bright bg-grandiose-hover;
   }
   .checkbox:checked::after {
+    @apply absolute text-gold-bright text-xs;
     content: "✓";
-    position: absolute;
     top: -0.0625rem;
     left: 0.125rem;
-    font-size: 0.75rem;
-    color: var(--color-gold-bright);
   }
   .check-label {
-    font-family: var(--font-lato);
-    font-size: 0.8125rem;
-    color: var(--color-text-secondary);
-    line-height: 1.5;
+    @apply font-lato text-sm text-text-secondary leading-relaxed;
   }
   .check-label a {
-    color: var(--color-gold-muted);
-    text-decoration: none;
-    transition: color 0.2s ease;
+    @apply text-gold-muted no-underline transition-colors duration-200;
   }
   .check-label a:hover {
-    color: var(--color-gold-bright);
+    @apply text-gold-bright;
   }
 
   /* ── Remember + Forgot row ── */
   .remember-forgot-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
+    @apply flex items-center justify-between mb-6;
   }
   .forgot-link {
-    font-family: var(--font-lato);
-    font-size: 0.75rem;
-    color: var(--color-gold-muted);
-    cursor: pointer;
-    text-decoration: none;
-    transition: color 0.2s ease;
+    @apply font-lato text-xs text-gold-muted cursor-pointer no-underline transition-colors duration-200;
   }
   .forgot-link:hover {
-    color: var(--color-gold-bright);
+    @apply text-gold-bright;
   }
 
   /* ── Auth buttons ── */
   .btn-primary {
-    background: linear-gradient(
-      135deg,
-      var(--color-gold-bright),
-      var(--color-gold-deep)
-    );
-    color: #0e0e0e;
-    font-family: var(--font-cinzel);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    padding: 0.875rem 2.25rem;
-    border-radius: 2px;
-    border: none;
-    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
-    cursor: pointer;
-    width: 100%;
-    transition:
-      box-shadow 0.2s ease,
-      opacity 0.2s ease;
-    display: block;
-    text-align: center;
-    text-decoration: none;
+    @apply text-bg-base font-cinzel text-sm font-bold tracking-widest uppercase py-3.5 px-9 rounded-xs border-0 cursor-pointer w-full transition duration-200 block text-center no-underline;
+    box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
   .btn-primary:hover {
-    box-shadow: 0 6px 28px rgba(201, 168, 76, 0.4);
-    opacity: 0.92;
+    @apply opacity-[0.92];
+    box-shadow: 0 6px 28px var(--color-grandiose-hover);
   }
   .btn-primary:disabled,
   .btn-primary[aria-disabled="true"] {
-    opacity: 0.5;
-    cursor: not-allowed;
+    @apply opacity-50 cursor-not-allowed;
   }
 
   .btn-secondary {
-    background: transparent;
-    color: var(--color-gold-bright);
-    font-family: var(--font-cinzel);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    padding: 0.8125rem 1.5rem;
-    border-radius: 2px;
-    border: 1px solid var(--color-gold-bright);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.2s ease;
+    @apply bg-transparent text-gold-bright font-cinzel text-sm font-bold tracking-widest uppercase py-3.25 px-6 rounded-xs border border-gold-bright cursor-pointer whitespace-nowrap transition duration-200;
   }
   .btn-secondary:hover {
-    background: rgba(201, 168, 76, 0.08);
+    @apply bg-grandiose-hover;
   }
 
   .btn-danger {
-    background: transparent;
-    color: var(--color-danger-text);
-    font-family: var(--font-cinzel);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    padding: 0.875rem 2.25rem;
-    border-radius: 2px;
-    border: 1px solid var(--color-danger-text);
-    cursor: pointer;
-    width: 100%;
-    transition:
-      background 0.2s ease,
-      opacity 0.2s ease;
-    display: block;
-    text-align: center;
+    @apply bg-transparent text-danger-text font-cinzel text-sm font-bold tracking-widest uppercase py-3.5 px-9 rounded-xs border border-danger-text cursor-pointer w-full transition duration-200 block text-center;
   }
   .btn-danger:hover {
     background: rgba(224, 145, 110, 0.1);
   }
   .btn-danger:disabled,
   .btn-danger[aria-disabled="true"] {
-    opacity: 0.5;
-    cursor: not-allowed;
+    @apply opacity-50 cursor-not-allowed;
   }
 
   /* ── Error banner ── */
   .error-banner {
-    background: var(--color-error-banner-bg);
-    border: 1px solid var(--color-error-banner-border);
-    border-radius: 2px;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
+    @apply bg-error-banner-bg border border-error-banner-border rounded-xs p-4 mb-6 flex items-start gap-2;
   }
   .error-text {
-    font-family: var(--font-lato);
-    font-size: 0.8125rem;
-    color: var(--color-danger-text);
-    line-height: 1.5;
+    @apply font-lato text-sm text-danger-text leading-relaxed;
   }
 
   /* ── Step tracker ── */
   .step-tracker {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 2.5rem;
+    @apply flex items-center justify-center mb-10;
   }
   .step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
+    @apply flex flex-col items-center gap-1;
   }
   .step-circle {
-    width: 1.75rem;
-    height: 1.75rem;
-    border-radius: 50%;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-sunken);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-cinzel);
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--color-text-muted);
+    @apply w-7 h-7 rounded-full border border-border bg-bg-sunken flex items-center justify-center font-cinzel text-2xs font-semibold text-text-muted;
   }
   .step-circle--done {
-    border-color: var(--color-gold-bright);
-    background: rgba(201, 168, 76, 0.15);
-    color: var(--color-gold-bright);
+    @apply border-gold-bright text-gold-bright;
+    background: var(--color-grandiose-hover);
   }
   .step-circle--current {
-    border-color: var(--color-gold-bright);
-    background: linear-gradient(
-      135deg,
-      var(--color-gold-bright),
-      var(--color-gold-deep)
-    );
-    color: #0e0e0e;
+    @apply border-gold-bright text-bg-base;
+    background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
   }
   .step-label {
-    font-family: var(--font-cinzel);
-    font-size: 0.5625rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
+    @apply font-cinzel text-2xs tracking-widest uppercase text-text-muted;
   }
   .step-label--current {
-    color: var(--color-gold-bright);
+    @apply text-gold-bright;
   }
   .step-connector {
-    height: 1px;
-    width: 40px;
-    background: var(--color-border);
-    margin-bottom: 1rem;
-    flex-shrink: 0;
+    @apply bg-border shrink-0 mb-4 h-px w-10;
   }
   .step-connector--done {
-    background: var(--color-gold-muted);
+    @apply bg-gold-muted;
   }
 
   /* ── Avatar upload ── */
   .avatar-upload-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 2.5rem;
+    @apply flex flex-col items-center gap-2 mb-10;
   }
   .avatar-preview {
-    width: 5rem;
-    height: 5rem;
-    border-radius: 50%;
-    background: var(--color-gold-ghost);
-    border: 2px solid var(--color-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-cinzel);
-    font-size: 1.625rem;
-    font-weight: 600;
-    color: var(--color-gold-bright);
-    position: relative;
-    cursor: pointer;
-    transition: border-color 0.2s ease;
+    @apply w-20 h-20 rounded-full bg-gold-ghost border-2 border-border flex items-center justify-center font-cinzel text-2xl font-semibold text-gold-bright relative cursor-pointer transition-colors duration-200;
   }
   .avatar-preview:hover {
-    border-color: var(--color-gold-bright);
+    @apply border-gold-bright;
   }
   .avatar-overlay {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
+    @apply absolute inset-0 rounded-full flex items-center justify-center opacity-0 transition-opacity duration-200;
     background: rgba(0, 0, 0, 0.55);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s ease;
   }
   .avatar-preview:hover .avatar-overlay {
-    opacity: 1;
+    @apply opacity-100;
   }
   .avatar-overlay-text {
-    font-family: var(--font-cinzel);
-    font-size: 0.5rem;
-    letter-spacing: 0.12em;
-    color: var(--color-gold-bright);
-    text-transform: uppercase;
-    text-align: center;
+    @apply font-cinzel text-2xs tracking-widest text-gold-bright uppercase text-center;
   }
   .avatar-hint {
-    font-family: var(--font-lato);
-    font-size: 0.6875rem;
-    color: var(--color-text-muted);
-    font-style: italic;
-    text-align: center;
+    @apply font-lato text-sm text-text-muted italic text-center;
   }
 
   /* ── Success / session info ── */
   .success-icon {
-    width: 3.75rem;
-    height: 3.75rem;
-    border-radius: 50%;
-    border: 1px solid rgba(201, 168, 76, 0.3);
-    background: rgba(201, 168, 76, 0.08);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 1.5rem;
-    font-size: 1.5rem;
+    @apply w-15 h-15 rounded-full bg-grandiose-hover border-grandiose-hover flex items-center justify-center mx-auto mb-6 text-2xl;
   }
   .session-info {
-    background: var(--color-bg-sunken);
-    border: 1px solid var(--color-border);
-    border-radius: 2px;
-    padding: 1rem;
-    margin-bottom: 2.5rem;
-    text-align: left;
+    @apply bg-bg-sunken border border-border rounded-xs p-4 mb-10 text-left;
   }
   .session-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.25rem 0;
-    border-bottom: 1px solid var(--color-border);
+    @apply flex justify-between items-center py-1 border-b border-border;
   }
   .session-row:last-child {
-    border-bottom: none;
+    @apply border-b-0;
   }
   .session-key {
-    font-family: var(--font-cinzel);
-    font-size: 0.625rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
+    @apply font-cinzel text-2xs tracking-widest uppercase text-text-muted;
   }
   .session-val {
-    font-family: var(--font-lato);
-    font-size: 0.8125rem;
-    color: var(--color-text-secondary);
+    @apply font-lato text-sm text-text-secondary;
   }
 
   /* ── Badge variants ── */
   .badge {
-    font-family: var(--font-cinzel);
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 0.1875rem 0.625rem;
-    border-radius: 2px;
-    display: inline-block;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase py-0.75 px-2.5 rounded-xs inline-block;
   }
   .badge--gold {
-    background: rgba(201, 168, 76, 0.15);
-    color: var(--color-gold-bright);
-    border: 1px solid rgba(201, 168, 76, 0.3);
+    @apply text-gold-bright bg-grandiose-hover;
+    border: 1px solid var(--color-grandiose-hover);
   }
   .badge--neutral {
-    background: var(--color-badge-neutral-bg);
-    color: var(--color-text-secondary);
-    border: 1px solid var(--color-border);
+    @apply bg-badge-neutral-bg text-text-secondary border border-border;
   }
   .badge--success {
-    background: rgba(43, 122, 75, 0.15);
-    color: #5aaa7a;
-    border: 1px solid rgba(43, 122, 75, 0.3);
+    @apply text-shiny-shamrock bg-bold-irish-bg border-bold-irish-border;
   }
 
   /* ── Navbar avatar & dropdown ── */
   .nav-avatar {
+    @apply rounded-full bg-gold-ghost border border-gold-muted flex items-center justify-center font-cinzel text-xs font-semibold text-gold-bright cursor-pointer shrink-0 transition duration-200;
     width: 2.125rem;
     height: 2.125rem;
-    border-radius: 50%;
-    background: var(--color-gold-ghost);
-    border: 1px solid var(--color-gold-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-cinzel);
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--color-gold-bright);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease;
-    background: none;
   }
   .nav-avatar:hover,
   .nav-avatar--open {
-    border-color: var(--color-gold-bright);
-    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
+    @apply border-gold-bright;
+    box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
 
   .nav-dropdown {
-    position: absolute;
+    @apply absolute right-0 w-55 bg-bg-surface border border-border-gold rounded z-99 overflow-hidden;
     top: calc(100% + 0.5rem);
-    right: 0;
-    width: 13.75rem;
-    background: var(--color-bg-surface);
-    border: 1px solid var(--color-border-gold);
-    border-radius: 4px;
-    box-shadow: 0 6px 28px rgba(201, 168, 76, 0.4);
-    z-index: 99;
-    overflow: hidden;
+    box-shadow: 0 6px 28px var(--color-grandiose-hover);
   }
 
   .nav-dropdown-user {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--color-border);
+    @apply px-4 py-3 border-b border-border;
   }
   .nav-dropdown-name {
-    font-family: var(--font-cinzel);
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    letter-spacing: 0.04em;
+    @apply font-cinzel text-xs font-semibold text-text-primary tracking-wider;
   }
   .nav-dropdown-email {
-    font-size: 0.6875rem;
-    color: var(--color-text-muted);
-    margin-top: 0.125rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    @apply text-2xs text-text-muted mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis;
   }
 
   .nav-dropdown-item {
-    padding: 0.625rem 1rem;
-    font-size: 0.8125rem;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    text-decoration: none;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    transition: background 0.15s ease;
+    @apply px-4 py-2.5 text-sm text-text-secondary cursor-pointer flex items-center gap-2 no-underline w-full text-left bg-none border-none transition-colors duration-150;
   }
   .nav-dropdown-item:hover {
-    background: rgba(201, 168, 76, 0.04);
+    background: var(--color-grandiose-hover);
   }
   .nav-dropdown-item--danger {
-    color: var(--color-danger-text);
+    @apply text-danger-text;
   }
   .nav-dropdown-divider {
-    height: 1px;
-    background: var(--color-border);
+    @apply h-px bg-border;
   }
 
   /* ── Navbar auth buttons ── */
   .nav-btn-login {
-    font-family: var(--font-cinzel);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--color-gold-bright);
-    background: transparent;
-    border: 1px solid var(--color-gold-ghost);
-    border-radius: 2px;
-    padding: 0.5rem 1.125rem;
-    cursor: pointer;
-    text-decoration: none;
-    transition:
-      border-color 0.2s ease,
-      background 0.2s ease;
-    display: inline-flex;
-    align-items: center;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-ghost rounded-xs py-2 px-4.5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
   }
   .nav-btn-login:hover {
-    border-color: var(--color-gold-bright);
-    background: rgba(201, 168, 76, 0.06);
+    @apply border-gold-bright;
+    background: var(--color-grandiose-hover);
   }
 
   .nav-btn-signup {
-    font-family: var(--font-cinzel);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #0e0e0e;
-    background: linear-gradient(
-      135deg,
-      var(--color-gold-bright),
-      var(--color-gold-deep)
-    );
-    border: none;
-    border-radius: 2px;
-    padding: 0.5625rem 1.25rem;
-    cursor: pointer;
-    text-decoration: none;
-    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
-    transition:
-      box-shadow 0.2s ease,
-      opacity 0.2s ease;
-    display: inline-flex;
-    align-items: center;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase text-bg-base border-none rounded-xs py-2.5 px-5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
+    background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
+    box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
   .nav-btn-signup:hover {
-    box-shadow: 0 6px 28px rgba(201, 168, 76, 0.4);
-    opacity: 0.92;
+    @apply opacity-90;
+    box-shadow: 0 6px 28px var(--color-grandiose-hover);
   }
 
   /* Drawer login/signup buttons */
   .nav-drawer-btn-login {
-    font-family: var(--font-cinzel);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--color-gold-bright);
-    background: transparent;
-    border: 1px solid var(--color-gold-bright);
-    border-radius: 2px;
-    padding: 0.75rem 1rem;
-    text-align: center;
-    text-decoration: none;
-    display: block;
-    transition: background 0.15s ease;
+    @apply font-cinzel text-sm font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-bright rounded-xs py-3 px-4 text-center no-underline block transition-colors duration-150;
   }
   .nav-drawer-btn-login:hover {
-    background: rgba(201, 168, 76, 0.08);
+    @apply bg-grandiose-hover;
   }
   .nav-drawer-btn-signup {
-    font-family: var(--font-cinzel);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #0e0e0e;
-    background: linear-gradient(
-      135deg,
-      var(--color-gold-bright),
-      var(--color-gold-deep)
-    );
-    border: none;
-    border-radius: 2px;
-    padding: 0.8125rem 1rem;
-    text-align: center;
-    text-decoration: none;
-    display: block;
-    margin-top: 0.5rem;
-    box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
+    @apply font-cinzel text-bg-base text-sm font-bold tracking-widest uppercase border-none rounded-xs py-3.5 px-4 text-center no-underline block mt-2;
+    background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
+    box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
 
   /* ── Confirm / locked screens ── */
   .confirm-icon {
-    width: 3.75rem;
-    height: 3.75rem;
-    border-radius: 50%;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-raised);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 1.5rem;
-    font-size: 1.5rem;
+    @apply w-15 h-15 rounded-full border border-border bg-bg-raised flex items-center justify-center mx-auto mb-6 text-2xl;
   }
   .confirm-icon--danger {
-    border-color: var(--color-danger-deep);
-    background: var(--color-danger-icon-bg);
+    @apply border-danger-deep bg-danger-icon-bg;
   }
   .confirm-title {
-    font-family: var(--font-cinzel);
-    font-size: 1.375rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    color: var(--color-text-primary);
-    margin-bottom: 0.5rem;
-    text-align: center;
+    @apply font-cinzel text-xl font-semibold tracking-wider text-text-primary mb-2 text-center;
   }
   .confirm-body {
-    font-family: var(--font-lato);
-    font-weight: 300;
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
-    line-height: 1.7;
-    margin-bottom: 2.5rem;
-    text-align: center;
+    @apply font-lato font-light text-sm text-text-secondary leading-1.5 mb-10 text-center;
   }
   .confirm-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    @apply flex flex-col gap-2;
   }
 
   /* ── Skeleton shimmer ── */

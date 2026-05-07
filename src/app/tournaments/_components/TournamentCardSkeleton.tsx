@@ -1,7 +1,7 @@
 export default function TournamentCardSkeleton() {
   return (
     <article
-      className="tournament-card"
+      className="card tournament-card"
       aria-hidden="true"
     >
       {/* Body */}

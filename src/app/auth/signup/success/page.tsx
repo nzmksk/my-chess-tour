@@ -21,7 +21,7 @@ export default async function SignUpSuccessPage({
     new Date().toLocaleDateString("en-MY", { month: "long", year: "numeric" });
 
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <div className="auth-page">
         <div className="centered-col">
@@ -34,7 +34,7 @@ export default async function SignUpSuccessPage({
               Welcome to the Board
             </h1>
 
-            <p className="font-(--font-lato) text-sm text-(--color-text-secondary) mb-(--space-xl) leading-[1.7]">
+            <p className="font-(--font-lato) text-sm text-text-secondary mb-(--space-xl) leading-[1.7]">
               Account created and verified. You&apos;re now part of MY Chess
               Tour.
             </p>

@@ -63,7 +63,7 @@ export default function TournamentCard({ tournament: t }: Props) {
   }
 
   return (
-    <article className="tournament-card">
+    <article className="card tournament-card">
       {/* Body */}
       <div className="p-4 flex flex-col justify-center">
         {/* Format + rating + spots badges */}
