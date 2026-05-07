@@ -10,7 +10,10 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid JSON body" } },
+      { status: 400 }
+    );
   }
 
   const {
@@ -42,14 +45,27 @@ export async function POST(request: NextRequest) {
   };
 
   if (!email || typeof email !== "string") {
-    return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Email is required" } },
+      { status: 400 }
+    );
   }
   if (!code || typeof code !== "string") {
-    return NextResponse.json({ error: "Code is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Code is required" } },
+      { status: 400 }
+    );
   }
   if (!password || !firstName || !lastName) {
     return NextResponse.json(
-      { error: "Missing required registration fields" },
+      { error: { code: "VALIDATION_ERROR", message: "Missing required registration fields" } },
+      { status: 400 }
+    );
+  }
+
+  if (password.length < 8) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Password must be at least 8 characters" } },
       { status: 400 }
     );
   }
@@ -58,14 +74,14 @@ export async function POST(request: NextRequest) {
 
   if (!stored) {
     return NextResponse.json(
-      { error: "Code has expired. Please request a new one.", code: "CODE_EXPIRED" },
+      { error: { code: "CODE_EXPIRED", message: "Code has expired. Please request a new one." } },
       { status: 410 }
     );
   }
 
   if (stored.toUpperCase() !== code.toUpperCase()) {
     return NextResponse.json(
-      { error: "Incorrect code. Please try again.", code: "CODE_INVALID" },
+      { error: { code: "CODE_INVALID", message: "Incorrect code. Please try again." } },
       { status: 422 }
     );
   }
@@ -92,11 +108,14 @@ export async function POST(request: NextRequest) {
       authError.message?.toLowerCase().includes("already registered")
     ) {
       return NextResponse.json(
-        { error: "An account with this email already exists", code: "EMAIL_EXISTS" },
+        { error: { code: "EMAIL_EXISTS", message: "An account with this email already exists" } },
         { status: 409 }
       );
     }
-    return NextResponse.json({ error: authError.message }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: authError.message } },
+      { status: 400 }
+    );
   }
 
   const userId = authData.user.id;
@@ -117,7 +136,7 @@ export async function POST(request: NextRequest) {
 
   if (profileError) {
     return NextResponse.json(
-      { error: "Account created but failed to save profile" },
+      { error: { code: "INTERNAL_ERROR", message: "Account created but failed to save profile" } },
       { status: 500 }
     );
   }

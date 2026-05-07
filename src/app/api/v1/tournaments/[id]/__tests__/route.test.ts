@@ -29,13 +29,15 @@ const { mockTournamentBuilder, mockRegistrationsBuilder, mockFrom } =
     return { mockTournamentBuilder, mockRegistrationsBuilder, mockFrom };
   });
 
-vi.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom },
 }));
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
+
+const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 
 const mockOrganization = {
   id: "org-1",
@@ -49,7 +51,7 @@ const mockOrganization = {
 
 function makeTournament(overrides: Record<string, unknown> = {}) {
   return {
-    id: "tournament-1",
+    id: VALID_UUID,
     name: "KL Open Rapid 2026",
     description: "Annual rapid chess championship",
     venue_name: "Kuala Lumpur Convention Centre",
@@ -126,8 +128,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("returns 200 with a data object for a valid published tournament", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
@@ -140,13 +142,13 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("shapes the tournament detail correctly", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
       const item = json.data;
 
-      expect(item.id).toBe("tournament-1");
+      expect(item.id).toBe(VALID_UUID);
       expect(item.name).toBe("KL Open Rapid 2026");
       expect(item.description).toBe("Annual rapid chess championship");
       expect(item.venue).toEqual({
@@ -189,8 +191,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("includes a nested organization object with full info", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
       const org = json.data.organization;
@@ -206,8 +208,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("does not expose raw organizations join or organization_id on the tournament item", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
@@ -218,8 +220,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("sets organization to null when organizations join is null", async () => {
       setTournamentResult(makeTournament({ organizations: null }));
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
@@ -229,8 +231,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("sets prizes to null when prizes is null", async () => {
       setTournamentResult(makeTournament({ prizes: null }));
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
@@ -240,8 +242,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("sets restrictions to null when restrictions is null", async () => {
       setTournamentResult(makeTournament({ restrictions: null }));
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
@@ -258,8 +260,8 @@ describe("GET /api/v1/tournaments/:id", () => {
       setTournamentResult(makeTournament());
       setRegistrationsCount(3);
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
@@ -270,8 +272,8 @@ describe("GET /api/v1/tournaments/:id", () => {
       setTournamentResult(makeTournament());
       setRegistrationsCount(null);
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
@@ -282,12 +284,12 @@ describe("GET /api/v1/tournaments/:id", () => {
       setTournamentResult(makeTournament());
       setRegistrationsCount(0);
 
-      await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
 
       const eqMock = mockRegistrationsBuilder.eq as ReturnType<typeof vi.fn>;
-      expect(eqMock).toHaveBeenCalledWith("tournament_id", "tournament-1");
+      expect(eqMock).toHaveBeenCalledWith("tournament_id", VALID_UUID);
       expect(eqMock).toHaveBeenCalledWith("status", "confirmed");
     });
   });
@@ -300,20 +302,20 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("queries by id and status=published", async () => {
       setTournamentResult(makeTournament());
 
-      await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
 
       const eqMock = mockTournamentBuilder.eq as ReturnType<typeof vi.fn>;
-      expect(eqMock).toHaveBeenCalledWith("id", "tournament-1");
+      expect(eqMock).toHaveBeenCalledWith("id", VALID_UUID);
       expect(eqMock).toHaveBeenCalledWith("status", "published");
     });
 
     it("calls .single() on the tournament query", async () => {
       setTournamentResult(makeTournament());
 
-      await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
 
       const singleMock = mockTournamentBuilder.single as ReturnType<
@@ -328,16 +330,26 @@ describe("GET /api/v1/tournaments/:id", () => {
   // -------------------------------------------------------------------------
 
   describe("error handling", () => {
+    it("returns 400 for a non-UUID id", async () => {
+      const res = await GET(makeRequest("not-a-uuid"), {
+        params: Promise.resolve({ id: "not-a-uuid" }),
+      });
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.message).toMatch(/invalid tournament id/i);
+    });
+
     it("returns 404 when tournament is not found", async () => {
       setTournamentResult(null, { code: "PGRST116", message: "No rows found" });
 
-      const res = await GET(makeRequest("nonexistent-id"), {
-        params: Promise.resolve({ id: "nonexistent-id" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
       expect(res.status).toBe(404);
-      expect(json.error).toBe("Tournament not found");
+      expect(json.error.message).toBe("Tournament not found");
     });
 
     it("returns 500 when Supabase returns a non-404 error", async () => {
@@ -346,13 +358,13 @@ describe("GET /api/v1/tournaments/:id", () => {
         message: "DB connection failed",
       });
 
-      const res = await GET(makeRequest("tournament-1"), {
-        params: Promise.resolve({ id: "tournament-1" }),
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
       });
       const json = await res.json();
 
       expect(res.status).toBe(500);
-      expect(json.error).toBe("DB connection failed");
+      expect(json.error.message).toBe("DB connection failed");
     });
   });
 });

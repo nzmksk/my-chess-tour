@@ -22,7 +22,7 @@ const { mockTournamentsBuilder, mockRpc, mockFrom } = vi.hoisted(() => {
   return { mockTournamentsBuilder, mockRpc, mockFrom };
 });
 
-vi.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
@@ -191,7 +191,7 @@ describe("GET /api/v1/tournaments", () => {
       const json = await res.json();
 
       expect(res.status).toBe(500);
-      expect(json.error).toBe("DB connection failed");
+      expect(json.error.message).toBe("DB connection failed");
     });
   });
 });

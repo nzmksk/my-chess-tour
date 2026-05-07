@@ -16,15 +16,15 @@ const { mockMaybeSingle, mockEq, mockSelect, mockFrom, mockStoreVerificationCode
     return { mockMaybeSingle, mockEq, mockSelect, mockFrom, mockStoreVerificationCode, mockSendVerificationEmail };
   });
 
-vi.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom },
 }));
 
-vi.mock("@/lib/redis", () => ({
+vi.mock("@/services/redis/redis", () => ({
   storeVerificationCode: mockStoreVerificationCode,
 }));
 
-vi.mock("@/lib/email", () => ({
+vi.mock("@/services/email/email", () => ({
   sendVerificationEmail: mockSendVerificationEmail,
 }));
 
@@ -103,7 +103,7 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/invalid json/i);
+    expect(json.error.message).toMatch(/invalid json/i);
   });
 
   it("returns 400 when email is missing", async () => {
@@ -111,7 +111,7 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/email is required/i);
+    expect(json.error.message).toMatch(/email is required/i);
   });
 
   it("returns 400 when email is not a string", async () => {
@@ -119,7 +119,15 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/email is required/i);
+    expect(json.error.message).toMatch(/email is required/i);
+  });
+
+  it("returns 400 for invalid email format", async () => {
+    const res = await POST(makeRequest({ email: "not-an-email" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.message).toMatch(/invalid email format/i);
   });
 
   // --- Email-exists check ---------------------------------------------------
@@ -131,8 +139,8 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(409);
-    expect(json.code).toBe("EMAIL_EXISTS");
-    expect(json.error).toMatch(/already exists/i);
+    expect(json.error.code).toBe("EMAIL_EXISTS");
+    expect(json.error.message).toMatch(/already exists/i);
   });
 
   it("does not store or send code when email already exists", async () => {
@@ -159,7 +167,7 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(500);
-    expect(json.error).toMatch(/failed to validate email/i);
+    expect(json.error.message).toMatch(/failed to validate email/i);
   });
 
   it("returns 500 when Redis store fails", async () => {
@@ -169,7 +177,7 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(500);
-    expect(json.error).toMatch(/failed to store verification code/i);
+    expect(json.error.message).toMatch(/failed to store verification code/i);
   });
 
   it("returns 500 when sending email fails", async () => {
@@ -179,7 +187,7 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(500);
-    expect(json.error).toMatch(/failed to send verification email/i);
+    expect(json.error.message).toMatch(/failed to send verification email/i);
   });
 
   it("does not send email when Redis store fails", async () => {

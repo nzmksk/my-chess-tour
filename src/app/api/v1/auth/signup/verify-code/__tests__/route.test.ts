@@ -215,7 +215,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/invalid json/i);
+    expect(json.error.message).toMatch(/invalid json/i);
   });
 
   it("returns 400 when email is missing", async () => {
@@ -224,7 +224,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/email is required/i);
+    expect(json.error.message).toMatch(/email is required/i);
   });
 
   it("returns 400 when code is missing", async () => {
@@ -233,7 +233,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/code is required/i);
+    expect(json.error.message).toMatch(/code is required/i);
   });
 
   it("returns 400 when password is missing", async () => {
@@ -242,7 +242,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/missing required registration fields/i);
+    expect(json.error.message).toMatch(/missing required registration fields/i);
   });
 
   it("returns 400 when firstName is missing", async () => {
@@ -251,7 +251,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/missing required registration fields/i);
+    expect(json.error.message).toMatch(/missing required registration fields/i);
   });
 
   it("returns 400 when lastName is missing", async () => {
@@ -260,7 +260,15 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/missing required registration fields/i);
+    expect(json.error.message).toMatch(/missing required registration fields/i);
+  });
+
+  it("returns 400 when password is shorter than 8 characters", async () => {
+    const res = await POST(makeRequest({ ...validBody, password: "short" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.message).toMatch(/8 characters/i);
   });
 
   // --- Code validation ------------------------------------------------------
@@ -272,7 +280,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(410);
-    expect(json.code).toBe("CODE_EXPIRED");
+    expect(json.error.code).toBe("CODE_EXPIRED");
   });
 
   it("returns 422 CODE_INVALID when code does not match", async () => {
@@ -282,7 +290,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(422);
-    expect(json.code).toBe("CODE_INVALID");
+    expect(json.error.code).toBe("CODE_INVALID");
   });
 
   it("does not call createUser when code is expired", async () => {
@@ -309,7 +317,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(409);
-    expect(json.code).toBe("EMAIL_EXISTS");
+    expect(json.error.code).toBe("EMAIL_EXISTS");
   });
 
   it("returns 409 EMAIL_EXISTS when error message contains 'already registered'", async () => {
@@ -322,7 +330,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(409);
-    expect(json.code).toBe("EMAIL_EXISTS");
+    expect(json.error.code).toBe("EMAIL_EXISTS");
   });
 
   it("returns 400 for other auth errors", async () => {
@@ -335,7 +343,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toBe("Something went wrong");
+    expect(json.error.message).toBe("Something went wrong");
   });
 
   // --- Profile update errors ------------------------------------------------
@@ -347,7 +355,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(500);
-    expect(json.error).toMatch(/failed to save profile/i);
+    expect(json.error.message).toMatch(/failed to save profile/i);
   });
 
   it("does not sign in when profile update fails", async () => {

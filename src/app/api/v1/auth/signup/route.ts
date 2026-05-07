@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     body = await request.json();
   } catch {
     return NextResponse.json(
-      { error: "Invalid JSON body" },
+      { error: { code: "VALIDATION_ERROR", message: "Invalid JSON body" } },
       { status: 400 }
     );
   }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   if (missing.length > 0) {
     return NextResponse.json(
-      { error: `Missing required fields: ${missing.join(", ")}` },
+      { error: { code: "VALIDATION_ERROR", message: `Missing required fields: ${missing.join(", ")}` } },
       { status: 400 }
     );
   }
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return NextResponse.json(
-      { error: "Invalid email format" },
+      { error: { code: "VALIDATION_ERROR", message: "Invalid email format" } },
       { status: 400 }
     );
   }
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   // Password length validation
   if (password.length < 8) {
     return NextResponse.json(
-      { error: "Password must be at least 8 characters" },
+      { error: { code: "VALIDATION_ERROR", message: "Password must be at least 8 characters" } },
       { status: 400 }
     );
   }
@@ -82,12 +82,15 @@ export async function POST(request: NextRequest) {
       error.message?.toLowerCase().includes("already registered")
     ) {
       return NextResponse.json(
-        { error: "An account with this email already exists" },
+        { error: { code: "CONFLICT", message: "An account with this email already exists" } },
         { status: 409 }
       );
     }
 
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 400 }
+    );
   }
 
   // When email confirmation is enabled, identities is an empty array for

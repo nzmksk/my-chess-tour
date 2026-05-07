@@ -5,12 +5,12 @@ import { sendVerificationEmail } from "@/services/email/email";
 
 function generateCode(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -18,32 +18,47 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid JSON body" } },
+      { status: 400 }
+    );
   }
 
   const { email } = body as { email?: string };
 
   if (!email || typeof email !== "string") {
-    return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Email is required" } },
+      { status: 400 }
+    );
+  }
+
+  const normalized = email.toLowerCase().trim();
+
+  if (!emailRegex.test(normalized)) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid email format" } },
+      { status: 400 }
+    );
   }
 
   // Check if email already exists in public.users
   const { data: existing, error: dbError } = await supabaseAdmin
     .from("users")
     .select("id")
-    .eq("email", email.toLowerCase().trim())
+    .eq("email", normalized)
     .maybeSingle();
 
   if (dbError) {
     return NextResponse.json(
-      { error: "Failed to validate email" },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to validate email" } },
       { status: 500 }
     );
   }
 
   if (existing) {
     return NextResponse.json(
-      { error: "An account with this email already exists", code: "EMAIL_EXISTS" },
+      { error: { code: "EMAIL_EXISTS", message: "An account with this email already exists" } },
       { status: 409 }
     );
   }
@@ -54,7 +69,7 @@ export async function POST(request: NextRequest) {
     await storeVerificationCode(email, code);
   } catch {
     return NextResponse.json(
-      { error: "Failed to store verification code" },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to store verification code" } },
       { status: 500 }
     );
   }
@@ -63,7 +78,7 @@ export async function POST(request: NextRequest) {
     await sendVerificationEmail(email, code);
   } catch {
     return NextResponse.json(
-      { error: "Failed to send verification email" },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to send verification email" } },
       { status: 500 }
     );
   }
