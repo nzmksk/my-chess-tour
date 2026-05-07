@@ -35,11 +35,20 @@ interface TournamentRow {
   organizations: Organization[] | Organization;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+
+  if (!UUID_RE.test(id)) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid tournament ID" } },
+      { status: 400 },
+    );
+  }
 
   const [{ data: row, error }, { count: currentParticipants }] =
     await Promise.all([
@@ -66,11 +75,14 @@ export async function GET(
   if (error) {
     if (error.code === "PGRST116") {
       return NextResponse.json(
-        { error: "Tournament not found" },
+        { error: { code: "NOT_FOUND", message: "Tournament not found" } },
         { status: 404 },
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 500 },
+    );
   }
 
   const t = row as TournamentRow;

@@ -9,7 +9,7 @@ vi.mock("next/headers", () => ({
 
 const mockSignInWithPassword = vi.fn();
 
-vi.mock("@/lib/supabase/server", () => ({
+vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({ auth: { signInWithPassword: mockSignInWithPassword } })
   ),
@@ -86,7 +86,7 @@ describe("POST /api/auth/login", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/invalid json/i);
+    expect(json.error.message).toMatch(/invalid json/i);
   });
 
   it("returns 400 listing all missing required fields", async () => {
@@ -94,8 +94,8 @@ describe("POST /api/auth/login", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/email/);
-    expect(json.error).toMatch(/password/);
+    expect(json.error.message).toMatch(/email/);
+    expect(json.error.message).toMatch(/password/);
   });
 
   it("returns 400 listing only the missing fields", async () => {
@@ -103,8 +103,8 @@ describe("POST /api/auth/login", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/password/);
-    expect(json.error).not.toMatch(/email/);
+    expect(json.error.message).toMatch(/password/);
+    expect(json.error.message).not.toMatch(/email/);
   });
 
   it("returns 400 for an invalid email format", async () => {
@@ -112,7 +112,7 @@ describe("POST /api/auth/login", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/invalid email/i);
+    expect(json.error.message).toMatch(/invalid email/i);
   });
 
   // --- Supabase error handling ----------------------------------------------
@@ -127,7 +127,7 @@ describe("POST /api/auth/login", () => {
     const json = await res.json();
 
     expect(res.status).toBe(401);
-    expect(json.error).toMatch(/invalid email or password/i);
+    expect(json.error.message).toMatch(/invalid email or password/i);
   });
 
   it("returns 403 when email is not confirmed", async () => {
@@ -140,7 +140,7 @@ describe("POST /api/auth/login", () => {
     const json = await res.json();
 
     expect(res.status).toBe(403);
-    expect(json.error).toMatch(/email not confirmed/i);
+    expect(json.error.message).toMatch(/email not confirmed/i);
   });
 
   it("returns 400 for other Supabase errors", async () => {
@@ -153,6 +153,6 @@ describe("POST /api/auth/login", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toBe("Something went wrong");
+    expect(json.error.message).toBe("Something went wrong");
   });
 });

@@ -8,7 +8,7 @@ vi.mock("next/headers", () => ({
 
 const mockSignOut = vi.fn();
 
-vi.mock("@/lib/supabase/server", () => ({
+vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({ auth: { signOut: mockSignOut } })
   ),
@@ -45,7 +45,7 @@ describe("POST /api/auth/logout", () => {
 
   // --- Supabase error handling ----------------------------------------------
 
-  it("returns 400 when Supabase signOut fails", async () => {
+  it("returns 500 when Supabase signOut fails", async () => {
     mockSignOut.mockResolvedValue({
       error: { message: "Something went wrong" },
     });
@@ -53,7 +53,7 @@ describe("POST /api/auth/logout", () => {
     const res = await POST();
     const json = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(json.error).toBe("Something went wrong");
+    expect(res.status).toBe(500);
+    expect(json.error.message).toBe("Something went wrong");
   });
 });

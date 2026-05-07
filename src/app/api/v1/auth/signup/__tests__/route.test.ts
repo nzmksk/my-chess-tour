@@ -13,7 +13,7 @@ vi.mock("bcryptjs", () => ({
 
 const mockSignUp = vi.fn();
 
-vi.mock("@/lib/supabase/server", () => ({
+vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({ auth: { signUp: mockSignUp } })
   ),
@@ -99,7 +99,7 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/invalid json/i);
+    expect(json.error.message).toMatch(/invalid json/i);
   });
 
   it("returns 400 listing all missing required fields", async () => {
@@ -107,10 +107,10 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/email/);
-    expect(json.error).toMatch(/password/);
-    expect(json.error).toMatch(/first_name/);
-    expect(json.error).toMatch(/last_name/);
+    expect(json.error.message).toMatch(/email/);
+    expect(json.error.message).toMatch(/password/);
+    expect(json.error.message).toMatch(/first_name/);
+    expect(json.error.message).toMatch(/last_name/);
   });
 
   it("returns 400 listing only the missing fields", async () => {
@@ -120,10 +120,10 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/last_name/);
-    expect(json.error).not.toMatch(/email/);
-    expect(json.error).not.toMatch(/password/);
-    expect(json.error).not.toMatch(/first_name/);
+    expect(json.error.message).toMatch(/last_name/);
+    expect(json.error.message).not.toMatch(/email/);
+    expect(json.error.message).not.toMatch(/password/);
+    expect(json.error.message).not.toMatch(/first_name/);
   });
 
   it("returns 400 for an invalid email format", async () => {
@@ -133,7 +133,7 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/invalid email/i);
+    expect(json.error.message).toMatch(/invalid email/i);
   });
 
   it("returns 400 when password is shorter than 8 characters", async () => {
@@ -141,7 +141,7 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/8 characters/i);
+    expect(json.error.message).toMatch(/8 characters/i);
   });
 
   // --- Supabase error handling ----------------------------------------------
@@ -156,7 +156,7 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(409);
-    expect(json.error).toMatch(/already exists/i);
+    expect(json.error.message).toMatch(/already exists/i);
   });
 
   it("returns 409 when Supabase error message contains 'already registered'", async () => {
@@ -169,7 +169,7 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(409);
-    expect(json.error).toMatch(/already exists/i);
+    expect(json.error.message).toMatch(/already exists/i);
   });
 
   it("returns 400 for other Supabase errors", async () => {
@@ -182,6 +182,6 @@ describe("POST /api/auth/signup", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toBe("Something went wrong");
+    expect(json.error.message).toBe("Something went wrong");
   });
 });

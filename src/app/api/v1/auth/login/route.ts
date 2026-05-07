@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     body = await request.json();
   } catch {
     return NextResponse.json(
-      { error: "Invalid JSON body" },
+      { error: { code: "VALIDATION_ERROR", message: "Invalid JSON body" } },
       { status: 400 }
     );
   }
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   if (missing.length > 0) {
     return NextResponse.json(
-      { error: `Missing required fields: ${missing.join(", ")}` },
+      { error: { code: "VALIDATION_ERROR", message: `Missing required fields: ${missing.join(", ")}` } },
       { status: 400 }
     );
   }
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return NextResponse.json(
-      { error: "Invalid email format" },
+      { error: { code: "VALIDATION_ERROR", message: "Invalid email format" } },
       { status: 400 }
     );
   }
@@ -51,19 +51,22 @@ export async function POST(request: NextRequest) {
   if (error) {
     if (error.message?.toLowerCase().includes("invalid login credentials")) {
       return NextResponse.json(
-        { error: "Invalid email or password" },
+        { error: { code: "UNAUTHORIZED", message: "Invalid email or password" } },
         { status: 401 }
       );
     }
 
     if (error.message?.toLowerCase().includes("email not confirmed")) {
       return NextResponse.json(
-        { error: "Email not confirmed. Please check your inbox." },
+        { error: { code: "FORBIDDEN", message: "Email not confirmed. Please check your inbox." } },
         { status: 403 }
       );
     }
 
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json(
