@@ -18,7 +18,7 @@ export default function ForgotPasswordForm() {
         <div className="centered-col">
           <div className="auth-card card card--featured text-center">
             <div
-              className="text-[2rem] text-(--color-gold-bright) mb-4"
+              className="text-[2rem] text-gold-bright mb-4"
               role="img"
               aria-label="Email sent"
             >

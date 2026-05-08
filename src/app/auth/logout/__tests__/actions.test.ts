@@ -13,7 +13,7 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn(() => ({ getAll: vi.fn(() => []), set: vi.fn() })),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
+vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({ auth: { signOut: mocks.signOut } }),
   ),

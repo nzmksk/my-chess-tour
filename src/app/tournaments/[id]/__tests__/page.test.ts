@@ -34,7 +34,7 @@ vi.mock("@/components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
+vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: null } }),

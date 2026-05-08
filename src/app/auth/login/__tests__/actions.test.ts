@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
 }));
 
-vi.mock("@/lib/redis", () => ({
+vi.mock("@/services/redis/redis", () => ({
   redis: {
     exists: mocks.exists,
     ttl: mocks.ttl,
@@ -26,7 +26,7 @@ vi.mock("@/lib/redis", () => ({
   },
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
+vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({ auth: { signInWithPassword: mocks.signInWithPassword } }),
   ),

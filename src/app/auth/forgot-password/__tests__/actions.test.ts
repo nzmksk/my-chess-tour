@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   sendPasswordResetEmail: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
     auth: {
       admin: {
@@ -19,7 +19,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   },
 }));
 
-vi.mock("@/lib/email", () => ({
+vi.mock("@/services/email/email", () => ({
   sendPasswordResetEmail: mocks.sendPasswordResetEmail,
 }));
 

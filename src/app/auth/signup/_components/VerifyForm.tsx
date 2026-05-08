@@ -174,7 +174,7 @@ export default function VerifyForm() {
             <p className="auth-subheading">
               We sent a 6-digit code to
               <br />
-              <strong className="text-(--color-gold-muted)">{email}</strong>
+              <strong className="text-gold-muted)">{email}</strong>
             </p>
             <hr className="divider-gold" />
           </div>
@@ -187,7 +187,7 @@ export default function VerifyForm() {
             </div>
             <input
               id="verificationCode"
-              className="input text-center tracking-[0.3em] text-[1.375rem] font-(--font-cinzel)"
+              className="input text-center tracking-[0.3em] text-[1.375rem] font-cinzel"
               type="text"
               inputMode="text"
               autoCapitalize="characters"
@@ -200,11 +200,11 @@ export default function VerifyForm() {
             />
             <p className="input-hint">
               {expired ? (
-                <span className="text-(--color-error)">Code has expired</span>
+                <span className="text-error">Code has expired</span>
               ) : (
                 <>
                   Code expires in{" "}
-                  <strong className="text-(--color-gold-muted)">
+                  <strong className="text-gold-muted">
                     {formatTime(timeLeft)}
                   </strong>
                 </>
@@ -225,9 +225,9 @@ export default function VerifyForm() {
           <p className="auth-footer mt-6">
             Didn&apos;t receive it?{" "}
             {cooldownLeft > 0 ? (
-              <span className="text-(--color-text-disabled)">
+              <span className="text-text-disabled">
                 Resend again in{" "}
-                <span className="text-(--color-text-muted)">
+                <span className="text-text-muted)">
                   {formatTime(cooldownLeft)}
                 </span>
               </span>

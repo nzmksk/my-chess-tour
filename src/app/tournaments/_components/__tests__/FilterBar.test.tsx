@@ -173,7 +173,7 @@ describe("search input", () => {
   it("renders with the current search value", () => {
     render(<FilterBar {...defaultProps()} search="Selangor Open" />);
     const input = screen.getByPlaceholderText(
-      "Search tournaments...",
+      "Search tournaments…",
     ) as HTMLInputElement;
     expect(input.value).toBe("Selangor Open");
   });
@@ -181,7 +181,7 @@ describe("search input", () => {
   it("calls onSearchChange when the input changes", async () => {
     const props = defaultProps();
     render(<FilterBar {...props} />);
-    const input = screen.getByPlaceholderText("Search tournaments...");
+    const input = screen.getByPlaceholderText("Search tournaments…");
 
     await act(async () => {
       fireEvent.change(input, { target: { value: "KL" } });

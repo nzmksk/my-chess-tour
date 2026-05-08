@@ -24,7 +24,7 @@ export default function TournamentCardSkeleton() {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between items-center pt-3 border-t border-(--color-border)">
+        <div className="flex justify-between items-center pt-3 border-t border-border)">
           <div className="skeleton-shimmer w-12 h-5.5 rounded-xs" />
           <div className="skeleton-shimmer w-18 h-8.5 rounded-xs" />
         </div>

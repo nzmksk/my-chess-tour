@@ -69,7 +69,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="pt-6 border-t border-(--color-border)">
+    <section className="pt-6 border-t border-border">
       <h2 className="font-cinzel text-[1.125rem] font-semibold text-text-primary tracking-[0.04em] mb-4">
         {title}
       </h2>
@@ -81,7 +81,7 @@ function Section({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="font-cinzel text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-(--color-text-muted)">
+      <dt className="font-cinzel text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-text-muted">
         {label}
       </dt>
       <dd className="font-lato text-[0.9375rem] text-text-body">{value}</dd>
@@ -107,7 +107,7 @@ export default function TournamentDetail({
   const lowestFeeEntry =
     t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
 
-  let spotsClass = "text-(--color-gold-bright)";
+  let spotsClass = "text-gold-bright";
   if (spotsLeft === 0) spotsClass = "text-red-500";
   else if (spotsRatio <= 0.2) spotsClass = "text-amber-400";
 
@@ -131,7 +131,7 @@ export default function TournamentDetail({
               {t.organizer && (
                 <p className="font-lato text-[0.875rem] text-text-secondary">
                   Organized by{" "}
-                  <span className="text-(--color-gold-bright)">
+                  <span className="text-gold-bright)">
                     {t.organizer.organization_name}
                   </span>
                 </p>
@@ -170,7 +170,7 @@ export default function TournamentDetail({
                     <>
                       {t.venue_name}, {t.state}
                       {t.venue_address && (
-                        <span className="block text-[0.8125rem] text-(--color-text-muted) mt-0.5">
+                        <span className="block text-[0.8125rem] text-text-muted mt-0.5">
                           {t.venue_address}
                         </span>
                       )}
@@ -222,12 +222,12 @@ export default function TournamentDetail({
                       <td>
                         {fee.type}
                         {fee.valid_until && (
-                          <span className="block text-[0.75rem] text-(--color-text-muted)">
+                          <span className="block text-[0.75rem] text-text-muted">
                             before {formatDeadline(fee.valid_until)}
                           </span>
                         )}
                         {(fee.age_min != null || fee.age_max != null) && (
-                          <span className="block text-[0.75rem] text-(--color-text-muted)">
+                          <span className="block text-[0.75rem] text-text-muted">
                             {fee.age_min != null && fee.age_max != null
                               ? `Age ${fee.age_min}–${fee.age_max}`
                               : fee.age_min != null
@@ -257,7 +257,7 @@ export default function TournamentDetail({
                 <ul className="flex flex-col gap-3">
                   {t.prizes.categories.map((cat, ci) => (
                     <li key={ci}>
-                      <p className="font-cinzel text-[0.75rem] font-semibold uppercase tracking-widest text-(--color-gold-muted) mb-2">
+                      <p className="font-cinzel text-[0.75rem] font-semibold uppercase tracking-widest text-gold-muted) mb-2">
                         {cat.name}
                       </p>
                       <ul className="flex flex-col gap-1">
@@ -345,14 +345,14 @@ export default function TournamentDetail({
                   <div className="flex flex-col gap-1 font-lato text-[0.875rem] text-text-secondary">
                     <a
                       href={`mailto:${t.organizer.email}`}
-                      className="hover:text-(--color-gold-bright) transition-colors"
+                      className="hover:text-gold-bright) transition-colors"
                     >
                       ✉ {t.organizer.email}
                     </a>
                     {t.organizer.phone && (
                       <a
                         href={`tel:${t.organizer.phone}`}
-                        className="hover:text-(--color-gold-bright) transition-colors"
+                        className="hover:text-gold-bright) transition-colors"
                       >
                         ☎ {t.organizer.phone}
                       </a>
@@ -363,7 +363,7 @@ export default function TournamentDetail({
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:text-(--color-gold-bright) transition-colors"
+                        className="hover:text-gold-bright transition-colors"
                       >
                         ↗ {link.label}
                       </a>
@@ -387,7 +387,7 @@ export default function TournamentDetail({
                   {minFee > 0 ? formatRm(minFee) : "Free"}
                 </div>
                 {lowestFeeEntry && (
-                  <p className="font-lato text-[0.8125rem] text-(--color-text-muted) mt-0.5">
+                  <p className="font-lato text-[0.8125rem] text-text-muted mt-0.5">
                     {lowestFeeEntry.type} price
                     {lowestFeeEntry.valid_until &&
                       ` (ends ${formatDeadline(lowestFeeEntry.valid_until)})`}
@@ -417,7 +417,7 @@ export default function TournamentDetail({
               </div>
 
               {/* Deadline */}
-              <p className="font-lato text-[0.8125rem] text-(--color-text-muted)">
+              <p className="font-lato text-[0.8125rem] text-text-muted">
                 ⏰ Registration closes {formatDeadline(t.registration_deadline)}
               </p>
             </div>

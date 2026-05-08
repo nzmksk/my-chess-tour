@@ -241,7 +241,7 @@ describe("ProfileForm", () => {
     expect(screen.getByRole("alert").textContent).toContain("Something went wrong");
   });
 
-  it("shows a 'Log in instead' link on EMAIL_EXISTS error", async () => {
+  it("shows a 'Sign in instead' link on EMAIL_EXISTS error", async () => {
     process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
     vi.stubGlobal(
       "fetch",
@@ -259,7 +259,7 @@ describe("ProfileForm", () => {
       fireEvent.submit(getSubmitButton().closest("form")!);
     });
 
-    expect(screen.getByRole("link", { name: /log in instead/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /sign in instead/i })).toBeDefined();
   });
 
   it("shows 'Network error' message when fetch throws", async () => {

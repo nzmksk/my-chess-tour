@@ -15,7 +15,7 @@ export default function WaitlistForm() {
   return (
     <form action={formAction} className="flex w-full max-w-md flex-col gap-3">
       {success ? (
-        <p className="text-center text-sm text-(--color-gold-bright)">
+        <p className="text-center text-sm text-gold-bright)">
           You&apos;re on the list. We&apos;ll be in touch.
         </p>
       ) : (
@@ -27,7 +27,7 @@ export default function WaitlistForm() {
               required
               placeholder="your@email.com"
               disabled={pending}
-              className="flex-1 rounded border px-4 py-3 text-sm outline-none transition-colors focus:border-(--color-gold-bright) disabled:opacity-50 bg-bg-raised border-(--color-border) text-text-body"
+              className="flex-1 rounded border px-4 py-3 text-sm outline-none transition-colors focus:border-gold-bright disabled:opacity-50 bg-bg-raised border-border text-text-body"
             />
             <button
               type="submit"

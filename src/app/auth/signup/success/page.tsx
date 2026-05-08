@@ -34,7 +34,7 @@ export default async function SignUpSuccessPage({
               Welcome to the Board
             </h1>
 
-            <p className="font-(--font-lato) text-sm text-text-secondary mb-(--space-xl) leading-[1.7]">
+            <p className="font-lato text-sm text-text-secondary mb-(--space-xl) leading-[1.7]">
               Account created and verified. You&apos;re now part of MY Chess
               Tour.
             </p>

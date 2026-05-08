@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetIssueProgress = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/github", () => ({
+vi.mock("@/services/github/github", () => ({
   getIssueProgress: mockGetIssueProgress,
 }));
 

@@ -115,7 +115,7 @@ export default function TournamentsClient({ tournaments }: Props) {
       {/* Tournament grid */}
       <div className="max-w-300 mx-auto px-10 py-6">
         {filtered.length === 0 ? (
-          <div className="text-center py-20 px-5 text-(--color-text-muted)">
+          <div className="text-center py-20 px-5 text-text-muted)">
             <div className="text-[2.5rem] mb-4 opacity-30">♟</div>
             <p className="text-[0.9375rem] leading-[1.6]">
               {tournaments.length === 0

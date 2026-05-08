@@ -12,17 +12,17 @@ export default function LandingPage() {
       {/* Centre content */}
       <section className="flex flex-col items-center gap-8 text-center">
         {/* Brand wordmark */}
-        <h1 className="text-3xl tracking-[0.2em] uppercase text-(--color-gold-bright) font-cinzel">
+        <h1 className="text-3xl tracking-[0.2em] uppercase text-gold-bright font-cinzel">
           MY Chess Tour
         </h1>
 
         {/* Divider */}
-        <div className="h-px w-16 bg-(--color-gold-bright)" />
+        <div className="h-px w-16 bg-gold-bright" />
 
         {/* Headline */}
         <h1 className="text-5xl font-semibold tracking-[0.08em] sm:text-6xl text-text-primary font-cinzel">
           Coming Soon
-          <span className="text-(--color-gold-bright)"> 2026</span>
+          <span className="text-gold-bright"> 2026</span>
         </h1>
 
         {/* Sub-copy */}

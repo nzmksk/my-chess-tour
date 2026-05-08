@@ -101,7 +101,7 @@ export default async function TournamentDetailPage({
   const { id } = await params;
 
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <Suspense fallback={<DetailSkeleton />}>
         <TournamentDetailData id={id} />

@@ -1,9 +1,9 @@
 export default function ProgressSkeleton() {
   return (
     <footer className="w-full max-w-xl">
-      <div className="mb-2 flex items-center justify-between text-xs text-(--color-text-muted)">
+      <div className="mb-2 flex items-center justify-between text-xs text-text-muted)">
         <span className="font-cinzel tracking-[0.05em]">Build Progress</span>
-        <span className="text-(--color-gold-bright)">…</span>
+        <span className="text-gold-bright)">…</span>
       </div>
       <div
         className="h-1 w-full overflow-hidden rounded-full bg-bg-raised"

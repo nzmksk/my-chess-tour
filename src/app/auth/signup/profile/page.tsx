@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function SignUpProfilePage() {
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <Suspense fallback={<AuthCardSkeleton rows={5} />}>
         <ProfileForm />

@@ -14,7 +14,7 @@ const base: TournamentDetailType = {
   venue_address: "Jalan Raja Laut, 50350 Kuala Lumpur",
   start_date: "2026-06-01",
   end_date: "2026-06-02",
-  registration_deadline: "2026-05-28T23:59:59Z",
+  registration_deadline: "2026-05-28T08:00:00Z",
   format: { type: "rapid", system: "swiss", rounds: 7 },
   time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
   is_fide_rated: true,
@@ -346,9 +346,9 @@ describe("CTA button auth states", () => {
     expect(html).toContain("Register Now");
   });
 
-  it("shows 'Log In / Sign Up to Register' when not authenticated and spots available", () => {
+  it("shows 'Sign In to Register' when not authenticated and spots available", () => {
     const html = render({}, false);
-    expect(html).toContain("Log In / Sign Up to Register");
+    expect(html).toContain("Sign In to Register");
   });
 
   it("disables CTA button when not authenticated", () => {

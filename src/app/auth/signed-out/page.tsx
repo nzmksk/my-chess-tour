@@ -14,7 +14,7 @@ export default function SignedOutPage() {
         <div className="centered-col">
           <div className="auth-card card text-center">
             <div
-              className="w-14 h-14 rounded-full border border-(--color-border) bg-(--color-bg-raised) flex items-center justify-center mx-auto mb-6 text-[1.375rem] text-(--color-gold-bright)"
+              className="w-14 h-14 rounded-full border border-border bg-bg-raised flex items-center justify-center mx-auto mb-6 text-[1.375rem] text-gold-bright"
               role="img"
               aria-label="Signed out"
             >

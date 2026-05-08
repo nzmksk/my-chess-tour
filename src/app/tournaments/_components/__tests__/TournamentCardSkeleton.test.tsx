@@ -56,7 +56,7 @@ describe("TournamentCardSkeleton mirrors TournamentCard layout", () => {
       "items-center",
       "pt-3",
       "border-t",
-      "border-(--color-border)",
+      "border-border",
     ];
 
     for (const cls of footerClasses) {

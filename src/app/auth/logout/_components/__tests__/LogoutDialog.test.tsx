@@ -23,7 +23,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: mocks.back, push: mocks.push }),
 }));
 
-vi.mock("../../actions", () => ({
+vi.mock("../../_actions/logout", () => ({
   logout: mocks.logout,
 }));
 

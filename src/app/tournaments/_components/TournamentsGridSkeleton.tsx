@@ -6,7 +6,7 @@ export default function TournamentsGridSkeleton() {
   return (
     <>
       {/* Filter bar skeleton */}
-      <div className="bg-(--color-bg-surface) border-b border-(--color-border) py-4">
+      <div className="bg-bg-surface border-b border-border py-4">
         <div className="max-w-300 mx-auto px-10">
           {/* Search bar */}
           <div className="skeleton-shimmer w-full h-10.5 rounded-xs" />

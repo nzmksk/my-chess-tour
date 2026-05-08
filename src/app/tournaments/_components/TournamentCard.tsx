@@ -103,10 +103,10 @@ export default function TournamentCard({ tournament: t }: Props) {
         </div>
 
         {/* Footer: price + CTA */}
-        <div className="flex justify-between items-center pt-3 border-t border-(--color-border)">
+        <div className="flex justify-between items-center pt-3 border-t border-border">
           <div>
             {hasMultipleFees && (
-              <small className="text-xs text-(--color-text-muted) font-lato ml-1">
+              <small className="text-xs text-text-muted font-lato ml-1">
                 starting from{" "}
               </small>
             )}

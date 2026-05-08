@@ -11,7 +11,7 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn(() => ({ getAll: vi.fn(() => []), set: vi.fn() })),
 }));
 
-vi.mock("@/lib/supabase/server");
+vi.mock("@/services/supabase/server");
 
 import * as supabaseServer from "@/services/supabase/server";
 

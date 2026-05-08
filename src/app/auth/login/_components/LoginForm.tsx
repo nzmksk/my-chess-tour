@@ -34,7 +34,7 @@ export default function LoginForm() {
               temporarily locked.
               <br />
               <br />
-              <strong className="font-(--font-cinzel) text-(--color-gold-muted) tracking-wider">
+              <strong className="font-cinzel text-gold-muted tracking-wider">
                 Unlocks in ~{minutes} minute{minutes !== 1 ? "s" : ""}
               </strong>
             </p>

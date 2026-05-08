@@ -13,17 +13,17 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@/lib/supabase/admin", () => ({
+vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
     auth: { admin: { generateLink: vi.fn() } },
   },
 }));
 
-vi.mock("@/lib/email", () => ({
+vi.mock("@/services/email/email", () => ({
   sendPasswordResetEmail: vi.fn(),
 }));
 
-vi.mock("../actions", () => ({
+vi.mock("../_actions/forgotPassword", () => ({
   forgotPassword: vi.fn(),
 }));
 
@@ -85,7 +85,7 @@ describe("ForgotPasswordForm", () => {
 
   it("renders Back to sign in link pointing to /login", () => {
     render(<ForgotPasswordForm />);
-    const link = screen.getByText("Back to sign in") as HTMLAnchorElement;
+    const link = screen.getByText("Return to sign in") as HTMLAnchorElement;
     expect(link.href).toContain("/login");
   });
 

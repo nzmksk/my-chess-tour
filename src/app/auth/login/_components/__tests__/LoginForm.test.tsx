@@ -13,7 +13,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("../actions", () => ({
+vi.mock("../_actions/login", () => ({
   login: vi.fn(),
 }));
 
@@ -96,7 +96,7 @@ describe("LoginForm", () => {
 
   it("renders create account link pointing to /sign-up", () => {
     render(<LoginForm />);
-    const link = screen.getByText("Create one") as HTMLAnchorElement;
+    const link = screen.getByText("Create an account") as HTMLAnchorElement;
     expect(link.href).toContain("/sign-up");
   });
 

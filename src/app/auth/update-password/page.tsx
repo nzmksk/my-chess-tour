@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function UpdatePasswordPage() {
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <UpdatePasswordForm />
     </div>

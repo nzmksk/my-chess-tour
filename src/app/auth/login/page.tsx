@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <LoginForm />
     </div>

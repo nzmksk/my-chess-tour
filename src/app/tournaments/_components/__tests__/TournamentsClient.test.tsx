@@ -187,7 +187,7 @@ describe("initial render", () => {
 
   it("renders empty-state message when no tournaments are provided", () => {
     const html = renderToStaticMarkup(<TournamentsClient tournaments={[]} />);
-    expect(html).toContain("No published tournaments");
+    expect(html).toContain("No tournaments are currently published.");
   });
 });
 
@@ -651,7 +651,7 @@ describe("search filter — component level", () => {
   it("shows 'no match' message when search excludes all tournaments", () => {
     const t = makeTournament({ name: "KL Rapid" });
     const html = renderWithFilters({ search: "xyz" }, [t]);
-    expect(html).toContain("No tournaments match your filters.");
+    expect(html).toContain("No tournaments match your current filters.");
   });
 });
 
@@ -667,7 +667,7 @@ describe("format filter — component level", () => {
   it("shows 'no match' message when format excludes all tournaments", () => {
     const t = makeTournament({ format: { type: "classical", system: "swiss", rounds: 5 } });
     const html = renderWithFilters({ formats: ["blitz"] }, [t]);
-    expect(html).toContain("No tournaments match your filters.");
+    expect(html).toContain("No tournaments match your current filters.");
   });
 });
 
@@ -683,7 +683,7 @@ describe("state filter — component level", () => {
   it("shows 'no match' message when state excludes all tournaments", () => {
     const t = makeTournament({ state: "Selangor" });
     const html = renderWithFilters({ states: ["Johor"] }, [t]);
-    expect(html).toContain("No tournaments match your filters.");
+    expect(html).toContain("No tournaments match your current filters.");
   });
 });
 
@@ -712,7 +712,7 @@ describe("rating filter — component level", () => {
 
   it("shows 'no match' message when rating excludes all tournaments", () => {
     const html = renderWithFilters({ ratings: ["fide"] }, [unrated]);
-    expect(html).toContain("No tournaments match your filters.");
+    expect(html).toContain("No tournaments match your current filters.");
   });
 
   it("shows both FIDE and MCF tournaments when both ratings are selected", () => {

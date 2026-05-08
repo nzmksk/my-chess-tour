@@ -65,7 +65,7 @@ function MultiSelectDropdown({
                 type="checkbox"
                 checked={selected.includes(opt.value)}
                 onChange={() => toggle(opt.value)}
-                className="accent-(--color-gold-bright) size-3.75 shrink-0"
+                className="accent-gold-bright) size-3.75 shrink-0"
               />
               {opt.label}
             </label>
@@ -141,7 +141,7 @@ export default function FilterBar({
   }
 
   return (
-    <div className="bg-bg-surface border-b border-(--color-border) py-4">
+    <div className="bg-bg-surface border-b border-border py-4">
       <div className="max-w-300 mx-auto px-10">
         {/* Search */}
         <input

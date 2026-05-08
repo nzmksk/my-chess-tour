@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function SignUpVerifyPage() {
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <Suspense fallback={<AuthCardSkeleton rows={1} />}>
         <VerifyForm />

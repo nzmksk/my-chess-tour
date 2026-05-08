@@ -55,7 +55,7 @@ async function TournamentsData() {
 
 export default function TournamentsPage() {
   return (
-    <div className="min-h-screen bg-(--color-bg-base)">
+    <div className="min-h-screen bg-bg-base">
       <NavBar />
       <Suspense fallback={<TournamentsGridSkeleton />}>
         <TournamentsData />

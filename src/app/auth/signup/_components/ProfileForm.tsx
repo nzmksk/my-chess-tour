@@ -41,6 +41,9 @@ export default function ProfileForm() {
   async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitError(null);
+
+    if (process.env.NEXT_PUBLIC_ENVIRONMENT !== "production") return;
+
     setIsSubmitting(true);
 
     try {
