@@ -36,7 +36,7 @@ export interface Restrictions {
 
 export interface OrganizerDetail {
   id: string;
-  organization_name: string;
+  name: string;
   description?: string | null;
   links?: Array<{ url: string; label: string }> | unknown;
   email: string;
@@ -47,9 +47,11 @@ export interface TournamentDetail {
   id: string;
   name: string;
   description?: string | null;
-  venue_name: string;
-  state: string;
-  venue_address?: string | null;
+  venue: {
+    name: string;
+    state: string;
+    address?: string | null;
+  };
   start_date: string;
   end_date: string;
   registration_deadline: string;
@@ -63,5 +65,5 @@ export interface TournamentDetail {
   max_participants: number;
   current_participants: number;
   status: string;
-  organizer: OrganizerDetail | null;
+  organization: OrganizerDetail | null;
 }

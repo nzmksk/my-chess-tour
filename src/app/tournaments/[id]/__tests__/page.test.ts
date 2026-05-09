@@ -16,19 +16,13 @@ vi.mock("next/navigation", () => ({
   notFound: mockNotFound,
 }));
 
-vi.mock(
-  "@/app/tournaments/[id]/_components/TournamentDetail",
-  () => ({
-    default: vi.fn().mockReturnValue(null),
-  }),
-);
+vi.mock("@/app/tournaments/[id]/_components/TournamentDetail", () => ({
+  default: vi.fn().mockReturnValue(null),
+}));
 
-vi.mock(
-  "@/app/tournaments/[id]/_components/DetailSkeleton",
-  () => ({
-    default: vi.fn().mockReturnValue(null),
-  }),
-);
+vi.mock("@/app/tournaments/[id]/_components/DetailSkeleton", () => ({
+  default: vi.fn().mockReturnValue(null),
+}));
 
 vi.mock("@/components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
@@ -52,14 +46,20 @@ function makeTournamentPayload(overrides: Record<string, unknown> = {}) {
       id: "t1",
       name: "KL Open Rapid Championship 2026",
       description: "Annual rapid chess championship.",
-      venue_name: "Dewan Bandaraya KL",
-      state: "W.P. Kuala Lumpur",
-      venue_address: "Jalan Raja Laut, 50350 Kuala Lumpur",
+      venue: {
+        name: "Dewan Bandaraya KL",
+        state: "W.P. Kuala Lumpur",
+        address: "Jalan Raja Laut, 50350 Kuala Lumpur",
+      },
       start_date: "2026-06-01",
       end_date: "2026-06-02",
       registration_deadline: "2026-05-28T23:59:59Z",
       format: { type: "rapid", system: "swiss", rounds: 7 },
-      time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
+      time_control: {
+        base_minutes: 15,
+        increment_seconds: 10,
+        delay_seconds: 0,
+      },
       is_fide_rated: true,
       is_mcf_rated: false,
       entry_fees: { standard: { amount_cents: 5000 } },
@@ -68,7 +68,7 @@ function makeTournamentPayload(overrides: Record<string, unknown> = {}) {
       max_participants: 120,
       current_participants: 78,
       status: "published",
-      organizer: null,
+      organization: null,
       ...overrides,
     },
   };
@@ -185,7 +185,9 @@ describe("generateMetadata", () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () =>
-        makeTournamentPayload({ description: "Custom tournament description." }),
+        makeTournamentPayload({
+          description: "Custom tournament description.",
+        }),
     });
 
     const { generateMetadata } = await import("../page");

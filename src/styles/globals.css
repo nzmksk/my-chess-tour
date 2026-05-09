@@ -146,7 +146,8 @@
   .badge-format,
   .badge-fide,
   .badge-mcf,
-  .badge-unrated {
+  .badge-unrated,
+  .badge-open {
     @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-1 rounded-sm;
   }
   .badge-format {
@@ -160,6 +161,9 @@
   }
   .badge-unrated {
     @apply bg-bg-raised text-text-muted border-border;
+  }
+  .badge-open {
+    @apply bg-bold-irish-bg text-shiny-shamrock border-bold-irish-border;
   }
   .spots {
     @apply font-lato font-semibold text-2xs rounded-sm px-2 py-1;
@@ -505,6 +509,11 @@
   /* ── Auth buttons ── */
   .btn-primary {
     @apply text-bg-base font-cinzel text-sm font-bold tracking-widest uppercase py-3.5 px-9 rounded-xs border-0 cursor-pointer w-full transition duration-200 block text-center no-underline;
+    background: linear-gradient(
+      135deg,
+      var(--color-gold-bright),
+      var(--color-gold-deep)
+    );
     box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
   .btn-primary:hover {
@@ -619,21 +628,6 @@
   }
   .session-val {
     @apply font-lato text-sm text-text-secondary;
-  }
-
-  /* ── Badge variants ── */
-  .badge {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase py-0.75 px-2.5 rounded-xs inline-block;
-  }
-  .badge--gold {
-    @apply text-gold-bright bg-grandiose-hover;
-    border: 1px solid var(--color-grandiose-hover);
-  }
-  .badge--neutral {
-    @apply bg-badge-neutral-bg text-text-secondary border border-border;
-  }
-  .badge--success {
-    @apply text-shiny-shamrock bg-bold-irish-bg border-bold-irish-border;
   }
 
   /* ── Navbar avatar & dropdown ── */

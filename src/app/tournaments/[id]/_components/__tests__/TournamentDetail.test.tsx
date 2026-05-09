@@ -9,9 +9,11 @@ const base: TournamentDetailType = {
   id: "t1",
   name: "KL Open Rapid Championship 2026",
   description: "Annual rapid chess championship in Kuala Lumpur.",
-  venue_name: "Dewan Bandaraya KL",
-  state: "W.P. Kuala Lumpur",
-  venue_address: "Jalan Raja Laut, 50350 Kuala Lumpur",
+  venue: {
+    name: "Dewan Bandaraya KL",
+    state: "W.P. Kuala Lumpur",
+    address: "Jalan Raja Laut, 50350 Kuala Lumpur",
+  },
   start_date: "2026-06-01",
   end_date: "2026-06-02",
   registration_deadline: "2026-05-28T08:00:00Z",
@@ -46,9 +48,9 @@ const base: TournamentDetailType = {
   max_participants: 120,
   current_participants: 78,
   status: "published",
-  organizer: {
+  organization: {
     id: "org-1",
-    organization_name: "KL Chess Association",
+    name: "KL Chess Association",
     description: "Premier chess organization in KL.",
     links: [{ url: "https://klchess.org", label: "Website" }],
     email: "info@klchess.org",
@@ -56,9 +58,15 @@ const base: TournamentDetailType = {
   },
 };
 
-function render(overrides: Partial<TournamentDetailType> = {}, isAuthenticated = false): string {
+function render(
+  overrides: Partial<TournamentDetailType> = {},
+  isAuthenticated = false,
+): string {
   return renderToStaticMarkup(
-    <TournamentDetail tournament={{ ...base, ...overrides }} isAuthenticated={isAuthenticated} />,
+    <TournamentDetail
+      tournament={{ ...base, ...overrides }}
+      isAuthenticated={isAuthenticated}
+    />,
   );
 }
 
@@ -76,7 +84,7 @@ describe("tournament header", () => {
   });
 
   it("does not render organizer line when organizer is null", () => {
-    const html = render({ organizer: null });
+    const html = render({ organization: null });
     expect(html).not.toContain("Organized by");
   });
 });
@@ -123,7 +131,11 @@ describe("tournament details section", () => {
 
   it("renders time control without increment when increment is 0", () => {
     const html = render({
-      time_control: { base_minutes: 90, increment_seconds: 0, delay_seconds: 0 },
+      time_control: {
+        base_minutes: 90,
+        increment_seconds: 0,
+        delay_seconds: 0,
+      },
     });
     expect(html).toContain("90 min");
     expect(html).not.toContain("+ 0 sec");
@@ -151,7 +163,7 @@ describe("tournament details section", () => {
   });
 
   it("omits venue address when not present", () => {
-    const html = render({ venue_address: null });
+    const html = render({ venue: { ...base.venue, address: null } });
     expect(html).not.toContain("Jalan Raja Laut");
   });
 });
@@ -257,7 +269,12 @@ describe("restrictions section", () => {
 
   it("renders max age restriction when set", () => {
     const html = render({
-      restrictions: { min_rating: null, max_rating: null, min_age: null, max_age: 18 },
+      restrictions: {
+        min_rating: null,
+        max_rating: null,
+        min_age: null,
+        max_age: 18,
+      },
     });
     expect(html).toContain("18");
   });
@@ -297,13 +314,13 @@ describe("organizer section", () => {
 
   it("omits phone when not present", () => {
     const html = render({
-      organizer: { ...base.organizer!, phone: null },
+      organization: { ...base.organization!, phone: null },
     });
     expect(html).not.toContain("+60123456789");
   });
 
   it("hides organizer section when organizer is null", () => {
-    const html = render({ organizer: null });
+    const html = render({ organization: null });
     expect(html).not.toContain("info@klchess.org");
   });
 
@@ -357,8 +374,14 @@ describe("CTA button auth states", () => {
   });
 
   it("shows 'Full' and disables button when no spots remain, regardless of auth", () => {
-    const htmlAuth = render({ max_participants: 100, current_participants: 100 }, true);
-    const htmlNoAuth = render({ max_participants: 100, current_participants: 100 }, false);
+    const htmlAuth = render(
+      { max_participants: 100, current_participants: 100 },
+      true,
+    );
+    const htmlNoAuth = render(
+      { max_participants: 100, current_participants: 100 },
+      false,
+    );
     expect(htmlAuth).toContain("Full");
     expect(htmlAuth).toContain("disabled");
     expect(htmlNoAuth).toContain("Full");

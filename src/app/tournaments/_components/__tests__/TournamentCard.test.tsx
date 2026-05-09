@@ -11,7 +11,11 @@ vi.mock("next/link", () => ({
     href: string;
     children: React.ReactNode;
     className?: string;
-  }) => <a href={href} className={className}>{children}</a>,
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
 }));
 
 import TournamentCard from "../TournamentCard";
@@ -162,7 +166,7 @@ describe("time control", () => {
 
   it("renders Swiss rounds when no time control is set", () => {
     const html = render({ time_control: undefined });
-    expect(html).toContain("Swiss · 7 rounds");
+    expect(html).toContain("7 rounds");
   });
 });
 

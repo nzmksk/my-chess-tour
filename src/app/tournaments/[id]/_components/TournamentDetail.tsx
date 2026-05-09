@@ -43,6 +43,10 @@ function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+function toTitleCase(s: string): string {
+  return s.replace(/[_\s]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function getMinFeeCents(fees: TournamentDetailType["entry_fees"]): number {
   if (!fees) return 0;
   const standard = fees.standard?.amount_cents ?? 0;
@@ -69,8 +73,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="pt-6 border-t border-border">
-      <h2 className="font-cinzel text-[1.125rem] font-semibold text-text-primary tracking-[0.04em] mb-4">
+    <section className="pt-4 border-t border-border">
+      <h2 className="font-cinzel text-[1.125rem] font-semibold text-text-primary tracking-[0.04em] mb-2">
         {title}
       </h2>
       {children}
@@ -112,8 +116,8 @@ export default function TournamentDetail({
   else if (spotsRatio <= 0.2) spotsClass = "text-amber-400";
 
   const orgLinks =
-    t.organizer?.links && Array.isArray(t.organizer.links)
-      ? (t.organizer.links as Array<{ url: string; label: string }>)
+    t.organization?.links && Array.isArray(t.organization.links)
+      ? (t.organization.links as Array<{ url: string; label: string }>)
       : [];
 
   return (
@@ -122,39 +126,37 @@ export default function TournamentDetail({
         {/* Two-column layout */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-8 items-start">
           {/* ── Left: scrollable detail ── */}
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
             {/* Header */}
             <div>
-              <h1 className="font-cinzel text-[1.75rem] font-semibold text-text-primary tracking-[0.05em] leading-[1.2] mb-2">
+              <h1 className="font-cinzel text-[1.75rem] font-semibold text-text-primary tracking-[0.05em] leading-[1.2]">
                 {t.name}
               </h1>
-              {t.organizer && (
+              {t.organization && (
                 <p className="font-lato text-[0.875rem] text-text-secondary">
                   Organized by{" "}
-                  <span className="text-gold-bright)">
-                    {t.organizer.organization_name}
+                  <span className="text-gold-bright">
+                    {t.organization.name}
                   </span>
                 </p>
               )}
-            </div>
 
-            {/* Badges */}
-            <div className="flex flex-wrap gap-2">
-              <span className="badge badge--neutral">
-                {capitalise(t.format?.type ?? "") || "—"}
-              </span>
-              {t.is_fide_rated && (
-                <span className="badge badge--gold">FIDE Rated</span>
-              )}
-              {t.is_mcf_rated && (
-                <span className="badge badge--gold">MCF Rated</span>
-              )}
-              {!t.is_fide_rated && !t.is_mcf_rated && (
-                <span className="badge badge--neutral">Unrated</span>
-              )}
-              {(!t.restrictions || !hasRestrictions(t.restrictions)) && (
-                <span className="badge badge--neutral">Open to All</span>
-              )}
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 mt-2">
+                <span className="badge-format">
+                  {capitalise(t.format?.type ?? "") || "—"}
+                </span>
+                {t.is_fide_rated && (
+                  <span className="badge-fide">FIDE Rated</span>
+                )}
+                {t.is_mcf_rated && <span className="badge-mcf">MCF Rated</span>}
+                {!t.is_fide_rated && !t.is_mcf_rated && (
+                  <span className="badge-unrated">Unrated</span>
+                )}
+                {(!t.restrictions || !hasRestrictions(t.restrictions)) && (
+                  <span className="badge-open">Open to All</span>
+                )}
+              </div>
             </div>
 
             {/* Tournament Details */}
@@ -168,10 +170,10 @@ export default function TournamentDetail({
                   label="Venue"
                   value={
                     <>
-                      {t.venue_name}, {t.state}
-                      {t.venue_address && (
+                      {t.venue.name}, {t.venue.state}
+                      {t.venue.address && (
                         <span className="block text-[0.8125rem] text-text-muted mt-0.5">
-                          {t.venue_address}
+                          {t.venue.address}
                         </span>
                       )}
                     </>
@@ -220,7 +222,7 @@ export default function TournamentDetail({
                   {t.entry_fees.additional?.map((fee, i) => (
                     <tr key={i}>
                       <td>
-                        {fee.type}
+                        {toTitleCase(fee.type)}
                         {fee.valid_until && (
                           <span className="block text-[0.75rem] text-text-muted">
                             before {formatDeadline(fee.valid_until)}
@@ -331,30 +333,27 @@ export default function TournamentDetail({
             )}
 
             {/* Organizer */}
-            {t.organizer && (
-              <Section title="Organizer">
-                <div className="flex flex-col gap-3">
-                  <h3 className="font-cinzel text-[1rem] font-semibold text-text-primary">
-                    {t.organizer.organization_name}
-                  </h3>
-                  {t.organizer.description && (
+            {t.organization && (
+              <Section title={t.organization.name}>
+                <div className="flex flex-col gap-1">
+                  {t.organization.description && (
                     <p className="font-lato text-[0.9375rem] text-text-body leading-[1.7]">
-                      {t.organizer.description}
+                      {t.organization.description}
                     </p>
                   )}
                   <div className="flex flex-col gap-1 font-lato text-[0.875rem] text-text-secondary">
                     <a
-                      href={`mailto:${t.organizer.email}`}
-                      className="hover:text-gold-bright) transition-colors"
+                      href={`mailto:${t.organization.email}`}
+                      className="hover:text-gold-bright transition-colors"
                     >
-                      ✉ {t.organizer.email}
+                      ✉ {t.organization.email}
                     </a>
-                    {t.organizer.phone && (
+                    {t.organization.phone && (
                       <a
-                        href={`tel:${t.organizer.phone}`}
-                        className="hover:text-gold-bright) transition-colors"
+                        href={`tel:${t.organization.phone}`}
+                        className="hover:text-gold-bright transition-colors"
                       >
-                        ☎ {t.organizer.phone}
+                        ☎ {t.organization.phone}
                       </a>
                     )}
                     {orgLinks.map((link, i) => (
@@ -387,8 +386,8 @@ export default function TournamentDetail({
                   {minFee > 0 ? formatRm(minFee) : "Free"}
                 </div>
                 {lowestFeeEntry && (
-                  <p className="font-lato text-[0.8125rem] text-text-muted mt-0.5">
-                    {lowestFeeEntry.type} price
+                  <p className="font-lato text-[0.8125rem] text-text-muted">
+                    {toTitleCase(lowestFeeEntry.type)} price
                     {lowestFeeEntry.valid_until &&
                       ` (ends ${formatDeadline(lowestFeeEntry.valid_until)})`}
                   </p>
@@ -397,13 +396,21 @@ export default function TournamentDetail({
 
               {/* CTA */}
               {spotsLeft === 0 ? (
-                <button className="btn-primary w-full opacity-50" disabled>
+                <button
+                  className="btn-primary rounded-md not-first:w-full opacity-50"
+                  disabled
+                >
                   Full
                 </button>
               ) : isAuthenticated ? (
-                <button className="btn-primary w-full">Register Now</button>
+                <button className="btn-primary rounded-md w-full">
+                  Register Now
+                </button>
               ) : (
-                <button className="btn-primary w-full opacity-50" disabled>
+                <button
+                  className="btn-primary rounded-md w-full opacity-50"
+                  disabled
+                >
                   Sign In to Register
                 </button>
               )}
@@ -414,12 +421,12 @@ export default function TournamentDetail({
                   {spotsLeft}
                 </span>{" "}
                 of {t.max_participants} spots remaining
+                {/* Deadline */}
+                <p className="font-lato text-[0.8125rem] text-text-muted">
+                  ⏰ Registration closes{" "}
+                  {formatDeadline(t.registration_deadline)}
+                </p>
               </div>
-
-              {/* Deadline */}
-              <p className="font-lato text-[0.8125rem] text-text-muted">
-                ⏰ Registration closes {formatDeadline(t.registration_deadline)}
-              </p>
             </div>
           </aside>
         </div>

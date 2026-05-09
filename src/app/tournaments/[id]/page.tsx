@@ -11,7 +11,7 @@ import { createClient } from "@/services/supabase/server";
 export const revalidate = 60;
 
 async function fetchTournament(
-  id: string
+  id: string,
 ): Promise<TournamentDetailType | null> {
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";
@@ -48,7 +48,7 @@ export async function generateMetadata({
 
   const startDate = new Date(tournament.start_date).toLocaleDateString(
     "en-MY",
-    { day: "numeric", month: "long", year: "numeric" }
+    { day: "numeric", month: "long", year: "numeric" },
   );
   const endDate = new Date(tournament.end_date).toLocaleDateString("en-MY", {
     day: "numeric",
@@ -58,7 +58,7 @@ export async function generateMetadata({
 
   const description =
     tournament.description?.trim() ||
-    `${tournament.name} — a ${tournament.format.type} chess tournament held at ${tournament.venue_name}, ${tournament.state} from ${startDate} to ${endDate}.${tournament.is_fide_rated ? " FIDE rated." : ""}${tournament.is_mcf_rated ? " MCF rated." : ""}`;
+    `${tournament.name} — a ${tournament.format.type} chess tournament held at ${tournament.venue.name}, ${tournament.venue.state} from ${startDate} to ${endDate}.${tournament.is_fide_rated ? " FIDE rated." : ""}${tournament.is_mcf_rated ? " MCF rated." : ""}`;
 
   const ogTitle = `${tournament.name} | MY Chess Tour`;
 
@@ -84,11 +84,12 @@ export async function TournamentDetailData({ id }: { id: string }) {
 
   if (!tournament) {
     notFound();
-    return null;
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return <TournamentDetail tournament={tournament} isAuthenticated={!!user} />;
 }
