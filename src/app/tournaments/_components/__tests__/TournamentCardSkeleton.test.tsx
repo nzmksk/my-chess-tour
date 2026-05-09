@@ -7,8 +7,7 @@ import type { Tournament } from "../../types";
 const mockTournament: Tournament = {
   id: "1",
   name: "Test Tournament",
-  venue_name: "Test Venue",
-  state: "Selangor",
+  venue: { name: "Test Venue", state: "Selangor" },
   start_date: "2026-06-01",
   end_date: "2026-06-02",
   registration_deadline: "2026-05-31",

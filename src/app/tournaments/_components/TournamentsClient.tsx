@@ -56,7 +56,7 @@ export default function TournamentsClient({ tournaments }: Props) {
       }
 
       // State
-      if (states.length > 0 && !states.includes(t.state)) {
+      if (states.length > 0 && !states.includes(t.venue.state)) {
         return false;
       }
 

@@ -130,7 +130,7 @@
 
 @layer components {
   .card {
-    @apply bg-bg-surface border border-border rounded-sm;
+    @apply bg-bg-surface border border-border rounded-lg;
   }
 
   .tournament-card {
@@ -147,7 +147,7 @@
   .badge-fide,
   .badge-mcf,
   .badge-unrated {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-0.5 rounded-xs;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-1 rounded-sm;
   }
   .badge-format {
     @apply bg-bg-raised text-text-secondary border-border;
@@ -161,10 +161,13 @@
   .badge-unrated {
     @apply bg-bg-raised text-text-muted border-border;
   }
+  .spots {
+    @apply font-lato font-semibold text-2xs rounded-sm px-2 py-1;
+  }
 
   /* Card CTA buttons */
   .card-btn-view {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-0.5 rounded-xs border-gold-bright bg-transparent text-gold-bright cursor-pointer transition duration-150;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-4 py-2 rounded-sm border border-gold-bright bg-transparent text-gold-bright cursor-pointer transition duration-150;
   }
   .card-btn-view:hover {
     @apply bg-grandiose-hover;
@@ -194,7 +197,7 @@
 
   /* ── Filter bar ── */
   .search-input {
-    @apply font-lato text-sm px-2.5 py-3.5 border-border rounded-xs bg-bg-sunken text-text-body outline-none transition duration-200 w-full;
+    @apply font-lato text-sm p-2 border border-border rounded-md bg-bg-sunken text-text-body outline-none transition duration-200 w-full;
   }
   .search-input:focus {
     @apply border-gold-bright;
@@ -205,7 +208,7 @@
   }
 
   .filter-btn {
-    @apply font-lato text-sm pt-2.5 pr-8 pb-2.5 pl-3 border-border rounded-xs text-text-body cursor-pointer whitespace-nowrap appearance-none transition duration-150;
+    @apply font-lato text-sm p-2 border border-border rounded-sm text-text-body cursor-pointer whitespace-nowrap appearance-none transition duration-150;
     background: var(--color-bg-raised)
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a6e55' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E")
       right 10px center / 12px no-repeat;
@@ -309,10 +312,6 @@
   }
 
   /* ── Auth card variant ── */
-  .card {
-    @apply bg-bg-surface border border-border rounded;
-    /* padding: 2.5rem; */
-  }
   .card--featured {
     @apply border-t-2 border-t-gold-bright;
   }
@@ -324,7 +323,12 @@
   /* ── Dividers ── */
   .divider-gold {
     @apply w-12 h-0.5;
-    background: linear-gradient(90deg, transparent, var(--color-gold-bright), transparent);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-gold-bright),
+      transparent
+    );
   }
 
   .divider-text {
@@ -454,7 +458,11 @@
   }
   .strength-fill {
     @apply h-full rounded-xs transition-[width] duration-200;
-    background: linear-gradient(90deg, var(--color-gold-bright), var(--color-gold-deep));
+    background: linear-gradient(
+      90deg,
+      var(--color-gold-bright),
+      var(--color-gold-deep)
+    );
   }
 
   /* ── Checkboxes ── */
@@ -550,7 +558,11 @@
   }
   .step-circle--current {
     @apply border-gold-bright text-bg-base;
-    background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
+    background: linear-gradient(
+      135deg,
+      var(--color-gold-bright),
+      var(--color-gold-deep)
+    );
   }
   .step-label {
     @apply font-cinzel text-2xs tracking-widest uppercase text-text-muted;
@@ -667,7 +679,7 @@
 
   /* ── Navbar auth buttons ── */
   .nav-btn-login {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-ghost rounded-xs py-2 px-4.5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
+    @apply font-cinzel text-xs font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-ghost rounded-sm py-2 px-4.5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
   }
   .nav-btn-login:hover {
     @apply border-gold-bright;
@@ -675,8 +687,12 @@
   }
 
   .nav-btn-signup {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase text-bg-base border-none rounded-xs py-2.5 px-5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
-    background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
+    @apply font-cinzel text-xs font-bold tracking-widest uppercase text-bg-base border-none rounded-sm py-2 px-4.5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
+    background: linear-gradient(
+      135deg,
+      var(--color-gold-bright),
+      var(--color-gold-deep)
+    );
     box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
   .nav-btn-signup:hover {
@@ -693,7 +709,11 @@
   }
   .nav-drawer-btn-signup {
     @apply font-cinzel text-bg-base text-sm font-bold tracking-widest uppercase border-none rounded-xs py-3.5 px-4 text-center no-underline block mt-2;
-    background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
+    background: linear-gradient(
+      135deg,
+      var(--color-gold-bright),
+      var(--color-gold-deep)
+    );
     box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
 

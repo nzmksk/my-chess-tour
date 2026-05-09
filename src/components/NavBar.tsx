@@ -97,7 +97,7 @@ export default function NavBar() {
 
   return (
     <>
-      <nav className="bg-bg-sunken border-b border-border) sticky top-0 z-50">
+      <nav className="bg-bg-sunken border-b border-border sticky top-0 z-50">
         <div className="max-w-300 mx-auto px-10 flex items-center justify-between h-16">
           {/* Brand logo */}
           <Link href="/tournaments" className="flex items-center shrink-0">

@@ -74,11 +74,7 @@ export default function TournamentCard({ tournament: t }: Props) {
           {!t.is_fide_rated && !t.is_mcf_rated && (
             <span className="badge-unrated">Unrated</span>
           )}
-          <span
-            className={`text-[0.6875rem] font-lato font-semibold py-0.75 px-2 rounded-xs ${spotsClass}`}
-          >
-            {spotsLabel}
-          </span>
+          <span className={`spots ${spotsClass}`}>{spotsLabel}</span>
         </div>
 
         {/* Title */}
@@ -88,17 +84,29 @@ export default function TournamentCard({ tournament: t }: Props) {
 
         {/* Meta */}
         <div className="flex flex-col gap-1 text-[0.8125rem] text-text-secondary font-lato mb-3">
-          <span>{formatDateRange(t.start_date, t.end_date)}</span>
-          <span>
-            {t.venue_name}, {t.state}
+          <span className="flex items-baseline gap-1.5">
+            <span className="w-4 shrink-0 text-center">📅</span>
+            <span>{formatDateRange(t.start_date, t.end_date)}</span>
+          </span>
+          <span className="flex items-baseline gap-1.5">
+            <span className="w-4 shrink-0 text-center">📍</span>
+            <span>
+              {t.venue.name}, {t.venue.state}
+            </span>
           </span>
           {timeBase !== undefined ? (
-            <span>
-              {timeBase} min{timeInc ? ` + ${timeInc} sec` : ""}
-              {rounds ? ` · ${rounds} rounds` : ""}
+            <span className="flex items-baseline gap-1.5">
+              <span className="w-4 shrink-0 text-center">⏱️</span>
+              <span>
+                {timeBase} min{timeInc ? ` + ${timeInc} sec` : ""}
+              </span>
             </span>
-          ) : rounds ? (
-            <span>Swiss · {rounds} rounds</span>
+          ) : null}
+          {rounds !== undefined ? (
+            <span className="flex items-baseline gap-1.5">
+              <span className="w-4 shrink-0 text-center">🥊</span>
+              <span>{rounds} rounds</span>
+            </span>
           ) : null}
         </div>
 

@@ -84,8 +84,7 @@ function makeTournament(overrides: Partial<Tournament> = {}): Tournament {
   return {
     id: "1",
     name: "Default Tournament",
-    venue_name: "Test Venue",
-    state: "Selangor",
+    venue: { name: "Test Venue", state: "Selangor" },
     start_date: "2026-03-10",
     end_date: "2026-03-10",
     registration_deadline: "2026-03-09",
@@ -132,7 +131,7 @@ function filterTournaments(
       return false;
     }
 
-    if (states.length > 0 && !states.includes(t.state)) return false;
+    if (states.length > 0 && !states.includes(t.venue.state)) return false;
 
     if (ratings.length > 0) {
       const matchFide = ratings.includes("fide") && t.is_fide_rated;
@@ -255,9 +254,9 @@ describe("format filter", () => {
 
 describe("state filter", () => {
   const tournaments = [
-    makeTournament({ id: "1", name: "Johor Open", state: "Johor" }),
-    makeTournament({ id: "2", name: "Selangor Open", state: "Selangor" }),
-    makeTournament({ id: "3", name: "Perak Open", state: "Perak" }),
+    makeTournament({ id: "1", name: "Johor Open", venue: { name: "Test Venue", state: "Johor" } }),
+    makeTournament({ id: "2", name: "Selangor Open", venue: { name: "Test Venue", state: "Selangor" } }),
+    makeTournament({ id: "3", name: "Perak Open", venue: { name: "Test Venue", state: "Perak" } }),
   ];
 
   it("includes only tournaments in the selected state", () => {
@@ -577,7 +576,7 @@ describe("combined filters", () => {
     makeTournament({
       id: "1",
       name: "KL Blitz",
-      state: "W.P. Kuala Lumpur",
+      venue: { name: "Test Venue", state: "W.P. Kuala Lumpur" },
       format: { type: "blitz", system: "swiss", rounds: 9 },
       is_fide_rated: true,
       is_mcf_rated: false,
@@ -587,7 +586,7 @@ describe("combined filters", () => {
     makeTournament({
       id: "2",
       name: "Selangor Rapid",
-      state: "Selangor",
+      venue: { name: "Test Venue", state: "Selangor" },
       format: { type: "rapid", system: "swiss", rounds: 7 },
       is_fide_rated: false,
       is_mcf_rated: true,
@@ -597,7 +596,7 @@ describe("combined filters", () => {
     makeTournament({
       id: "3",
       name: "Johor Classical",
-      state: "Johor",
+      venue: { name: "Test Venue", state: "Johor" },
       format: { type: "classical", system: "swiss", rounds: 5 },
       is_fide_rated: false,
       is_mcf_rated: false,
@@ -673,15 +672,15 @@ describe("format filter — component level", () => {
 
 describe("state filter — component level", () => {
   it("shows matching state and hides non-matching one", () => {
-    const johor = makeTournament({ id: "1", name: "Johor Open", state: "Johor" });
-    const selangor = makeTournament({ id: "2", name: "Selangor Open", state: "Selangor" });
+    const johor = makeTournament({ id: "1", name: "Johor Open", venue: { name: "Test Venue", state: "Johor" } });
+    const selangor = makeTournament({ id: "2", name: "Selangor Open", venue: { name: "Test Venue", state: "Selangor" } });
     const html = renderWithFilters({ states: ["Johor"] }, [johor, selangor]);
     expect(html).toContain("Johor Open");
     expect(html).not.toContain("Selangor Open");
   });
 
   it("shows 'no match' message when state excludes all tournaments", () => {
-    const t = makeTournament({ state: "Selangor" });
+    const t = makeTournament({ venue: { name: "Test Venue", state: "Selangor" } });
     const html = renderWithFilters({ states: ["Johor"] }, [t]);
     expect(html).toContain("No tournaments match your current filters.");
   });

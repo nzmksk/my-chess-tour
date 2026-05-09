@@ -24,8 +24,10 @@ export interface EntryFees {
 export interface Tournament {
   id: string;
   name: string;
-  venue_name: string;
-  state: string;
+  venue: {
+    name: string;
+    state: string;
+  };
   start_date: string;
   end_date: string;
   registration_deadline: string;
