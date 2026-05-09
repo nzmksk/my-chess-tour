@@ -83,10 +83,10 @@ describe("ForgotPasswordForm", () => {
     expect(screen.getByRole("button", { name: "Send Reset Link" })).toBeDefined();
   });
 
-  it("renders Back to sign in link pointing to /login", () => {
+  it("renders Back to sign in link pointing to /auth/login", () => {
     render(<ForgotPasswordForm />);
     const link = screen.getByText("Return to sign in") as HTMLAnchorElement;
-    expect(link.href).toContain("/login");
+    expect(link.href).toContain("/auth/login");
   });
 
   it("shows reset link validity hint", () => {

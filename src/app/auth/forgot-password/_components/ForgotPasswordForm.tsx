@@ -29,7 +29,7 @@ export default function ForgotPasswordForm() {
               If an account with that email exists, we&apos;ve sent a password
               reset link. It expires in 1 hour.
             </p>
-            <Link href="/login" className="btn-primary">
+            <Link href="/auth/login" className="btn-primary">
               Back to Sign In
             </Link>
           </div>
@@ -93,7 +93,7 @@ export default function ForgotPasswordForm() {
           </form>
 
           <p className="auth-footer mt-lg">
-            Remembered it? <Link href="/login">Return to sign in</Link>
+            Remembered it? <Link href="/auth/login">Return to sign in</Link>
           </p>
         </div>
       </div>

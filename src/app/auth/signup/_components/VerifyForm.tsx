@@ -96,7 +96,7 @@ export default function VerifyForm() {
         return;
       }
       document.cookie = `${SIGNUP_STEP_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
-      router.push("/sign-up/success");
+      router.push("/auth/signup/success");
     } catch {
       setVerifyError("Network error. Please try again.");
     } finally {
@@ -238,7 +238,7 @@ export default function VerifyForm() {
             )}
           </p>
           <p className="auth-footer">
-            <a href="/sign-up">Change email</a>
+            <a href="/auth/signup">Change email</a>
           </p>
         </div>
       </div>

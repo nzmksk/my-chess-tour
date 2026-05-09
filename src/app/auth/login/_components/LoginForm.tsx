@@ -63,7 +63,9 @@ export default function LoginForm() {
           <div className="auth-card-header">
             <span className="auth-logo">MY Chess Tour</span>
             <h1 className="auth-heading">Welcome Back</h1>
-            <p className="auth-subheading">Enter your credentials to continue</p>
+            <p className="auth-subheading">
+              Enter your credentials to continue
+            </p>
             <hr className="divider-gold" />
           </div>
 
@@ -172,7 +174,8 @@ export default function LoginForm() {
           </form>
 
           <p className="auth-footer mt-lg">
-            New to MY Chess Tour? <Link href="/sign-up">Create an account</Link>
+            New to MY Chess Tour?{" "}
+            <Link href="/auth/signup">Create an account</Link>
           </p>
         </div>
       </div>

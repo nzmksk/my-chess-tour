@@ -12,7 +12,10 @@ export async function updatePassword(
   const password = formData.get("password")?.toString() ?? "";
   const confirmPassword = formData.get("confirmPassword")?.toString() ?? "";
 
-  const { errors, isValid } = validateUpdatePasswordForm(password, confirmPassword);
+  const { errors, isValid } = validateUpdatePasswordForm(
+    password,
+    confirmPassword,
+  );
 
   if (!isValid) {
     return { error: null, fieldErrors: errors };
@@ -25,5 +28,5 @@ export async function updatePassword(
     return { error: error.message, fieldErrors: {} };
   }
 
-  redirect("/login");
+  redirect("/auth/login");
 }

@@ -113,13 +113,13 @@ describe("updatePassword action", () => {
     expect(mocks.updateUser).toHaveBeenCalledWith({ password: "Strong1!" });
   });
 
-  it("calls redirect to /login on success", async () => {
+  it("calls redirect to /auth/login on success", async () => {
     const fd = makeFormData({ password: "Strong1!", confirmPassword: "Strong1!" });
 
     await expect(
       updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd)
     ).rejects.toThrow("NEXT_REDIRECT");
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/login");
+    expect(mocks.redirect).toHaveBeenCalledWith("/auth/login");
   });
 });

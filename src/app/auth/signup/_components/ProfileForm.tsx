@@ -64,7 +64,7 @@ export default function ProfileForm() {
       }
 
       document.cookie = `${SIGNUP_STEP_COOKIE}=verify; path=/; max-age=${SIGNUP_STEP_MAX_AGE}; SameSite=Lax`;
-      router.push("/sign-up/verify");
+      router.push("/auth/signup/verify");
     } catch {
       setSubmitError({
         message: "Network error. Please try again.",
@@ -76,7 +76,7 @@ export default function ProfileForm() {
   }
 
   function handleBack() {
-    router.push("/sign-up");
+    router.push("/auth/signup");
   }
 
   return (
@@ -128,7 +128,7 @@ export default function ProfileForm() {
                 {submitError.emailExists && (
                   <>
                     {" "}
-                    <Link href="/login">Sign in instead</Link>
+                    <Link href="/auth/login">Sign in instead</Link>
                   </>
                 )}
               </p>

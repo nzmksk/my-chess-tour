@@ -36,7 +36,7 @@ export default function SignUpForm() {
     setErrors(validationErrors);
     if (isValid) {
       document.cookie = `${SIGNUP_STEP_COOKIE}=profile; path=/; max-age=${SIGNUP_STEP_MAX_AGE}; SameSite=Lax`;
-      router.push("/sign-up/profile");
+      router.push("/auth/signup/profile");
     }
   }
 
@@ -355,7 +355,7 @@ export default function SignUpForm() {
 
           <div className="divider-text">Already have an account?</div>
           <p className="auth-footer mt-0">
-            <Link href="/login">Sign in instead</Link>
+            <Link href="/auth/login">Sign in instead</Link>
           </p>
         </div>
       </div>

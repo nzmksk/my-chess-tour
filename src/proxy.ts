@@ -1,6 +1,6 @@
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
-import { SIGNUP_STEP_COOKIE } from '@/lib/signup-cookie';
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -15,15 +15,15 @@ export async function proxy(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value)
+            request.cookies.set(name, value),
           );
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options),
           );
         },
       },
-    }
+    },
   );
 
   // Refresh session — IMPORTANT: do not remove this
@@ -35,28 +35,28 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const signupStep = request.cookies.get(SIGNUP_STEP_COOKIE)?.value;
 
-  if (pathname.startsWith("/sign-up/profile")) {
+  if (pathname.startsWith("/auth/signup/profile")) {
     if (signupStep !== "profile" && signupStep !== "verify") {
-      return NextResponse.redirect(new URL("/sign-up", request.url));
+      return NextResponse.redirect(new URL("/auth/signup", request.url));
     }
   }
 
-  if (pathname.startsWith("/sign-up/verify")) {
+  if (pathname.startsWith("/auth/signup/verify")) {
     if (signupStep !== "verify") {
-      return NextResponse.redirect(new URL("/sign-up", request.url));
+      return NextResponse.redirect(new URL("/auth/signup", request.url));
     }
   }
 
   // Protect routes that require auth
-  const protectedPaths = ['/dashboard', '/player', '/organizer', '/admin'];
+  const protectedPaths = ["/dashboard", "/player", "/organizer", "/admin"];
   const isProtected = protectedPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
+    request.nextUrl.pathname.startsWith(path),
   );
 
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('redirectTo', request.nextUrl.pathname);
+    url.pathname = "/auth/login";
+    url.searchParams.set("redirectTo", request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 
@@ -65,6 +65,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -57,7 +57,7 @@ export default async function SignUpSuccessPage({
               <div className="session-row">
                 <span className="session-key">Role</span>
                 <span className="session-val">
-                  <span className="badge badge--neutral">Player</span>
+                  <span className="badge-unrated">Player</span>
                 </span>
               </div>
             </div>

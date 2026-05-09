@@ -40,7 +40,7 @@ export default function SignedOutPage() {
               </div>
             </div>
             <div className="confirm-actions">
-              <Link href="/login" className="btn-primary">
+              <Link href="/auth/login" className="btn-primary">
                 Sign Back In
               </Link>
               <Link
