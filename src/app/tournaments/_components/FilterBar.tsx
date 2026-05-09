@@ -149,7 +149,7 @@ export default function FilterBar({
           placeholder="Search tournaments…"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="search-input"
+          className="input"
         />
 
         {/* Filter row */}

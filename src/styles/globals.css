@@ -200,17 +200,6 @@
   }
 
   /* ── Filter bar ── */
-  .search-input {
-    @apply font-lato text-sm p-2 border border-border rounded-md bg-bg-sunken text-text-body outline-none transition duration-200 w-full;
-  }
-  .search-input:focus {
-    @apply border-gold-bright;
-    box-shadow: 0 0 0 3px var(--color-grandiose-hover);
-  }
-  .search-input::placeholder {
-    @apply text-text-disabled;
-  }
-
   .filter-btn {
     @apply font-lato text-sm p-2 border border-border rounded-sm text-text-body cursor-pointer whitespace-nowrap appearance-none transition duration-150;
     background: var(--color-bg-raised)
@@ -286,7 +275,7 @@
   }
 
   .auth-card {
-    @apply w-full max-w-115;
+    @apply w-full max-w-115 p-8;
   }
 
   .auth-card-header {
@@ -294,11 +283,11 @@
   }
 
   .auth-logo {
-    @apply font-cinzel font-bold text-sm tracking-widest text-gold-bright uppercase mb-3 block;
+    @apply font-cinzel font-bold text-sm tracking-widest text-gold-bright uppercase mb-1 block;
   }
 
   .auth-heading {
-    @apply font-cinzel font-semibold text-2xl tracking-wider text-text-primary leading-[1.2] mb-2;
+    @apply font-cinzel font-semibold text-2xl tracking-wider text-text-primary leading-[1.2] mb-1;
   }
 
   .auth-subheading {
@@ -306,7 +295,7 @@
   }
 
   .auth-footer {
-    @apply text-center font-lato text-sm text-text-muted;
+    @apply text-center font-lato text-sm text-text-muted mt-1;
   }
   .auth-footer a {
     @apply text-gold-muted no-underline transition-colors duration-200;
@@ -326,7 +315,7 @@
 
   /* ── Dividers ── */
   .divider-gold {
-    @apply w-12 h-0.5;
+    @apply w-12 h-0.5 border-none mx-auto my-6;
     background: linear-gradient(
       90deg,
       transparent,
@@ -336,7 +325,7 @@
   }
 
   .divider-text {
-    @apply flex items-center gap-4 my-6 text-text-muted text-xs tracking-widest font-cinzel uppercase;
+    @apply flex items-center gap-4 mt-4 text-text-muted text-xs tracking-widest font-cinzel uppercase;
   }
   .divider-text::before,
   .divider-text::after {
@@ -378,7 +367,7 @@
   }
 
   .input {
-    @apply bg-bg-sunken border border-border rounded-xs text-text-body font-lato text-sm px-4 py-3 w-full outline-none transition duration-200 appearance-none;
+    @apply bg-bg-sunken border border-border rounded-sm md:rounded-md text-text-body font-lato text-sm px-4 py-2 w-full outline-none transition duration-200 appearance-none;
   }
   .input:focus {
     @apply border-gold-bright;
@@ -432,7 +421,7 @@
 
   /* ── Password requirements ── */
   .pw-requirements {
-    @apply bg-bg-sunken border border-border rounded-xs px-4 py-2 mt-2;
+    @apply bg-bg-sunken border border-border rounded-md px-4 py-2 mt-2;
   }
   .pw-requirements--error {
     @apply border-danger-deep;
@@ -508,7 +497,7 @@
 
   /* ── Auth buttons ── */
   .btn-primary {
-    @apply text-bg-base font-cinzel text-sm font-bold tracking-widest uppercase py-3.5 px-9 rounded-xs border-0 cursor-pointer w-full transition duration-200 block text-center no-underline;
+    @apply text-bg-base font-cinzel text-sm font-bold tracking-widest uppercase p-2 rounded-sm md:rounded-md border-0 cursor-pointer w-full transition duration-200 block text-center no-underline;
     background: linear-gradient(
       135deg,
       var(--color-gold-bright),
@@ -553,7 +542,7 @@
 
   /* ── Step tracker ── */
   .step-tracker {
-    @apply flex items-center justify-center mb-10;
+    @apply flex items-center justify-center mb-8;
   }
   .step {
     @apply flex flex-col items-center gap-1;
