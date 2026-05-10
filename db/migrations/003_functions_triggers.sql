@@ -6,6 +6,10 @@ RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'update_updated_at_column failed on %: % (SQLSTATE: %)', TG_TABLE_NAME, SQLERRM, SQLSTATE
+      USING ERRCODE = 'P0001';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -42,6 +46,10 @@ BEGIN
   VALUES (NEW.id);
 
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'handle_new_user failed: % (SQLSTATE: %)', SQLERRM, SQLSTATE
+      USING ERRCODE = 'P0001';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -149,6 +157,10 @@ BEGIN
   );
 
   RETURN COALESCE(NEW, OLD);
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'audit_trigger_func failed on % (%): % (SQLSTATE: %)', TG_TABLE_NAME, TG_OP, SQLERRM, SQLSTATE
+      USING ERRCODE = 'P0001';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
