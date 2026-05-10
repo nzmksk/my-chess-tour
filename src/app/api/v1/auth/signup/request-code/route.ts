@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (dbError) {
-    console.error(`Database error while checking existing email: ${normalized}`, dbError);
+    console.error("Database error while checking existing email: %s", normalized, dbError);
     return NextResponse.json(
       {
         error: { code: "INTERNAL_ERROR", message: "Failed to validate email" },
