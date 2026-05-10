@@ -6,23 +6,23 @@ const enum NonMonetaryPrize {
   Certificate = "Certificate",
 }
 
-export interface PrizeEntry {
+interface PrizeEntry {
   place: string;
   amount_cents: number;
   non_monetary_prize?: NonMonetaryPrize | null;
 }
 
-export interface PrizeCategory {
+interface PrizeCategory {
   name: string;
   entries: PrizeEntry[];
 }
 
-export interface PrizeSubCategory {
+interface PrizeSubCategory {
   name: string;
   entries: PrizeEntry[];
   conditions: unknown;
 }
-export interface PrizesData {
+interface PrizesData {
   categories: PrizeCategory[];
   subcategories?: PrizeSubCategory[] | null;
 }
@@ -34,7 +34,7 @@ export interface Restrictions {
   max_age?: number | null;
 }
 
-export interface OrganizerDetail {
+interface OrganizerDetail {
   id: string;
   name: string;
   description?: string | null;
