@@ -222,7 +222,7 @@ export default function VerifyForm() {
             {isVerifying ? "Verifying…" : "Verify Email"}
           </button>
 
-          <p className="auth-footer mt-6">
+          <p className="auth-footer mt-4">
             Didn&apos;t receive it?{" "}
             {cooldownLeft > 0 ? (
               <span className="text-text-disabled">

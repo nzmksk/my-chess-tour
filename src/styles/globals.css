@@ -279,7 +279,7 @@
   }
 
   .auth-card-header {
-    @apply text-center mb-6;
+    @apply text-center mb-4;
   }
 
   .auth-logo {
@@ -685,13 +685,13 @@
 
   /* Drawer login/signup buttons */
   .nav-drawer-btn-login {
-    @apply font-cinzel text-sm font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-bright rounded-xs py-3 px-4 text-center no-underline block transition-colors duration-150;
+    @apply font-cinzel text-sm font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-bright rounded-sm py-3 px-4 text-center no-underline block transition-colors duration-150;
   }
   .nav-drawer-btn-login:hover {
     @apply bg-grandiose-hover;
   }
   .nav-drawer-btn-signup {
-    @apply font-cinzel text-bg-base text-sm font-bold tracking-widest uppercase border-none rounded-xs py-3.5 px-4 text-center no-underline block mt-2;
+    @apply font-cinzel text-bg-base text-sm font-bold tracking-widest uppercase border-none rounded-sm py-3.5 px-4 text-center no-underline block mt-2;
     background: linear-gradient(
       135deg,
       var(--color-gold-bright),
