@@ -349,6 +349,12 @@ describe("register card", () => {
     expect(html).toContain("Full");
   });
 
+  it("applies low-spots colour class when spots ratio is at or below 20%", () => {
+    // 4 spots left out of 100 → 4% ≤ 20%, not full
+    const html = render({ max_participants: 100, current_participants: 96 });
+    expect(html).toContain("text-amber-400");
+  });
+
   it("shows registration deadline", () => {
     const html = render();
     expect(html).toContain("28 May");

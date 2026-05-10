@@ -217,6 +217,17 @@ describe("GET /api/v1/tournaments/:id", () => {
       expect(json.data).not.toHaveProperty("organization_id");
     });
 
+    it("unwraps organization from array when join returns an array", async () => {
+      setTournamentResult(makeTournament({ organizations: [mockOrganization] }));
+
+      const res = await GET(makeRequest(VALID_UUID), {
+        params: Promise.resolve({ id: VALID_UUID }),
+      });
+      const json = await res.json();
+
+      expect(json.data.organization.name).toBe("KL Chess Association");
+    });
+
     it("sets organization to null when organizations join is null", async () => {
       setTournamentResult(makeTournament({ organizations: null }));
 

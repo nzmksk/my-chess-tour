@@ -104,6 +104,7 @@ describe("ProfileForm", () => {
     expect(avatar.textContent).toContain("AW");
   });
 
+
   it("renders Back and Continue/Sending buttons", () => {
     render(<ProfileForm />);
     expect(getBackButton()).toBeDefined();
@@ -260,6 +261,26 @@ describe("ProfileForm", () => {
     });
 
     expect(screen.getByRole("link", { name: /sign in instead/i })).toBeDefined();
+  });
+
+  it("shows fallback error message when API response has no error field", async () => {
+    process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({}), // no error field
+      }),
+    );
+
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.submit(getSubmitButton().closest("form")!);
+    });
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Something went wrong",
+    );
   });
 
   it("shows 'Network error' message when fetch throws", async () => {

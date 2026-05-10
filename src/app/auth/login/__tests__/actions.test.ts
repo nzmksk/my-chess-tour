@@ -206,6 +206,22 @@ describe("login action", () => {
     });
   });
 
+  it("handles missing email key in FormData (passes empty string)", async () => {
+    const fd = new FormData();
+    fd.append("password", "anypassword");
+    const result = await login(INITIAL_LOGIN_STATE, fd);
+    expect(result.error).toMatch(/email/i);
+    expect(mocks.exists).not.toHaveBeenCalled();
+  });
+
+  it("handles missing password key in FormData (passes empty string)", async () => {
+    const fd = new FormData();
+    fd.append("email", "user@example.com");
+    const result = await login(INITIAL_LOGIN_STATE, fd);
+    expect(result.error).toMatch(/password/i);
+    expect(mocks.exists).not.toHaveBeenCalled();
+  });
+
   it("trims whitespace from email before using it", async () => {
     mocks.signInWithPassword.mockResolvedValue({
       data: { user: { id: "abc-123" }, session: {} },

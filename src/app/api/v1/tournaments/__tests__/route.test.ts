@@ -173,6 +173,16 @@ describe("GET /api/v1/tournaments", () => {
       expect(json.data[0].current_participants).toBe(0);
     });
 
+    it("handles null countsData from RPC and defaults to 0", async () => {
+      setTournamentsResult([makeTournament()]);
+      mockRpc.mockResolvedValue({ data: null });
+
+      const res = await GET();
+      const json = await res.json();
+
+      expect(json.data[0].current_participants).toBe(0);
+    });
+
     it("skips the RPC query when there are no tournaments", async () => {
       setTournamentsResult([]);
 
