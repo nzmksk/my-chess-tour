@@ -148,7 +148,7 @@
   .badge-mcf,
   .badge-unrated,
   .badge-open {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-1 rounded-sm;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-1 rounded-md;
   }
   .badge-format {
     @apply bg-bg-raised text-text-secondary border-border;
@@ -166,18 +166,18 @@
     @apply bg-bold-irish-bg text-shiny-shamrock border-bold-irish-border;
   }
   .spots {
-    @apply font-lato font-semibold text-2xs rounded-sm px-2 py-1;
+    @apply font-lato font-semibold text-2xs rounded-md px-2 py-1;
   }
 
   /* Card CTA buttons */
   .card-btn-view {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-4 py-2 rounded-sm border border-gold-bright bg-transparent text-gold-bright cursor-pointer transition duration-150;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-4 py-2 rounded-md border border-gold-bright bg-transparent text-gold-bright cursor-pointer transition duration-150;
   }
   .card-btn-view:hover {
     @apply bg-grandiose-hover;
   }
   .card-btn-full {
-    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-0.5 rounded-xs border-border bg-transparent text-text-muted;
+    @apply font-cinzel text-2xs font-bold tracking-widest uppercase px-2 py-0.5 rounded-md border-border bg-transparent text-text-muted;
   }
 
   /* Gold gradient CTA button */
@@ -201,7 +201,7 @@
 
   /* ── Filter bar ── */
   .filter-btn {
-    @apply font-lato text-sm p-2 border border-border rounded-sm text-text-body cursor-pointer whitespace-nowrap appearance-none transition duration-150;
+    @apply font-lato text-sm p-2 border border-border rounded-md text-text-body cursor-pointer whitespace-nowrap appearance-none transition duration-150;
     background: var(--color-bg-raised)
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a6e55' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E")
       right 10px center / 12px no-repeat;
@@ -256,17 +256,17 @@
     @apply text-gold-bright;
   }
   .nav-link-organizer {
-    @apply text-sm tracking-widest text-gold-bright uppercase no-underline pl-4 ml-2 transition-opacity duration-150;
+    @apply text-sm tracking-widest text-gold-bright uppercase no-underline pl-4 ml-2 transition-opacity duration-150 text-wrap text-right;
   }
 
   .nav-drawer-link {
-    @apply text-sm tracking-widest text-text-secondary uppercase no-underline py-3 px-4 rounded-xs transition duration-150;
+    @apply text-sm tracking-widest text-text-secondary uppercase no-underline py-3 px-4 rounded-md transition duration-150;
   }
   .nav-drawer-link--active {
     @apply text-gold-bright bg-grandiose-hover;
   }
   .nav-drawer-link-organizer {
-    @apply text-sm tracking-widest text-gold-bright uppercase no-underline py-3 px-4 mt-4 border border-gold-bright rounded-xs text-center transition-colors duration-150;
+    @apply text-sm tracking-widest text-gold-bright uppercase no-underline py-3 px-4 mt-4 border border-gold-bright rounded-md text-center transition-colors duration-150;
   }
 
   /* ── Auth pages ── */
@@ -362,12 +362,12 @@
     @apply block;
   }
   .tooltip {
-    @apply hidden absolute left-5 w-55 top-1/2 -translate-y-1/2 bg-bg-raised border border-border-gold rounded-xs px-4 py-2 z-50 font-lato text-sm font-light text-text-secondary leading-relaxed pointer-events-none;
+    @apply hidden absolute left-5 w-55 top-1/2 -translate-y-1/2 bg-bg-raised border border-border-gold rounded-md px-4 py-2 z-50 font-lato text-sm font-light text-text-secondary leading-relaxed pointer-events-none;
     box-shadow: 0 4px 20px var(--color-grandiose-hover);
   }
 
   .input {
-    @apply bg-bg-sunken border border-border rounded-sm md:rounded-md text-text-body font-lato text-sm px-4 py-2 w-full outline-none transition duration-200 appearance-none;
+    @apply bg-bg-sunken border border-border rounded-md text-text-body font-lato text-sm px-4 py-2 w-full outline-none transition duration-200 appearance-none;
   }
   .input:focus {
     @apply border-gold-bright;
@@ -375,6 +375,20 @@
   }
   .input::placeholder {
     @apply text-text-disabled;
+  }
+  .input::-webkit-calendar-picker-indicator {
+    @apply cursor-pointer opacity-70;
+    filter: invert(70%) sepia(30%) saturate(400%) hue-rotate(5deg)
+      brightness(90%);
+  }
+  .input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+  select.input {
+    @apply bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a6e55' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-position: right 12px center;
+    background-size: 12px;
   }
   .input-error {
     @apply border-danger-border;
@@ -391,7 +405,7 @@
   }
 
   .input-row {
-    @apply grid grid-cols-2 gap-4;
+    @apply grid grid-cols-1 sm:grid-cols-2 gap-4;
   }
 
   /* Eye icon wrapper */
@@ -447,10 +461,10 @@
 
   /* ── Password strength bar ── */
   .strength-bar {
-    @apply h-0.75 rounded-xs bg-border mt-2 overflow-hidden;
+    @apply h-0.75 rounded-md bg-border mt-2 overflow-hidden;
   }
   .strength-fill {
-    @apply h-full rounded-xs transition-[width] duration-200;
+    @apply h-full rounded-md transition-[width] duration-200;
     background: linear-gradient(
       90deg,
       var(--color-gold-bright),
@@ -460,10 +474,10 @@
 
   /* ── Checkboxes ── */
   .check-row {
-    @apply flex items-start gap-2;
+    @apply flex gap-2;
   }
   .checkbox {
-    @apply w-4 h-4 shrink-0 mt-0.5 bg-bg-sunken border border-border rounded-xs appearance-none cursor-pointer relative transition-colors duration-200;
+    @apply w-4 h-4 shrink-0 mt-0.5 bg-bg-sunken border border-border rounded-md appearance-none cursor-pointer relative transition-colors duration-200;
   }
   .checkbox:checked {
     @apply border-gold-bright bg-grandiose-hover;
@@ -475,7 +489,7 @@
     left: 0.125rem;
   }
   .check-label {
-    @apply font-lato text-sm text-text-secondary leading-relaxed;
+    @apply font-lato text-sm text-text-secondary leading-relaxed mb-4;
   }
   .check-label a {
     @apply text-gold-muted no-underline transition-colors duration-200;
@@ -486,7 +500,7 @@
 
   /* ── Remember + Forgot row ── */
   .remember-forgot-row {
-    @apply flex items-center justify-between mb-6;
+    @apply flex items-center justify-between mb-4;
   }
   .forgot-link {
     @apply font-lato text-xs text-gold-muted cursor-pointer no-underline transition-colors duration-200;
@@ -497,7 +511,7 @@
 
   /* ── Auth buttons ── */
   .btn-primary {
-    @apply text-bg-base font-cinzel text-sm font-bold tracking-widest uppercase p-2 rounded-sm md:rounded-md border-0 cursor-pointer w-full transition duration-200 block text-center no-underline;
+    @apply text-bg-base font-cinzel text-sm font-bold tracking-widest uppercase p-2 rounded-md border-0 cursor-pointer w-full transition duration-200 block text-center no-underline;
     background: linear-gradient(
       135deg,
       var(--color-gold-bright),
@@ -515,14 +529,14 @@
   }
 
   .btn-secondary {
-    @apply bg-transparent text-gold-bright font-cinzel text-sm font-bold tracking-widest uppercase py-3.25 px-6 rounded-xs border border-gold-bright cursor-pointer whitespace-nowrap transition duration-200;
+    @apply bg-transparent text-gold-bright font-cinzel text-sm font-bold tracking-widest uppercase p-2 rounded-md border border-gold-bright cursor-pointer whitespace-nowrap transition duration-200;
   }
   .btn-secondary:hover {
     @apply bg-grandiose-hover;
   }
 
   .btn-danger {
-    @apply bg-transparent text-danger-text font-cinzel text-sm font-bold tracking-widest uppercase py-3.5 px-9 rounded-xs border border-danger-text cursor-pointer w-full transition duration-200 block text-center;
+    @apply bg-transparent text-danger-text font-cinzel text-sm font-bold tracking-widest uppercase p-2 rounded-md border border-danger-text cursor-pointer w-full transition duration-200 block text-center;
   }
   .btn-danger:hover {
     background: rgba(224, 145, 110, 0.1);
@@ -534,7 +548,7 @@
 
   /* ── Error banner ── */
   .error-banner {
-    @apply bg-error-banner-bg border border-error-banner-border rounded-sm md:rounded-md p-2 mb-4 flex items-start gap-2;
+    @apply bg-error-banner-bg border border-error-banner-border rounded-md p-2 mb-4 flex items-start gap-2;
   }
   .error-text {
     @apply font-lato text-sm text-danger-text leading-relaxed;
@@ -577,7 +591,7 @@
 
   /* ── Avatar upload ── */
   .avatar-upload-wrap {
-    @apply flex flex-col items-center gap-2 mb-10;
+    @apply flex flex-col items-center gap-2 mb-8;
   }
   .avatar-preview {
     @apply w-20 h-20 rounded-full bg-gold-ghost border-2 border-border flex items-center justify-center font-cinzel text-2xl font-semibold text-gold-bright relative cursor-pointer transition-colors duration-200;
@@ -604,7 +618,7 @@
     @apply w-15 h-15 rounded-full bg-grandiose-hover border-grandiose-hover flex items-center justify-center mx-auto mb-6 text-2xl;
   }
   .session-info {
-    @apply bg-bg-sunken border border-border rounded-xs p-4 mb-10 text-left;
+    @apply bg-bg-sunken border border-border rounded-md p-4 mb-4 text-left;
   }
   .session-row {
     @apply flex justify-between items-center py-1 border-b border-border;
@@ -662,7 +676,7 @@
 
   /* ── Navbar auth buttons ── */
   .nav-btn-login {
-    @apply font-cinzel text-xs font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-ghost rounded-sm py-2 px-4.5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
+    @apply font-cinzel text-xs font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-ghost rounded-md py-2 px-4 cursor-pointer no-underline transition duration-200 inline-flex items-center;
   }
   .nav-btn-login:hover {
     @apply border-gold-bright;
@@ -670,7 +684,7 @@
   }
 
   .nav-btn-signup {
-    @apply font-cinzel text-xs font-bold tracking-widest uppercase text-bg-base border-none rounded-sm py-2 px-4.5 cursor-pointer no-underline transition duration-200 inline-flex items-center;
+    @apply font-cinzel text-xs font-bold tracking-widest uppercase text-bg-base border-none rounded-md py-2 px-4 cursor-pointer no-underline transition duration-200 inline-flex items-center whitespace-nowrap;
     background: linear-gradient(
       135deg,
       var(--color-gold-bright),
@@ -685,13 +699,13 @@
 
   /* Drawer login/signup buttons */
   .nav-drawer-btn-login {
-    @apply font-cinzel text-sm font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-bright rounded-sm py-3 px-4 text-center no-underline block transition-colors duration-150;
+    @apply font-cinzel text-sm font-bold tracking-widest uppercase text-gold-bright bg-transparent border border-gold-bright rounded-md py-3 px-4 text-center no-underline block transition-colors duration-150;
   }
   .nav-drawer-btn-login:hover {
     @apply bg-grandiose-hover;
   }
   .nav-drawer-btn-signup {
-    @apply font-cinzel text-bg-base text-sm font-bold tracking-widest uppercase border-none rounded-sm py-3.5 px-4 text-center no-underline block mt-2;
+    @apply font-cinzel text-bg-base text-sm font-bold tracking-widest uppercase border-none rounded-md py-3.5 px-4 text-center no-underline block mt-2;
     background: linear-gradient(
       135deg,
       var(--color-gold-bright),
@@ -702,7 +716,7 @@
 
   /* ── Confirm / locked screens ── */
   .confirm-icon {
-    @apply w-15 h-15 rounded-full border border-border bg-bg-raised flex items-center justify-center mx-auto mb-6 text-2xl;
+    @apply w-15 h-15 rounded-full border border-border bg-bg-raised flex items-center justify-center mx-auto mb-4 text-2xl;
   }
   .confirm-icon--danger {
     @apply border-danger-deep bg-danger-icon-bg;
@@ -711,10 +725,10 @@
     @apply font-cinzel text-xl font-semibold tracking-wider text-text-primary mb-2 text-center;
   }
   .confirm-body {
-    @apply font-lato font-light text-sm text-text-secondary leading-1.5 mb-10 text-center;
+    @apply font-lato font-light text-sm text-text-secondary mb-4 text-center;
   }
   .confirm-actions {
-    @apply flex flex-col gap-2;
+    @apply flex flex-col sm:flex-row-reverse gap-2;
   }
 
   /* ── Skeleton shimmer ── */

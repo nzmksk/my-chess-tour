@@ -111,7 +111,7 @@ export default function LoginForm() {
             </div>
 
             {/* Password */}
-            <div className="form-group">
+            <div className="form-group mb-1">
               <div className="label-row">
                 <label className="input-label" htmlFor="password">
                   Password
@@ -143,7 +143,7 @@ export default function LoginForm() {
 
             {/* Remember me + Forgot password */}
             <div className="remember-forgot-row">
-              <div className="check-row mb-0">
+              <div className="check-row mb-0 items-center">
                 <input
                   id="keepSignedIn"
                   name="keepSignedIn"
@@ -153,7 +153,7 @@ export default function LoginForm() {
                 />
                 <label
                   htmlFor="keepSignedIn"
-                  className="check-label font-[0.75rem]"
+                  className="check-label text-xs m-auto"
                 >
                   Keep me signed in
                 </label>

@@ -30,11 +30,11 @@ export default async function SignUpSuccessPage({
               &#9823;
             </div>
 
-            <h1 className="auth-heading mb-(--space-sm)">
+            <h1 className="auth-heading">
               Welcome to the Board
             </h1>
 
-            <p className="font-lato text-sm text-text-secondary mb-(--space-xl) leading-[1.7]">
+            <p className="font-lato text-sm text-text-secondary leading-relaxed">
               Account created and verified. You&apos;re now part of MY Chess
               Tour.
             </p>

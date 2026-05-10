@@ -164,7 +164,7 @@ export default function VerifyForm() {
 
           <div className="auth-card-header">
             <div
-              className="text-[2rem] mb-(--space-md)"
+              className="text-3xl"
               role="img"
               aria-label="Email"
             >
@@ -187,7 +187,7 @@ export default function VerifyForm() {
             </div>
             <input
               id="verificationCode"
-              className="input text-center tracking-[0.3em] text-[1.375rem] font-cinzel"
+              className="input text-center tracking-wide text-xl font-cinzel"
               type="text"
               inputMode="text"
               autoCapitalize="characters"

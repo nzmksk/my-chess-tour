@@ -65,7 +65,7 @@ export default function TournamentCard({ tournament: t }: Props) {
   return (
     <article className="card tournament-card">
       {/* Body */}
-      <div className="p-4 flex flex-col justify-center">
+      <div className="p-4 flex flex-col h-full">
         {/* Format + rating + spots badges */}
         <div className="flex flex-wrap gap-1.5 mb-2">
           <span className="badge-format">{capitalise(formatType) || "—"}</span>
@@ -78,12 +78,12 @@ export default function TournamentCard({ tournament: t }: Props) {
         </div>
 
         {/* Title */}
-        <h3 className="font-cinzel text-[0.9375rem] font-semibold text-text-primary mb-2 leading-[1.3]">
+        <h3 className="font-cinzel text-sm font-semibold text-text-primary mb-2 leading-tight">
           {t.name}
         </h3>
 
         {/* Meta */}
-        <div className="flex flex-col gap-1 text-[0.8125rem] text-text-secondary font-lato mb-3">
+        <div className="flex flex-col gap-1 text-sm text-text-secondary font-lato mb-3">
           <span className="flex items-baseline gap-1.5">
             <span className="w-4 shrink-0 text-center">📅</span>
             <span>{formatDateRange(t.start_date, t.end_date)}</span>
@@ -111,14 +111,14 @@ export default function TournamentCard({ tournament: t }: Props) {
         </div>
 
         {/* Footer: price + CTA */}
-        <div className="flex justify-between items-center pt-3 border-t border-border">
+        <div className="flex justify-between items-center pt-3 border-t border-border mt-auto">
           <div>
             {hasMultipleFees && (
               <small className="text-xs text-text-muted font-lato ml-1">
                 starting from{" "}
               </small>
             )}
-            <span className="font-cinzel text-[1.125rem] font-bold text-text-primary">
+            <span className="font-cinzel text-lg font-bold text-text-primary">
               {minFee > 0 ? formatRm(minFee) : "Free"}
             </span>
           </div>

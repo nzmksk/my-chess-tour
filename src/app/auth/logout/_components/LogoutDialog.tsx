@@ -25,7 +25,7 @@ export default function LogoutDialog() {
   return (
     <div className="auth-page">
       <div className="centered-col">
-        <div className="auth-card card confirm-card mx-auto text-center">
+        <div className="auth-card card mx-auto text-center">
           <div className="confirm-icon" role="img" aria-label="Sign out">
             ↪
           </div>
@@ -45,7 +45,7 @@ export default function LogoutDialog() {
             </button>
             <button
               type="button"
-              className="btn-secondary mt-2 w-full"
+              className="btn-secondary w-full"
               onClick={handleCancel}
               disabled={pending}
             >

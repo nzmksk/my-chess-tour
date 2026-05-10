@@ -116,8 +116,8 @@ export default function TournamentsClient({ tournaments }: Props) {
       <div className="max-w-300 mx-auto px-10 py-6">
         {filtered.length === 0 ? (
           <div className="text-center py-20 px-5 text-text-muted)">
-            <div className="text-[2.5rem] mb-4 opacity-30">♟</div>
-            <p className="text-[0.9375rem] leading-[1.6]">
+            <div className="text-4xl mb-4 opacity-30">♟</div>
+            <p className="text-sm leading-relaxed">
               {tournaments.length === 0
                 ? "No tournaments are currently published. Check back soon."
                 : "No tournaments match your current filters."}

@@ -318,7 +318,7 @@ export default function SignUpForm() {
             </div>
 
             {/* Terms */}
-            <div className="check-row mb-(--space-lg)">
+            <div className="check-row">
               <input
                 id="terms"
                 type="checkbox"

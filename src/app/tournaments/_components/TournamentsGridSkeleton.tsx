@@ -9,14 +9,14 @@ export default function TournamentsGridSkeleton() {
       <div className="bg-bg-surface border-b border-border py-4">
         <div className="max-w-300 mx-auto px-10">
           {/* Search bar */}
-          <div className="skeleton-shimmer w-full h-10.5 rounded-xs" />
+          <div className="skeleton-shimmer w-full h-10.5 rounded-md" />
 
           {/* Filter buttons */}
           <div className="flex gap-2.5 mt-3">
             {["w-20", "w-17", "w-18", "w-21"].map((w, i) => (
               <div
                 key={i}
-                className={`skeleton-shimmer ${w} h-10 rounded-xs`}
+                className={`skeleton-shimmer ${w} h-10 rounded-md`}
               />
             ))}
           </div>

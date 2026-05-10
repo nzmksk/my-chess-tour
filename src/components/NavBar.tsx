@@ -118,7 +118,7 @@ export default function NavBar() {
                 href={href}
                 className={
                   ghost
-                    ? "nav-link"
+                    ? "nav-link-organizer"
                     : `nav-link${pathname === href ? " nav-link--active" : ""}`
                 }
               >
@@ -179,7 +179,7 @@ export default function NavBar() {
                       </div>
                       <div className="nav-dropdown-divider" />
                       <Link
-                        href="/logout"
+                        href="/auth/logout"
                         className="nav-dropdown-item nav-dropdown-item--danger"
                         onClick={() => setDropdownOpen(false)}
                       >
@@ -298,7 +298,7 @@ export default function NavBar() {
                 My Tournaments
               </Link>
               <Link
-                href="/logout"
+                href="/auth/logout"
                 className="nav-drawer-btn-login mt-4"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))

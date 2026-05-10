@@ -7,7 +7,7 @@ import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
-const GENDERS = ["Male", "Female", "Prefer not to say"] as const;
+const GENDERS = ["Male", "Female"] as const;
 const STATES = [
   "Johor",
   "Kedah",
@@ -22,9 +22,9 @@ const STATES = [
   "Sarawak",
   "Selangor",
   "Terengganu",
-  "Kuala Lumpur",
-  "Labuan",
-  "Putrajaya",
+  "W.P. Kuala Lumpur",
+  "W.P. Labuan",
+  "W.P. Putrajaya",
 ] as const;
 
 export default function ProfileForm() {
@@ -137,7 +137,7 @@ export default function ProfileForm() {
 
           <form onSubmit={handleSubmit} noValidate>
             {/* Gender + Nationality */}
-            <div className="input-row mb-(--space-lg)">
+            <div className="input-row">
               <div className="form-group mb-0">
                 <div className="label-row">
                   <label className="input-label" htmlFor="gender">
@@ -163,7 +163,7 @@ export default function ProfileForm() {
                 </select>
               </div>
 
-              <div className="form-group mb-0">
+              <div className="form-group">
                 <div className="label-row">
                   <label className="input-label" htmlFor="nationality">
                     Nationality
@@ -185,7 +185,7 @@ export default function ProfileForm() {
             </div>
 
             {/* Date of Birth + State */}
-            <div className="input-row mb-(--space-lg)">
+            <div className="input-row">
               <div className="form-group mb-0">
                 <div className="label-row">
                   <label className="input-label" htmlFor="dateOfBirth">
@@ -204,7 +204,7 @@ export default function ProfileForm() {
                 />
               </div>
 
-              <div className="form-group mb-0">
+              <div className="form-group">
                 <div className="label-row">
                   <label className="input-label" htmlFor="state">
                     State
@@ -295,7 +295,7 @@ export default function ProfileForm() {
             </div>
 
             {/* OKU checkbox */}
-            <div className="check-row mb-(--space-xl)">
+            <div className="check-row">
               <input
                 id="oku"
                 type="checkbox"
@@ -322,10 +322,10 @@ export default function ProfileForm() {
               </label>
             </div>
 
-            <div className="flex gap-(--space-sm)">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-secondary w-full"
                 onClick={handleBack}
                 disabled={isSubmitting}
               >
