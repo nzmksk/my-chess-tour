@@ -7,7 +7,7 @@ import { useSignUpForm } from "./SignUpContext";
 import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
 
 const CODE_LENGTH = 6;
-const CODE_EXPIRY_SECONDS = 10 * 60; // 10 minutes
+const CODE_EXPIRY_SECONDS = 15 * 60; // 10 minutes
 const RESEND_COOLDOWN_SECONDS = 30 * 60; // 30 minutes
 
 function formatTime(seconds: number): string {
