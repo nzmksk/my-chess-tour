@@ -335,7 +335,7 @@
 
   /* ── Forms ── */
   .form-group {
-    @apply mb-6 relative;
+    @apply mb-4 relative;
   }
 
   .label-row {
@@ -534,7 +534,7 @@
 
   /* ── Error banner ── */
   .error-banner {
-    @apply bg-error-banner-bg border border-error-banner-border rounded-xs p-4 mb-6 flex items-start gap-2;
+    @apply bg-error-banner-bg border border-error-banner-border rounded-sm md:rounded-md p-2 mb-4 flex items-start gap-2;
   }
   .error-text {
     @apply font-lato text-sm text-danger-text leading-relaxed;

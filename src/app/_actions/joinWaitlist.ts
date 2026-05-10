@@ -16,7 +16,9 @@ export async function joinWaitlist(
 
   if (error) {
     if (error.code === "23505") {
-      return { error: "You're already on the waitlist!", submitted: false };
+      // Email already on the waitlist — the desired state is achieved, so return
+      // success to keep this action idempotent.
+      return { error: null, submitted: true };
     }
     console.error(error);
     return {
