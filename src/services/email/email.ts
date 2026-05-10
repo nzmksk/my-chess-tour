@@ -7,7 +7,7 @@ const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL!;
 
 function loadTemplate(name: string): string {
   return fs.readFileSync(
-    path.join(process.cwd(), "lib/email-templates", name),
+    path.join(process.cwd(), "src/services/email/templates", name),
     "utf-8"
   );
 }
