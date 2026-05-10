@@ -43,7 +43,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
@@ -67,7 +67,7 @@ RETURNS boolean AS $$
     WHERE ugr.user_id = p_user_id
       AND p.key = p_permission
   );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
 -- Check if user has permission within a specific organization
 CREATE OR REPLACE FUNCTION has_org_permission(p_user_id uuid, p_org_id uuid, p_permission text)
@@ -81,7 +81,7 @@ RETURNS boolean AS $$
       AND om.organization_id = p_org_id
       AND p.key = p_permission
   );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
 -- Check if user is a member of an organization (any role).
 -- Used for RLS on organization_memberships to avoid infinite recursion.
@@ -91,7 +91,7 @@ RETURNS boolean AS $$
     SELECT 1 FROM organization_memberships
     WHERE user_id = p_user_id AND organization_id = p_org_id
   );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
 -- =============================================
 -- AUDIT TRAIL TRIGGER
@@ -136,7 +136,7 @@ BEGIN
   END IF;
   -- users, player_profiles, user_global_roles → v_org_id stays NULL
 
-  INSERT INTO audit_logs (table_name, record_id, action, changed_by, organization_id, context, old_data, new_data)
+  INSERT INTO public.audit_logs (table_name, record_id, action, changed_by, organization_id, context, old_data, new_data)
   VALUES (
     TG_TABLE_NAME,
     v_record_id,
@@ -150,7 +150,7 @@ BEGIN
 
   RETURN COALESCE(NEW, OLD);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Strictly required: personal data, financial, access control
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON users
@@ -225,4 +225,4 @@ RETURNS TABLE(tournament_id uuid, count bigint) AS $$
   WHERE tournament_id = ANY(tournament_ids)
     AND status = 'confirmed'
   GROUP BY tournament_id;
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
