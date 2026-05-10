@@ -5,7 +5,7 @@ export default function TournamentCardSkeleton() {
       aria-hidden="true"
     >
       {/* Body */}
-      <div className="p-4 flex flex-col justify-center">
+      <div className="p-4 flex flex-col h-full">
         {/* Badge row */}
         <div className="flex gap-1.5 mb-3">
           <div className="skeleton-shimmer w-15.5 h-4.5 rounded-md" />

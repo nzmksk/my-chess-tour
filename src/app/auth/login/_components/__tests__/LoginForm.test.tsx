@@ -94,10 +94,10 @@ describe("LoginForm", () => {
     expect(link.href).toContain("/auth/forgot-password");
   });
 
-  it("renders create account link pointing to /sign-up", () => {
+  it("renders create account link pointing to /auth/signup", () => {
     render(<LoginForm />);
     const link = screen.getByText("Create an account") as HTMLAnchorElement;
-    expect(link.href).toContain("/sign-up");
+    expect(link.href).toContain("/auth/signup");
   });
 
   // --- Error state (2B) -------------------------------------------------------

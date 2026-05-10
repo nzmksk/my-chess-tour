@@ -40,7 +40,7 @@ describe("TournamentCardSkeleton mirrors TournamentCard layout", () => {
   });
 
   it("body column has matching layout", () => {
-    const bodyClasses = ["p-4", "flex", "flex-col", "justify-center"];
+    const bodyClasses = ["p-4", "flex", "flex-col", "h-full"];
 
     for (const cls of bodyClasses) {
       expect(cardHtml).toContain(cls);

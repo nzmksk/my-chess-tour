@@ -120,7 +120,7 @@ describe("SignUpForm", () => {
       fireEvent.submit(getForm());
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/sign-up/profile");
+    expect(mockPush).toHaveBeenCalledWith("/auth/signup/profile");
   });
 
   // --- Password visibility toggles ------------------------------------------

@@ -184,7 +184,7 @@ describe("ProfileForm", () => {
     await act(async () => {
       fireEvent.click(getBackButton());
     });
-    expect(mockPush).toHaveBeenCalledWith("/sign-up");
+    expect(mockPush).toHaveBeenCalledWith("/auth/signup");
   });
 
   // --- Non-production behaviour ---------------------------------------------
@@ -220,7 +220,7 @@ describe("ProfileForm", () => {
       fireEvent.submit(getSubmitButton().closest("form")!);
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/sign-up/verify");
+    expect(mockPush).toHaveBeenCalledWith("/auth/signup/verify");
   });
 
   it("shows error banner when the API returns an error", async () => {

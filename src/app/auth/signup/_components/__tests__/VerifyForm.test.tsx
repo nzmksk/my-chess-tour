@@ -72,9 +72,9 @@ describe("VerifyForm", () => {
     expect(matches.length).toBeGreaterThan(0);
   });
 
-  it("shows the initial 10:00 expiry countdown", () => {
+  it("shows the initial 15:00 expiry countdown", () => {
     render(<VerifyForm />);
-    const matches = screen.getAllByText("10:00");
+    const matches = screen.getAllByText("15:00");
     expect(matches.length).toBeGreaterThan(0);
   });
 
@@ -153,7 +153,7 @@ describe("VerifyForm", () => {
       fireEvent.change(getCodeInput(), { target: { value: VALID_CODE } });
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/sign-up/success");
+    expect(mockPush).toHaveBeenCalledWith("/auth/signup/success");
   });
 
   it("shows an inline error when verification fails", async () => {
@@ -186,12 +186,12 @@ describe("VerifyForm", () => {
 
   // --- Timer ----------------------------------------------------------------
 
-  it("shows 'Code has expired' after the 10-minute timer elapses", async () => {
+  it("shows 'Code has expired' after the 15-minute timer elapses", async () => {
     vi.useFakeTimers();
     render(<VerifyForm />);
 
     await act(async () => {
-      vi.advanceTimersByTime(10 * 60 * 1000 + 500);
+      vi.advanceTimersByTime(15 * 60 * 1000 + 500);
     });
 
     expect(screen.getByText(/code has expired/i)).toBeDefined();
@@ -330,9 +330,9 @@ describe("VerifyForm", () => {
       fireEvent.click(resendLink);
     });
 
-    // Advance 10 minutes + 1 second to expire the new timer
+    // Advance 15 minutes + 1 second to expire the new timer
     await act(async () => {
-      vi.advanceTimersByTime(10 * 60 * 1000 + 1000);
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
     });
 
     expect(screen.getByText(/code has expired/i)).toBeDefined();

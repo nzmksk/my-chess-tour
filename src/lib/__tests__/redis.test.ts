@@ -47,17 +47,17 @@ describe("lib/redis", () => {
       expect(mockSet).toHaveBeenCalledWith(
         "verify:player@example.com",
         "ABC123",
-        { ex: 600 }
+        { ex: 900 }
       );
     });
 
-    it("stores with a 600-second TTL", async () => {
+    it("stores with a 900-second TTL", async () => {
       mockSet.mockResolvedValue("OK");
 
       await storeVerificationCode("player@example.com", "ABC123");
 
       const [, , options] = mockSet.mock.calls[0];
-      expect(options.ex).toBe(600);
+      expect(options.ex).toBe(900);
     });
 
     it("lowercases the email when building the key", async () => {

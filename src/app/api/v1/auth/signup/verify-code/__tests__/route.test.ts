@@ -307,7 +307,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
 
   // --- Auth errors ----------------------------------------------------------
 
-  it("returns 409 EMAIL_EXISTS when Supabase reports email_exists code", async () => {
+  it("returns 400 VERIFICATION_FAILED when Supabase reports email_exists code", async () => {
     mockCreateUser.mockResolvedValue({
       data: { user: null },
       error: { code: "email_exists", message: "User already registered" },
@@ -316,11 +316,11 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
-    expect(res.status).toBe(409);
-    expect(json.error.code).toBe("EMAIL_EXISTS");
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VERIFICATION_FAILED");
   });
 
-  it("returns 409 EMAIL_EXISTS when error message contains 'already registered'", async () => {
+  it("returns 400 VERIFICATION_FAILED when error message contains 'already registered'", async () => {
     mockCreateUser.mockResolvedValue({
       data: { user: null },
       error: { code: "other_code", message: "User already registered" },
@@ -329,8 +329,8 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
-    expect(res.status).toBe(409);
-    expect(json.error.code).toBe("EMAIL_EXISTS");
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VERIFICATION_FAILED");
   });
 
   it("returns 400 for other auth errors", async () => {

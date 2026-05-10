@@ -47,7 +47,7 @@ describe("logout action", () => {
 
     await logout();
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/signed-out");
+    expect(mocks.redirect).toHaveBeenCalledWith("/auth/signed-out");
   });
 
   it("still redirects to /signed-out when signOut returns an error", async () => {
@@ -57,6 +57,6 @@ describe("logout action", () => {
 
     await logout();
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/signed-out");
+    expect(mocks.redirect).toHaveBeenCalledWith("/auth/signed-out");
   });
 });

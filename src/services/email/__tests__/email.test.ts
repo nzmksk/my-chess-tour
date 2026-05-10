@@ -43,11 +43,11 @@ describe("sendVerificationEmail", () => {
     );
   });
 
-  it("loads the template from the email-templates directory", async () => {
+  it("loads the template from the templates directory", async () => {
     await sendVerificationEmail("player@example.com", "ABC123");
 
     const [filePath] = mockReadFileSync.mock.calls[0];
-    expect(filePath).toMatch(/email-templates/);
+    expect(filePath).toMatch(/templates/);
   });
 
   // --- Code injection -------------------------------------------------------
