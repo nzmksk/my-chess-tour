@@ -16,10 +16,11 @@ export async function POST(request: NextRequest) {
 
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error("Failed to parse JSON body in request-code endpoint", err);
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid JSON body" } },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (!email || typeof email !== "string") {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Email is required" } },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
   if (!validateEmail(normalized)) {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid email format" } },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -49,16 +50,25 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (dbError) {
+    console.error(`Database error while checking existing email: ${normalized}`, dbError);
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Failed to validate email" } },
-      { status: 500 }
+      {
+        error: { code: "INTERNAL_ERROR", message: "Failed to validate email" },
+      },
+      { status: 500 },
     );
   }
 
   if (existing) {
+    console.error(`Attempt to request verification code for already existing email: ${normalized}`);
     return NextResponse.json(
-      { error: { code: "EMAIL_EXISTS", message: "An account with this email already exists" } },
-      { status: 409 }
+      {
+        error: {
+          code: "EMAIL_EXISTS",
+          message: "An account with this email already exists",
+        },
+      },
+      { status: 409 },
     );
   }
 
@@ -66,21 +76,38 @@ export async function POST(request: NextRequest) {
 
   try {
     await storeVerificationCode(email, code);
-  } catch {
+  } catch (err) {
+    console.error(
+      `Failed to store verification code for: ${email} with error:, ${err}`,
+    );
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Failed to store verification code" } },
-      { status: 500 }
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Failed to store verification code",
+        },
+      },
+      { status: 500 },
     );
   }
 
   try {
     await sendVerificationEmail(email, code);
-  } catch {
+  } catch (err) {
+    console.error(`Failed to send verification email for: ${email} with error: ${err}`);
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Failed to send verification email" } },
-      { status: 500 }
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Failed to send verification email",
+        },
+      },
+      { status: 500 },
     );
   }
 
-  return NextResponse.json({ message: "Verification code sent" }, { status: 200 });
+  return NextResponse.json(
+    { message: "Verification code sent" },
+    { status: 200 },
+  );
 }

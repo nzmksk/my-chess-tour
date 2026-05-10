@@ -9,7 +9,8 @@ export async function POST(request: NextRequest) {
 
   try {
     body = await request.json();
-  } catch {
+  } catch (err) {
+    console.error("Failed to parse JSON body in verify-code endpoint", err);
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid JSON body" } },
       { status: 400 },
@@ -81,7 +82,6 @@ export async function POST(request: NextRequest) {
   }
 
   const stored = await getVerificationCode(email);
-
   if (!stored) {
     return NextResponse.json(
       {
@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    console.error("Failed to create auth user", authError);
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: authError.message } },
       { status: 400 },
@@ -160,6 +161,7 @@ export async function POST(request: NextRequest) {
     .eq("user_id", userId);
 
   if (profileError) {
+    console.error("Failed to update player profile for user ID:", userId, profileError);
     return NextResponse.json(
       {
         error: {
