@@ -1,7 +1,9 @@
+import Link from "next/link";
 import type {
   TournamentDetail as TournamentDetailType,
   Restrictions,
 } from "../types";
+import { formatDeadline, formatRm, toTitleCase } from "../../utils";
 
 // ── Formatting helpers ────────────────────────────────────────
 
@@ -24,27 +26,9 @@ function formatDateRange(start: string, end: string): string {
   return `${sStr} – ${eStr}`;
 }
 
-function formatDeadline(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatRm(cents: number): string {
-  if (cents === 0) return "Free";
-  return `RM${(cents / 100).toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
 function capitalise(s: string): string {
   if (!s) return "";
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-function toTitleCase(s: string): string {
-  return s.replace(/[_\s]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function getMinFeeCents(fees: TournamentDetailType["entry_fees"]): number {
@@ -403,9 +387,12 @@ export default function TournamentDetail({
                   Full
                 </button>
               ) : isAuthenticated ? (
-                <button className="btn-primary rounded-md w-full">
+                <Link
+                  href={`/tournaments/${t.id}/register`}
+                  className="btn-primary rounded-md w-full text-center block"
+                >
                   Register Now
-                </button>
+                </Link>
               ) : (
                 <button
                   className="btn-primary rounded-md w-full opacity-50"

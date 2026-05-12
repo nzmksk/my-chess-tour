@@ -10,6 +10,16 @@ export interface TimeControl {
   delay_seconds: number;
 }
 
+export type ChessTitle =
+  | "GM"
+  | "WGM"
+  | "IM"
+  | "WIM"
+  | "FM"
+  | "WFM"
+  | "CM"
+  | "WCM";
+
 export interface EntryFees {
   standard: { amount_cents: number };
   additional?: Array<{
@@ -18,6 +28,9 @@ export interface EntryFees {
     valid_until?: string;
     age_min?: number;
     age_max?: number;
+    gender?: "female";
+    oku?: boolean;
+    titles?: ChessTitle[];
   }>;
 }
 
