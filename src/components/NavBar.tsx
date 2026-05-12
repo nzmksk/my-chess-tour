@@ -131,8 +131,8 @@ export default function NavBar() {
             {authUser ? (
               <>
                 <Link
-                  href="/tournaments"
-                  className={`nav-link${pathname === "/tournaments" ? " nav-link--active" : ""}`}
+                  href="/player/registrations"
+                  className={`nav-link${pathname === "/player/registrations" ? " nav-link--active" : ""}`}
                 >
                   My Tournaments
                 </Link>
@@ -163,7 +163,7 @@ export default function NavBar() {
                           My Profile
                         </Link>
                         <Link
-                          href="/tournaments"
+                          href="/player/registrations"
                           className="nav-dropdown-item"
                           onClick={() => setDropdownOpen(false)}
                         >
@@ -289,11 +289,11 @@ export default function NavBar() {
           {authUser ? (
             <>
               <Link
-                href="/tournaments"
+                href="/player/registrations"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
                 }
-                className={`nav-drawer-link${pathname === "/tournaments" ? " nav-drawer-link--active" : ""}`}
+                className={`nav-drawer-link${pathname === "/player/registrations" ? " nav-drawer-link--active" : ""}`}
               >
                 My Tournaments
               </Link>
