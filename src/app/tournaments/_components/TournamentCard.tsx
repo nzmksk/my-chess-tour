@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Tournament } from "../types";
+import { formatRm } from "../utils";
 
 function formatDateRange(start: string, end: string): string {
   const s = new Date(start);
@@ -25,10 +26,6 @@ function getMinFeeCents(fees: Tournament["entry_fees"]): number {
   const standard = fees.standard?.amount_cents ?? 0;
   const additional = fees.additional?.map((f) => f.amount_cents) ?? [];
   return Math.min(standard, ...additional);
-}
-
-function formatRm(cents: number): string {
-  return `RM${(cents / 100).toFixed(0)}`;
 }
 
 function capitalise(s: string): string {
