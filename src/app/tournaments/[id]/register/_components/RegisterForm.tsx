@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { TournamentDetail } from "../../types";
 import { formatRm, toTitleCase, formatDeadline, calculateAge } from "@/app/tournaments/utils";
 import type { RegistrationRow, PlayerProfile } from "../types";
+import RegistrationPending from "./RegistrationPending";
 
 const PROCESSING_FEE_CENTS = 150;
 
@@ -179,42 +180,10 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
 
   if (status === "success" && registration) {
     return (
-      <div className="max-w-lg mx-auto">
-        <div className="card card--featured p-8 flex flex-col text-center">
-          <div className="confirm-icon">♟</div>
-          <h2 className="confirm-title">Registration Submitted</h2>
-          <p className="confirm-body">
-            Your spot is reserved. Your registration is pending payment
-            confirmation.
-          </p>
-          <div className="session-info text-left mt-2">
-            <div className="session-row">
-              <span className="session-key">Reference</span>
-              <span className="session-val font-mono text-xs">
-                {registration.id}
-              </span>
-            </div>
-            <div className="session-row">
-              <span className="session-key">Fee Tier</span>
-              <span className="session-val">
-                {toTitleCase(registration.fee_tier)}
-              </span>
-            </div>
-            <div className="session-row">
-              <span className="session-key">Status</span>
-              <span className="session-val text-amber-400">
-                Pending Payment
-              </span>
-            </div>
-          </div>
-          <Link
-            href={`/tournaments/${tournament.id}`}
-            className="btn-secondary rounded-md text-center mt-2"
-          >
-            Back to Tournament
-          </Link>
-        </div>
-      </div>
+      <RegistrationPending
+        registration={registration}
+        tournamentId={tournament.id}
+      />
     );
   }
 
