@@ -1,3 +1,12 @@
+export function calculateAge(dob: Date, now: Date): number {
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 export function formatDeadline(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-MY", {

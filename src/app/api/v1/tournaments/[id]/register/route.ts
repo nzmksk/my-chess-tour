@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees, ChessTitle } from "@/app/tournaments/types";
+import { calculateAge } from "@/app/tournaments/utils";
 import type {
   RegistrationRequest,
   RegistrationRow,
@@ -208,9 +209,7 @@ export async function POST(
       }
 
       const dob = new Date(profile.date_of_birth);
-      const age = Math.floor(
-        (now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25),
-      );
+      const age = calculateAge(dob, now);
 
       if (matchedTier.age_min != null && age < matchedTier.age_min) {
         return NextResponse.json(

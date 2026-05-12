@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { TournamentDetail } from "../../types";
-import { formatRm, toTitleCase, formatDeadline } from "@/app/tournaments/utils";
+import { formatRm, toTitleCase, formatDeadline, calculateAge } from "@/app/tournaments/utils";
 import type { RegistrationRow, PlayerProfile } from "../types";
 
 const PROCESSING_FEE_CENTS = 150;
@@ -53,9 +53,7 @@ function checkEligibility(
     if (!playerProfile?.date_of_birth)
       return "Complete your player profile (date of birth) to select this tier.";
     const dob = new Date(playerProfile.date_of_birth);
-    const age = Math.floor(
-      (now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25),
-    );
+    const age = calculateAge(dob, now);
     if (tier.age_min != null && age < tier.age_min)
       return `You must be at least ${tier.age_min} years old for this tier.`;
     if (tier.age_max != null && age > tier.age_max)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatRm, toTitleCase, formatDeadline } from "../utils";
+import { formatRm, toTitleCase, formatDeadline, calculateAge } from "../utils";
 
 describe("formatRm", () => {
   it("returns 'Free' for 0 cents", () => {
@@ -54,6 +54,32 @@ describe("toTitleCase", () => {
 
   it("handles consecutive separators", () => {
     expect(toTitleCase("a__b")).toBe("A B");
+  });
+});
+
+describe("calculateAge", () => {
+  it("returns correct age well before birthday", () => {
+    const dob = new Date("2000-12-31");
+    const now = new Date("2026-01-01");
+    expect(calculateAge(dob, now)).toBe(25);
+  });
+
+  it("returns correct age well after birthday", () => {
+    const dob = new Date("2000-01-01");
+    const now = new Date("2026-06-01");
+    expect(calculateAge(dob, now)).toBe(26);
+  });
+
+  it("counts the birthday itself as having turned the new age", () => {
+    const dob = new Date("2008-05-12");
+    const now = new Date("2026-05-12");
+    expect(calculateAge(dob, now)).toBe(18);
+  });
+
+  it("returns one year less the day before birthday", () => {
+    const dob = new Date("2008-05-13");
+    const now = new Date("2026-05-12");
+    expect(calculateAge(dob, now)).toBe(17);
   });
 });
 
