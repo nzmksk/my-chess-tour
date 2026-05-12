@@ -2,10 +2,10 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees } from "@/app/tournaments/types";
-import type { Restrictions } from "@/app/tournaments/[id]/types";
 import {
   checkRestrictions,
   checkFeeTierEligibility,
+  normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[id]/register/validators";
 import type {
   RegistrationRequest,
@@ -159,7 +159,7 @@ export async function POST(
     );
   }
 
-  const restrictions = tournament.restrictions as Restrictions | null;
+  const restrictions = normalizeRestrictions(tournament.restrictions);
 
   const needsTierProfile =
     matchedTier.age_min != null ||
@@ -173,7 +173,8 @@ export async function POST(
     restrictions?.min_rating != null ||
     restrictions?.max_rating != null ||
     restrictions?.min_age != null ||
-    restrictions?.max_age != null
+    restrictions?.max_age != null ||
+    restrictions?.gender != null
   );
 
   if (needsTierProfile || needsRestrictionProfile) {

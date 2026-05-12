@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkRestrictions, checkFeeTierEligibility } from "../validators";
+import { checkRestrictions, checkFeeTierEligibility, normalizeRestrictions } from "../validators";
 import type { EligibilityProfile, FeeTier } from "../validators";
 
 // ---------------------------------------------------------------------------
@@ -26,10 +26,108 @@ function makeProfile(overrides: Partial<EligibilityProfile> = {}): EligibilityPr
 }
 
 // ---------------------------------------------------------------------------
+// normalizeRestrictions
+// ---------------------------------------------------------------------------
+
+describe("normalizeRestrictions", () => {
+  it("returns null for null input", () => {
+    expect(normalizeRestrictions(null)).toBeNull();
+  });
+
+  it("returns null for undefined input", () => {
+    expect(normalizeRestrictions(undefined)).toBeNull();
+  });
+
+  it("passes through a flat object unchanged", () => {
+    const flat = { min_rating: 1000, max_rating: 1800 };
+    expect(normalizeRestrictions(flat)).toEqual(flat);
+  });
+
+  it("converts array rating restriction to flat format", () => {
+    const raw = [{ type: "rating", max: 1799 }];
+    expect(normalizeRestrictions(raw)).toEqual({ max_rating: 1799 });
+  });
+
+  it("converts array age restriction to flat format", () => {
+    const raw = [{ type: "age", max: 18 }];
+    expect(normalizeRestrictions(raw)).toEqual({ max_age: 18 });
+  });
+
+  it("converts array gender restriction to flat format", () => {
+    const raw = [{ type: "gender", value: "female" }];
+    expect(normalizeRestrictions(raw)).toEqual({ gender: "female" });
+  });
+
+  it("merges multiple restriction types from an array", () => {
+    const raw = [{ type: "rating", max: 1799 }, { type: "age", max: 20 }];
+    expect(normalizeRestrictions(raw)).toEqual({ max_rating: 1799, max_age: 20 });
+  });
+
+  it("maps both min and max for rating and age", () => {
+    const raw = [{ type: "rating", min: 1000, max: 1799 }, { type: "age", min: 16, max: 20 }];
+    expect(normalizeRestrictions(raw)).toEqual({
+      min_rating: 1000,
+      max_rating: 1799,
+      min_age: 16,
+      max_age: 20,
+    });
+  });
+
+  it("ignores unknown restriction types (e.g. nationality)", () => {
+    const raw = [{ type: "nationality", value: "Malaysian" }];
+    expect(normalizeRestrictions(raw)).toBeNull();
+  });
+
+  it("returns null for an empty array", () => {
+    expect(normalizeRestrictions([])).toBeNull();
+  });
+
+  it("handles combined seed-style restrictions", () => {
+    const raw = [{ type: "nationality", value: "Malaysian" }, { type: "age", max: 20 }];
+    expect(normalizeRestrictions(raw)).toEqual({ max_age: 20 });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // checkRestrictions
 // ---------------------------------------------------------------------------
 
 describe("checkRestrictions", () => {
+  describe("gender restriction", () => {
+    it("returns 422 when tournament is female-only and player is male", async () => {
+      const result = checkRestrictions(
+        { gender: "female" },
+        makeProfile({ gender: "male" }),
+        "rapid",
+        NOW,
+      );
+      expect(result!.status).toBe(422);
+      const json = await result!.json();
+      expect(json.error.code).toBe("ELIGIBILITY_ERROR");
+      expect(json.error.message).toContain("female");
+    });
+
+    it("returns null when tournament is female-only and player is female", () => {
+      const result = checkRestrictions(
+        { gender: "female" },
+        makeProfile({ gender: "female" }),
+        "rapid",
+        NOW,
+      );
+      expect(result).toBeNull();
+    });
+
+    it("returns 422 when profile is null and gender restriction is set", async () => {
+      const result = checkRestrictions(
+        { gender: "female" },
+        null,
+        "rapid",
+        NOW,
+      );
+      expect(result!.status).toBe(422);
+    });
+  });
+
   describe("no active restrictions", () => {
     it("returns null when all restriction fields are null", () => {
       const result = checkRestrictions(

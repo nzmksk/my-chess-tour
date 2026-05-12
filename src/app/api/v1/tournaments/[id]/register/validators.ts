@@ -20,12 +20,54 @@ export interface FeeTier {
   titles?: ChessTitle[] | null;
 }
 
+type RawRestrictionItem = {
+  type: string;
+  min?: number;
+  max?: number;
+  value?: string;
+};
+
+export function normalizeRestrictions(raw: unknown): Restrictions | null {
+  if (!raw) return null;
+  if (!Array.isArray(raw)) return raw as Restrictions;
+
+  const result: Restrictions = {};
+  for (const item of raw as RawRestrictionItem[]) {
+    switch (item.type) {
+      case "rating":
+        if (item.min != null) result.min_rating = item.min;
+        if (item.max != null) result.max_rating = item.max;
+        break;
+      case "age":
+        if (item.min != null) result.min_age = item.min;
+        if (item.max != null) result.max_age = item.max;
+        break;
+      case "gender":
+        if (item.value != null) result.gender = item.value;
+        break;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
 export function checkRestrictions(
   restrictions: Restrictions,
   profile: EligibilityProfile | null,
   formatType: string,
   now: Date,
 ): NextResponse | null {
+  if (restrictions.gender != null && profile?.gender !== restrictions.gender) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "ELIGIBILITY_ERROR",
+          message: `This tournament is for ${restrictions.gender} players only`,
+        },
+      },
+      { status: 422 },
+    );
+  }
+
   if ((restrictions.titles?.length ?? 0) > 0) {
     if (
       !profile?.title ||
