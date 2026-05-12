@@ -25,6 +25,7 @@ export default async function PaymentFailurePage({
               Your payment could not be processed. Please try again or contact
               support if the problem persists.
             </p>
+            {/* TODO: This link is temporary and will be replaced once the payment gateway is integrated */}
             <Link
               href={`/tournaments/${id}/register`}
               className="btn-primary rounded-md text-center mt-2"
