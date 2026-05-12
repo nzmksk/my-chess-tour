@@ -5,6 +5,8 @@ export interface PlayerProfile {
   is_oku: boolean;
   date_of_birth: string | null;
   title: ChessTitle | null;
+  fide_rating: Record<string, number> | null;
+  national_rating: number | null;
 }
 
 export interface RegistrationRequest {
