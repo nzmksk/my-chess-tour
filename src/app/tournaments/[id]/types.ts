@@ -1,4 +1,4 @@
-import type { EntryFees, TournamentFormat, TimeControl } from "../types";
+import type { EntryFees, TournamentFormat, TimeControl, ChessTitle } from "../types";
 
 const enum NonMonetaryPrize {
   Trophy = "Trophy",
@@ -32,6 +32,8 @@ export interface Restrictions {
   max_rating?: number | null;
   min_age?: number | null;
   max_age?: number | null;
+  titles?: ChessTitle[] | null;
+  gender?: string | null;
 }
 
 interface OrganizerDetail {

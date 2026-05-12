@@ -1,8 +1,12 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import type { EntryFees, ChessTitle } from "@/app/tournaments/types";
-import { calculateAge } from "@/app/tournaments/utils";
+import type { EntryFees } from "@/app/tournaments/types";
+import {
+  checkRestrictions,
+  checkFeeTierEligibility,
+  normalizeRestrictions,
+} from "@/app/api/v1/tournaments/[id]/register/validators";
 import type {
   RegistrationRequest,
   RegistrationRow,
@@ -56,7 +60,9 @@ export async function POST(
 
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
-    .select("id, entry_fees, max_participants, registration_deadline")
+    .select(
+      "id, entry_fees, max_participants, registration_deadline, restrictions, format",
+    )
     .eq("id", id)
     .eq("status", "published")
     .single();
@@ -84,6 +90,19 @@ export async function POST(
           message: "Registration deadline has passed",
         },
       },
+      { status: 422 },
+    );
+  }
+
+  const { count: currentCount } = await supabaseAdmin
+    .from("registrations")
+    .select("*", { count: "exact", head: true })
+    .eq("tournament_id", id)
+    .in("status", ["pending_payment", "confirmed"]);
+
+  if (currentCount !== null && currentCount >= tournament.max_participants) {
+    return NextResponse.json(
+      { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
       { status: 422 },
     );
   }
@@ -140,100 +159,45 @@ export async function POST(
     );
   }
 
-  const needsProfile =
+  const restrictions = normalizeRestrictions(tournament.restrictions);
+
+  const needsTierProfile =
     matchedTier.age_min != null ||
     matchedTier.age_max != null ||
     matchedTier.gender != null ||
     matchedTier.oku === true ||
     (matchedTier.titles?.length ?? 0) > 0;
 
-  if (needsProfile) {
+  const needsRestrictionProfile = !!(
+    (restrictions?.titles?.length ?? 0) > 0 ||
+    restrictions?.min_rating != null ||
+    restrictions?.max_rating != null ||
+    restrictions?.min_age != null ||
+    restrictions?.max_age != null ||
+    restrictions?.gender != null
+  );
+
+  if (needsTierProfile || needsRestrictionProfile) {
     const { data: profile } = await supabaseAdmin
       .from("player_profiles")
-      .select("date_of_birth, gender, is_oku, title")
+      .select(
+        "date_of_birth, gender, is_oku, title, fide_rating, national_rating",
+      )
       .eq("user_id", user.id)
       .single();
 
-    if (matchedTier.gender === "female" && profile?.gender !== "female") {
-      return NextResponse.json(
-        {
-          error: {
-            code: "INVALID_FEE_TIER",
-            message: "This fee tier is for female players only",
-          },
-        },
-        { status: 400 },
+    if (needsRestrictionProfile && restrictions) {
+      const restrictionError = checkRestrictions(
+        restrictions,
+        profile,
+        (tournament.format as { type: string }).type,
+        now,
       );
+      if (restrictionError) return restrictionError;
     }
 
-    if (matchedTier.oku && !profile?.is_oku) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "INVALID_FEE_TIER",
-            message: "This fee tier is for OKU players only",
-          },
-        },
-        { status: 400 },
-      );
-    }
-
-    if (
-      matchedTier.titles?.length &&
-      (!profile?.title ||
-        !matchedTier.titles.includes(profile.title as ChessTitle))
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "INVALID_FEE_TIER",
-            message: `This fee tier is for titled players only (${matchedTier.titles.join(", ")})`,
-          },
-        },
-        { status: 400 },
-      );
-    }
-
-    if (matchedTier.age_min != null || matchedTier.age_max != null) {
-      if (!profile?.date_of_birth) {
-        return NextResponse.json(
-          {
-            error: {
-              code: "VALIDATION_ERROR",
-              message:
-                "Your player profile is missing a date of birth required for this fee tier",
-            },
-          },
-          { status: 422 },
-        );
-      }
-
-      const dob = new Date(profile.date_of_birth);
-      const age = calculateAge(dob, now);
-
-      if (matchedTier.age_min != null && age < matchedTier.age_min) {
-        return NextResponse.json(
-          {
-            error: {
-              code: "INVALID_FEE_TIER",
-              message: `You must be at least ${matchedTier.age_min} years old for this tier`,
-            },
-          },
-          { status: 400 },
-        );
-      }
-      if (matchedTier.age_max != null && age > matchedTier.age_max) {
-        return NextResponse.json(
-          {
-            error: {
-              code: "INVALID_FEE_TIER",
-              message: `You must be ${matchedTier.age_max} years old or younger for this tier`,
-            },
-          },
-          { status: 400 },
-        );
-      }
-    }
+    const tierError = checkFeeTierEligibility(matchedTier, profile, now);
+    if (tierError) return tierError;
   }
 
   const { data: existing } = await supabaseAdmin

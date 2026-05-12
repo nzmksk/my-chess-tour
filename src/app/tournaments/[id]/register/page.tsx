@@ -58,7 +58,7 @@ async function RegisterPageContent({ id }: { id: string }) {
 
   const { data: playerProfile } = await supabase
     .from("player_profiles")
-    .select("gender, is_oku, date_of_birth, title")
+    .select("gender, is_oku, date_of_birth, title, fide_rating, national_rating")
     .eq("user_id", user.id)
     .single();
 
