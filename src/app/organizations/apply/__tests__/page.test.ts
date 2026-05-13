@@ -48,7 +48,7 @@ describe("OrganizerApplyPage", () => {
     await OrganizerApplyPage();
 
     expect(mockRedirect).toHaveBeenCalledWith(
-      "/auth/login?next=/organizer/apply",
+      "/auth/login?next=/organizations/applications",
     );
   });
 
