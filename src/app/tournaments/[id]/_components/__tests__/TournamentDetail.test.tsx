@@ -61,11 +61,13 @@ const base: TournamentDetailType = {
 function render(
   overrides: Partial<TournamentDetailType> = {},
   isAuthenticated = false,
+  isRegistered = false,
 ): string {
   return renderToStaticMarkup(
     <TournamentDetail
       tournament={{ ...base, ...overrides }}
       isAuthenticated={isAuthenticated}
+      isRegistered={isRegistered}
     />,
   );
 }
@@ -392,5 +394,35 @@ describe("CTA button auth states", () => {
     expect(htmlAuth).toContain("disabled");
     expect(htmlNoAuth).toContain("Full");
     expect(htmlNoAuth).toContain("disabled");
+  });
+
+  it("shows 'Registration Closed' when deadline has passed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render({ registration_deadline: pastDeadline }, true);
+    expect(html).toContain("Registration Closed");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Registration Closed' for unauthenticated users when deadline has passed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render({ registration_deadline: pastDeadline }, false);
+    expect(html).toContain("Registration Closed");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Registered' when authenticated user has already registered", () => {
+    const html = render({}, true, true);
+    expect(html).toContain("Registered");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Full' over 'Registration Closed' when tournament is full and deadline passed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render(
+      { max_participants: 100, current_participants: 100, registration_deadline: pastDeadline },
+      true,
+    );
+    expect(html).toContain("Full");
+    expect(html).not.toContain("Registration Closed");
   });
 });

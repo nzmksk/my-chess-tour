@@ -7,6 +7,7 @@ import TournamentDetail from "./_components/TournamentDetail";
 import DetailSkeleton from "./_components/DetailSkeleton";
 import type { TournamentDetail as TournamentDetailType } from "./types";
 import { createClient } from "@/services/supabase/server";
+import { supabaseAdmin } from "@/services/supabase/admin";
 
 export const revalidate = 60;
 
@@ -91,7 +92,24 @@ export async function TournamentDetailData({ id }: { id: string }) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return <TournamentDetail tournament={tournament} isAuthenticated={!!user} />;
+  let isRegistered = false;
+  if (user) {
+    const { count } = await supabaseAdmin
+      .from("registrations")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("tournament_id", id)
+      .in("status", ["pending_payment", "confirmed"]);
+    isRegistered = (count ?? 0) > 0;
+  }
+
+  return (
+    <TournamentDetail
+      tournament={tournament}
+      isAuthenticated={!!user}
+      isRegistered={isRegistered}
+    />
+  );
 }
 
 export default async function TournamentDetailPage({
