@@ -11,7 +11,10 @@ export const metadata: Metadata = {
   description: "View and manage your chess tournament registrations.",
 };
 
-async function fetchRegistrations(host: string): Promise<PlayerRegistration[]> {
+async function fetchRegistrations(
+  host: string,
+  cookieHeader: string,
+): Promise<PlayerRegistration[]> {
   const protocol =
     host.startsWith("localhost") || host.startsWith("127.0.0.1")
       ? "http"
@@ -20,7 +23,10 @@ async function fetchRegistrations(host: string): Promise<PlayerRegistration[]> {
   try {
     const res = await fetch(
       `${protocol}://${host}/api/v1/player/registrations?sort=registered_at&order=desc`,
-      { cache: "no-store" },
+      {
+        cache: "no-store",
+        headers: { cookie: cookieHeader },
+      },
     );
     if (!res.ok) return [];
     const json = await res.json();
@@ -42,7 +48,8 @@ export default async function PlayerRegistrationsPage() {
 
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";
-  const registrations = await fetchRegistrations(host);
+  const cookieHeader = headersList.get("cookie") ?? "";
+  const registrations = await fetchRegistrations(host, cookieHeader);
 
   return (
     <div className="min-h-screen bg-bg-base">
