@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateEmail } from "@/services/auth/auth-validation";
 
 export const VALID_LINK_TYPES = [
   "website",
@@ -69,8 +70,7 @@ export function validateApplyRequest(
     };
   }
 
-  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRe.test(b.email.trim())) {
+  if (!validateEmail(b.email as string)) {
     return {
       error: NextResponse.json(
         {
