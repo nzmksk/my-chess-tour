@@ -9,7 +9,7 @@ import { createClient } from "@/services/supabase/client";
 import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_LINKS = [
-  { href: "/become-organizer", label: "Become an Organizer", ghost: true },
+  { href: "/organizations/applications", label: "Become an Organizer", ghost: true },
 ];
 
 type AuthUser = {
@@ -131,8 +131,8 @@ export default function NavBar() {
             {authUser ? (
               <>
                 <Link
-                  href="/player/registrations"
-                  className={`nav-link${pathname === "/player/registrations" ? " nav-link--active" : ""}`}
+                  href="/registrations"
+                  className={`nav-link${pathname === "/registrations" ? " nav-link--active" : ""}`}
                 >
                   My Tournaments
                 </Link>
@@ -163,7 +163,7 @@ export default function NavBar() {
                           My Profile
                         </Link>
                         <Link
-                          href="/player/registrations"
+                          href="/registrations"
                           className="nav-dropdown-item"
                           onClick={() => setDropdownOpen(false)}
                         >
@@ -289,11 +289,11 @@ export default function NavBar() {
           {authUser ? (
             <>
               <Link
-                href="/player/registrations"
+                href="/registrations"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
                 }
-                className={`nav-drawer-link${pathname === "/player/registrations" ? " nav-drawer-link--active" : ""}`}
+                className={`nav-drawer-link${pathname === "/registrations" ? " nav-drawer-link--active" : ""}`}
               >
                 My Tournaments
               </Link>
