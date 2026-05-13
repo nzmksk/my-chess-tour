@@ -36,6 +36,21 @@ vi.mock("@/services/supabase/server", () => ({
   }),
 }));
 
+const mockRegistrationSelect = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockResolvedValue({ count: 0 }),
+  }),
+);
+
+vi.mock("@/services/supabase/admin", () => ({
+  supabaseAdmin: {
+    from: vi.fn().mockReturnValue({
+      select: mockRegistrationSelect,
+    }),
+  },
+}));
+
 // ── Helpers ───────────────────────────────────────────────────
 
 const mockFetch = vi.fn();

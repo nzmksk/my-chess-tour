@@ -82,16 +82,19 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 interface Props {
   tournament: TournamentDetailType;
   isAuthenticated: boolean;
+  isRegistered?: boolean;
 }
 
 export default function TournamentDetail({
   tournament: t,
   isAuthenticated,
+  isRegistered = false,
 }: Props) {
   const spotsLeft = t.max_participants - t.current_participants;
   const spotsRatio =
     t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
   const minFee = getMinFeeCents(t.entry_fees);
+  const isDeadlinePassed = new Date(t.registration_deadline) < new Date();
   const lowestFeeEntry =
     t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
 
@@ -379,27 +382,41 @@ export default function TournamentDetail({
               </div>
 
               {/* CTA */}
-              {spotsLeft === 0 ? (
-                <button
-                  className="btn-primary rounded-md not-first:w-full opacity-50"
-                  disabled
-                >
-                  Full
-                </button>
-              ) : isAuthenticated ? (
-                <Link
-                  href={`/tournaments/${t.id}/register`}
-                  className="btn-primary rounded-md w-full text-center block"
-                >
-                  Register Now
-                </Link>
-              ) : (
+              {!isAuthenticated ? (
                 <button
                   className="btn-primary rounded-md w-full opacity-50"
                   disabled
                 >
                   Sign In to Register
                 </button>
+              ) : isRegistered ? (
+                <button
+                  className="btn-primary rounded-md w-full opacity-50"
+                  disabled
+                >
+                  Registered
+                </button>
+              ) : isDeadlinePassed ? (
+                <button
+                  className="btn-primary rounded-md w-full opacity-50"
+                  disabled
+                >
+                  Registration Closed
+                </button>
+              ) : spotsLeft === 0 ? (
+                <button
+                  className="btn-primary rounded-md w-full opacity-50"
+                  disabled
+                >
+                  Full Capacity
+                </button>
+              ) : (
+                <Link
+                  href={`/tournaments/${t.id}/register`}
+                  className="btn-primary rounded-md w-full text-center block"
+                >
+                  Register Now
+                </Link>
               )}
 
               {/* Spots */}
