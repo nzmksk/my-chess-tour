@@ -382,19 +382,12 @@ export default function TournamentDetail({
               </div>
 
               {/* CTA */}
-              {spotsLeft === 0 ? (
-                <button
-                  className="btn-primary rounded-md not-first:w-full opacity-50"
-                  disabled
-                >
-                  Full
-                </button>
-              ) : isDeadlinePassed ? (
+              {!isAuthenticated ? (
                 <button
                   className="btn-primary rounded-md w-full opacity-50"
                   disabled
                 >
-                  Registration Closed
+                  Sign In to Register
                 </button>
               ) : isRegistered ? (
                 <button
@@ -403,20 +396,27 @@ export default function TournamentDetail({
                 >
                   Registered
                 </button>
-              ) : isAuthenticated ? (
+              ) : isDeadlinePassed ? (
+                <button
+                  className="btn-primary rounded-md w-full opacity-50"
+                  disabled
+                >
+                  Registration Closed
+                </button>
+              ) : spotsLeft === 0 ? (
+                <button
+                  className="btn-primary rounded-md w-full opacity-50"
+                  disabled
+                >
+                  Full Capacity
+                </button>
+              ) : (
                 <Link
                   href={`/tournaments/${t.id}/register`}
                   className="btn-primary rounded-md w-full text-center block"
                 >
                   Register Now
                 </Link>
-              ) : (
-                <button
-                  className="btn-primary rounded-md w-full opacity-50"
-                  disabled
-                >
-                  Sign In to Register
-                </button>
               )}
 
               {/* Spots */}

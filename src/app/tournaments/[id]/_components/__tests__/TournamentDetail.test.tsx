@@ -347,8 +347,8 @@ describe("register card", () => {
   });
 
   it("shows full status when no spots remain", () => {
-    const html = render({ max_participants: 100, current_participants: 100 });
-    expect(html).toContain("Full");
+    const html = render({ max_participants: 100, current_participants: 100 }, true);
+    expect(html).toContain("Full Capacity");
   });
 
   it("applies low-spots colour class when spots ratio is at or below 20%", () => {
@@ -381,18 +381,21 @@ describe("CTA button auth states", () => {
     expect(html).toContain("disabled");
   });
 
-  it("shows 'Full' and disables button when no spots remain, regardless of auth", () => {
+  it("shows 'Full Capacity' and disables button for authenticated when no spots remain", () => {
     const htmlAuth = render(
       { max_participants: 100, current_participants: 100 },
       true,
     );
+    expect(htmlAuth).toContain("Full Capacity");
+    expect(htmlAuth).toContain("disabled");
+  });
+
+  it("shows 'Sign In to Register' for unauthenticated users even when no spots remain", () => {
     const htmlNoAuth = render(
       { max_participants: 100, current_participants: 100 },
       false,
     );
-    expect(htmlAuth).toContain("Full");
-    expect(htmlAuth).toContain("disabled");
-    expect(htmlNoAuth).toContain("Full");
+    expect(htmlNoAuth).toContain("Sign In to Register");
     expect(htmlNoAuth).toContain("disabled");
   });
 
@@ -403,10 +406,10 @@ describe("CTA button auth states", () => {
     expect(html).toContain("disabled");
   });
 
-  it("shows 'Registration Closed' for unauthenticated users when deadline has passed", () => {
+  it("shows 'Sign In to Register' for unauthenticated users even when deadline has passed", () => {
     const pastDeadline = new Date(Date.now() - 1000).toISOString();
     const html = render({ registration_deadline: pastDeadline }, false);
-    expect(html).toContain("Registration Closed");
+    expect(html).toContain("Sign In to Register");
     expect(html).toContain("disabled");
   });
 
@@ -416,13 +419,30 @@ describe("CTA button auth states", () => {
     expect(html).toContain("disabled");
   });
 
-  it("shows 'Full' over 'Registration Closed' when tournament is full and deadline passed", () => {
+  it("shows 'Full Capacity' over 'Registration Closed' when tournament is full and deadline passed", () => {
     const pastDeadline = new Date(Date.now() - 1000).toISOString();
     const html = render(
       { max_participants: 100, current_participants: 100, registration_deadline: pastDeadline },
       true,
     );
-    expect(html).toContain("Full");
+    expect(html).toContain("Full Capacity");
     expect(html).not.toContain("Registration Closed");
+  });
+
+  it("shows 'Registered' over 'Registration Closed' when user is registered and deadline passed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render({ registration_deadline: pastDeadline }, true, true);
+    expect(html).toContain("Registered");
+    expect(html).not.toContain("Registration Closed");
+  });
+
+  it("shows 'Registered' over 'Full Capacity' when user is registered and tournament is full", () => {
+    const html = render(
+      { max_participants: 100, current_participants: 100 },
+      true,
+      true,
+    );
+    expect(html).toContain("Registered");
+    expect(html).not.toContain("Full Capacity");
   });
 });
