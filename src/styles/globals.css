@@ -134,7 +134,7 @@
   }
 
   .tournament-card {
-    @apply transition duration-200 cursor-pointer;
+    @apply transition duration-200;
   }
 
   .tournament-card:hover {
