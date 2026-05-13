@@ -118,7 +118,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const rows = (data ?? []) as RegistrationRow[];
+  const rows = (data ?? []) as unknown as RegistrationRow[];
 
   const formatted = rows.map((row) => {
     const fees = row.tournaments.entry_fees;
