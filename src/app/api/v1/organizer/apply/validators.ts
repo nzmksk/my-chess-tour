@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
 import { validateEmail } from "@/services/auth/auth-validation";
 
-export const VALID_LINK_TYPES = [
-  "website",
-  "facebook",
-  "instagram",
-  "x_twitter",
-  "youtube",
-  "whatsapp",
-  "telegram",
-  "other",
-] as const;
-
-export type LinkType = (typeof VALID_LINK_TYPES)[number];
-
 export interface OrgLink {
-  type: LinkType;
   url: string;
+  label: string;
 }
 
 export interface ApplyRequest {
@@ -106,7 +93,7 @@ export function validateApplyRequest(
             {
               error: {
                 code: "VALIDATION_ERROR",
-                message: "Each link must be an object with type and url",
+                message: "Each link must be an object with label and url",
               },
             },
             { status: 400 },
@@ -116,13 +103,13 @@ export function validateApplyRequest(
 
       const l = link as Record<string, unknown>;
 
-      if (!VALID_LINK_TYPES.includes(l.type as LinkType)) {
+      if (typeof l.label !== "string" || l.label.trim() === "") {
         return {
           error: NextResponse.json(
             {
               error: {
                 code: "VALIDATION_ERROR",
-                message: `Invalid link type: ${l.type}. Must be one of: ${VALID_LINK_TYPES.join(", ")}`,
+                message: "Each link must have a non-empty label",
               },
             },
             { status: 400 },

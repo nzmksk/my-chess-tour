@@ -227,23 +227,23 @@ describe("POST /api/v1/organizer/apply", () => {
       expect(json.error.message).toMatch(/links/i);
     });
 
-    it("returns 400 when a link has an invalid type", async () => {
+    it("returns 400 when a link has an empty label", async () => {
       const res = await POST(
         makeRequest({
           ...VALID_BODY,
-          links: [{ type: "tiktok", url: "https://tiktok.com/..." }],
+          links: [{ label: "", url: "https://facebook.com/..." }],
         }),
       );
       expect(res.status).toBe(400);
       const json = await res.json();
-      expect(json.error.message).toMatch(/invalid link type/i);
+      expect(json.error.message).toMatch(/label/i);
     });
 
     it("returns 400 when a link has an empty url", async () => {
       const res = await POST(
         makeRequest({
           ...VALID_BODY,
-          links: [{ type: "facebook", url: "" }],
+          links: [{ label: "Facebook", url: "" }],
         }),
       );
       expect(res.status).toBe(400);
@@ -304,7 +304,7 @@ describe("POST /api/v1/organizer/apply", () => {
         description: "A chess club",
         phone: "+60123456789",
         past_tournament_refs: "KL Open 2025",
-        links: [{ type: "facebook", url: "https://facebook.com/klchess" }],
+        links: [{ label: "Facebook", url: "https://facebook.com/klchess" }],
       };
       setInsertResult(makeOrg({ description: "A chess club" }));
       const res = await POST(makeRequest(body));

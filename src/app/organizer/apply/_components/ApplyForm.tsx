@@ -58,7 +58,12 @@ export default function ApplyForm() {
     setStatus("submitting");
     setErrorMessage(null);
 
-    const filteredLinks = links.filter((l) => l.url.trim() !== "");
+    const filteredLinks = links
+      .filter((l) => l.url.trim() !== "")
+      .map((l) => ({
+        url: l.url.trim(),
+        label: LINK_TYPES.find((t) => t.value === l.type)?.label ?? l.type,
+      }));
 
     try {
       const res = await fetch("/api/v1/organizer/apply", {
