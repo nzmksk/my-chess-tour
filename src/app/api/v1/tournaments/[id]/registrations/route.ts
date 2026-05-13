@@ -6,7 +6,7 @@ import {
   checkRestrictions,
   checkFeeTierEligibility,
   normalizeRestrictions,
-} from "@/app/api/v1/tournaments/[id]/register/validators";
+} from "@/app/api/v1/tournaments/[id]/registrations/validators";
 import type {
   RegistrationRequest,
   RegistrationRow,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { validateEmail } from "@/services/auth/auth-validation";
 
-export interface OrgLink {
+interface OrgLink {
   url: string;
   label: string;
 }

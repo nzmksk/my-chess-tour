@@ -66,7 +66,7 @@ export default function ApplyForm() {
       }));
 
     try {
-      const res = await fetch("/api/v1/organizer/apply", {
+      const res = await fetch("/api/v1/organizations/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
