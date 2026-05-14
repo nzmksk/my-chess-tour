@@ -145,6 +145,7 @@ export default function FilterBar({
       <div className="max-w-300 mx-auto px-10">
         {/* Search */}
         <input
+          id="search-tournaments"
           type="text"
           placeholder="Search tournaments…"
           value={search}
@@ -174,6 +175,7 @@ export default function FilterBar({
           />
 
           <select
+            id="date-filter"
             value={dateFilter}
             onChange={(e) => onDateFilterChange(e.target.value)}
             className={
