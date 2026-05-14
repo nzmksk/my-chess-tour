@@ -17,7 +17,7 @@ export default async function OrganizerApplyPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login?next=/organizations/applications");
+    redirect("/auth/login?next=/organizations/apply");
   }
 
   return (

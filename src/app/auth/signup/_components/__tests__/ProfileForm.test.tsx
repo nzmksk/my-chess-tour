@@ -31,7 +31,6 @@ const mockFormData = {
   gender: "Female",
   nationality: "Malaysian",
   dateOfBirth: "1990-01-01",
-  state: "Selangor",
   fideId: "",
   mcfId: "",
   isOku: false,
@@ -142,14 +141,6 @@ describe("ProfileForm", () => {
     expect(true).toBe(true);
   });
 
-  it("fires onChange on the State select", async () => {
-    render(<ProfileForm />);
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText("State"), { target: { value: "Sabah" } });
-    });
-    expect(true).toBe(true);
-  });
-
   it("fires onChange on the FIDE ID input", async () => {
     render(<ProfileForm />);
     await act(async () => {
@@ -230,7 +221,7 @@ describe("ProfileForm", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: "Something went wrong" }),
+        json: async () => ({ error: { code: "INTERNAL_ERROR", message: "Something went wrong" } }),
       })
     );
 
@@ -249,8 +240,7 @@ describe("ProfileForm", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         json: async () => ({
-          error: "An account with this email already exists",
-          code: "EMAIL_EXISTS",
+          error: { code: "EMAIL_EXISTS", message: "An account with this email already exists" },
         }),
       })
     );

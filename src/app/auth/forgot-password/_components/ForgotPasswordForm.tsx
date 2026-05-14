@@ -93,7 +93,7 @@ export default function ForgotPasswordForm() {
           </form>
 
           <p className="auth-footer mt-lg">
-            Remembered it? <Link href="/auth/login">Return to sign in</Link>
+            <Link href="/auth/login">Back to sign in</Link>
           </p>
         </div>
       </div>

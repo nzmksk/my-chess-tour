@@ -78,7 +78,6 @@ const validBody = {
   gender: "female",
   nationality: "Malaysian",
   dateOfBirth: "1990-01-01",
-  state: "Selangor",
   fideId: "",
   mcfId: "",
   isOku: false,
@@ -175,7 +174,6 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
         gender: "female",
         nationality: "Malaysian",
         date_of_birth: "1990-01-01",
-        state: "Selangor",
         is_oku: false,
       })
     );

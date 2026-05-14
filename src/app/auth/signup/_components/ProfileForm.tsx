@@ -8,24 +8,6 @@ import { useSignUpForm } from "./SignUpContext";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 const GENDERS = ["Male", "Female"] as const;
-const STATES = [
-  "Johor",
-  "Kedah",
-  "Kelantan",
-  "Melaka",
-  "Negeri Sembilan",
-  "Pahang",
-  "Perak",
-  "Perlis",
-  "Pulau Pinang",
-  "Sabah",
-  "Sarawak",
-  "Selangor",
-  "Terengganu",
-  "W.P. Kuala Lumpur",
-  "W.P. Labuan",
-  "W.P. Putrajaya",
-] as const;
 
 export default function ProfileForm() {
   const { form, setForm } = useSignUpForm();
@@ -57,8 +39,8 @@ export default function ProfileForm() {
 
       if (!res.ok) {
         setSubmitError({
-          message: data.error ?? "Something went wrong. Please try again.",
-          emailExists: data.code === "EMAIL_EXISTS",
+          message: data.error?.message ?? "Something went wrong. Please try again.",
+          emailExists: data.error?.code === "EMAIL_EXISTS",
         });
         return;
       }
@@ -136,96 +118,70 @@ export default function ProfileForm() {
           )}
 
           <form onSubmit={handleSubmit} noValidate>
-            {/* Gender + Nationality */}
-            <div className="input-row">
-              <div className="form-group mb-0">
-                <div className="label-row">
-                  <label className="input-label" htmlFor="gender">
-                    Gender
-                  </label>
-                </div>
-                <select
-                  id="gender"
-                  className="input"
-                  value={form.gender ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, gender: e.target.value }))
-                  }
-                  required
-                  aria-required="true"
-                >
-                  <option value="">Select…</option>
-                  {GENDERS.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
+            {/* Gender */}
+            <div className="form-group">
+              <div className="label-row">
+                <label className="input-label" htmlFor="gender">
+                  Gender
+                </label>
               </div>
-
-              <div className="form-group">
-                <div className="label-row">
-                  <label className="input-label" htmlFor="nationality">
-                    Nationality
-                  </label>
-                </div>
-                <input
-                  id="nationality"
-                  className="input"
-                  type="text"
-                  placeholder="Malaysian"
-                  value={form.nationality ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, nationality: e.target.value }))
-                  }
-                  required
-                  aria-required="true"
-                />
-              </div>
+              <select
+                id="gender"
+                className="input"
+                value={form.gender ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, gender: e.target.value }))
+                }
+                required
+                aria-required="true"
+              >
+                <option value="">Select…</option>
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Date of Birth + State */}
-            <div className="input-row">
-              <div className="form-group mb-0">
-                <div className="label-row">
-                  <label className="input-label" htmlFor="dateOfBirth">
-                    Date of Birth
-                  </label>
-                </div>
-                <input
-                  id="dateOfBirth"
-                  className="input"
-                  type="date"
-                  placeholder="DD / MM / YYYY"
-                  value={form.dateOfBirth ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, dateOfBirth: e.target.value }))
-                  }
-                />
+            {/* Date of Birth */}
+            <div className="form-group">
+              <div className="label-row">
+                <label className="input-label" htmlFor="dateOfBirth">
+                  Date of Birth
+                </label>
               </div>
+              <input
+                id="dateOfBirth"
+                className="input"
+                type="date"
+                placeholder="DD / MM / YYYY"
+                value={form.dateOfBirth ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, dateOfBirth: e.target.value }))
+                }
+              />
+            </div>
 
-              <div className="form-group">
-                <div className="label-row">
-                  <label className="input-label" htmlFor="state">
-                    State
-                  </label>
-                </div>
-                <select
-                  id="state"
-                  className="input"
-                  value={form.state ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, state: e.target.value }))
-                  }
-                >
-                  <option value="">Select…</option>
-                  {STATES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+            {/* Nationality */}
+            <div className="form-group">
+              <div className="label-row">
+                <label className="input-label" htmlFor="nationality">
+                  Nationality
+                </label>
               </div>
+              <input
+                id="nationality"
+                className="input"
+                type="text"
+                placeholder="Malaysian"
+                value={form.nationality ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, nationality: e.target.value }))
+                }
+                required
+                aria-required="true"
+              />
             </div>
 
             {/* FIDE ID */}
@@ -252,10 +208,14 @@ export default function ProfileForm() {
                 id="fideId"
                 className="input"
                 type="text"
+                inputMode="numeric"
                 placeholder="e.g. 36095765"
                 value={form.fideId ?? ""}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, fideId: e.target.value }))
+                  setForm((f) => ({
+                    ...f,
+                    fideId: e.target.value.replace(/\D/g, ""),
+                  }))
                 }
               />
               <p className="input-hint">
@@ -286,10 +246,14 @@ export default function ProfileForm() {
                 id="mcfId"
                 className="input"
                 type="text"
-                placeholder="e.g. MCF-2024-001234"
+                inputMode="numeric"
+                placeholder="e.g. 1234567"
                 value={form.mcfId ?? ""}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, mcfId: e.target.value }))
+                  setForm((f) => ({
+                    ...f,
+                    mcfId: e.target.value.replace(/\D/g, ""),
+                  }))
                 }
               />
             </div>

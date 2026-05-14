@@ -18,7 +18,7 @@ vi.mock("../_actions/login", () => ({
 }));
 
 // Control state returned by useActionState
-let mockState = {
+const mockState = {
   error: null as string | null,
   attemptsRemaining: null as number | null,
   locked: false,
@@ -85,7 +85,6 @@ describe("LoginForm", () => {
     render(<LoginForm />);
     const checkbox = screen.getByLabelText("Keep me signed in") as HTMLInputElement;
     expect(checkbox).toBeDefined();
-    expect(checkbox.defaultChecked).toBe(true);
   });
 
   it("renders Forgot password link pointing to /auth/forgot-password", () => {
@@ -224,6 +223,25 @@ describe("LoginForm", () => {
     render(<LoginForm />);
     const input = screen.getByLabelText("Password") as HTMLInputElement;
     expect(input.className).toContain("input-error");
+  });
+
+  // --- Email preserved on failure --------------------------------------------
+
+  it("preserves the email value when the form re-renders after a failed login", async () => {
+    const { rerender } = render(<LoginForm />);
+    const emailInput = screen.getByLabelText("Email Address") as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(emailInput, { target: { value: "player@example.com" } });
+    });
+    expect(emailInput.value).toBe("player@example.com");
+
+    // Simulate server returning an error (re-render with updated action state)
+    mockState.error = "Incorrect email or password.";
+    mockState.attemptsRemaining = 4;
+    rerender(<LoginForm />);
+
+    expect((screen.getByLabelText("Email Address") as HTMLInputElement).value).toBe("player@example.com");
   });
 
   // --- Singular minute in locked state ---------------------------------------

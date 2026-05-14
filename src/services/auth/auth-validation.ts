@@ -28,6 +28,8 @@ export function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email.trim());
 }
 
+const NAME_PATTERN = /^[a-zA-ZÀ-ɏ\s'.\-]+$/;
+
 export type RegistrationErrors = {
   firstName?: string;
   lastName?: string;
@@ -49,7 +51,6 @@ export type RegistrationFields = {
   gender?: string;
   nationality?: string;
   dateOfBirth?: string;
-  state?: string;
   fideId?: string;
   mcfId?: string;
   isOku?: boolean;
@@ -62,9 +63,13 @@ export function validateRegistrationForm(
 
   if (!fields.firstName.trim()) {
     errors.firstName = "First name is required";
+  } else if (!NAME_PATTERN.test(fields.firstName.trim())) {
+    errors.firstName = "First name can only contain letters, spaces, hyphens, and apostrophes";
   }
   if (!fields.lastName.trim()) {
     errors.lastName = "Last name is required";
+  } else if (!NAME_PATTERN.test(fields.lastName.trim())) {
+    errors.lastName = "Last name can only contain letters, spaces, hyphens, and apostrophes";
   }
   if (!fields.email.trim()) {
     errors.email = "Email address is required";

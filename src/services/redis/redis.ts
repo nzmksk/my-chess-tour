@@ -1,9 +1,15 @@
 import { Redis } from "@upstash/redis";
 
-export const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+const url = process.env.UPSTASH_REDIS_REST_URL;
+const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+if (!url || !token) {
+  throw new Error(
+    "Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN environment variable",
+  );
+}
+
+export const redis = new Redis({ url, token });
 
 const VERIFY_PREFIX = "verify:";
 const VERIFY_TTL_SECONDS = 15 * 60; // 10 minutes

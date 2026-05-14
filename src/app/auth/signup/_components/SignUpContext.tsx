@@ -13,7 +13,6 @@ const defaultForm: RegistrationFields = {
   gender: "",
   nationality: "",
   dateOfBirth: "",
-  state: "",
   fideId: "",
   mcfId: "",
   isOku: false,

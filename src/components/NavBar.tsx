@@ -9,7 +9,7 @@ import { createClient } from "@/services/supabase/client";
 import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_LINKS = [
-  { href: "/organizations/applications", label: "Become an Organizer", ghost: true },
+  { href: "/organizations/apply", label: "Become an Organizer", ghost: true },
 ];
 
 type AuthUser = {

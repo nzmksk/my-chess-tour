@@ -18,14 +18,14 @@ describe("ForgotPasswordPage", () => {
   });
 
   it("has a min-h-screen container", () => {
-    const result = ForgotPasswordPage() as Record<string, unknown>;
+    const result = ForgotPasswordPage() as unknown as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
     expect(props.className).toContain("min-h-screen");
   });
 
-  it("exports metadata with a title containing MY Chess Tour", async () => {
+  it("exports metadata with title 'Reset Password'", async () => {
     const mod = await import("../page");
     expect(mod.metadata).toBeDefined();
-    expect((mod.metadata as { title: string }).title).toContain("MY Chess Tour");
+    expect((mod.metadata as { title: string }).title).toBe("Reset Password");
   });
 });

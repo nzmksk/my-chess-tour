@@ -13,7 +13,7 @@ vi.mock("@/components/NavBar", () => ({
 }));
 
 vi.mock(
-  "@/app/organizer/apply/_components/ApplyForm",
+  "@/app/organizations/apply/_components/ApplyForm",
   () => ({
     default: vi.fn().mockReturnValue(null),
   }),
@@ -48,7 +48,7 @@ describe("OrganizerApplyPage", () => {
     await OrganizerApplyPage();
 
     expect(mockRedirect).toHaveBeenCalledWith(
-      "/auth/login?next=/organizations/applications",
+      "/auth/login?next=/organizations/apply",
     );
   });
 

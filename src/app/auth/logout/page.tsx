@@ -2,7 +2,7 @@ import NavBar from "@/components/NavBar";
 import LogoutDialog from "./_components/LogoutDialog";
 
 export const metadata = {
-  title: "Sign Out — MY Chess Tour",
+  title: "Sign Out",
   description: "Sign out of your MY Chess Tour account.",
 };
 
