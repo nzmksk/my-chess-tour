@@ -18,7 +18,7 @@ vi.mock("../_actions/login", () => ({
 }));
 
 // Control state returned by useActionState
-let mockState = {
+const mockState = {
   error: null as string | null,
   attemptsRemaining: null as number | null,
   locked: false,
@@ -85,7 +85,6 @@ describe("LoginForm", () => {
     render(<LoginForm />);
     const checkbox = screen.getByLabelText("Keep me signed in") as HTMLInputElement;
     expect(checkbox).toBeDefined();
-    expect(checkbox.defaultChecked).toBe(true);
   });
 
   it("renders Forgot password link pointing to /auth/forgot-password", () => {

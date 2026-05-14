@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (gender && !["Male", "Female"].includes(gender)) {
+  if (gender && !["male", "female"].includes(gender.toLowerCase())) {
     return NextResponse.json(
       {
         error: {
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
   const { error: profileError } = await supabaseAdmin
     .from("player_profiles")
     .update({
-      gender: gender ? gender.toLowerCase() : null,
+      gender: gender ? gender.toLowerCase() as "male" | "female" : null,
       nationality: nationality || null,
       date_of_birth: dateOfBirth || null,
       fide_id: fideId || null,

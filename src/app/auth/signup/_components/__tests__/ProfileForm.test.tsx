@@ -31,7 +31,6 @@ const mockFormData = {
   gender: "Female",
   nationality: "Malaysian",
   dateOfBirth: "1990-01-01",
-  state: "Selangor",
   fideId: "",
   mcfId: "",
   isOku: false,
@@ -138,14 +137,6 @@ describe("ProfileForm", () => {
       fireEvent.change(screen.getByLabelText("Date of Birth"), {
         target: { value: "2000-05-15" },
       });
-    });
-    expect(true).toBe(true);
-  });
-
-  it("fires onChange on the State select", async () => {
-    render(<ProfileForm />);
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText("State"), { target: { value: "Sabah" } });
     });
     expect(true).toBe(true);
   });
