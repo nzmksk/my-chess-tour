@@ -167,7 +167,7 @@ DECLARE
   ];
 
   states text[] := ARRAY[
-    'Selangor','Kuala Lumpur','Penang','Johor','Perak',
+    'Selangor','W.P. Kuala Lumpur','Pulau Pinang','Johor','Perak',
     'Kedah','Sabah','Sarawak','Negeri Sembilan','Pahang',
     'Terengganu','Kelantan','Melaka'
   ];
