@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
     gender,
     nationality,
     dateOfBirth,
-    state,
     fideId,
     mcfId,
     isOku,
@@ -39,7 +38,6 @@ export async function POST(request: NextRequest) {
     gender?: string;
     nationality?: string;
     dateOfBirth?: string;
-    state?: string;
     fideId?: string;
     mcfId?: string;
     isOku?: boolean;
@@ -69,12 +67,72 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const NAME_PATTERN = /^[a-zA-ZÀ-ɏ\s'.\-]+$/;
+  if (!NAME_PATTERN.test(firstName.trim())) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "First name can only contain letters, spaces, hyphens, and apostrophes",
+        },
+      },
+      { status: 400 },
+    );
+  }
+  if (!NAME_PATTERN.test(lastName.trim())) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Last name can only contain letters, spaces, hyphens, and apostrophes",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   if (password.length < 8) {
     return NextResponse.json(
       {
         error: {
           code: "VALIDATION_ERROR",
           message: "Password must be at least 8 characters",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (gender && !["Male", "Female"].includes(gender)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Gender must be Male or Female",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (fideId && !/^\d+$/.test(fideId)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "FIDE ID must contain digits only",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (mcfId && !/^\d+$/.test(mcfId)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "MCF ID must contain digits only",
         },
       },
       { status: 400 },
@@ -150,10 +208,9 @@ export async function POST(request: NextRequest) {
   const { error: profileError } = await supabaseAdmin
     .from("player_profiles")
     .update({
-      gender: gender || null,
+      gender: gender ? gender.toLowerCase() : null,
       nationality: nationality || null,
       date_of_birth: dateOfBirth || null,
-      state: state || null,
       fide_id: fideId || null,
       mcf_id: mcfId || null,
       is_oku: isOku ?? false,

@@ -84,7 +84,6 @@ export default function VerifyForm() {
           gender: form.gender,
           nationality: form.nationality,
           dateOfBirth: form.dateOfBirth,
-          state: form.state,
           fideId: form.fideId,
           mcfId: form.mcfId,
           isOku: form.isOku,
