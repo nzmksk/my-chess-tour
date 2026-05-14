@@ -118,52 +118,30 @@ export default function ProfileForm() {
           )}
 
           <form onSubmit={handleSubmit} noValidate>
-            {/* Gender + Nationality */}
-            <div className="input-row">
-              <div className="form-group mb-0">
-                <div className="label-row">
-                  <label className="input-label" htmlFor="gender">
-                    Gender
-                  </label>
-                </div>
-                <select
-                  id="gender"
-                  className="input"
-                  value={form.gender ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, gender: e.target.value }))
-                  }
-                  required
-                  aria-required="true"
-                >
-                  <option value="">Select…</option>
-                  {GENDERS.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
+            {/* Gender */}
+            <div className="form-group">
+              <div className="label-row">
+                <label className="input-label" htmlFor="gender">
+                  Gender
+                </label>
               </div>
-
-              <div className="form-group">
-                <div className="label-row">
-                  <label className="input-label" htmlFor="nationality">
-                    Nationality
-                  </label>
-                </div>
-                <input
-                  id="nationality"
-                  className="input"
-                  type="text"
-                  placeholder="Malaysian"
-                  value={form.nationality ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, nationality: e.target.value }))
-                  }
-                  required
-                  aria-required="true"
-                />
-              </div>
+              <select
+                id="gender"
+                className="input"
+                value={form.gender ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, gender: e.target.value }))
+                }
+                required
+                aria-required="true"
+              >
+                <option value="">Select…</option>
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Date of Birth */}
@@ -182,6 +160,27 @@ export default function ProfileForm() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, dateOfBirth: e.target.value }))
                 }
+              />
+            </div>
+
+            {/* Nationality */}
+            <div className="form-group">
+              <div className="label-row">
+                <label className="input-label" htmlFor="nationality">
+                  Nationality
+                </label>
+              </div>
+              <input
+                id="nationality"
+                className="input"
+                type="text"
+                placeholder="Malaysian"
+                value={form.nationality ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, nationality: e.target.value }))
+                }
+                required
+                aria-required="true"
               />
             </div>
 
