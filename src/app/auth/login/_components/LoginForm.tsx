@@ -11,6 +11,7 @@ export default function LoginForm() {
     INITIAL_LOGIN_STATE,
   );
   const [showPassword, setShowPassword] = useState(false);
+  const [emailValue, setEmailValue] = useState("");
 
   // Screen 2C — Account Locked
   if (state.locked) {
@@ -107,6 +108,8 @@ export default function LoginForm() {
                 placeholder="you@example.com"
                 autoComplete="email"
                 required
+                value={emailValue}
+                onChange={(e) => setEmailValue(e.target.value)}
               />
             </div>
 
@@ -149,7 +152,6 @@ export default function LoginForm() {
                   name="keepSignedIn"
                   type="checkbox"
                   className="checkbox"
-                  defaultChecked
                 />
                 <label
                   htmlFor="keepSignedIn"

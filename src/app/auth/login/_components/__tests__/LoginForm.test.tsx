@@ -226,6 +226,25 @@ describe("LoginForm", () => {
     expect(input.className).toContain("input-error");
   });
 
+  // --- Email preserved on failure --------------------------------------------
+
+  it("preserves the email value when the form re-renders after a failed login", async () => {
+    const { rerender } = render(<LoginForm />);
+    const emailInput = screen.getByLabelText("Email Address") as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(emailInput, { target: { value: "player@example.com" } });
+    });
+    expect(emailInput.value).toBe("player@example.com");
+
+    // Simulate server returning an error (re-render with updated action state)
+    mockState.error = "Incorrect email or password.";
+    mockState.attemptsRemaining = 4;
+    rerender(<LoginForm />);
+
+    expect((screen.getByLabelText("Email Address") as HTMLInputElement).value).toBe("player@example.com");
+  });
+
   // --- Singular minute in locked state ---------------------------------------
 
   it("shows singular 'minute' when locked for exactly 1 minute", () => {
