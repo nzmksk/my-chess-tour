@@ -13,6 +13,8 @@ import {
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
+import TermsModal from "./TermsModal";
+import PrivacyModal from "./PrivacyModal";
 
 export default function SignUpForm() {
   const { form, setForm } = useSignUpForm();
@@ -21,6 +23,8 @@ export default function SignUpForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [submitted, setSubmitted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const passwordReqs = checkPasswordRequirements(form.password);
   const passwordStrength = getPasswordStrength(form.password);
@@ -333,8 +337,22 @@ export default function SignUpForm() {
                 className={`check-label ${errors.terms ? "" : "mb-2"}`}
                 htmlFor="terms"
               >
-                I agree to the <Link href="/terms">Terms of Service</Link> and{" "}
-                <Link href="/privacy">Privacy Policy</Link>
+                I agree to the{" "}
+                <button
+                  type="button"
+                  className="modal-trigger-link"
+                  onClick={() => setShowTermsModal(true)}
+                >
+                  Terms of Service
+                </button>{" "}
+                and{" "}
+                <button
+                  type="button"
+                  className="modal-trigger-link"
+                  onClick={() => setShowPrivacyModal(true)}
+                >
+                  Privacy Policy
+                </button>
               </label>
             </div>
             {errors.terms && (
@@ -359,6 +377,13 @@ export default function SignUpForm() {
           </p>
         </div>
       </div>
+
+      {showTermsModal && (
+        <TermsModal onClose={() => setShowTermsModal(false)} />
+      )}
+      {showPrivacyModal && (
+        <PrivacyModal onClose={() => setShowPrivacyModal(false)} />
+      )}
     </div>
   );
 }
