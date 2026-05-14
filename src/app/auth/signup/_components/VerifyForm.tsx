@@ -92,7 +92,7 @@ export default function VerifyForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setVerifyError(data.error ?? "Verification failed. Please try again.");
+        setVerifyError(data.error?.message ?? "Verification failed. Please try again.");
         return;
       }
       document.cookie = `${SIGNUP_STEP_COOKIE}=; path=/; max-age=0; SameSite=Lax`;

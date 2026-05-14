@@ -230,7 +230,7 @@ describe("ProfileForm", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: "Something went wrong" }),
+        json: async () => ({ error: { code: "INTERNAL_ERROR", message: "Something went wrong" } }),
       })
     );
 
@@ -249,8 +249,7 @@ describe("ProfileForm", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         json: async () => ({
-          error: "An account with this email already exists",
-          code: "EMAIL_EXISTS",
+          error: { code: "EMAIL_EXISTS", message: "An account with this email already exists" },
         }),
       })
     );

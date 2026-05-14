@@ -57,8 +57,8 @@ export default function ProfileForm() {
 
       if (!res.ok) {
         setSubmitError({
-          message: data.error ?? "Something went wrong. Please try again.",
-          emailExists: data.code === "EMAIL_EXISTS",
+          message: data.error?.message ?? "Something went wrong. Please try again.",
+          emailExists: data.error?.code === "EMAIL_EXISTS",
         });
         return;
       }

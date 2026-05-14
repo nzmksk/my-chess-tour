@@ -161,7 +161,7 @@ describe("VerifyForm", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: "Incorrect code. Please try again." }),
+        json: async () => ({ error: { code: "CODE_INVALID", message: "Incorrect code. Please try again." } }),
       })
     );
 
@@ -257,7 +257,7 @@ describe("VerifyForm", () => {
     await act(async () => {
       resolveFirst({
         ok: false,
-        json: async () => ({ error: "invalid" }),
+        json: async () => ({ error: { code: "CODE_INVALID", message: "invalid" } }),
       });
     });
 
