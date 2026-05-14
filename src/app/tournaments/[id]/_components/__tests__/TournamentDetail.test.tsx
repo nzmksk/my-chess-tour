@@ -406,10 +406,11 @@ describe("CTA button auth states", () => {
     expect(html).toContain("disabled");
   });
 
-  it("shows 'Sign In to Register' for unauthenticated users even when deadline has passed", () => {
+  it("shows 'Registration Closed' for unauthenticated users when deadline has passed", () => {
     const pastDeadline = new Date(Date.now() - 1000).toISOString();
     const html = render({ registration_deadline: pastDeadline }, false);
-    expect(html).toContain("Sign In to Register");
+    expect(html).toContain("Registration Closed");
+    expect(html).not.toContain("Sign In to Register");
     expect(html).toContain("disabled");
   });
 

@@ -382,14 +382,7 @@ export default function TournamentDetail({
               </div>
 
               {/* CTA */}
-              {!isAuthenticated ? (
-                <button
-                  className="btn-primary rounded-md w-full opacity-50"
-                  disabled
-                >
-                  Sign In to Register
-                </button>
-              ) : isRegistered ? (
+              {isRegistered ? (
                 <button
                   className="btn-primary rounded-md w-full opacity-50"
                   disabled
@@ -402,6 +395,13 @@ export default function TournamentDetail({
                   disabled
                 >
                   Registration Closed
+                </button>
+              ) : !isAuthenticated ? (
+                <button
+                  className="btn-primary rounded-md w-full opacity-50"
+                  disabled
+                >
+                  Sign In to Register
                 </button>
               ) : spotsLeft === 0 ? (
                 <button
