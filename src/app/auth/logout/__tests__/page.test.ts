@@ -18,16 +18,14 @@ describe("LogoutPage", () => {
   });
 
   it("has a min-h-screen container", () => {
-    const result = LogoutPage() as Record<string, unknown>;
+    const result = LogoutPage() as unknown as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
     expect(props.className).toContain("min-h-screen");
   });
 
-  it("exports metadata with a title containing MY Chess Tour", async () => {
+  it("exports metadata with title 'Sign Out'", async () => {
     const mod = await import("../page");
     expect(mod.metadata).toBeDefined();
-    expect((mod.metadata as { title: string }).title).toContain(
-      "MY Chess Tour",
-    );
+    expect((mod.metadata as { title: string }).title).toBe("Sign Out");
   });
 });

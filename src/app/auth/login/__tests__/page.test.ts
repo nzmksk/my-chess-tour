@@ -34,15 +34,15 @@ describe("LoginPage", () => {
   });
 
   it("has a min-h-screen container", async () => {
-    const result = (await LoginPage()) as Record<string, unknown>;
+    const result = (await LoginPage()) as unknown as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
     expect(props.className).toContain("min-h-screen");
   });
 
-  it("exports metadata with a title containing MY Chess Tour", async () => {
+  it("exports metadata with title 'Sign In'", async () => {
     const mod = await import("../page");
     expect(mod.metadata).toBeDefined();
-    expect((mod.metadata as { title: string }).title).toContain("MY Chess Tour");
+    expect((mod.metadata as { title: string }).title).toBe("Sign In");
   });
 
   it("redirects to /tournaments when user is already logged in", async () => {

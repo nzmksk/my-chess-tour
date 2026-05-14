@@ -6,7 +6,7 @@ import AuthCardSkeleton from "./_components/AuthCardSkeleton";
 import { createClient } from "@/services/supabase/server";
 
 export const metadata = {
-  title: "Create Account — MY Chess Tour",
+  title: "Create Account",
   description:
     "Sign up for MY Chess Tour — Malaysia's premier competitive chess circuit.",
 };

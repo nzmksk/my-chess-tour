@@ -4,7 +4,7 @@ import LoginForm from "./_components/LoginForm";
 import { createClient } from "@/services/supabase/server";
 
 export const metadata = {
-  title: "Sign In — MY Chess Tour",
+  title: "Sign In",
   description: "Sign in to your MY Chess Tour account.",
 };
 

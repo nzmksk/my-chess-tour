@@ -2,7 +2,7 @@ import NavBar from "@/components/NavBar";
 import ForgotPasswordForm from "./_components/ForgotPasswordForm";
 
 export const metadata = {
-  title: "Reset Password — MY Chess Tour",
+  title: "Reset Password",
   description: "Reset your MY Chess Tour account password.",
 };
 
