@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
+    env: {
+      UPSTASH_REDIS_REST_URL: "https://dummy.upstash.io",
+      UPSTASH_REDIS_REST_TOKEN: "dummy",
+    },
     css: false,
     coverage: {
       provider: "v8",
