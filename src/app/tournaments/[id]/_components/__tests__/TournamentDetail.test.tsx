@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import TournamentDetail from "../TournamentDetail";
 import type { TournamentDetail as TournamentDetailType } from "../../types";
+import type { StartingRankPlayer } from "../../types";
 
 // ── Fixtures ─────────────────────────────────────────────────
 
@@ -58,19 +59,58 @@ const base: TournamentDetailType = {
   },
 };
 
+const samplePlayers: StartingRankPlayer[] = [
+  {
+    rank: 1,
+    user_id: "u1",
+    name: "Alice Wong",
+    title: "WFM",
+    fide_id: 123456,
+    fide_rating: 2100,
+    national_rating: null,
+  },
+  {
+    rank: 2,
+    user_id: "u2",
+    name: "Bob Lee",
+    title: null,
+    fide_id: null,
+    fide_rating: null,
+    national_rating: 1500,
+  },
+];
+
 function render(
   overrides: Partial<TournamentDetailType> = {},
   isAuthenticated = false,
   isRegistered = false,
+  canViewStartingRank = false,
+  startingRank: StartingRankPlayer[] | null = null,
 ): string {
   return renderToStaticMarkup(
     <TournamentDetail
       tournament={{ ...base, ...overrides }}
       isAuthenticated={isAuthenticated}
       isRegistered={isRegistered}
+      canViewStartingRank={canViewStartingRank}
+      startingRank={startingRank}
     />,
   );
 }
+
+// ── Tab structure ─────────────────────────────────────────────
+
+describe("tab structure", () => {
+  it("renders Tournament Details tab", () => {
+    const html = render();
+    expect(html).toContain("Tournament Details");
+  });
+
+  it("renders Starting Rank tab", () => {
+    const html = render();
+    expect(html).toContain("Starting Rank");
+  });
+});
 
 // ── Tournament header ─────────────────────────────────────────
 
@@ -445,5 +485,26 @@ describe("CTA button auth states", () => {
     );
     expect(html).toContain("Registered");
     expect(html).not.toContain("Full Capacity");
+  });
+});
+
+// ── Starting rank tab visibility ──────────────────────────────
+// StartingRankTab display logic is tested in StartingRankTab.test.tsx.
+// Here we only verify it renders without error under various prop combinations.
+
+describe("starting rank tab integration", () => {
+  it("renders without error when startingRank is null", () => {
+    const html = render({}, false, false, false, null);
+    expect(html).toContain("Starting Rank");
+  });
+
+  it("renders without error when startingRank is an empty array", () => {
+    const html = render({}, true, true, true, []);
+    expect(html).toContain("Starting Rank");
+  });
+
+  it("renders without error when startingRank has players", () => {
+    const html = render({}, true, true, true, samplePlayers);
+    expect(html).toContain("Starting Rank");
   });
 });
