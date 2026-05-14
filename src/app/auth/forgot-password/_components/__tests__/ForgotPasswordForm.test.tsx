@@ -85,7 +85,7 @@ describe("ForgotPasswordForm", () => {
 
   it("renders Back to sign in link pointing to /auth/login", () => {
     render(<ForgotPasswordForm />);
-    const link = screen.getByText("Return to sign in") as HTMLAnchorElement;
+    const link = screen.getByText("Back to sign in") as HTMLAnchorElement;
     expect(link.href).toContain("/auth/login");
   });
 
