@@ -731,6 +731,14 @@
     @apply flex flex-col sm:flex-row-reverse gap-2;
   }
 
+  /* ── Footer ── */
+  .footer-link {
+    @apply font-lato text-sm text-text-secondary no-underline transition-colors duration-200;
+  }
+  .footer-link:hover {
+    @apply text-gold-bright;
+  }
+  
   /* ── Modals ── */
   .modal-overlay {
     @apply fixed inset-0 z-200 flex items-center justify-center p-4;
