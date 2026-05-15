@@ -14,6 +14,9 @@ const samplePlayers: StartingRankPlayer[] = [
     fide_id: 123456,
     fide_rating: 2100,
     national_rating: null,
+    nationality: "Malaysia",
+    mcf_id: 10001,
+    gender: "female",
   },
   {
     rank: 2,
@@ -23,6 +26,9 @@ const samplePlayers: StartingRankPlayer[] = [
     fide_id: null,
     fide_rating: null,
     national_rating: 1500,
+    nationality: "Singapore",
+    mcf_id: null,
+    gender: "male",
   },
   {
     rank: 3,
@@ -32,6 +38,9 @@ const samplePlayers: StartingRankPlayer[] = [
     fide_id: null,
     fide_rating: null,
     national_rating: null,
+    nationality: null,
+    mcf_id: null,
+    gender: null,
   },
 ];
 
@@ -150,7 +159,23 @@ describe("player table", () => {
     expect(html).toContain("WFM");
   });
 
-  it("renders FIDE rating with FIDE label", () => {
+  it("renders table header columns", () => {
+    const html = render({
+      startingRank: samplePlayers,
+      canViewStartingRank: true,
+      tournamentStarted: false,
+      isAuthenticated: true,
+    });
+    expect(html).toContain("Nat.");
+    expect(html).toContain("Name");
+    expect(html).toContain("FIDE ID");
+    expect(html).toContain("MCF ID");
+    expect(html).toContain("FIDE");
+    expect(html).toContain("MCF");
+    expect(html).toContain("Gender");
+  });
+
+  it("renders FIDE rating value", () => {
     const html = render({
       startingRank: samplePlayers,
       canViewStartingRank: true,
@@ -158,10 +183,9 @@ describe("player table", () => {
       isAuthenticated: true,
     });
     expect(html).toContain("2100");
-    expect(html).toContain("FIDE");
   });
 
-  it("renders national rating with Nat. label for player without FIDE rating", () => {
+  it("renders MCF rating value for player with national_rating", () => {
     const html = render({
       startingRank: samplePlayers,
       canViewStartingRank: true,
@@ -169,7 +193,6 @@ describe("player table", () => {
       isAuthenticated: true,
     });
     expect(html).toContain("1500");
-    expect(html).toContain("Nat.");
   });
 
   it("renders dash for player with no ratings", () => {
@@ -182,7 +205,7 @@ describe("player table", () => {
     expect(html).toContain("—");
   });
 
-  it("renders FIDE ID when present", () => {
+  it("renders FIDE ID as a link to ratings.fide.com", () => {
     const html = render({
       startingRank: samplePlayers,
       canViewStartingRank: true,
@@ -190,16 +213,71 @@ describe("player table", () => {
       isAuthenticated: true,
     });
     expect(html).toContain("123456");
+    expect(html).toContain("https://ratings.fide.com/profile/123456");
   });
 
-  it("does not render FIDE ID when absent", () => {
+  it("does not render FIDE ID link when FIDE ID is absent", () => {
     const html = render({
       startingRank: [samplePlayers[1]], // Bob Lee has no FIDE ID
       canViewStartingRank: true,
       tournamentStarted: false,
       isAuthenticated: true,
     });
+    expect(html).not.toContain("ratings.fide.com");
     expect(html).not.toContain("123456");
+  });
+
+  it("renders MCF ID when present", () => {
+    const html = render({
+      startingRank: samplePlayers,
+      canViewStartingRank: true,
+      tournamentStarted: false,
+      isAuthenticated: true,
+    });
+    expect(html).toContain("10001");
+  });
+
+  it("renders nationality flag emoji for known country", () => {
+    const html = render({
+      startingRank: samplePlayers,
+      canViewStartingRank: true,
+      tournamentStarted: false,
+      isAuthenticated: true,
+    });
+    // 🇲🇾 Malaysia flag
+    expect(html).toContain("🇲🇾");
+    // 🇸🇬 Singapore flag
+    expect(html).toContain("🇸🇬");
+  });
+
+  it("renders female gender icon for female players", () => {
+    const html = render({
+      startingRank: [samplePlayers[0]], // Alice is female
+      canViewStartingRank: true,
+      tournamentStarted: false,
+      isAuthenticated: true,
+    });
+    expect(html).toContain("♀");
+  });
+
+  it("renders male gender icon for male players", () => {
+    const html = render({
+      startingRank: [samplePlayers[1]], // Bob is male
+      canViewStartingRank: true,
+      tournamentStarted: false,
+      isAuthenticated: true,
+    });
+    expect(html).toContain("♂");
+  });
+
+  it("renders dash for players with no gender", () => {
+    const html = render({
+      startingRank: [samplePlayers[2]], // Carol has no gender set
+      canViewStartingRank: true,
+      tournamentStarted: false,
+      isAuthenticated: true,
+    });
+    expect(html).toContain("—");
   });
 
   it("shows plural 'players' for multiple players", () => {
@@ -221,16 +299,5 @@ describe("player table", () => {
     });
     expect(html).toContain("1 player");
     expect(html).not.toContain("1 players");
-  });
-
-  it("renders table header columns", () => {
-    const html = render({
-      startingRank: samplePlayers,
-      canViewStartingRank: true,
-      tournamentStarted: false,
-      isAuthenticated: true,
-    });
-    expect(html).toContain("Player");
-    expect(html).toContain("Rating");
   });
 });

@@ -431,7 +431,7 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock(
         { data: [{ user_id: "u1" }], error: null },
         [{ id: "u1", first_name: "Alice", last_name: "Wong" }],
-        [{ user_id: "u1", title: "FM", fide_id: 111, fide_rating: { rapid: 1800, standard: 1850 }, national_rating: null }],
+        [{ user_id: "u1", title: "FM", fide_id: 111, fide_rating: { rapid: 1800, standard: 1850 }, national_rating: null, nationality: "Malaysia", mcf_id: 9001, gender: "male" }],
       ),
     );
     const { TournamentDetailData } = await import("../page");
@@ -452,7 +452,7 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock(
         { data: [{ user_id: "u1" }], error: null },
         [{ id: "u1", first_name: "Bob", last_name: "Lee" }],
-        [{ user_id: "u1", title: null, fide_id: null, fide_rating: { blitz: 1600 }, national_rating: null }],
+        [{ user_id: "u1", title: null, fide_id: null, fide_rating: { blitz: 1600 }, national_rating: null, nationality: null, mcf_id: null, gender: null }],
       ),
     );
     const { TournamentDetailData } = await import("../page");
@@ -473,7 +473,7 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock(
         { data: [{ user_id: "u1" }], error: null },
         [{ id: "u1", first_name: "Carol", last_name: "Chan" }],
-        [{ user_id: "u1", title: null, fide_id: null, fide_rating: null, national_rating: 1200 }],
+        [{ user_id: "u1", title: null, fide_id: null, fide_rating: null, national_rating: 1200, nationality: "Singapore", mcf_id: null, gender: "female" }],
       ),
     );
     const { TournamentDetailData } = await import("../page");
@@ -502,9 +502,9 @@ describe("fetchStartingRank coverage", () => {
           { id: "u3", first_name: "Carol", last_name: "C" },
         ],
         [
-          { user_id: "u1", title: null, fide_id: null, fide_rating: { rapid: 1500 }, national_rating: null },
-          { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: null },
-          { user_id: "u3", title: "GM", fide_id: 99, fide_rating: { rapid: 2600 }, national_rating: null },
+          { user_id: "u1", title: null, fide_id: null, fide_rating: { rapid: 1500 }, national_rating: null, nationality: "Malaysia", mcf_id: null, gender: "male" },
+          { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: null, nationality: null, mcf_id: null, gender: null },
+          { user_id: "u3", title: "GM", fide_id: 99, fide_rating: { rapid: 2600 }, national_rating: null, nationality: "Russia", mcf_id: null, gender: "male" },
         ],
       ),
     );

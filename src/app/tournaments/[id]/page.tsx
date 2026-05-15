@@ -60,7 +60,7 @@ async function fetchStartingRank(
       .in("id", userIds),
     supabaseAdmin
       .from("player_profiles")
-      .select("user_id, title, fide_id, fide_rating, national_rating")
+      .select("user_id, title, fide_id, fide_rating, national_rating, nationality, mcf_id, gender")
       .in("user_id", userIds),
   ]);
 
@@ -77,6 +77,9 @@ async function fetchStartingRank(
         fide_id: number | null;
         fide_rating: Record<string, number> | null;
         national_rating: number | null;
+        nationality: string | null;
+        mcf_id: number | null;
+        gender: "male" | "female" | null;
       }> ?? []
     ).map((p) => [p.user_id, p]),
   );
@@ -108,6 +111,9 @@ async function fetchStartingRank(
         fide_id: profile?.fide_id ?? null,
         fide_rating,
         national_rating: profile?.national_rating ?? null,
+        nationality: profile?.nationality ?? null,
+        mcf_id: profile?.mcf_id ?? null,
+        gender: profile?.gender ?? null,
       };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);

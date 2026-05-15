@@ -53,6 +53,9 @@ export interface StartingRankPlayer {
   fide_id: number | null;
   fide_rating: number | null;
   national_rating: number | null;
+  nationality: string | null;
+  mcf_id: number | null;
+  gender: "male" | "female" | null;
 }
 
 export interface TournamentDetail {
