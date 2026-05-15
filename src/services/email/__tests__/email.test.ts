@@ -15,7 +15,9 @@ vi.mock("fs", () => ({
 }));
 
 vi.mock("resend", () => ({
-  Resend: vi.fn(function () { return { emails: { send: mockSend } }; }),
+  Resend: vi.fn(function () {
+    return { emails: { send: mockSend } };
+  }),
 }));
 
 import { sendPasswordResetEmail, sendVerificationEmail } from "../email";
@@ -39,7 +41,7 @@ describe("sendVerificationEmail", () => {
     expect(mockReadFileSync).toHaveBeenCalledOnce();
     expect(mockReadFileSync).toHaveBeenCalledWith(
       expect.stringContaining("verification.html"),
-      "utf-8"
+      "utf-8",
     );
   });
 
@@ -72,7 +74,7 @@ describe("sendVerificationEmail", () => {
     await sendVerificationEmail("player@example.com", "ABC123");
 
     expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "player@example.com" })
+      expect.objectContaining({ to: "player@example.com" }),
     );
   });
 
@@ -89,13 +91,13 @@ describe("sendVerificationEmail", () => {
     mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
 
     await expect(
-      sendVerificationEmail("player@example.com", "ABC123")
+      sendVerificationEmail("player@example.com", "ABC123"),
     ).rejects.toThrow(/sending failed/i);
   });
 
   it("resolves without a value when send succeeds", async () => {
     await expect(
-      sendVerificationEmail("player@example.com", "ABC123")
+      sendVerificationEmail("player@example.com", "ABC123"),
     ).resolves.toBeUndefined();
   });
 });
@@ -103,19 +105,24 @@ describe("sendVerificationEmail", () => {
 describe("sendPasswordResetEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue('<html><a href="{{resetLink}}">reset</a>{{resetLink}}</html>');
+    mockReadFileSync.mockReturnValue(
+      '<html><a href="{{resetLink}}">reset</a>{{resetLink}}</html>',
+    );
     mockSend.mockResolvedValue({ error: null });
   });
 
   // --- Template loading -----------------------------------------------------
 
   it("loads the reset-password.html template from the filesystem", async () => {
-    await sendPasswordResetEmail("player@example.com", "https://example.com/reset");
+    await sendPasswordResetEmail(
+      "player@example.com",
+      "https://example.com/reset",
+    );
 
     expect(mockReadFileSync).toHaveBeenCalledOnce();
     expect(mockReadFileSync).toHaveBeenCalledWith(
       expect.stringContaining("reset-password.html"),
-      "utf-8"
+      "utf-8",
     );
   });
 
@@ -133,15 +140,21 @@ describe("sendPasswordResetEmail", () => {
   // --- Email fields ---------------------------------------------------------
 
   it("sends to the correct email address", async () => {
-    await sendPasswordResetEmail("player@example.com", "https://example.com/reset");
+    await sendPasswordResetEmail(
+      "player@example.com",
+      "https://example.com/reset",
+    );
 
     expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "player@example.com" })
+      expect.objectContaining({ to: "player@example.com" }),
     );
   });
 
   it("includes a subject mentioning reset (case-insensitive)", async () => {
-    await sendPasswordResetEmail("player@example.com", "https://example.com/reset");
+    await sendPasswordResetEmail(
+      "player@example.com",
+      "https://example.com/reset",
+    );
 
     const { subject } = mockSend.mock.calls[0][0];
     expect(subject).toMatch(/reset/i);
@@ -153,13 +166,13 @@ describe("sendPasswordResetEmail", () => {
     mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
 
     await expect(
-      sendPasswordResetEmail("player@example.com", "https://example.com/reset")
+      sendPasswordResetEmail("player@example.com", "https://example.com/reset"),
     ).rejects.toThrow(/sending failed/i);
   });
 
   it("resolves without a value when send succeeds", async () => {
     await expect(
-      sendPasswordResetEmail("player@example.com", "https://example.com/reset")
+      sendPasswordResetEmail("player@example.com", "https://example.com/reset"),
     ).resolves.toBeUndefined();
   });
 });

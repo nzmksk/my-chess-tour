@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -86,9 +92,11 @@ describe("VerifyForm", () => {
 
   it("Verify Email button is disabled when input is empty", () => {
     render(<VerifyForm />);
-    const btn = screen.getAllByRole("button").find(
-      (b) => b.textContent?.includes("Verify Email")
-    ) as HTMLButtonElement | undefined;
+    const btn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("Verify Email")) as
+      | HTMLButtonElement
+      | undefined;
     expect(btn).toBeDefined();
     expect(btn!.disabled).toBe(true);
   });
@@ -125,7 +133,7 @@ describe("VerifyForm", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ message: "Account created successfully" }),
-      })
+      }),
     );
 
     render(<VerifyForm />);
@@ -135,7 +143,7 @@ describe("VerifyForm", () => {
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       "/api/v1/auth/signup/verify-code",
-      expect.objectContaining({ method: "POST" })
+      expect.objectContaining({ method: "POST" }),
     );
   });
 
@@ -145,7 +153,7 @@ describe("VerifyForm", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ message: "Account created successfully" }),
-      })
+      }),
     );
 
     render(<VerifyForm />);
@@ -161,8 +169,13 @@ describe("VerifyForm", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: { code: "CODE_INVALID", message: "Incorrect code. Please try again." } }),
-      })
+        json: async () => ({
+          error: {
+            code: "CODE_INVALID",
+            message: "Incorrect code. Please try again.",
+          },
+        }),
+      }),
     );
 
     render(<VerifyForm />);
@@ -174,7 +187,10 @@ describe("VerifyForm", () => {
   });
 
   it("shows 'Network error' when fetch throws", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network down")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network down")),
+    );
 
     render(<VerifyForm />);
     await act(async () => {
@@ -206,7 +222,7 @@ describe("VerifyForm", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ message: "Verification code sent" }),
-      })
+      }),
     );
 
     render(<VerifyForm />);
@@ -220,7 +236,7 @@ describe("VerifyForm", () => {
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       "/api/v1/auth/signup/request-code",
-      expect.objectContaining({ method: "POST" })
+      expect.objectContaining({ method: "POST" }),
     );
   });
 
@@ -230,11 +246,14 @@ describe("VerifyForm", () => {
     // Use a deferred promise so we can control when the first (auto-submit)
     // fetch resolves, leaving the button enabled for a second click.
     let resolveFirst!: (v: unknown) => void;
-    const firstFetch = new Promise((res) => { resolveFirst = res; });
+    const firstFetch = new Promise((res) => {
+      resolveFirst = res;
+    });
 
     vi.stubGlobal(
       "fetch",
-      vi.fn()
+      vi
+        .fn()
         // First call: auto-submit triggered by typing 6 chars — we hold it
         // open so that isVerifying stays true initially, then resolve it so
         // the component resets isVerifying to false before we click the button.
@@ -257,14 +276,18 @@ describe("VerifyForm", () => {
     await act(async () => {
       resolveFirst({
         ok: false,
-        json: async () => ({ error: { code: "CODE_INVALID", message: "invalid" } }),
+        json: async () => ({
+          error: { code: "CODE_INVALID", message: "invalid" },
+        }),
       });
     });
 
     // Now click the button directly
-    const btn = screen.getAllByRole("button").find(
-      (b) => b.textContent?.includes("Verify Email"),
-    ) as HTMLButtonElement;
+    const btn = screen
+      .getAllByRole("button")
+      .find((b) =>
+        b.textContent?.includes("Verify Email"),
+      ) as HTMLButtonElement;
 
     await act(async () => {
       fireEvent.click(btn);
@@ -282,10 +305,13 @@ describe("VerifyForm", () => {
 
   it("shows Resend code link again after cooldown timer reaches zero", async () => {
     vi.useFakeTimers();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      }),
+    );
 
     render(<VerifyForm />);
 
@@ -314,10 +340,13 @@ describe("VerifyForm", () => {
 
   it("shows Code has expired after resend resets the expiry timer and time elapses", async () => {
     vi.useFakeTimers();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      }),
+    );
 
     render(<VerifyForm />);
 

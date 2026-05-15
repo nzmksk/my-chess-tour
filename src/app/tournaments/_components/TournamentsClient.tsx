@@ -77,7 +77,11 @@ export default function TournamentsClient({ tournaments }: Props) {
       const start = new Date(t.start_date + "T00:00:00");
       const end = new Date(t.end_date + "T00:00:00");
       if (dateFilter === "this-week") {
-        const windowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const windowStart = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+        );
         const windowEnd = new Date(windowStart);
         windowEnd.setDate(windowEnd.getDate() + 7);
         if (start > windowEnd || end < windowStart) return false;

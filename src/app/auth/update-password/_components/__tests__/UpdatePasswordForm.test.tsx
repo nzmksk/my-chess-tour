@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted so they run before imports
@@ -22,7 +28,11 @@ vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
-    useActionState: (_action: unknown, _initial: unknown) => [mockState, mockFormAction, mockPending],
+    useActionState: (_action: unknown, _initial: unknown) => [
+      mockState,
+      mockFormAction,
+      mockPending,
+    ],
   };
 });
 
@@ -74,7 +84,9 @@ describe("UpdatePasswordForm", () => {
 
   it("renders Update Password submit button", () => {
     render(<UpdatePasswordForm />);
-    expect(screen.getByRole("button", { name: "Update Password" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Update Password" }),
+    ).toBeDefined();
   });
 
   // --- Error state ----------------------------------------------------------
@@ -86,9 +98,13 @@ describe("UpdatePasswordForm", () => {
   });
 
   it("shows password field error", () => {
-    mockState.fieldErrors = { password: "Password does not meet the requirements" };
+    mockState.fieldErrors = {
+      password: "Password does not meet the requirements",
+    };
     render(<UpdatePasswordForm />);
-    expect(screen.getByText("Password does not meet the requirements")).toBeDefined();
+    expect(
+      screen.getByText("Password does not meet the requirements"),
+    ).toBeDefined();
   });
 
   it("shows confirmPassword field error", () => {
@@ -153,7 +169,9 @@ describe("UpdatePasswordForm", () => {
   // --- input-error class ----------------------------------------------------
 
   it("adds input-error class to password when fieldErrors.password is set", () => {
-    mockState.fieldErrors = { password: "Password does not meet the requirements" };
+    mockState.fieldErrors = {
+      password: "Password does not meet the requirements",
+    };
     render(<UpdatePasswordForm />);
     const input = screen.getByLabelText("New Password") as HTMLInputElement;
     expect(input.className).toContain("input-error");

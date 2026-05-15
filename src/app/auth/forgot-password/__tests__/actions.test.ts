@@ -39,7 +39,11 @@ function makeFormData(data: Record<string, string>): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.generateLink.mockResolvedValue({
-    data: { properties: { action_link: "https://supabase.example.com/auth/v1/verify?token=abc" } },
+    data: {
+      properties: {
+        action_link: "https://supabase.example.com/auth/v1/verify?token=abc",
+      },
+    },
     error: null,
   });
   mocks.sendPasswordResetEmail.mockResolvedValue(undefined);

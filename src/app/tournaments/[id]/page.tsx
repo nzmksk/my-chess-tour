@@ -5,7 +5,10 @@ import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import TournamentDetail from "./_components/TournamentDetail";
 import DetailSkeleton from "./_components/DetailSkeleton";
-import type { TournamentDetail as TournamentDetailType, StartingRankPlayer } from "./types";
+import type {
+  TournamentDetail as TournamentDetailType,
+  StartingRankPlayer,
+} from "./types";
 import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 
@@ -60,18 +63,21 @@ async function fetchStartingRank(
       .in("id", userIds),
     supabaseAdmin
       .from("player_profiles")
-      .select("user_id, title, fide_id, fide_rating, national_rating, nationality, mcf_id, gender")
+      .select(
+        "user_id, title, fide_id, fide_rating, national_rating, nationality, mcf_id, gender",
+      )
       .in("user_id", userIds),
   ]);
 
   const userMap = new Map(
-    (users as Array<{ id: string; first_name: string; last_name: string }> ?? []).map(
-      (u) => [u.id, u],
-    ),
+    (
+      (users as Array<{ id: string; first_name: string; last_name: string }>) ??
+      []
+    ).map((u) => [u.id, u]),
   );
   const profileMap = new Map(
     (
-      profiles as Array<{
+      (profiles as Array<{
         user_id: string;
         title: string | null;
         fide_id: number | null;
@@ -80,7 +86,7 @@ async function fetchStartingRank(
         nationality: string | null;
         mcf_id: number | null;
         gender: "male" | "female" | null;
-      }> ?? []
+      }>) ?? []
     ).map((p) => [p.user_id, p]),
   );
 
@@ -96,7 +102,10 @@ async function fetchStartingRank(
       if (fideRatingObj) {
         if (formatType === "blitz") {
           fide_rating =
-            fideRatingObj.blitz ?? fideRatingObj.rapid ?? fideRatingObj.standard ?? null;
+            fideRatingObj.blitz ??
+            fideRatingObj.rapid ??
+            fideRatingObj.standard ??
+            null;
         } else if (formatType === "rapid") {
           fide_rating = fideRatingObj.rapid ?? fideRatingObj.standard ?? null;
         } else {

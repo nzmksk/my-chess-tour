@@ -45,7 +45,11 @@ const {
     if (table === "tournaments") return mockTournamentBuilder;
     if (table === "player_profiles") return mockProfileBuilder;
     if (table === "registrations") {
-      const builders = [mockCapacityBuilder, mockExistingBuilder, mockInsertBuilder];
+      const builders = [
+        mockCapacityBuilder,
+        mockExistingBuilder,
+        mockInsertBuilder,
+      ];
       return builders[regCallCount++] ?? mockInsertBuilder;
     }
     return makeBuilder({ data: null, error: null });
@@ -122,14 +126,11 @@ function makeRequest(
   id: string,
   body: unknown = { fee_tier: "standard" },
 ): NextRequest {
-  return new NextRequest(
-    `http://localhost/api/v1/tournaments/${id}/register`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  );
+  return new NextRequest(`http://localhost/api/v1/tournaments/${id}/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +418,9 @@ describe("POST /api/v1/tournaments/:id/register", () => {
 
       it("allows registration when player rating is within range", async () => {
         setTournamentResult(
-          makeTournament({ restrictions: { min_rating: 1000, max_rating: 2000 } }),
+          makeTournament({
+            restrictions: { min_rating: 1000, max_rating: 2000 },
+          }),
         );
         setProfileResult({ ...baseProfile, fide_rating: { rapid: 1500 } });
         const res = await POST(makeRequest(VALID_UUID), {
@@ -429,9 +432,7 @@ describe("POST /api/v1/tournaments/:id/register", () => {
 
     describe("age restriction", () => {
       it("returns 422 when player has no DOB and tournament has an age restriction", async () => {
-        setTournamentResult(
-          makeTournament({ restrictions: { max_age: 18 } }),
-        );
+        setTournamentResult(makeTournament({ restrictions: { max_age: 18 } }));
         setProfileResult({ ...baseProfile, date_of_birth: null });
         const res = await POST(makeRequest(VALID_UUID), {
           params: Promise.resolve({ id: VALID_UUID }),
@@ -442,9 +443,7 @@ describe("POST /api/v1/tournaments/:id/register", () => {
       });
 
       it("returns 422 when player exceeds the tournament max_age", async () => {
-        setTournamentResult(
-          makeTournament({ restrictions: { max_age: 17 } }),
-        );
+        setTournamentResult(makeTournament({ restrictions: { max_age: 17 } }));
         // Born 2008-05-12 → age 18 at 2026-05-12
         setProfileResult({ ...baseProfile, date_of_birth: "2008-05-12" });
         const res = await POST(makeRequest(VALID_UUID), {
@@ -456,9 +455,7 @@ describe("POST /api/v1/tournaments/:id/register", () => {
       });
 
       it("returns 422 when player is below the tournament min_age", async () => {
-        setTournamentResult(
-          makeTournament({ restrictions: { min_age: 19 } }),
-        );
+        setTournamentResult(makeTournament({ restrictions: { min_age: 19 } }));
         // Born 2008-05-12 → age 18 at 2026-05-12
         setProfileResult({ ...baseProfile, date_of_birth: "2008-05-12" });
         const res = await POST(makeRequest(VALID_UUID), {
@@ -495,10 +492,9 @@ describe("POST /api/v1/tournaments/:id/register", () => {
         fide_rating: null,
         national_rating: null,
       });
-      const res = await POST(
-        makeRequest(VALID_UUID, { fee_tier: "female" }),
-        { params: Promise.resolve({ id: VALID_UUID }) },
-      );
+      const res = await POST(makeRequest(VALID_UUID, { fee_tier: "female" }), {
+        params: Promise.resolve({ id: VALID_UUID }),
+      });
       expect(res.status).toBe(400);
       const json = await res.json();
       expect(json.error.code).toBe("INVALID_FEE_TIER");
@@ -521,10 +517,9 @@ describe("POST /api/v1/tournaments/:id/register", () => {
         fide_rating: null,
         national_rating: null,
       });
-      const res = await POST(
-        makeRequest(VALID_UUID, { fee_tier: "oku" }),
-        { params: Promise.resolve({ id: VALID_UUID }) },
-      );
+      const res = await POST(makeRequest(VALID_UUID, { fee_tier: "oku" }), {
+        params: Promise.resolve({ id: VALID_UUID }),
+      });
       expect(res.status).toBe(400);
     });
   });

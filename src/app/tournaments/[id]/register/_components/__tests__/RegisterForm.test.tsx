@@ -18,7 +18,7 @@ import {
   act,
 } from "@testing-library/react";
 import type { TournamentDetail } from "@/app/tournaments/[id]/types";
-import type { PlayerProfile } from "../../../types";
+import type { PlayerProfile } from "../../types";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -85,24 +85,32 @@ const MALE_PROFILE: PlayerProfile = {
   is_oku: false,
   date_of_birth: "1990-01-01", // age 36
   title: null,
+  fide_rating: null,
+  national_rating: null,
 };
 const FEMALE_PROFILE: PlayerProfile = {
   gender: "female",
   is_oku: false,
   date_of_birth: "1990-01-01",
   title: null,
+  fide_rating: null,
+  national_rating: null,
 };
 const OKU_PROFILE: PlayerProfile = {
   gender: "male",
   is_oku: true,
   date_of_birth: "1990-01-01",
   title: null,
+  fide_rating: null,
+  national_rating: null,
 };
 const GM_PROFILE: PlayerProfile = {
   gender: "male",
   is_oku: false,
   date_of_birth: "1990-01-01",
   title: "GM",
+  fide_rating: null,
+  national_rating: null,
 };
 // Age 10 on 2026-05-12 (born 2016-01-01 → 10 years old)
 const YOUNG_PROFILE: PlayerProfile = {
@@ -110,6 +118,8 @@ const YOUNG_PROFILE: PlayerProfile = {
   is_oku: false,
   date_of_birth: "2016-01-01",
   title: null,
+  fide_rating: null,
+  national_rating: null,
 };
 // Age 36 — reuse MALE_PROFILE
 const ADULT_PROFILE = MALE_PROFILE;
@@ -119,6 +129,8 @@ const NO_DOB_PROFILE: PlayerProfile = {
   is_oku: false,
   date_of_birth: null,
   title: null,
+  fide_rating: null,
+  national_rating: null,
 };
 
 const FAKE_REGISTRATION = {

@@ -29,16 +29,19 @@
 **Provider:** Supabase Auth (built into the stack)
 
 **Methods supported for MVP:**
+
 - Email + password (primary)
 - Magic link (passwordless email)
 - Google OAuth (optional, low effort with Supabase)
 
 **Session management:**
+
 - Supabase issues a JWT on login, refreshed automatically by the Supabase client SDK.
 - The JWT contains `user_id` and is verified server-side on every API request via Supabase's `getUser()`.
 - No custom token management needed for MVP.
 
 **Auth flow:**
+
 1. User signs up or logs in via Supabase Auth (client-side SDK).
 2. Supabase returns a JWT stored in an HTTP-only cookie (Next.js middleware).
 3. Every API route extracts the user from the cookie using `createServerClient()`.
@@ -50,47 +53,54 @@
 
 A single user can hold multiple roles simultaneously. Roles are not stored on the `users` table — they are derived from the existence of related records.
 
-| Role | How it's determined | Capabilities |
-|---|---|---|
-| **Player** | Has a row in `player_profiles` | Browse, register, pay, view own registrations |
-| **Organizer (owner)** | Has a row in `organizer_members` with `role = 'owner'` for an approved organization | Full org management, create/edit tournaments, manage members, view payouts |
-| **Organizer (admin)** | Has a row in `organizer_members` with `role = 'admin'` | Create/edit tournaments, view participants and payouts |
-| **Organizer (member)** | Has a row in `organizer_members` with `role = 'member'` | View tournaments and participants only |
-| **Platform Admin** | `users.role = 'admin'` | Full platform access: approve/reject organizers, view all tournaments, transactions, users |
+| Role                   | How it's determined                                                                 | Capabilities                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Player**             | Has a row in `player_profiles`                                                      | Browse, register, pay, view own registrations                                              |
+| **Organizer (owner)**  | Has a row in `organizer_members` with `role = 'owner'` for an approved organization | Full org management, create/edit tournaments, manage members, view payouts                 |
+| **Organizer (admin)**  | Has a row in `organizer_members` with `role = 'admin'`                              | Create/edit tournaments, view participants and payouts                                     |
+| **Organizer (member)** | Has a row in `organizer_members` with `role = 'member'`                             | View tournaments and participants only                                                     |
+| **Platform Admin**     | `users.role = 'admin'`                                                              | Full platform access: approve/reject organizers, view all tournaments, transactions, users |
 
 **Permission check helper (server-side):**
 
 ```typescript
 // lib/permissions.ts
 
-type OrgRole = 'owner' | 'admin' | 'member';
+type OrgRole = "owner" | "admin" | "member";
 
-async function getUserOrgRole(userId: string, organizerId: string): Promise<OrgRole | null> {
+async function getUserOrgRole(
+  userId: string,
+  organizerId: string,
+): Promise<OrgRole | null> {
   const { data } = await supabase
-    .from('organizer_members')
-    .select('role')
-    .eq('user_id', userId)
-    .eq('organizer_id', organizerId)
+    .from("organizer_members")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("organizer_id", organizerId)
     .single();
   return data?.role ?? null;
 }
 
-async function requireOrgRole(userId: string, organizerId: string, minRole: OrgRole): Promise<void> {
+async function requireOrgRole(
+  userId: string,
+  organizerId: string,
+  minRole: OrgRole,
+): Promise<void> {
   const role = await getUserOrgRole(userId, organizerId);
-  const hierarchy: OrgRole[] = ['member', 'admin', 'owner'];
+  const hierarchy: OrgRole[] = ["member", "admin", "owner"];
   if (!role || hierarchy.indexOf(role) < hierarchy.indexOf(minRole)) {
-    throw new ForbiddenError('Insufficient permissions');
+    throw new ForbiddenError("Insufficient permissions");
   }
 }
 
 async function requireAdmin(userId: string): Promise<void> {
   const { data } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', userId)
+    .from("users")
+    .select("role")
+    .eq("id", userId)
     .single();
-  if (data?.role !== 'admin') {
-    throw new ForbiddenError('Admin access required');
+  if (data?.role !== "admin") {
+    throw new ForbiddenError("Admin access required");
   }
 }
 ```
@@ -140,13 +150,13 @@ Query params: `?cursor=abc123&limit=20` (default limit: 20, max: 100).
 
 These are handled primarily by Supabase's client-side SDK. The API layer provides a few helpers.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/auth/signup/request-code` | Public | Step 1: Send a 6-character email verification code |
-| POST | `/auth/signup/verify-code` | Public | Step 2: Verify code and create account + player profile |
-| POST | `/auth/login` | Public | Supabase login. Returns `user_id`. |
-| POST | `/auth/logout` | Authenticated | Destroys session. |
-| GET | `/auth/me` | Authenticated | Returns current user with all roles. |
+| Method | Path                        | Auth          | Description                                             |
+| ------ | --------------------------- | ------------- | ------------------------------------------------------- |
+| POST   | `/auth/signup/request-code` | Public        | Step 1: Send a 6-character email verification code      |
+| POST   | `/auth/signup/verify-code`  | Public        | Step 2: Verify code and create account + player profile |
+| POST   | `/auth/login`               | Public        | Supabase login. Returns `user_id`.                      |
+| POST   | `/auth/logout`              | Authenticated | Destroys session.                                       |
+| GET    | `/auth/me`                  | Authenticated | Returns current user with all roles.                    |
 
 > **Note:** Signup is a two-step email verification flow. The client first requests a code, then submits the code along with all registration fields to complete account creation.
 
@@ -155,6 +165,7 @@ These are handled primarily by Supabase's client-side SDK. The API layer provide
 Validates the email is not already registered, generates a 6-character alphanumeric code, stores it in Redis with a TTL, and sends a verification email.
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com"
@@ -162,11 +173,13 @@ Validates the email is not already registered, generates a 6-character alphanume
 ```
 
 **Response `200`:**
+
 ```json
 { "message": "Verification code sent" }
 ```
 
 **Error responses:**
+
 - `400` — Email missing or invalid format
 - `409` — `{ "error": "An account with this email already exists", "code": "EMAIL_EXISTS" }`
 - `500` — Failed to store code or send email
@@ -176,6 +189,7 @@ Validates the email is not already registered, generates a 6-character alphanume
 Verifies the code against the Redis-stored value, creates the Supabase auth user (with `email_confirm: true`), and updates the player profile row created by the `handle_new_user` DB trigger.
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com",
@@ -196,11 +210,13 @@ Verifies the code against the Redis-stored value, creates the Supabase auth user
 Required: `email`, `code`, `password`, `firstName`, `lastName`. All other fields are optional.
 
 **Response `201`:**
+
 ```json
 { "message": "Account created successfully" }
 ```
 
 **Error responses:**
+
 - `400` — Missing required fields
 - `409` — `{ "error": "An account with this email already exists", "code": "EMAIL_EXISTS" }`
 - `410` — `{ "error": "Code has expired. Please request a new one.", "code": "CODE_EXPIRED" }`
@@ -210,6 +226,7 @@ Required: `email`, `code`, `password`, `firstName`, `lastName`. All other fields
 #### `POST /auth/login`
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com",
@@ -218,6 +235,7 @@ Required: `email`, `code`, `password`, `firstName`, `lastName`. All other fields
 ```
 
 **Response `200`:**
+
 ```json
 {
   "message": "Login successful",
@@ -228,6 +246,7 @@ Required: `email`, `code`, `password`, `firstName`, `lastName`. All other fields
 Session is set via HTTP-only cookie by Supabase SSR.
 
 **Error responses:**
+
 - `401` — Invalid email or password
 - `403` — Email not confirmed
 
@@ -236,6 +255,7 @@ Session is set via HTTP-only cookie by Supabase SSR.
 No request body required.
 
 **Response `200`:**
+
 ```json
 { "message": "Logged out successfully" }
 ```
@@ -245,6 +265,7 @@ No request body required.
 Returns the current user's profile and all associated roles.
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -280,14 +301,15 @@ Returns the current user's profile and all associated roles.
 
 ### Player Profile
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/player/profile` | Player | Get own player profile |
-| PATCH | `/player/profile` | Player | Update own player profile |
+| Method | Path              | Auth   | Description               |
+| ------ | ----------------- | ------ | ------------------------- |
+| GET    | `/player/profile` | Player | Get own player profile    |
+| PATCH  | `/player/profile` | Player | Update own player profile |
 
 #### `PATCH /player/profile`
 
 **Request:**
+
 ```json
 {
   "fide_id": "5834567",
@@ -311,16 +333,17 @@ All fields optional — only provided fields are updated.
 
 Public endpoints for browsing and viewing tournaments. No authentication required.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/tournaments` | Public | Browse published tournaments |
-| GET | `/tournaments/:id` | Public | Get tournament details |
+| Method | Path               | Auth   | Description                  |
+| ------ | ------------------ | ------ | ---------------------------- |
+| GET    | `/tournaments`     | Public | Browse published tournaments |
+| GET    | `/tournaments/:id` | Public | Get tournament details       |
 
 #### `GET /tournaments`
 
 Returns all published tournaments ordered by `start_date` ascending. No query parameters accepted.
 
 **Response `200`:**
+
 ```json
 {
   "data": [
@@ -358,6 +381,7 @@ Note: `current_participants` is a live count of confirmed registrations queried 
 Returns full tournament detail including prizes, restrictions, and time control.
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -406,18 +430,19 @@ The `commission_rate` is included so the client can compute and display "Player 
 
 ### Registration & Payments
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/tournaments/:id/sign-up` | Player | Start registration + initiate payment |
-| GET | `/player/registrations` | Player | List own registrations |
-| GET | `/player/registrations/:id` | Player | Get single registration detail |
-| POST | `/player/registrations/:id/cancel` | Player | Cancel a registration |
+| Method | Path                               | Auth   | Description                           |
+| ------ | ---------------------------------- | ------ | ------------------------------------- |
+| POST   | `/tournaments/:id/sign-up`         | Player | Start registration + initiate payment |
+| GET    | `/player/registrations`            | Player | List own registrations                |
+| GET    | `/player/registrations/:id`        | Player | Get single registration detail        |
+| POST   | `/player/registrations/:id/cancel` | Player | Cancel a registration                 |
 
 #### `POST /tournaments/:id/sign-up`
 
 Creates a registration and initiates a CHIP payment session. The client redirects the player to the CHIP payment URL.
 
 **Request:**
+
 ```json
 {
   "fee_tier": "early_bird"
@@ -427,6 +452,7 @@ Creates a registration and initiates a CHIP payment session. The client redirect
 Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rating_based"`, `"age_based"`. The server validates that the player qualifies for the selected tier.
 
 **Server-side logic:**
+
 1. Validate tournament is published and registration is open (not past deadline, not full).
 2. Validate player doesn't already have an active registration.
 3. Validate player qualifies for the selected fee tier (check title, rating, age, date).
@@ -437,6 +463,7 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
 8. Return CHIP's payment URL for client redirect.
 
 **Response `201`:**
+
 ```json
 {
   "data": {
@@ -457,6 +484,7 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
 **Query parameters:** `?status=confirmed,pending_payment&sort=registered_at&order=desc`
 
 **Response `200`:**
+
 ```json
 {
   "data": [
@@ -485,6 +513,7 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
 #### `POST /player/registrations/:id/cancel`
 
 **Request:**
+
 ```json
 {
   "reason": "Schedule conflict"
@@ -494,6 +523,7 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
 **Server-side logic:** Only allowed if registration status is `confirmed` or `pending_payment`. If `pending_payment`, simply cancels. If `confirmed`, marks for refund (organizer or admin reviews).
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -509,14 +539,15 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
 
 ### Organizer Applications
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/organizer/apply` | Authenticated | Submit an organizer application |
-| GET | `/organizer/application` | Authenticated | Check own application status |
+| Method | Path                     | Auth          | Description                     |
+| ------ | ------------------------ | ------------- | ------------------------------- |
+| POST   | `/organizer/apply`       | Authenticated | Submit an organizer application |
+| GET    | `/organizer/application` | Authenticated | Check own application status    |
 
 #### `POST /organizer/apply`
 
 **Request:**
+
 ```json
 {
   "organization_name": "Penang Chess Club",
@@ -532,12 +563,14 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
 ```
 
 **Server-side logic:**
+
 1. Validate user doesn't already have a pending or approved application.
 2. Create `organizer_profiles` row with `approval_status: 'pending'`.
 3. Create `organizer_members` row linking the user as `role: 'owner'`.
 4. Notify admins (email or in-app).
 
 **Response `201`:**
+
 ```json
 {
   "data": {
@@ -554,6 +587,7 @@ Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rat
 Returns the current user's organizer application status. Returns `null` if they haven't applied.
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -570,15 +604,16 @@ Returns the current user's organizer application status. Returns `null` if they 
 
 ### Organizer Dashboard
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/organizer/:orgId/dashboard` | Org member+ | Dashboard stats |
+| Method | Path                          | Auth        | Description     |
+| ------ | ----------------------------- | ----------- | --------------- |
+| GET    | `/organizer/:orgId/dashboard` | Org member+ | Dashboard stats |
 
 #### `GET /organizer/:orgId/dashboard`
 
 **Permission:** Any `organizer_members` role (member, admin, owner) for the given `orgId`. Organization must be approved.
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -611,19 +646,19 @@ Returns the current user's organizer application status. Returns `null` if they 
 
 ### Organizer Tournaments
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/organizer/:orgId/upload` | Org admin+ | Upload a file (poster image) |
-| GET | `/organizer/:orgId/tournaments` | Org member+ | List org's tournaments |
-| POST | `/organizer/:orgId/tournaments` | Org admin+ | Create tournament |
-| GET | `/organizer/:orgId/tournaments/:id` | Org member+ | Get tournament detail (management view) |
-| PATCH | `/organizer/:orgId/tournaments/:id` | Org admin+ | Update tournament |
-| POST | `/organizer/:orgId/tournaments/:id/publish` | Org admin+ | Publish a draft tournament |
-| POST | `/organizer/:orgId/tournaments/:id/close-registration` | Org admin+ | Close registration early |
-| POST | `/organizer/:orgId/tournaments/:id/cancel` | Org owner | Cancel the tournament |
-| GET | `/organizer/:orgId/tournaments/:id/participants` | Org member+ | List registered players |
-| GET | `/organizer/:orgId/tournaments/:id/participants/export` | Org admin+ | Export participants as CSV |
-| GET | `/organizer/:orgId/tournaments/:id/stats` | Org member+ | Registration stats |
+| Method | Path                                                    | Auth        | Description                             |
+| ------ | ------------------------------------------------------- | ----------- | --------------------------------------- |
+| POST   | `/organizer/:orgId/upload`                              | Org admin+  | Upload a file (poster image)            |
+| GET    | `/organizer/:orgId/tournaments`                         | Org member+ | List org's tournaments                  |
+| POST   | `/organizer/:orgId/tournaments`                         | Org admin+  | Create tournament                       |
+| GET    | `/organizer/:orgId/tournaments/:id`                     | Org member+ | Get tournament detail (management view) |
+| PATCH  | `/organizer/:orgId/tournaments/:id`                     | Org admin+  | Update tournament                       |
+| POST   | `/organizer/:orgId/tournaments/:id/publish`             | Org admin+  | Publish a draft tournament              |
+| POST   | `/organizer/:orgId/tournaments/:id/close-registration`  | Org admin+  | Close registration early                |
+| POST   | `/organizer/:orgId/tournaments/:id/cancel`              | Org owner   | Cancel the tournament                   |
+| GET    | `/organizer/:orgId/tournaments/:id/participants`        | Org member+ | List registered players                 |
+| GET    | `/organizer/:orgId/tournaments/:id/participants/export` | Org admin+  | Export participants as CSV              |
+| GET    | `/organizer/:orgId/tournaments/:id/stats`               | Org member+ | Registration stats                      |
 
 #### `POST /organizer/:orgId/upload`
 
@@ -634,6 +669,7 @@ Uploads a file to Supabase Storage and returns a public URL. Used for tournament
 **Request:** `multipart/form-data` with a `file` field. Max 5MB. Accepted types: `image/jpeg`, `image/png`, `image/webp`.
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -647,6 +683,7 @@ Uploads a file to Supabase Storage and returns a public URL. Used for tournament
 **Permission:** `admin` or `owner` role. Organization must be approved.
 
 **Request:**
+
 ```json
 {
   "name": "KL Open Rapid Championship 2026",
@@ -687,6 +724,7 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
 **Permission:** `admin` or `owner`. Tournament must be in `draft` status and pass validation (all required fields present, dates in the future, at least one fee tier).
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -704,6 +742,7 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
 **Query parameters:** `?search=ahmad&status=confirmed,pending_payment&sort=registered_at&order=desc`
 
 **Response `200`:**
+
 ```json
 {
   "data": [
@@ -732,6 +771,7 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
 #### `GET /organizer/:orgId/tournaments/:id/stats`
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -755,18 +795,19 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
 
 ### Organizer Members
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/organizer/:orgId/members` | Org member+ | List members |
-| POST | `/organizer/:orgId/members/invite` | Org owner | Invite a new member |
-| PATCH | `/organizer/:orgId/members/:memberId` | Org owner | Change member role |
-| DELETE | `/organizer/:orgId/members/:memberId` | Org owner | Remove a member |
+| Method | Path                                  | Auth        | Description         |
+| ------ | ------------------------------------- | ----------- | ------------------- |
+| GET    | `/organizer/:orgId/members`           | Org member+ | List members        |
+| POST   | `/organizer/:orgId/members/invite`    | Org owner   | Invite a new member |
+| PATCH  | `/organizer/:orgId/members/:memberId` | Org owner   | Change member role  |
+| DELETE | `/organizer/:orgId/members/:memberId` | Org owner   | Remove a member     |
 
 #### `POST /organizer/:orgId/members/invite`
 
 **Permission:** `owner` only.
 
 **Request:**
+
 ```json
 {
   "email": "colleague@example.com",
@@ -775,11 +816,13 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
 ```
 
 **Server-side logic:**
+
 1. Look up user by email. If no account exists, create a pending invitation.
 2. If account exists, add to `organizer_members` directly.
 3. Send invitation email.
 
 **Response `201`:**
+
 ```json
 {
   "data": {
@@ -795,6 +838,7 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
 #### `PATCH /organizer/:orgId/members/:memberId`
 
 **Request:**
+
 ```json
 {
   "role": "member"
@@ -807,14 +851,15 @@ Cannot change the `owner` role. Cannot promote someone to `owner`.
 
 ### Organizer Payouts
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/organizer/:orgId/payouts` | Org admin+ | List payouts |
-| GET | `/organizer/:orgId/payouts/:id` | Org admin+ | Get payout detail |
+| Method | Path                            | Auth       | Description       |
+| ------ | ------------------------------- | ---------- | ----------------- |
+| GET    | `/organizer/:orgId/payouts`     | Org admin+ | List payouts      |
+| GET    | `/organizer/:orgId/payouts/:id` | Org admin+ | Get payout detail |
 
 #### `GET /organizer/:orgId/payouts`
 
 **Response `200`:**
+
 ```json
 {
   "data": [
@@ -854,15 +899,16 @@ Note: `total_commission_cents` is not shown to organizers in payouts (commission
 
 ### Admin: Dashboard
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/admin/dashboard` | Platform admin | Dashboard stats |
+| Method | Path               | Auth           | Description     |
+| ------ | ------------------ | -------------- | --------------- |
+| GET    | `/admin/dashboard` | Platform admin | Dashboard stats |
 
 **Permission:** `users.role = 'admin'`
 
 #### `GET /admin/dashboard`
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -886,18 +932,19 @@ Note: `total_commission_cents` is not shown to organizers in payouts (commission
 
 ### Admin: Applications
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/admin/applications` | Platform admin | List organizer applications |
-| GET | `/admin/applications/:id` | Platform admin | Get application detail |
-| POST | `/admin/applications/:id/approve` | Platform admin | Approve application |
-| POST | `/admin/applications/:id/reject` | Platform admin | Reject application |
+| Method | Path                              | Auth           | Description                 |
+| ------ | --------------------------------- | -------------- | --------------------------- |
+| GET    | `/admin/applications`             | Platform admin | List organizer applications |
+| GET    | `/admin/applications/:id`         | Platform admin | Get application detail      |
+| POST   | `/admin/applications/:id/approve` | Platform admin | Approve application         |
+| POST   | `/admin/applications/:id/reject`  | Platform admin | Reject application          |
 
 #### `GET /admin/applications`
 
 **Query parameters:** `?status=pending&search=penang&sort=created_at&order=desc`
 
 **Response `200`:**
+
 ```json
 {
   "data": [
@@ -927,11 +974,13 @@ Returns the full application detail including organization info, links, past tou
 #### `POST /admin/applications/:id/approve`
 
 **Server-side logic:**
+
 1. Set `organizer_profiles.approval_status = 'approved'`.
 2. Set `approved_by` and `approved_at`.
 3. Send approval notification email to the applicant.
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -945,6 +994,7 @@ Returns the full application detail including organization info, links, past tou
 #### `POST /admin/applications/:id/reject`
 
 **Request:**
+
 ```json
 {
   "reason": "Insufficient tournament history. Please reapply with more references."
@@ -952,6 +1002,7 @@ Returns the full application detail including organization info, links, past tou
 ```
 
 **Server-side logic:**
+
 1. Set `organizer_profiles.approval_status = 'rejected'`.
 2. Set `rejection_reason`, `approved_by`, `approved_at`.
 3. Send rejection notification email with the reason.
@@ -960,10 +1011,10 @@ Returns the full application detail including organization info, links, past tou
 
 ### Admin: Tournaments
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/admin/tournaments` | Platform admin | List all tournaments |
-| GET | `/admin/tournaments/:id` | Platform admin | Get tournament detail (admin view) |
+| Method | Path                     | Auth           | Description                        |
+| ------ | ------------------------ | -------------- | ---------------------------------- |
+| GET    | `/admin/tournaments`     | Platform admin | List all tournaments               |
+| GET    | `/admin/tournaments/:id` | Platform admin | Get tournament detail (admin view) |
 
 #### `GET /admin/tournaments`
 
@@ -972,6 +1023,7 @@ Returns the full application detail including organization info, links, past tou
 The `search` parameter indexes both tournament name and organizer name.
 
 **Response `200`:**
+
 ```json
 {
   "data": [
@@ -1002,10 +1054,10 @@ The `search` parameter indexes both tournament name and organizer name.
 
 ### Admin: Transactions
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/admin/transactions` | Platform admin | List all transactions |
-| GET | `/admin/transactions/stats` | Platform admin | Transaction summary stats |
+| Method | Path                        | Auth           | Description               |
+| ------ | --------------------------- | -------------- | ------------------------- |
+| GET    | `/admin/transactions`       | Platform admin | List all transactions     |
+| GET    | `/admin/transactions/stats` | Platform admin | Transaction summary stats |
 
 #### `GET /admin/transactions`
 
@@ -1014,6 +1066,7 @@ The `search` parameter indexes both tournament name and organizer name.
 The `search` parameter indexes player name and CHIP reference.
 
 **Response `200`:**
+
 ```json
 {
   "data": [
@@ -1046,6 +1099,7 @@ The `search` parameter indexes player name and CHIP reference.
 #### `GET /admin/transactions/stats`
 
 **Response `200`:**
+
 ```json
 {
   "data": {
@@ -1064,15 +1118,16 @@ The `search` parameter indexes player name and CHIP reference.
 
 CHIP sends payment status updates via webhooks to a public endpoint on our server.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/webhooks/chip` | CHIP signature | Payment status callback |
+| Method | Path             | Auth           | Description             |
+| ------ | ---------------- | -------------- | ----------------------- |
+| POST   | `/webhooks/chip` | CHIP signature | Payment status callback |
 
 #### `POST /webhooks/chip`
 
 **Verification:** CHIP signs every webhook with an HMAC SHA-256 signature in the `X-Signature` header. The server verifies this signature using the CHIP webhook secret before processing.
 
 **Payload (from CHIP):**
+
 ```json
 {
   "id": "purchase_id",
@@ -1087,6 +1142,7 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 ```
 
 **Server-side logic on `status: "paid"`:**
+
 1. Verify webhook signature.
 2. Look up `payment` by `chip_purchase_id`.
 3. Idempotency check: if payment already `completed`, return `200` and do nothing.
@@ -1097,6 +1153,7 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 8. Return `200`.
 
 **On `status: "failed"` or `status: "expired"`:**
+
 1. Update `payment.status = 'failed'`.
 2. Update `registration.status = 'cancelled'`.
 3. Return `200`.
@@ -1107,18 +1164,19 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 
 **Standard error codes:**
 
-| HTTP | Code | Description |
-|---|---|---|
-| 400 | `VALIDATION_ERROR` | Request body fails validation |
-| 401 | `UNAUTHORIZED` | Missing or invalid auth token |
-| 403 | `FORBIDDEN` | User lacks required permission |
-| 404 | `NOT_FOUND` | Resource does not exist |
-| 409 | `CONFLICT` | Duplicate registration, application already exists, etc. |
-| 422 | `UNPROCESSABLE` | Business logic violation (tournament full, deadline passed, etc.) |
-| 429 | `RATE_LIMITED` | Too many requests |
-| 500 | `INTERNAL_ERROR` | Unexpected server error |
+| HTTP | Code               | Description                                                       |
+| ---- | ------------------ | ----------------------------------------------------------------- |
+| 400  | `VALIDATION_ERROR` | Request body fails validation                                     |
+| 401  | `UNAUTHORIZED`     | Missing or invalid auth token                                     |
+| 403  | `FORBIDDEN`        | User lacks required permission                                    |
+| 404  | `NOT_FOUND`        | Resource does not exist                                           |
+| 409  | `CONFLICT`         | Duplicate registration, application already exists, etc.          |
+| 422  | `UNPROCESSABLE`    | Business logic violation (tournament full, deadline passed, etc.) |
+| 429  | `RATE_LIMITED`     | Too many requests                                                 |
+| 500  | `INTERNAL_ERROR`   | Unexpected server error                                           |
 
 **Error response shape:**
+
 ```json
 {
   "error": {
@@ -1140,20 +1198,20 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 
 ## Endpoint Summary
 
-| Area | Endpoints | Auth Level |
-|---|---|---|
-| Auth | 5 | Public / Authenticated |
-| Player Profile | 2 | Player |
-| Tournaments (Public) | 2 | Public |
-| Registration & Payments | 4 | Player |
-| Organizer Applications | 2 | Authenticated |
-| Organizer Dashboard | 1 | Org member+ |
-| Organizer Tournaments | 11 | Org member+ / admin+ / owner |
-| Organizer Members | 4 | Org member+ / owner |
-| Organizer Payouts | 2 | Org admin+ |
-| Admin Dashboard | 1 | Platform admin |
-| Admin Applications | 4 | Platform admin |
-| Admin Tournaments | 2 | Platform admin |
-| Admin Transactions | 2 | Platform admin |
-| Webhooks | 1 | CHIP signature |
-| **Total** | **43** | |
+| Area                    | Endpoints | Auth Level                   |
+| ----------------------- | --------- | ---------------------------- |
+| Auth                    | 5         | Public / Authenticated       |
+| Player Profile          | 2         | Player                       |
+| Tournaments (Public)    | 2         | Public                       |
+| Registration & Payments | 4         | Player                       |
+| Organizer Applications  | 2         | Authenticated                |
+| Organizer Dashboard     | 1         | Org member+                  |
+| Organizer Tournaments   | 11        | Org member+ / admin+ / owner |
+| Organizer Members       | 4         | Org member+ / owner          |
+| Organizer Payouts       | 2         | Org admin+                   |
+| Admin Dashboard         | 1         | Platform admin               |
+| Admin Applications      | 4         | Platform admin               |
+| Admin Tournaments       | 2         | Platform admin               |
+| Admin Transactions      | 2         | Platform admin               |
+| Webhooks                | 1         | CHIP signature               |
+| **Total**               | **43**    |                              |

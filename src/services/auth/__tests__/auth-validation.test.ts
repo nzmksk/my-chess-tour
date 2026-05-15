@@ -135,17 +135,26 @@ describe("validateRegistrationForm", () => {
   });
 
   it("returns firstName error when first name is empty", () => {
-    const { errors } = validateRegistrationForm({ ...validFields, firstName: "" });
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      firstName: "",
+    });
     expect(errors.firstName).toBeDefined();
   });
 
   it("returns lastName error when last name is empty", () => {
-    const { errors } = validateRegistrationForm({ ...validFields, lastName: "" });
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      lastName: "",
+    });
     expect(errors.lastName).toBeDefined();
   });
 
   it("returns email error for invalid email", () => {
-    const { errors } = validateRegistrationForm({ ...validFields, email: "not-valid" });
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      email: "not-valid",
+    });
     expect(errors.email).toBeDefined();
   });
 
@@ -155,22 +164,35 @@ describe("validateRegistrationForm", () => {
   });
 
   it("returns password error for weak password", () => {
-    const { errors } = validateRegistrationForm({ ...validFields, password: "weak", confirmPassword: "weak" });
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      password: "weak",
+      confirmPassword: "weak",
+    });
     expect(errors.password).toBeDefined();
   });
 
   it("returns confirmPassword error when passwords do not match", () => {
-    const { errors } = validateRegistrationForm({ ...validFields, confirmPassword: "different" });
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      confirmPassword: "different",
+    });
     expect(errors.confirmPassword).toBeDefined();
   });
 
   it("returns terms error when terms not accepted", () => {
-    const { errors } = validateRegistrationForm({ ...validFields, termsAccepted: false });
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      termsAccepted: false,
+    });
     expect(errors.terms).toBeDefined();
   });
 
   it("returns isValid false when any field is invalid", () => {
-    const { isValid } = validateRegistrationForm({ ...validFields, email: "bad" });
+    const { isValid } = validateRegistrationForm({
+      ...validFields,
+      email: "bad",
+    });
     expect(isValid).toBe(false);
   });
 });
@@ -190,23 +212,40 @@ describe("isRegistrationFormSubmittable", () => {
   });
 
   it("returns false when first name is empty", () => {
-    expect(isRegistrationFormSubmittable({ ...validFields, firstName: "" })).toBe(false);
+    expect(
+      isRegistrationFormSubmittable({ ...validFields, firstName: "" }),
+    ).toBe(false);
   });
 
   it("returns false when email is invalid", () => {
-    expect(isRegistrationFormSubmittable({ ...validFields, email: "bad" })).toBe(false);
+    expect(
+      isRegistrationFormSubmittable({ ...validFields, email: "bad" }),
+    ).toBe(false);
   });
 
   it("returns false when password requirements are not met", () => {
-    expect(isRegistrationFormSubmittable({ ...validFields, password: "weak", confirmPassword: "weak" })).toBe(false);
+    expect(
+      isRegistrationFormSubmittable({
+        ...validFields,
+        password: "weak",
+        confirmPassword: "weak",
+      }),
+    ).toBe(false);
   });
 
   it("returns false when passwords do not match", () => {
-    expect(isRegistrationFormSubmittable({ ...validFields, confirmPassword: "different" })).toBe(false);
+    expect(
+      isRegistrationFormSubmittable({
+        ...validFields,
+        confirmPassword: "different",
+      }),
+    ).toBe(false);
   });
 
   it("returns false when terms not accepted", () => {
-    expect(isRegistrationFormSubmittable({ ...validFields, termsAccepted: false })).toBe(false);
+    expect(
+      isRegistrationFormSubmittable({ ...validFields, termsAccepted: false }),
+    ).toBe(false);
   });
 });
 
@@ -233,7 +272,10 @@ describe("validateLoginForm", () => {
   });
 
   it("returns email error when email is invalid", () => {
-    const { errors } = validateLoginForm({ ...validFields, email: "not-valid" });
+    const { errors } = validateLoginForm({
+      ...validFields,
+      email: "not-valid",
+    });
     expect(errors.email).toBeDefined();
   });
 
@@ -248,7 +290,10 @@ describe("validateLoginForm", () => {
   });
 
   it("accepts keepSignedIn as false", () => {
-    const { isValid } = validateLoginForm({ ...validFields, keepSignedIn: false });
+    const { isValid } = validateLoginForm({
+      ...validFields,
+      keepSignedIn: false,
+    });
     expect(isValid).toBe(true);
   });
 });
@@ -265,7 +310,9 @@ describe("isLoginFormSubmittable", () => {
   });
 
   it("returns false when email is invalid", () => {
-    expect(isLoginFormSubmittable({ ...validFields, email: "bad" })).toBe(false);
+    expect(isLoginFormSubmittable({ ...validFields, email: "bad" })).toBe(
+      false,
+    );
   });
 
   it("returns false when email is empty", () => {
@@ -273,7 +320,9 @@ describe("isLoginFormSubmittable", () => {
   });
 
   it("returns false when password is empty", () => {
-    expect(isLoginFormSubmittable({ ...validFields, password: "" })).toBe(false);
+    expect(isLoginFormSubmittable({ ...validFields, password: "" })).toBe(
+      false,
+    );
   });
 });
 

@@ -228,7 +228,10 @@ describe("login action", () => {
       error: null,
     });
 
-    const fd = makeFormData({ email: "  user@example.com  ", password: "anypassword" });
+    const fd = makeFormData({
+      email: "  user@example.com  ",
+      password: "anypassword",
+    });
     await login(INITIAL_LOGIN_STATE, fd);
 
     expect(mocks.signInWithPassword).toHaveBeenCalledWith(

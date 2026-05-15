@@ -33,9 +33,13 @@ describe("BuildProgress", () => {
     function findProgressbar(node: unknown): Record<string, unknown> | null {
       if (!node || typeof node !== "object") return null;
       const el = node as Record<string, unknown>;
-      if (el.props && (el.props as Record<string, unknown>).role === "progressbar")
+      if (
+        el.props &&
+        (el.props as Record<string, unknown>).role === "progressbar"
+      )
         return el.props as Record<string, unknown>;
-      const children = (el.props as Record<string, unknown> | undefined)?.children;
+      const children = (el.props as Record<string, unknown> | undefined)
+        ?.children;
       if (!children) return null;
       for (const child of Array.isArray(children) ? children : [children]) {
         const found = findProgressbar(child);
@@ -67,7 +71,8 @@ describe("BuildProgress", () => {
       if (!node || typeof node !== "object") return false;
       const el = node as Record<string, unknown>;
       if (containsText(el.props, target)) return true;
-      const children = (el.props as Record<string, unknown> | undefined)?.children;
+      const children = (el.props as Record<string, unknown> | undefined)
+        ?.children;
       if (!children) return false;
       const arr = Array.isArray(children) ? children : [children];
       return arr.some((c) => searchProps(c, target));

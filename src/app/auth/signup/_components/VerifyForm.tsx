@@ -91,7 +91,9 @@ export default function VerifyForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setVerifyError(data.error?.message ?? "Verification failed. Please try again.");
+        setVerifyError(
+          data.error?.message ?? "Verification failed. Please try again.",
+        );
         return;
       }
       document.cookie = `${SIGNUP_STEP_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
@@ -162,11 +164,7 @@ export default function VerifyForm() {
           />
 
           <div className="auth-card-header">
-            <div
-              className="text-3xl"
-              role="img"
-              aria-label="Email"
-            >
+            <div className="text-3xl" role="img" aria-label="Email">
               &#128236;
             </div>
             <h1 className="auth-heading">Check Your Email</h1>

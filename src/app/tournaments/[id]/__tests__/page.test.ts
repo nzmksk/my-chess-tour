@@ -294,7 +294,9 @@ describe("generateMetadata", () => {
     });
 
     expect((result.openGraph as Record<string, unknown>)?.type).toBe("article");
-    expect((result.openGraph as Record<string, unknown>)?.siteName).toBe("MY Chess Tour");
+    expect((result.openGraph as Record<string, unknown>)?.siteName).toBe(
+      "MY Chess Tour",
+    );
     expect((result.twitter as Record<string, unknown>)?.card).toBe("summary");
   });
 
@@ -354,7 +356,8 @@ function makeChain(resolveWith: unknown) {
       Promise.resolve(resolveWith).catch(r),
     select: vi.fn(() => chain),
     eq: vi.fn(() => chain),
-    in: vi.fn(() => Promise.resolve({ count: 0, data: null, error: null })),
+    in: vi.fn<() => Promise<{ count?: number; data: unknown; error: unknown }>>(() =>
+      Promise.resolve({ count: 0, data: null, error: null })),
   };
   return chain;
 }
@@ -378,9 +381,7 @@ function makeFromMock(
     }
     if (t === "player_profiles") {
       const c = makeChain(null);
-      c.in = vi.fn(() =>
-        Promise.resolve({ data: profilesData, error: null }),
-      );
+      c.in = vi.fn(() => Promise.resolve({ data: profilesData, error: null }));
       return { select: vi.fn(() => c) };
     }
     return { select: vi.fn(() => makeChain({ data: null, error: null })) };
@@ -397,7 +398,10 @@ describe("fetchStartingRank coverage", () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () =>
-        makeTournamentPayload({ start_date: "2020-01-01", end_date: "2020-01-02" }),
+        makeTournamentPayload({
+          start_date: "2020-01-01",
+          end_date: "2020-01-02",
+        }),
     });
     mockHeadersGet.mockReturnValue("localhost:3000");
   });
@@ -431,7 +435,18 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock(
         { data: [{ user_id: "u1" }], error: null },
         [{ id: "u1", first_name: "Alice", last_name: "Wong" }],
-        [{ user_id: "u1", title: "FM", fide_id: 111, fide_rating: { rapid: 1800, standard: 1850 }, national_rating: null, nationality: "Malaysia", mcf_id: 9001, gender: "male" }],
+        [
+          {
+            user_id: "u1",
+            title: "FM",
+            fide_id: 111,
+            fide_rating: { rapid: 1800, standard: 1850 },
+            national_rating: null,
+            nationality: "Malaysia",
+            mcf_id: 9001,
+            gender: "male",
+          },
+        ],
       ),
     );
     const { TournamentDetailData } = await import("../page");
@@ -452,7 +467,18 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock(
         { data: [{ user_id: "u1" }], error: null },
         [{ id: "u1", first_name: "Bob", last_name: "Lee" }],
-        [{ user_id: "u1", title: null, fide_id: null, fide_rating: { blitz: 1600 }, national_rating: null, nationality: null, mcf_id: null, gender: null }],
+        [
+          {
+            user_id: "u1",
+            title: null,
+            fide_id: null,
+            fide_rating: { blitz: 1600 },
+            national_rating: null,
+            nationality: null,
+            mcf_id: null,
+            gender: null,
+          },
+        ],
       ),
     );
     const { TournamentDetailData } = await import("../page");
@@ -473,7 +499,18 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock(
         { data: [{ user_id: "u1" }], error: null },
         [{ id: "u1", first_name: "Carol", last_name: "Chan" }],
-        [{ user_id: "u1", title: null, fide_id: null, fide_rating: null, national_rating: 1200, nationality: "Singapore", mcf_id: null, gender: "female" }],
+        [
+          {
+            user_id: "u1",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: 1200,
+            nationality: "Singapore",
+            mcf_id: null,
+            gender: "female",
+          },
+        ],
       ),
     );
     const { TournamentDetailData } = await import("../page");
@@ -495,16 +532,46 @@ describe("fetchStartingRank coverage", () => {
   it("sorts FIDE-rated players first, MCF-only second, then unrated alphabetically", async () => {
     mockFrom.mockImplementation(
       makeFromMock(
-        { data: [{ user_id: "u1" }, { user_id: "u2" }, { user_id: "u3" }], error: null },
+        {
+          data: [{ user_id: "u1" }, { user_id: "u2" }, { user_id: "u3" }],
+          error: null,
+        },
         [
           { id: "u1", first_name: "Alice", last_name: "A" },
           { id: "u2", first_name: "Bob", last_name: "B" },
           { id: "u3", first_name: "Carol", last_name: "C" },
         ],
         [
-          { user_id: "u1", title: null, fide_id: null, fide_rating: { rapid: 1500 }, national_rating: null, nationality: "Malaysia", mcf_id: null, gender: "male" },
-          { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: null, nationality: null, mcf_id: null, gender: null },
-          { user_id: "u3", title: "GM", fide_id: 99, fide_rating: { rapid: 2600 }, national_rating: null, nationality: "Russia", mcf_id: null, gender: "male" },
+          {
+            user_id: "u1",
+            title: null,
+            fide_id: null,
+            fide_rating: { rapid: 1500 },
+            national_rating: null,
+            nationality: "Malaysia",
+            mcf_id: null,
+            gender: "male",
+          },
+          {
+            user_id: "u2",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: null,
+            nationality: null,
+            mcf_id: null,
+            gender: null,
+          },
+          {
+            user_id: "u3",
+            title: "GM",
+            fide_id: 99,
+            fide_rating: { rapid: 2600 },
+            national_rating: null,
+            nationality: "Russia",
+            mcf_id: null,
+            gender: "male",
+          },
         ],
       ),
     );
@@ -521,8 +588,26 @@ describe("fetchStartingRank coverage", () => {
           { id: "u2", first_name: "MCF", last_name: "Rated" },
         ],
         [
-          { user_id: "u1", title: null, fide_id: null, fide_rating: null, national_rating: null, nationality: null, mcf_id: null, gender: null },
-          { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: 1400, nationality: "Malaysia", mcf_id: 9999, gender: "female" },
+          {
+            user_id: "u1",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: null,
+            nationality: null,
+            mcf_id: null,
+            gender: null,
+          },
+          {
+            user_id: "u2",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: 1400,
+            nationality: "Malaysia",
+            mcf_id: 9999,
+            gender: "female",
+          },
         ],
       ),
     );
@@ -534,7 +619,9 @@ describe("fetchStartingRank coverage", () => {
     const serverModule = await import("@/services/supabase/server");
     vi.mocked(serverModule.createClient).mockResolvedValueOnce({
       auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-1" } } }),
       },
     } as unknown as Awaited<ReturnType<typeof serverModule.createClient>>);
 
@@ -558,7 +645,7 @@ describe("fetchStartingRank coverage", () => {
         regCallIdx++;
         if (regCallIdx === 1) {
           const c = makeChain({ count: 0 });
-          c.in = vi.fn(() => Promise.resolve({ count: 0 }));
+          c.in = vi.fn(() => Promise.resolve({ count: 0, data: null, error: null }));
           return { select: vi.fn(() => c) };
         }
         return { select: vi.fn(() => makeChain({ data: [], error: null })) };

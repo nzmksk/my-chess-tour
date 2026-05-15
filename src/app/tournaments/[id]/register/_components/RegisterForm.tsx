@@ -3,7 +3,12 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { TournamentDetail } from "../../types";
-import { formatRm, toTitleCase, formatDeadline, calculateAge } from "@/app/tournaments/utils";
+import {
+  formatRm,
+  toTitleCase,
+  formatDeadline,
+  calculateAge,
+} from "@/app/tournaments/utils";
 import type { RegistrationRow, PlayerProfile } from "../types";
 import RegistrationPending from "./RegistrationPending";
 

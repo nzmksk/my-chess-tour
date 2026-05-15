@@ -1,9 +1,6 @@
 export default function TournamentCardSkeleton() {
   return (
-    <article
-      className="card tournament-card"
-      aria-hidden="true"
-    >
+    <article className="card tournament-card" aria-hidden="true">
       {/* Body */}
       <div className="p-4 flex flex-col h-full">
         {/* Badge row */}

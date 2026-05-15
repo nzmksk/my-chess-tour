@@ -154,9 +154,17 @@ function EmptyState() {
 
 function GenderIcon({ gender }: { gender: "male" | "female" | null }) {
   if (gender === "male")
-    return <span className="text-blue-cue" aria-label="Male">♂</span>;
+    return (
+      <span className="text-blue-cue" aria-label="Male">
+        ♂
+      </span>
+    );
   if (gender === "female")
-    return <span className="text-purception" aria-label="Female">♀</span>;
+    return (
+      <span className="text-purception" aria-label="Female">
+        ♀
+      </span>
+    );
   return <span className="text-text-disabled">—</span>;
 }
 
@@ -207,7 +215,10 @@ export default function StartingRankTab({
                   </td>
                   <td>
                     {flag ? (
-                      <span aria-label={player.nationality ?? undefined} title={player.nationality ?? undefined}>
+                      <span
+                        aria-label={player.nationality ?? undefined}
+                        title={player.nationality ?? undefined}
+                      >
                         {flag}
                       </span>
                     ) : player.nationality ? (

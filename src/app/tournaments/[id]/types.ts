@@ -1,4 +1,9 @@
-import type { EntryFees, TournamentFormat, TimeControl, ChessTitle } from "../types";
+import type {
+  EntryFees,
+  TournamentFormat,
+  TimeControl,
+  ChessTitle,
+} from "../types";
 
 const enum NonMonetaryPrize {
   Trophy = "Trophy",

@@ -24,7 +24,7 @@ describe("generateMetadata", () => {
       mockGet.mockReturnValue(host);
       const meta = await generateMetadata();
       expect(meta.robots).toEqual({ index: false, follow: false });
-    }
+    },
   );
 
   it.each([["mychessour.com"], ["www.mychessour.com"]])(
@@ -33,7 +33,7 @@ describe("generateMetadata", () => {
       mockGet.mockReturnValue(host);
       const meta = await generateMetadata();
       expect(meta.robots).toEqual({ index: true, follow: true });
-    }
+    },
   );
 
   it("returns index:true when host header is absent", async () => {

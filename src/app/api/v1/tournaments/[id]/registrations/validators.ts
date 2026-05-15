@@ -202,8 +202,7 @@ export function checkFeeTierEligibility(
 
   if (
     tier.titles?.length &&
-    (!profile?.title ||
-      !tier.titles.includes(profile.title as ChessTitle))
+    (!profile?.title || !tier.titles.includes(profile.title as ChessTitle))
   ) {
     return NextResponse.json(
       {

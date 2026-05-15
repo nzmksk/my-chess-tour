@@ -19,10 +19,8 @@ function classifyRegistration(
   const isActive =
     reg.status === "confirmed" || reg.status === "pending_payment";
   const isCancelled =
-    reg.status === "cancelled_payment" ||
-    reg.status === "failed_payment";
-  const isCompleted =
-    reg.status === "confirmed" || reg.status === "forfeited";
+    reg.status === "cancelled_payment" || reg.status === "failed_payment";
+  const isCompleted = reg.status === "confirmed" || reg.status === "forfeited";
 
   if (isCancelled) return "cancelled";
   if (isActive && startDate >= today) return "upcoming";
@@ -47,28 +45,23 @@ function StatusBadge({ status }: { status: RegistrationStatus }) {
   > = {
     confirmed: {
       label: "Confirmed",
-      className:
-        "bg-success/10 text-success border border-success/20",
+      className: "bg-success/10 text-success border border-success/20",
     },
     pending_payment: {
       label: "Pending Payment",
-      className:
-        "bg-warning/15 text-warning border border-warning/20",
+      className: "bg-warning/15 text-warning border border-warning/20",
     },
     failed_payment: {
       label: "Payment Failed",
-      className:
-        "bg-danger/15 text-danger border border-danger/20",
+      className: "bg-danger/15 text-danger border border-danger/20",
     },
     cancelled_payment: {
       label: "Cancelled",
-      className:
-        "bg-bg-raised text-text-muted border border-border",
+      className: "bg-bg-raised text-text-muted border border-border",
     },
     forfeited: {
       label: "Forfeited",
-      className:
-        "bg-bg-raised text-text-muted border border-border",
+      className: "bg-bg-raised text-text-muted border border-border",
     },
   };
 
@@ -91,7 +84,9 @@ interface RegistrationCardProps {
 function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
   const { tournament, status } = registration;
   const startDate = new Date(tournament.start_date + "T00:00:00");
-  const month = startDate.toLocaleString("en-MY", { month: "short" }).toUpperCase();
+  const month = startDate
+    .toLocaleString("en-MY", { month: "short" })
+    .toUpperCase();
   const day = startDate.getDate();
   const format = tournament.format as TournamentFormat;
   const tc = tournament.time_control as TimeControl;
@@ -137,7 +132,8 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
 
 function EmptyState({ tab }: { tab: Tab }) {
   const messages: Record<Tab, string> = {
-    upcoming: "No upcoming tournaments. Browse available tournaments to register.",
+    upcoming:
+      "No upcoming tournaments. Browse available tournaments to register.",
     past: "No past tournaments yet.",
     cancelled: "No cancelled registrations.",
   };
@@ -186,7 +182,11 @@ export default function RegistrationsClient({ registrations }: Props) {
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
     { key: "upcoming", label: "Upcoming", count: categorised.upcoming.length },
     { key: "past", label: "Past", count: categorised.past.length },
-    { key: "cancelled", label: "Cancelled", count: categorised.cancelled.length },
+    {
+      key: "cancelled",
+      label: "Cancelled",
+      count: categorised.cancelled.length,
+    },
   ];
 
   const items = categorised[activeTab];

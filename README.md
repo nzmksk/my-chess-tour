@@ -18,15 +18,15 @@
 
 ## Milestone Overview
 
-| # | Milestone | Weeks | What you'll have at the end |
-|---|---|---|---|
-| M0 | Project Setup | 1 | Repo, CI/CD, database, auth, deployed skeleton |
-| M1 | Player: Browse & View | 2–3 | Public tournament listing and detail pages |
-| M2 | Player: Register & Pay | 3–4 | Full registration flow with CHIP payment |
-| M3 | Organizer: Apply & Dashboard | 2–3 | Organizer application and dashboard shell |
-| M4 | Organizer: Create & Manage | 3–4 | Tournament creation wizard and participant management |
-| M5 | Admin Panel | 2–3 | Application review, tournament oversight, transactions |
-| M6 | Polish & Launch Prep | 2–3 | Bug fixes, responsive design, emails, seed organizers |
+| #   | Milestone                    | Weeks | What you'll have at the end                            |
+| --- | ---------------------------- | ----- | ------------------------------------------------------ |
+| M0  | Project Setup                | 1     | Repo, CI/CD, database, auth, deployed skeleton         |
+| M1  | Player: Browse & View        | 2–3   | Public tournament listing and detail pages             |
+| M2  | Player: Register & Pay       | 3–4   | Full registration flow with CHIP payment               |
+| M3  | Organizer: Apply & Dashboard | 2–3   | Organizer application and dashboard shell              |
+| M4  | Organizer: Create & Manage   | 3–4   | Tournament creation wizard and participant management  |
+| M5  | Admin Panel                  | 2–3   | Application review, tournament oversight, transactions |
+| M6  | Polish & Launch Prep         | 2–3   | Bug fixes, responsive design, emails, seed organizers  |
 
 **Total: 15–21 weeks** (target ~18 weeks)
 
@@ -319,13 +319,13 @@ Week 21  ████████
 
 ## Risk Mitigation
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| CHIP integration complexity | Medium | High | Start sandbox testing in M2 week 1. CHIP has good docs and Malaysian support. |
-| Scope creep on wizard forms | High | Medium | Stick to the wireframe exactly. No extra fields or "nice to have" validations. |
-| Burnout at 10hrs/week | Medium | High | Buffer weeks built into every milestone. Skip a week if needed — no deadline. |
-| Supabase RLS complexity | Medium | Medium | Start simple: basic policies in M0, refine as each feature is built. |
-| Mobile responsiveness debt | Medium | Low | Test on mobile every milestone, not just at the end. |
+| Risk                        | Likelihood | Impact | Mitigation                                                                     |
+| --------------------------- | ---------- | ------ | ------------------------------------------------------------------------------ |
+| CHIP integration complexity | Medium     | High   | Start sandbox testing in M2 week 1. CHIP has good docs and Malaysian support.  |
+| Scope creep on wizard forms | High       | Medium | Stick to the wireframe exactly. No extra fields or "nice to have" validations. |
+| Burnout at 10hrs/week       | Medium     | High   | Buffer weeks built into every milestone. Skip a week if needed — no deadline.  |
+| Supabase RLS complexity     | Medium     | Medium | Start simple: basic policies in M0, refine as each feature is built.           |
+| Mobile responsiveness debt  | Medium     | Low    | Test on mobile every milestone, not just at the end.                           |
 
 ---
 

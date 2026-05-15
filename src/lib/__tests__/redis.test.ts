@@ -10,10 +10,16 @@ const { mockSet, mockGet } = vi.hoisted(() => ({
 }));
 
 vi.mock("@upstash/redis", () => ({
-  Redis: vi.fn(function () { return { set: mockSet, get: mockGet }; }),
+  Redis: vi.fn(function () {
+    return { set: mockSet, get: mockGet };
+  }),
 }));
 
-import { getVerificationCode, storeVerificationCode, verifyKey } from "../../services/redis/redis";
+import {
+  getVerificationCode,
+  storeVerificationCode,
+  verifyKey,
+} from "../../services/redis/redis";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -47,7 +53,7 @@ describe("lib/redis", () => {
       expect(mockSet).toHaveBeenCalledWith(
         "verify:player@example.com",
         "ABC123",
-        { ex: 900 }
+        { ex: 900 },
       );
     });
 
@@ -68,7 +74,7 @@ describe("lib/redis", () => {
       expect(mockSet).toHaveBeenCalledWith(
         "verify:player@example.com",
         "XYZ999",
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });

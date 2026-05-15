@@ -21,7 +21,9 @@ function FormUpdater() {
   return (
     <div>
       <span data-testid="email">{form.email}</span>
-      <button onClick={() => setForm((f) => ({ ...f, email: "updated@test.com" }))}>
+      <button
+        onClick={() => setForm((f) => ({ ...f, email: "updated@test.com" }))}
+      >
         Update
       </button>
     </div>
@@ -37,7 +39,7 @@ describe("SignUpProvider", () => {
     render(
       <SignUpProvider>
         <div data-testid="child">content</div>
-      </SignUpProvider>
+      </SignUpProvider>,
     );
     expect(screen.getByTestId("child").textContent).toBe("content");
   });
@@ -46,7 +48,7 @@ describe("SignUpProvider", () => {
     render(
       <SignUpProvider>
         <EmailDisplay />
-      </SignUpProvider>
+      </SignUpProvider>,
     );
     expect(screen.getByTestId("email").textContent).toBe("");
   });
@@ -55,7 +57,7 @@ describe("SignUpProvider", () => {
     render(
       <SignUpProvider>
         <FormUpdater />
-      </SignUpProvider>
+      </SignUpProvider>,
     );
 
     await act(async () => {
@@ -71,7 +73,7 @@ describe("useSignUpForm", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(() => render(<EmailDisplay />)).toThrow(
-      "useSignUpForm must be used within SignUpProvider"
+      "useSignUpForm must be used within SignUpProvider",
     );
 
     spy.mockRestore();

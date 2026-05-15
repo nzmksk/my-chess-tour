@@ -38,7 +38,7 @@ export async function GET() {
   if (error) {
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 }
+      { status: 500 },
     );
   }
 

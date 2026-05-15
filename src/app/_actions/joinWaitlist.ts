@@ -22,7 +22,8 @@ export async function joinWaitlist(
     }
     console.error(error);
     return {
-      error: "Something went wrong. Please contact us at mychesstour@gmail.com for support.",
+      error:
+        "Something went wrong. Please contact us at mychesstour@gmail.com for support.",
       submitted: false,
     };
   }

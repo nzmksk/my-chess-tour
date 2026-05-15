@@ -20,7 +20,8 @@ export default function TournamentTabs({
   const searchParams = useSearchParams();
 
   const tabParam = searchParams.get("tab");
-  const activeTab: Tab = tabParam === "starting-rank" ? "starting-rank" : "details";
+  const activeTab: Tab =
+    tabParam === "starting-rank" ? "starting-rank" : "details";
 
   const setTab = useCallback(
     (tab: Tab) => {
@@ -31,7 +32,9 @@ export default function TournamentTabs({
         params.set("tab", tab);
       }
       const query = params.toString();
-      router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+      router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+        scroll: false,
+      });
     },
     [router, pathname, searchParams],
   );

@@ -436,9 +436,7 @@ export default function TournamentDetail({
             <span className="badge-format">
               {capitalise(t.format?.type ?? "") || "—"}
             </span>
-            {t.is_fide_rated && (
-              <span className="badge-fide">FIDE Rated</span>
-            )}
+            {t.is_fide_rated && <span className="badge-fide">FIDE Rated</span>}
             {t.is_mcf_rated && <span className="badge-mcf">MCF Rated</span>}
             {!t.is_fide_rated && !t.is_mcf_rated && (
               <span className="badge-unrated">Unrated</span>

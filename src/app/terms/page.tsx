@@ -51,8 +51,13 @@ export default function TermsPage() {
                 official tournament records and FIDE/MCF registration.
               </p>
               <ul className="list-disc pl-5 space-y-1 text-text-secondary">
-                <li>You are responsible for maintaining the security of your account.</li>
-                <li>You must not share your credentials with any other person.</li>
+                <li>
+                  You are responsible for maintaining the security of your
+                  account.
+                </li>
+                <li>
+                  You must not share your credentials with any other person.
+                </li>
                 <li>
                   You must notify us immediately if you suspect unauthorised
                   access to your account.
@@ -145,8 +150,8 @@ export default function TermsPage() {
               </ul>
               <p className="text-text-secondary mt-2">
                 Violations may result in account suspension, disqualification
-                from events, or reporting to the Malaysian Chess Federation (MCF)
-                and FIDE.
+                from events, or reporting to the Malaysian Chess Federation
+                (MCF) and FIDE.
               </p>
             </section>
 
@@ -156,9 +161,9 @@ export default function TermsPage() {
               </h2>
               <p className="text-text-secondary">
                 All content on the MY Chess Tour platform — including logos,
-                graphics, software, and tournament data — is owned by or licensed
-                to MCT. You may not reproduce, distribute, or create derivative
-                works without our written permission.
+                graphics, software, and tournament data — is owned by or
+                licensed to MCT. You may not reproduce, distribute, or create
+                derivative works without our written permission.
               </p>
             </section>
 
@@ -169,9 +174,9 @@ export default function TermsPage() {
               <p className="text-text-secondary">
                 MY Chess Tour provides its platform on an &quot;as is&quot;
                 basis. To the fullest extent permitted by Malaysian law, we are
-                not liable for any indirect, incidental, or consequential damages
-                arising from your use of the platform or participation in any
-                event.
+                not liable for any indirect, incidental, or consequential
+                damages arising from your use of the platform or participation
+                in any event.
               </p>
             </section>
 
@@ -182,8 +187,8 @@ export default function TermsPage() {
               <p className="text-text-secondary">
                 We may update these Terms from time to time. We will notify you
                 of material changes via email or a prominent notice on the
-                platform. Continued use of the platform after changes constitutes
-                acceptance of the revised Terms.
+                platform. Continued use of the platform after changes
+                constitutes acceptance of the revised Terms.
               </p>
             </section>
 

@@ -19,13 +19,17 @@ export default function UpdatePasswordForm() {
           <div className="auth-card-header">
             <span className="auth-logo">MY Chess Tour</span>
             <h1 className="auth-heading">New Password</h1>
-            <p className="auth-subheading">Choose a strong password for your account</p>
+            <p className="auth-subheading">
+              Choose a strong password for your account
+            </p>
             <hr className="divider-gold" />
           </div>
 
           {state.error && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px" aria-hidden="true">⚠</span>
+              <span className="text-sm shrink-0 mt-px" aria-hidden="true">
+                ⚠
+              </span>
               <p className="error-text">{state.error}</p>
             </div>
           )}
@@ -95,7 +99,9 @@ export default function UpdatePasswordForm() {
                 </button>
               </div>
               {state.fieldErrors.confirmPassword && (
-                <p className="input-hint error">{state.fieldErrors.confirmPassword}</p>
+                <p className="input-hint error">
+                  {state.fieldErrors.confirmPassword}
+                </p>
               )}
             </div>
 

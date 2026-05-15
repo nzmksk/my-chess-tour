@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
-    Promise.resolve({ auth: { updateUser: mocks.updateUser } })
+    Promise.resolve({ auth: { updateUser: mocks.updateUser } }),
   ),
 }));
 
@@ -82,7 +82,10 @@ describe("updatePassword action", () => {
   });
 
   it("returns confirmPassword fieldError when passwords do not match", async () => {
-    const fd = makeFormData({ password: "Strong1!", confirmPassword: "Different1!" });
+    const fd = makeFormData({
+      password: "Strong1!",
+      confirmPassword: "Different1!",
+    });
     const result = await updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd);
 
     expect(result.fieldErrors.confirmPassword).toBeDefined();
@@ -92,9 +95,14 @@ describe("updatePassword action", () => {
   // --- Supabase error -------------------------------------------------------
 
   it("returns error state when supabase returns an error", async () => {
-    mocks.updateUser.mockResolvedValue({ error: { message: "Auth session missing" } });
+    mocks.updateUser.mockResolvedValue({
+      error: { message: "Auth session missing" },
+    });
 
-    const fd = makeFormData({ password: "Strong1!", confirmPassword: "Strong1!" });
+    const fd = makeFormData({
+      password: "Strong1!",
+      confirmPassword: "Strong1!",
+    });
     const result = await updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd);
 
     expect(result.error).toBe("Auth session missing");
@@ -104,20 +112,26 @@ describe("updatePassword action", () => {
   // --- Success cases --------------------------------------------------------
 
   it("calls updateUser with the correct password on success", async () => {
-    const fd = makeFormData({ password: "Strong1!", confirmPassword: "Strong1!" });
+    const fd = makeFormData({
+      password: "Strong1!",
+      confirmPassword: "Strong1!",
+    });
 
     await expect(
-      updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd)
+      updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd),
     ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(mocks.updateUser).toHaveBeenCalledWith({ password: "Strong1!" });
   });
 
   it("calls redirect to /auth/login on success", async () => {
-    const fd = makeFormData({ password: "Strong1!", confirmPassword: "Strong1!" });
+    const fd = makeFormData({
+      password: "Strong1!",
+      confirmPassword: "Strong1!",
+    });
 
     await expect(
-      updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd)
+      updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd),
     ).rejects.toThrow("NEXT_REDIRECT");
 
     expect(mocks.redirect).toHaveBeenCalledWith("/auth/login");

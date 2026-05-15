@@ -10,6 +10,7 @@ This skill provides comprehensive guidance for building beautiful, responsive, a
 ## Purpose
 
 Provide expert-level Tailwind CSS v4 guidance covering:
+
 - Modern v4 utility classes and deprecation updates
 - Dark mode implementation and patterns
 - Responsive design with mobile-first approach
@@ -21,6 +22,7 @@ Provide expert-level Tailwind CSS v4 guidance covering:
 ## When to Use
 
 Use this skill when:
+
 - Styling HTML elements or components
 - Creating UI components or layouts
 - Implementing or updating dark mode
@@ -50,16 +52,16 @@ Tailwind v4 uses CSS `@import` instead of `@tailwind` directives:
 
 Tailwind v4 removed deprecated utilities. Always use replacements:
 
-| Deprecated | Replacement | Example |
-|------------|-------------|---------|
-| `bg-opacity-*` | `bg-{color}/*` | `bg-black/50` |
-| `text-opacity-*` | `text-{color}/*` | `text-blue-600/75` |
-| `border-opacity-*` | `border-{color}/*` | `border-gray-300/60` |
-| `flex-shrink-*` | `shrink-*` | `shrink-0` |
-| `flex-grow-*` | `grow-*` | `grow` |
-| `overflow-ellipsis` | `text-ellipsis` | `text-ellipsis` |
-| `decoration-slice` | `box-decoration-slice` | `box-decoration-slice` |
-| `decoration-clone` | `box-decoration-clone` | `box-decoration-clone` |
+| Deprecated          | Replacement            | Example                |
+| ------------------- | ---------------------- | ---------------------- |
+| `bg-opacity-*`      | `bg-{color}/*`         | `bg-black/50`          |
+| `text-opacity-*`    | `text-{color}/*`       | `text-blue-600/75`     |
+| `border-opacity-*`  | `border-{color}/*`     | `border-gray-300/60`   |
+| `flex-shrink-*`     | `shrink-*`             | `shrink-0`             |
+| `flex-grow-*`       | `grow-*`               | `grow`                 |
+| `overflow-ellipsis` | `text-ellipsis`        | `text-ellipsis`        |
+| `decoration-slice`  | `box-decoration-slice` | `box-decoration-slice` |
+| `decoration-clone`  | `box-decoration-clone` | `box-decoration-clone` |
 
 **Note**: Opacity values remain numeric (0-100), not percentages.
 
@@ -105,12 +107,12 @@ Start with mobile styles, then add larger breakpoints:
 
 ```html
 <!-- Mobile first - text is small by default, larger on bigger screens -->
-<h1 class="text-2xl md:text-4xl lg:text-5xl xl:text-6xl">
-  Responsive Heading
-</h1>
+<h1 class="text-2xl md:text-4xl lg:text-5xl xl:text-6xl">Responsive Heading</h1>
 
 <!-- Responsive grid -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+<div
+  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+>
   <div>Item</div>
   <div>Item</div>
   <div>Item</div>
@@ -126,9 +128,7 @@ If the project supports dark mode, apply dark mode variants to all components:
 ```html
 <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
   <!-- Background and text adapt to theme -->
-  <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-    Title
-  </h2>
+  <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Title</h2>
   <p class="text-gray-600 dark:text-gray-300">
     Content that works in both themes
   </p>
@@ -143,7 +143,9 @@ Group utilities logically for readability:
 
 ```html
 <!-- Good: Layout → Spacing → Typography → Colors → States -->
-<button class="flex items-center gap-2 px-4 py-2 rounded text-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition-colors">
+<button
+  class="flex items-center gap-2 px-4 py-2 rounded text-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 transition-colors"
+>
   Click Me
 </button>
 ```
@@ -165,7 +167,9 @@ Don't duplicate inherited properties:
 ### Card Component
 
 ```html
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
+<div
+  class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700"
+>
   <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
     Card Title
   </h3>
@@ -179,17 +183,23 @@ Don't duplicate inherited properties:
 
 ```html
 <!-- Primary -->
-<button class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition-colors">
+<button
+  class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition-colors"
+>
   Primary
 </button>
 
 <!-- Secondary -->
-<button class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded font-medium transition-colors">
+<button
+  class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded font-medium transition-colors"
+>
   Secondary
 </button>
 
 <!-- Outline -->
-<button class="border-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded font-medium transition-colors">
+<button
+  class="border-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded font-medium transition-colors"
+>
   Outline
 </button>
 ```
@@ -197,27 +207,35 @@ Don't duplicate inherited properties:
 ### Form Input
 
 ```html
-<input 
-  type="text" 
-  placeholder="Enter text..." 
+<input
+  type="text"
+  placeholder="Enter text..."
   class="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors"
->
+/>
 ```
 
 ### Navigation Bar
 
 ```html
-<nav class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+<nav
+  class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm"
+>
   <div class="container mx-auto px-4 py-3">
     <div class="flex items-center justify-between">
       <a href="/" class="text-xl font-bold text-gray-900 dark:text-white">
         Logo
       </a>
       <div class="flex gap-6">
-        <a href="/about" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+        <a
+          href="/about"
+          class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+        >
           About
         </a>
-        <a href="/contact" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+        <a
+          href="/contact"
+          class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+        >
           Contact
         </a>
       </div>
@@ -260,7 +278,9 @@ When seeing the same utilities repeated, suggest creating a component:
 
 ```html
 <!-- If this appears multiple times: -->
-<button class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition-colors">
+<button
+  class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white px-4 py-2 rounded font-medium transition-colors"
+>
   Button
 </button>
 
@@ -272,7 +292,8 @@ When seeing the same utilities repeated, suggest creating a component:
 Always include hover, focus, and active states:
 
 ```html
-<button class="
+<button
+  class="
   bg-blue-600 
   hover:bg-blue-700 
   active:bg-blue-800 
@@ -289,7 +310,8 @@ Always include hover, focus, and active states:
   transition-colors
   disabled:opacity-50 
   disabled:cursor-not-allowed
-">
+"
+>
   Interactive Button
 </button>
 ```

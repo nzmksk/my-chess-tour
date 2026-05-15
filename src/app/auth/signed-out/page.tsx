@@ -43,10 +43,7 @@ export default function SignedOutPage() {
               <Link href="/auth/login" className="btn-primary">
                 Sign Back In
               </Link>
-              <Link
-                href="/tournaments"
-                className="btn-secondary"
-              >
+              <Link href="/tournaments" className="btn-secondary">
                 Browse Tournaments
               </Link>
             </div>

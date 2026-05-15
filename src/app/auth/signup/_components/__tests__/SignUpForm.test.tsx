@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { SignUpProvider } from "../SignUpContext";
 
 // ---------------------------------------------------------------------------
@@ -32,12 +38,14 @@ function renderForm() {
   return render(
     <SignUpProvider>
       <SignUpForm />
-    </SignUpProvider>
+    </SignUpProvider>,
   );
 }
 
 function getForm() {
-  return screen.getByRole("button", { name: /create account/i }).closest("form")!;
+  return screen
+    .getByRole("button", { name: /create account/i })
+    .closest("form")!;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +69,9 @@ describe("SignUpForm", () => {
 
   it("renders the Create Account submit button", () => {
     renderForm();
-    expect(screen.getByRole("button", { name: "Create Account" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Create Account" }),
+    ).toBeDefined();
   });
 
   it("renders the password strength meter", () => {
@@ -89,7 +99,9 @@ describe("SignUpForm", () => {
     await act(async () => {
       fireEvent.submit(getForm());
     });
-    expect(document.querySelectorAll(".input-hint.error").length).toBeGreaterThan(0);
+    expect(
+      document.querySelectorAll(".input-hint.error").length,
+    ).toBeGreaterThan(0);
   });
 
   it("does not navigate when the form is invalid", async () => {
@@ -105,12 +117,18 @@ describe("SignUpForm", () => {
   it("navigates to /sign-up/profile on a valid form submit", async () => {
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("First Name"), { target: { value: "Alice" } });
-    fireEvent.change(screen.getByLabelText("Last Name"), { target: { value: "Wong" } });
+    fireEvent.change(screen.getByLabelText("First Name"), {
+      target: { value: "Alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Last Name"), {
+      target: { value: "Wong" },
+    });
     fireEvent.change(screen.getByLabelText("Email Address"), {
       target: { value: "alice@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Password1!" } });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "Password1!" },
+    });
     fireEvent.change(screen.getByLabelText("Confirm Password"), {
       target: { value: "Password1!" },
     });

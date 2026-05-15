@@ -8,7 +8,9 @@ export type PasswordRequirements = {
 
 export type PasswordStrength = 0 | 1 | 2 | 3 | 4 | 5;
 
-export function checkPasswordRequirements(password: string): PasswordRequirements {
+export function checkPasswordRequirements(
+  password: string,
+): PasswordRequirements {
   return {
     minLength: password.length >= 8,
     hasUppercase: /[A-Z]/.test(password),
@@ -56,20 +58,23 @@ export type RegistrationFields = {
   isOku?: boolean;
 };
 
-export function validateRegistrationForm(
-  fields: RegistrationFields,
-): { errors: RegistrationErrors; isValid: boolean } {
+export function validateRegistrationForm(fields: RegistrationFields): {
+  errors: RegistrationErrors;
+  isValid: boolean;
+} {
   const errors: RegistrationErrors = {};
 
   if (!fields.firstName.trim()) {
     errors.firstName = "First name is required";
   } else if (!NAME_PATTERN.test(fields.firstName.trim())) {
-    errors.firstName = "First name can only contain letters, spaces, hyphens, and apostrophes";
+    errors.firstName =
+      "First name can only contain letters, spaces, hyphens, and apostrophes";
   }
   if (!fields.lastName.trim()) {
     errors.lastName = "Last name is required";
   } else if (!NAME_PATTERN.test(fields.lastName.trim())) {
-    errors.lastName = "Last name can only contain letters, spaces, hyphens, and apostrophes";
+    errors.lastName =
+      "Last name can only contain letters, spaces, hyphens, and apostrophes";
   }
   if (!fields.email.trim()) {
     errors.email = "Email address is required";
@@ -98,7 +103,9 @@ export function validateRegistrationForm(
   return { errors, isValid: Object.keys(errors).length === 0 };
 }
 
-export function isRegistrationFormSubmittable(fields: RegistrationFields): boolean {
+export function isRegistrationFormSubmittable(
+  fields: RegistrationFields,
+): boolean {
   const reqs = checkPasswordRequirements(fields.password);
   const allReqsMet = Object.values(reqs).every(Boolean);
   return (
@@ -124,9 +131,10 @@ export type LoginErrors = {
   password?: string;
 };
 
-export function validateLoginForm(
-  fields: LoginFields,
-): { errors: LoginErrors; isValid: boolean } {
+export function validateLoginForm(fields: LoginFields): {
+  errors: LoginErrors;
+  isValid: boolean;
+} {
   const errors: LoginErrors = {};
 
   if (!fields.email.trim()) {
@@ -182,9 +190,10 @@ export type ForgotPasswordErrors = {
   email?: string;
 };
 
-export function validateForgotPasswordForm(
-  email: string,
-): { errors: ForgotPasswordErrors; isValid: boolean } {
+export function validateForgotPasswordForm(email: string): {
+  errors: ForgotPasswordErrors;
+  isValid: boolean;
+} {
   const errors: ForgotPasswordErrors = {};
 
   if (!email.trim()) {

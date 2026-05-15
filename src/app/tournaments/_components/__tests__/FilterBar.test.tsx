@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  act,
+} from "@testing-library/react";
 import FilterBar from "../FilterBar";
 
 afterEach(cleanup);
@@ -244,7 +250,8 @@ describe("toggle — add/remove selection", () => {
     const checkboxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
     // "Rapid" is the first FORMAT_OPTIONS item
     const rapidCheckbox = checkboxes.find(
-      (cb) => !cb.checked && cb.closest("label")?.textContent?.includes("Rapid"),
+      (cb) =>
+        !cb.checked && cb.closest("label")?.textContent?.includes("Rapid"),
     )!;
 
     await act(async () => {
