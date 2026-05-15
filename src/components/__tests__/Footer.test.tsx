@@ -37,28 +37,42 @@ describe("Footer", () => {
     expect(html).toContain("premier competitive chess circuit");
   });
 
-  it("renders the Tournaments navigation link", () => {
+  it("renders the Terms and Conditions link", () => {
     const html = renderToStaticMarkup(<Footer />);
-    expect(html).toContain('href="/tournaments"');
-    expect(html).toContain("Tournaments");
+    expect(html).toContain('href="/terms"');
+    expect(html).toContain("Terms and Conditions");
   });
 
-  it("renders the Become an Organizer link", () => {
+  it("renders the Privacy Policy link", () => {
     const html = renderToStaticMarkup(<Footer />);
-    expect(html).toContain('href="/organizations/apply"');
-    expect(html).toContain("Become an Organizer");
+    expect(html).toContain('href="/privacy"');
+    expect(html).toContain("Privacy Policy");
   });
 
-  it("renders the Login link", () => {
+  it("renders the Facebook social link", () => {
     const html = renderToStaticMarkup(<Footer />);
-    expect(html).toContain('href="/auth/login"');
-    expect(html).toContain("Login");
+    expect(html).toContain("facebook.com/mychesstour");
+    expect(html).toContain("Facebook");
   });
 
-  it("renders the Sign Up link", () => {
+  it("renders the Instagram social link", () => {
     const html = renderToStaticMarkup(<Footer />);
-    expect(html).toContain('href="/auth/signup"');
-    expect(html).toContain("Sign Up");
+    expect(html).toContain("instagram.com/mychesstour");
+    expect(html).toContain("Instagram");
+  });
+
+  it("renders the LinkedIn social link", () => {
+    const html = renderToStaticMarkup(<Footer />);
+    expect(html).toContain("linkedin.com/company/mychesstour");
+    expect(html).toContain("LinkedIn");
+  });
+
+  it("does not render old navigation links", () => {
+    const html = renderToStaticMarkup(<Footer />);
+    expect(html).not.toContain('href="/tournaments"');
+    expect(html).not.toContain('href="/organizations/apply"');
+    expect(html).not.toContain('href="/auth/login"');
+    expect(html).not.toContain('href="/auth/signup"');
   });
 
   it("renders a copyright notice", () => {
@@ -74,5 +88,11 @@ describe("Footer", () => {
   it("applies footer-link class to nav links", () => {
     const html = renderToStaticMarkup(<Footer />);
     expect(html).toContain("footer-link");
+  });
+
+  it("opens social links in a new tab", () => {
+    const html = renderToStaticMarkup(<Footer />);
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
   });
 });
