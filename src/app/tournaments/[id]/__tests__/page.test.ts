@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mocks ─────────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ vi.mock("@/services/supabase/server", () => ({
   }),
 }));
 
-const mockRegistrationSelect = vi.hoisted(() =>
+const mockSelect = vi.hoisted(() =>
   vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockResolvedValue({ count: 0 }),
@@ -46,7 +46,7 @@ const mockRegistrationSelect = vi.hoisted(() =>
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
     from: vi.fn().mockReturnValue({
-      select: mockRegistrationSelect,
+      select: mockSelect,
     }),
   },
 }));
@@ -162,6 +162,35 @@ describe("TournamentDetailData", () => {
 
     expect(mockNotFound).toHaveBeenCalled();
   });
+
+  it("renders successfully when tournament has an organization", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          organization: { id: "org-1", name: "Chess Club" },
+        }),
+    });
+
+    const { TournamentDetailData } = await import("../page");
+    const result = await TournamentDetailData({ id: "t1" });
+
+    expect(result).toBeDefined();
+    expect(mockNotFound).not.toHaveBeenCalled();
+  });
+
+  it("renders successfully when tournament has no organization", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => makeTournamentPayload({ organization: null }),
+    });
+
+    const { TournamentDetailData } = await import("../page");
+    const result = await TournamentDetailData({ id: "t1" });
+
+    expect(result).toBeDefined();
+    expect(mockNotFound).not.toHaveBeenCalled();
+  });
 });
 
 describe("generateMetadata", () => {
@@ -264,9 +293,9 @@ describe("generateMetadata", () => {
       params: Promise.resolve({ id: "t1" }),
     });
 
-    expect(result.openGraph?.type).toBe("article");
-    expect(result.openGraph?.siteName).toBe("MY Chess Tour");
-    expect(result.twitter?.card).toBe("summary");
+    expect((result.openGraph as Record<string, unknown>)?.type).toBe("article");
+    expect((result.openGraph as Record<string, unknown>)?.siteName).toBe("MY Chess Tour");
+    expect((result.twitter as Record<string, unknown>)?.card).toBe("summary");
   });
 
   it("uses https protocol when host is not localhost", async () => {
@@ -305,5 +334,242 @@ describe("generateMetadata", () => {
       expect.any(Object),
     );
     expect(result.title).toBe("KL Open Rapid Championship 2026");
+  });
+});
+
+// ── fetchStartingRank coverage ────────────────────────────────
+//
+// Use a past start_date so tournamentStarted=true and canViewStartingRank=true,
+// which causes fetchStartingRank to be called. With user=null the isRegistered
+// and isOrgMember auth checks are skipped, so fetchStartingRank makes the
+// FIRST call to from("registrations") — no counter needed.
+//
+// makeChain: thenable object so `await chain.eq().eq()` resolves with the
+// wrapped value, while chain.in() is overridable for the .in()-terminated paths.
+
+function makeChain(resolveWith: unknown) {
+  const chain = {
+    then: (r: (v: unknown) => unknown) => Promise.resolve(resolveWith).then(r),
+    catch: (r: (e: unknown) => unknown) =>
+      Promise.resolve(resolveWith).catch(r),
+    select: vi.fn(() => chain),
+    eq: vi.fn(() => chain),
+    in: vi.fn(() => Promise.resolve({ count: 0, data: null, error: null })),
+  };
+  return chain;
+}
+
+// Builds a from() implementation for fetchStartingRank tests (user=null).
+// registrations → resolved data chain (fetchStartingRank data call)
+// users / player_profiles → chain with .in() override returning row arrays
+function makeFromMock(
+  registrationFetchData: unknown,
+  usersData: unknown,
+  profilesData: unknown,
+) {
+  return (t: string) => {
+    if (t === "registrations") {
+      return { select: vi.fn(() => makeChain(registrationFetchData)) };
+    }
+    if (t === "users") {
+      const c = makeChain(null);
+      c.in = vi.fn(() => Promise.resolve({ data: usersData, error: null }));
+      return { select: vi.fn(() => c) };
+    }
+    if (t === "player_profiles") {
+      const c = makeChain(null);
+      c.in = vi.fn(() =>
+        Promise.resolve({ data: profilesData, error: null }),
+      );
+      return { select: vi.fn(() => c) };
+    }
+    return { select: vi.fn(() => makeChain({ data: null, error: null })) };
+  };
+}
+
+describe("fetchStartingRank coverage", () => {
+  let mockFrom: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const mod = await import("@/services/supabase/admin");
+    mockFrom = vi.mocked(mod.supabaseAdmin.from);
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({ start_date: "2020-01-01", end_date: "2020-01-02" }),
+    });
+    mockHeadersGet.mockReturnValue("localhost:3000");
+  });
+
+  it("returns empty array when registrations result is empty", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock({ data: [], error: null }, [], []),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("returns empty array when registrations query errors", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock({ data: null, error: { message: "DB error" } }, [], []),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("returns empty array when all user_ids are null", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock({ data: [{ user_id: null }], error: null }, [], []),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("covers rapid format: uses rapid fide_rating field", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }], error: null },
+        [{ id: "u1", first_name: "Alice", last_name: "Wong" }],
+        [{ user_id: "u1", title: "FM", fide_id: 111, fide_rating: { rapid: 1800, standard: 1850 }, national_rating: null, nationality: "Malaysia", mcf_id: 9001, gender: "male" }],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("covers blitz format: uses blitz fide_rating field", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2020-01-01",
+          end_date: "2020-01-02",
+          format: { type: "blitz", system: "swiss", rounds: 9 },
+        }),
+    });
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }], error: null },
+        [{ id: "u1", first_name: "Bob", last_name: "Lee" }],
+        [{ user_id: "u1", title: null, fide_id: null, fide_rating: { blitz: 1600 }, national_rating: null, nationality: null, mcf_id: null, gender: null }],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("covers classical format: uses standard fide_rating, falls back to national", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2020-01-01",
+          end_date: "2020-01-02",
+          format: { type: "classical", system: "swiss", rounds: 9 },
+        }),
+    });
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }], error: null },
+        [{ id: "u1", first_name: "Carol", last_name: "Chan" }],
+        [{ user_id: "u1", title: null, fide_id: null, fide_rating: null, national_rating: 1200, nationality: "Singapore", mcf_id: null, gender: "female" }],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("filters null user_ids and handles missing user in map", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }, { user_id: null }], error: null },
+        [],
+        [],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("sorts FIDE-rated players first, MCF-only second, then unrated alphabetically", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }, { user_id: "u2" }, { user_id: "u3" }], error: null },
+        [
+          { id: "u1", first_name: "Alice", last_name: "A" },
+          { id: "u2", first_name: "Bob", last_name: "B" },
+          { id: "u3", first_name: "Carol", last_name: "C" },
+        ],
+        [
+          { user_id: "u1", title: null, fide_id: null, fide_rating: { rapid: 1500 }, national_rating: null, nationality: "Malaysia", mcf_id: null, gender: "male" },
+          { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: null, nationality: null, mcf_id: null, gender: null },
+          { user_id: "u3", title: "GM", fide_id: 99, fide_rating: { rapid: 2600 }, national_rating: null, nationality: "Russia", mcf_id: null, gender: "male" },
+        ],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("sorts MCF-only player above unrated player", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }, { user_id: "u2" }], error: null },
+        [
+          { id: "u1", first_name: "Unrated", last_name: "Player" },
+          { id: "u2", first_name: "MCF", last_name: "Rated" },
+        ],
+        [
+          { user_id: "u1", title: null, fide_id: null, fide_rating: null, national_rating: null, nationality: null, mcf_id: null, gender: null },
+          { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: 1400, nationality: "Malaysia", mcf_id: 9999, gender: "female" },
+        ],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("covers isOrgMember branch for logged-in user with org tournament", async () => {
+    const serverModule = await import("@/services/supabase/server");
+    vi.mocked(serverModule.createClient).mockResolvedValueOnce({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+    } as unknown as Awaited<ReturnType<typeof serverModule.createClient>>);
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2020-01-01",
+          end_date: "2020-01-02",
+          organization: { id: "org-1", name: "Chess Club" },
+        }),
+    });
+
+    // With a logged-in user, from("registrations") is called twice:
+    //   1st: isRegistered check (.select().eq().eq().in() → {count:0})
+    //   2nd: fetchStartingRank data (.select().eq().eq() → await chain)
+    // organization_memberships is called once for isOrgMember.
+    let regCallIdx = 0;
+    mockFrom.mockImplementation((t: string) => {
+      if (t === "registrations") {
+        regCallIdx++;
+        if (regCallIdx === 1) {
+          const c = makeChain({ count: 0 });
+          c.in = vi.fn(() => Promise.resolve({ count: 0 }));
+          return { select: vi.fn(() => c) };
+        }
+        return { select: vi.fn(() => makeChain({ data: [], error: null })) };
+      }
+      if (t === "organization_memberships") {
+        return { select: vi.fn(() => makeChain({ count: 0 })) };
+      }
+      return { select: vi.fn(() => makeChain({ data: null, error: null })) };
+    });
+
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
   });
 });

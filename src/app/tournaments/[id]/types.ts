@@ -45,6 +45,19 @@ interface OrganizerDetail {
   phone?: string | null;
 }
 
+export interface StartingRankPlayer {
+  rank: number;
+  user_id: string;
+  name: string;
+  title: string | null;
+  fide_id: number | null;
+  fide_rating: number | null;
+  national_rating: number | null;
+  nationality: string | null;
+  mcf_id: number | null;
+  gender: "male" | "female" | null;
+}
+
 export interface TournamentDetail {
   id: string;
   name: string;
