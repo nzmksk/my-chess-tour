@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useCallback } from "react";
 import type { ReactNode } from "react";
 
 type Tab = "details" | "starting-rank";
@@ -14,7 +15,26 @@ export default function TournamentTabs({
   tournamentDetailsContent,
   startingRankContent,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("details");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const tabParam = searchParams.get("tab");
+  const activeTab: Tab = tabParam === "starting-rank" ? "starting-rank" : "details";
+
+  const setTab = useCallback(
+    (tab: Tab) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === "details") {
+        params.delete("tab");
+      } else {
+        params.set("tab", tab);
+      }
+      const query = params.toString();
+      router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "details", label: "Tournament Details" },
@@ -27,7 +47,7 @@ export default function TournamentTabs({
         {tabs.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setActiveTab(key)}
+            onClick={() => setTab(key)}
             className={`font-lato text-sm font-medium px-4 py-2.5 border-b-2 transition-colors duration-150 cursor-pointer bg-transparent ${
               activeTab === key
                 ? "text-text-primary border-gold-bright"

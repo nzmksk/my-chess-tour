@@ -1,17 +1,35 @@
 // @vitest-environment jsdom
 import React from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import TournamentTabs from "../TournamentTabs";
 
-afterEach(cleanup);
+// ── next/navigation mock ───────────────────────────────────────
+
+let mockTabParam: string | null = null;
+const mockReplace = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: mockReplace }),
+  usePathname: () => "/tournaments/t1",
+  useSearchParams: () => ({
+    get: (key: string) => (key === "tab" ? mockTabParam : null),
+    toString: () => (mockTabParam ? `tab=${mockTabParam}` : ""),
+  }),
+}));
+
+afterEach(() => {
+  cleanup();
+  mockTabParam = null;
+  mockReplace.mockClear();
+});
 
 const detailsContent = <div data-testid="details">Tournament Details Content</div>;
 const startingRankContent = <div data-testid="starting-rank">Starting Rank Content</div>;
 
-describe("TournamentTabs", () => {
-  // ── Initial rendering ──────────────────────────────────────
+// ── Initial rendering ──────────────────────────────────────────
 
+describe("TournamentTabs — initial rendering", () => {
   it("renders the Tournament Details tab button", () => {
     render(
       <TournamentTabs
@@ -32,7 +50,7 @@ describe("TournamentTabs", () => {
     expect(screen.getByText("Starting Rank")).toBeDefined();
   });
 
-  it("shows tournament details content by default", () => {
+  it("shows details content by default when no tab param is set", () => {
     render(
       <TournamentTabs
         tournamentDetailsContent={detailsContent}
@@ -43,21 +61,35 @@ describe("TournamentTabs", () => {
     expect(screen.queryByTestId("starting-rank")).toBeNull();
   });
 
-  // ── Tab switching ──────────────────────────────────────────
-
-  it("shows starting rank content when Starting Rank tab is clicked", () => {
+  it("shows starting rank content when tab=starting-rank is in the URL", () => {
+    mockTabParam = "starting-rank";
     render(
       <TournamentTabs
         tournamentDetailsContent={detailsContent}
         startingRankContent={startingRankContent}
       />,
     );
-    fireEvent.click(screen.getByText("Starting Rank"));
     expect(screen.getByTestId("starting-rank")).toBeDefined();
     expect(screen.queryByTestId("details")).toBeNull();
   });
 
-  it("switches back to tournament details when Tournament Details tab is clicked", () => {
+  it("falls back to details for an unrecognised tab param value", () => {
+    mockTabParam = "unknown-tab";
+    render(
+      <TournamentTabs
+        tournamentDetailsContent={detailsContent}
+        startingRankContent={startingRankContent}
+      />,
+    );
+    expect(screen.getByTestId("details")).toBeDefined();
+    expect(screen.queryByTestId("starting-rank")).toBeNull();
+  });
+});
+
+// ── Tab interaction (router.replace calls) ─────────────────────
+
+describe("TournamentTabs — tab interaction", () => {
+  it("calls router.replace with ?tab=starting-rank when Starting Rank is clicked", () => {
     render(
       <TournamentTabs
         tournamentDetailsContent={detailsContent}
@@ -65,14 +97,43 @@ describe("TournamentTabs", () => {
       />,
     );
     fireEvent.click(screen.getByText("Starting Rank"));
-    fireEvent.click(screen.getByText("Tournament Details"));
-    expect(screen.getByTestId("details")).toBeDefined();
-    expect(screen.queryByTestId("starting-rank")).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith(
+      expect.stringContaining("tab=starting-rank"),
+      expect.objectContaining({ scroll: false }),
+    );
   });
 
-  // ── Active tab styling ─────────────────────────────────────
+  it("calls router.replace without tab param when Tournament Details is clicked", () => {
+    mockTabParam = "starting-rank";
+    render(
+      <TournamentTabs
+        tournamentDetailsContent={detailsContent}
+        startingRankContent={startingRankContent}
+      />,
+    );
+    fireEvent.click(screen.getByText("Tournament Details"));
+    expect(mockReplace).toHaveBeenCalledWith(
+      expect.not.stringContaining("tab="),
+      expect.objectContaining({ scroll: false }),
+    );
+  });
 
-  it("applies active styles to Tournament Details tab by default", () => {
+  it("calls router.replace when Tournament Details is clicked even from details tab", () => {
+    render(
+      <TournamentTabs
+        tournamentDetailsContent={detailsContent}
+        startingRankContent={startingRankContent}
+      />,
+    );
+    fireEvent.click(screen.getByText("Tournament Details"));
+    expect(mockReplace).toHaveBeenCalledOnce();
+  });
+});
+
+// ── Active tab styling ─────────────────────────────────────────
+
+describe("TournamentTabs — active tab styling", () => {
+  it("applies active styles to Tournament Details tab when no param is set", () => {
     render(
       <TournamentTabs
         tournamentDetailsContent={detailsContent}
@@ -84,7 +145,7 @@ describe("TournamentTabs", () => {
     expect(detailsBtn.className).toContain("text-text-primary");
   });
 
-  it("applies inactive styles to Starting Rank tab by default", () => {
+  it("applies inactive styles to Starting Rank tab when no param is set", () => {
     render(
       <TournamentTabs
         tournamentDetailsContent={detailsContent}
@@ -96,27 +157,27 @@ describe("TournamentTabs", () => {
     expect(rankBtn.className).toContain("text-text-muted");
   });
 
-  it("applies active styles to Starting Rank tab after clicking it", () => {
+  it("applies active styles to Starting Rank tab when tab=starting-rank", () => {
+    mockTabParam = "starting-rank";
     render(
       <TournamentTabs
         tournamentDetailsContent={detailsContent}
         startingRankContent={startingRankContent}
       />,
     );
-    fireEvent.click(screen.getByText("Starting Rank"));
     const rankBtn = screen.getByText("Starting Rank").closest("button")!;
     expect(rankBtn.className).toContain("border-gold-bright");
     expect(rankBtn.className).toContain("text-text-primary");
   });
 
   it("applies inactive styles to Tournament Details tab when Starting Rank is active", () => {
+    mockTabParam = "starting-rank";
     render(
       <TournamentTabs
         tournamentDetailsContent={detailsContent}
         startingRankContent={startingRankContent}
       />,
     );
-    fireEvent.click(screen.getByText("Starting Rank"));
     const detailsBtn = screen.getByText("Tournament Details").closest("button")!;
     expect(detailsBtn.className).toContain("border-transparent");
   });

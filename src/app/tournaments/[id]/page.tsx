@@ -119,9 +119,17 @@ async function fetchStartingRank(
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
   players.sort((a, b) => {
-    const ra = a.fide_rating ?? a.national_rating ?? -1;
-    const rb = b.fide_rating ?? b.national_rating ?? -1;
-    if (rb !== ra) return rb - ra;
+    const hasFideA = a.fide_rating != null;
+    const hasFideB = b.fide_rating != null;
+    const hasMcfA = a.national_rating != null;
+    const hasMcfB = b.national_rating != null;
+
+    if (hasFideA && hasFideB) return b.fide_rating! - a.fide_rating!;
+    if (hasFideA) return -1;
+    if (hasFideB) return 1;
+    if (hasMcfA && hasMcfB) return b.national_rating! - a.national_rating!;
+    if (hasMcfA) return -1;
+    if (hasMcfB) return 1;
     return a.name.localeCompare(b.name);
   });
 

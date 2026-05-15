@@ -1,6 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import TournamentDetail from "../TournamentDetail";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => "/tournaments/t1",
+  useSearchParams: () => ({ get: () => null, toString: () => "" }),
+}));
 import type { TournamentDetail as TournamentDetailType } from "../../types";
 import type { StartingRankPlayer } from "../../types";
 
@@ -68,6 +74,9 @@ const samplePlayers: StartingRankPlayer[] = [
     fide_id: 123456,
     fide_rating: 2100,
     national_rating: null,
+    nationality: "Malaysia",
+    mcf_id: 10001,
+    gender: "female",
   },
   {
     rank: 2,
@@ -77,6 +86,9 @@ const samplePlayers: StartingRankPlayer[] = [
     fide_id: null,
     fide_rating: null,
     national_rating: 1500,
+    nationality: "Singapore",
+    mcf_id: null,
+    gender: "male",
   },
 ];
 

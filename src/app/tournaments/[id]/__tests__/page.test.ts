@@ -492,7 +492,7 @@ describe("fetchStartingRank coverage", () => {
     expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
   });
 
-  it("sorts multiple players by rating descending then name ascending", async () => {
+  it("sorts FIDE-rated players first, MCF-only second, then unrated alphabetically", async () => {
     mockFrom.mockImplementation(
       makeFromMock(
         { data: [{ user_id: "u1" }, { user_id: "u2" }, { user_id: "u3" }], error: null },
@@ -505,6 +505,24 @@ describe("fetchStartingRank coverage", () => {
           { user_id: "u1", title: null, fide_id: null, fide_rating: { rapid: 1500 }, national_rating: null, nationality: "Malaysia", mcf_id: null, gender: "male" },
           { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: null, nationality: null, mcf_id: null, gender: null },
           { user_id: "u3", title: "GM", fide_id: 99, fide_rating: { rapid: 2600 }, national_rating: null, nationality: "Russia", mcf_id: null, gender: "male" },
+        ],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("sorts MCF-only player above unrated player", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }, { user_id: "u2" }], error: null },
+        [
+          { id: "u1", first_name: "Unrated", last_name: "Player" },
+          { id: "u2", first_name: "MCF", last_name: "Rated" },
+        ],
+        [
+          { user_id: "u1", title: null, fide_id: null, fide_rating: null, national_rating: null, nationality: null, mcf_id: null, gender: null },
+          { user_id: "u2", title: null, fide_id: null, fide_rating: null, national_rating: 1400, nationality: "Malaysia", mcf_id: 9999, gender: "female" },
         ],
       ),
     );
