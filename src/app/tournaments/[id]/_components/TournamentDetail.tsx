@@ -72,7 +72,7 @@ function Section({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="font-cinzel text-2xs font-semibold uppercase tracking-widest text-text-muted">
+      <dt className="font-cinzel text-xs font-semibold uppercase tracking-widest text-text-muted">
         {label}
       </dt>
       <dd className="font-lato text-sm text-text-body">{value}</dd>

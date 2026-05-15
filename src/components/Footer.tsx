@@ -108,7 +108,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-border pt-6">
-          <p className="font-lato text-xs text-text-muted text-center sm:text-left">
+          <p className="font-lato text-xs text-text-muted text-center">
             &copy; {year} MY Chess Tour. All rights reserved.
           </p>
         </div>

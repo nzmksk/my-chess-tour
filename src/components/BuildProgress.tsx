@@ -4,8 +4,8 @@ export default async function BuildProgress() {
   const percentage = await getIssueProgress();
 
   return (
-    <footer className="w-full max-w-xl">
-      <div className="mb-2 flex items-center justify-between text-xs text-text-muted)">
+    <div className="w-full">
+      <div className="mb-2 flex items-center justify-between text-xs text-text-muted">
         <span className="font-cinzel tracking-wider">Build Progress</span>
         <span className="text-gold-bright">{percentage}%</span>
       </div>
@@ -21,6 +21,6 @@ export default async function BuildProgress() {
           style={{ width: `${percentage}%` }}
         />
       </div>
-    </footer>
+    </div>
   );
 }

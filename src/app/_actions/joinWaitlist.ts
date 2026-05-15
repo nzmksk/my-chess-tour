@@ -7,12 +7,15 @@ export async function joinWaitlist(
   formData: FormData,
 ): Promise<{ error: string | null; submitted: boolean }> {
   const email = formData.get("email")?.toString().trim();
+  const userType = formData.get("user_type")?.toString() ?? "player";
 
   if (!email)
     return { error: "Please enter your email address.", submitted: false };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("waitlist").insert({ email });
+  const { error } = await supabase
+    .from("waitlist")
+    .insert({ email, user_type: userType });
 
   if (error) {
     if (error.code === "23505") {

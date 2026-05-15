@@ -69,7 +69,7 @@ function StatusBadge({ status }: { status: RegistrationStatus }) {
 
   return (
     <span
-      className={`font-cinzel text-2xs font-bold tracking-widest uppercase px-2.5 py-1 rounded-md whitespace-nowrap ${className}`}
+      className={`font-cinzel text-xs font-bold tracking-widest uppercase px-2.5 py-1 rounded-md whitespace-nowrap ${className}`}
     >
       {label}
     </span>
@@ -98,7 +98,7 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
     >
       {/* Date block */}
       <div className="text-center min-w-12 shrink-0">
-        <div className="font-cinzel text-2xs font-bold tracking-widest text-gold-bright">
+        <div className="font-cinzel text-xs font-bold tracking-widest text-gold-bright">
           {month}
         </div>
         <div className="font-cinzel text-2xl font-bold text-text-primary leading-tight">
@@ -215,7 +215,7 @@ export default function RegistrationsClient({ registrations }: Props) {
             {label}
             {count > 0 && (
               <span
-                className={`ml-1.5 font-cinzel text-2xs font-bold px-1.5 py-0.5 rounded-full ${
+                className={`ml-1.5 font-cinzel text-xs font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === key
                     ? "bg-gold-ghost text-gold-bright"
                     : "bg-bg-raised text-text-muted"

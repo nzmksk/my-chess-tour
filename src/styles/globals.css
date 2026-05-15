@@ -6,10 +6,11 @@
   --font-cinzel: "Cinzel", serif;
   --font-lato: "Lato", sans-serif;
 
-  --color-bg-base: #0e0e0e;
-  --color-bg-surface: #141414;
-  --color-bg-raised: #1a1a1a;
-  --color-bg-sunken: #0a0a0a;
+  /* Backgrounds */
+  --color-bg-base: #0f0f0f; /* Page / outermost background */
+  --color-bg-surface: #1c1c1c; /* Cards, panels, email wrapper */
+  --color-bg-raised: #282828; /* Slightly elevated surfaces */
+  --color-bg-sunken: #080808; /* Headers, footers, recessed areas */
 
   /* Gold */
   --color-gold-bright: #c9a84c;
@@ -25,41 +26,49 @@
   --color-text-muted: #7a6e55;
   --color-text-disabled: #4a4030;
 
-  /* Semantic */
-  --color-border: #2e2a1e;
+  /* Borders */
+  --color-border: #3a3020;
   --color-border-gold: #c9a84c;
-  --color-grandiose-hover: rgba(201, 168, 76, 0.08);
-  --color-raftsman-bg: rgba(59, 90, 160, 0.18);
-  --color-raftsman-border: rgba(59, 90, 160, 0.3);
-  --color-murasaki-purple-bg: rgba(140, 60, 150, 0.18);
-  --color-murasaki-purple-border: rgba(140, 60, 150, 0.3);
-  --color-bold-irish-bg: rgba(43, 122, 75, 0.15);
-  --color-bold-irish-border: rgba(43, 122, 75, 0.3);
-  --color-shiny-shamrock: #5aaa7a;
-  --color-blue-cue: #7ea3d9;
-  --color-purception: #c07fd0;
-  --color-error: #e87070;
 
-  /* Status */
-  --color-success: #6db86d;
-  --color-success-bg: rgba(80, 160, 80, 0.1);
+  /* Interactive */
+  --color-int-gold-bg: rgba(201, 168, 76, 0.08);
+  --color-int-gold-border: rgba(201, 168, 76, 0.3);
+
+  /* Info (blue) */
+  --color-info: #7ea3d9;
+  --color-info-bg: rgba(59, 90, 160, 0.18);
+  --color-info-border: rgba(59, 90, 160, 0.3);
+
+  /* Purple */
+  --color-purple: #c07fd0;
+  --color-purple-bg: rgba(140, 60, 150, 0.18);
+  --color-purple-border: rgba(140, 60, 150, 0.3);
+
+  /* Success (green) */
+  --color-success: #5aaa7a;
+  --color-success-bg: rgba(43, 122, 75, 0.15);
+  --color-success-border: rgba(43, 122, 75, 0.3);
+
+  /* Warning */
   --color-warning: #c8883a;
   --color-warning-bg: rgba(200, 130, 40, 0.15);
-  --color-danger: #c05040;
+  --color-warning-border: rgba(200, 130, 40, 0.3);
+
+  /* Danger */
+  --color-danger: #e07060;
   --color-danger-bg: rgba(180, 60, 50, 0.15);
+  --color-danger-border: rgba(180, 60, 50, 0.3);
+  --color-danger-subtle: rgba(180, 60, 50, 0.08);
 
-  /* Danger / error UI */
-  --color-danger-text: #e0916e;
-  --color-danger-border: #7a3a20;
-  --color-danger-deep: #5a2a14;
-  --color-error-text: #e05a2b;
-  --color-error-banner-bg: rgba(160, 60, 20, 0.12);
-  --color-error-banner-border: rgba(160, 60, 20, 0.4);
-  --color-danger-icon-bg: rgba(90, 30, 10, 0.15);
+  /* Neutral badge */
   --color-badge-neutral-bg: rgba(255, 255, 255, 0.05);
-  --color-skeleton-highlight: #222222;
+  --color-badge-neutral-border: rgba(255, 255, 255, 0.1);
 
-  --text-2xs: 0.625rem;
+  /* Skeleton */
+  --color-skeleton-base: #1c1c1c;
+  --color-skeleton-highlight: #303030;
+
+  --breakpoint-xs: 32rem; /* Mobile */
 }
 
 [data-theme="light"] {
@@ -117,6 +126,18 @@
   body {
     @apply bg-bg-base text-text-body font-lato antialiased;
   }
+
+  h1 {
+    @apply font-cinzel text-text-primary text-3xl leading-tight font-semibold tracking-wide;
+  }
+
+  h2 {
+    @apply font-cinzel text-text-secondary text-2xl font-semibold tracking-wide;
+  }
+
+  h3 {
+    @apply font-cinzel text-text-secondary text-lg font-normal tracking-wide;
+  }
 }
 
 @keyframes skeleton-shimmer {
@@ -129,6 +150,38 @@
 }
 
 @layer components {
+  .text--brand {
+    @apply font-cinzel text-xl font-bold tracking-widest uppercase;
+  }
+
+  .text--eyebrow {
+    @apply font-cinzel text-xs font-semibold tracking-widest uppercase;
+  }
+
+  .text--body {
+    @apply font-lato text-base leading-relaxed font-light;
+  }
+
+  .text--small {
+    @apply font-lato text-text-secondary text-sm font-light;
+  }
+
+  .text--meta {
+    @apply font-lato text-text-muted text-xs font-light tracking-wide;
+  }
+
+  .text--ui-label {
+    @apply font-cinzel text-xs font-semibold tracking-widest uppercase;
+  }
+
+  .text--button {
+    @apply font-cinzel text-sm font-bold tracking-widest uppercase;
+  }
+
+  .icon--landing-page {
+    @apply text-gold-bright mb-2 block;
+  }
+
   .card {
     @apply bg-bg-surface border-border rounded-lg border;
   }
@@ -148,36 +201,36 @@
   .badge-mcf,
   .badge-unrated,
   .badge-open {
-    @apply font-cinzel text-2xs rounded-md px-2 py-1 font-bold tracking-widest uppercase;
+    @apply font-cinzel rounded-md px-2 py-1 text-xs font-bold tracking-widest uppercase;
   }
   .badge-format {
     @apply bg-bg-raised text-text-secondary border-border;
   }
   .badge-fide {
-    @apply bg-raftsman-bg text-blue-cue border-raftsman-border;
+    @apply bg-info-bg text-info border-info-border;
   }
   .badge-mcf {
-    @apply bg-murasaki-purple-bg text-purception border-murasaki-purple-border;
+    @apply bg-purple-bg text-purple border-purple-border;
   }
   .badge-unrated {
     @apply bg-bg-raised text-text-muted border-border;
   }
   .badge-open {
-    @apply bg-bold-irish-bg text-shiny-shamrock border-bold-irish-border;
+    @apply bg-success-bg text-success border-success-border;
   }
   .spots {
-    @apply font-lato text-2xs rounded-md px-2 py-1 font-semibold;
+    @apply font-lato rounded-md px-2 py-1 text-xs font-semibold;
   }
 
   /* Card CTA buttons */
   .card-btn-view {
-    @apply font-cinzel text-2xs border-gold-bright text-gold-bright cursor-pointer rounded-md border bg-transparent px-4 py-2 font-bold tracking-widest uppercase transition duration-150;
+    @apply font-cinzel border-gold-bright text-gold-bright cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-150;
   }
   .card-btn-view:hover {
-    @apply bg-grandiose-hover;
+    @apply bg-int-gold-bg;
   }
   .card-btn-full {
-    @apply font-cinzel text-2xs border-border text-text-muted rounded-md bg-transparent px-2 py-0.5 font-bold tracking-widest uppercase;
+    @apply font-cinzel border-border text-text-muted rounded-md bg-transparent px-2 py-0.5 text-xs font-bold tracking-widest uppercase;
   }
 
   /* Gold gradient CTA button */
@@ -210,7 +263,7 @@
     @apply border-gold-muted;
   }
   .filter-btn--active {
-    @apply border-gold-bright text-gold-bright bg-grandiose-hover;
+    @apply border-gold-bright text-gold-bright bg-int-gold-bg;
   }
 
   .filter-panel {
@@ -223,7 +276,7 @@
     @apply font-lato text-text-body flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-sm transition-colors select-none;
   }
   .filter-checkbox-item:hover {
-    @apply bg-grandiose-hover;
+    @apply bg-int-gold-bg;
   }
 
   .filter-clear-btn {
@@ -263,7 +316,7 @@
     @apply text-text-secondary rounded-md px-4 py-3 text-sm tracking-widest uppercase no-underline transition duration-150;
   }
   .nav-drawer-link--active {
-    @apply text-gold-bright bg-grandiose-hover;
+    @apply text-gold-bright bg-int-gold-bg;
   }
   .nav-drawer-link-organizer {
     @apply text-gold-bright border-gold-bright mt-4 rounded-md border px-4 py-3 text-center text-sm tracking-widest uppercase no-underline transition-colors duration-150;
@@ -401,7 +454,7 @@
     @apply font-lato text-text-muted mt-1 text-xs font-light;
   }
   .input-hint.error {
-    @apply text-error-text;
+    @apply text-danger;
   }
 
   .input-row {
@@ -438,7 +491,7 @@
     @apply bg-bg-sunken border-border mt-2 rounded-md border px-4 py-2;
   }
   .pw-requirements--error {
-    @apply border-danger-deep;
+    @apply border-danger-border;
   }
   .pw-req-title {
     @apply font-cinzel text-text-muted mb-1 text-sm font-semibold tracking-widest uppercase;
@@ -480,7 +533,7 @@
     @apply bg-bg-sunken border-border relative mt-0.5 h-4 w-4 shrink-0 cursor-pointer appearance-none rounded-md border transition-colors duration-200;
   }
   .checkbox:checked {
-    @apply border-gold-bright bg-grandiose-hover;
+    @apply border-gold-bright bg-int-gold-bg;
   }
   .checkbox:checked::after {
     @apply text-gold-bright absolute text-xs;
@@ -532,11 +585,11 @@
     @apply text-gold-bright font-cinzel border-gold-bright cursor-pointer rounded-md border bg-transparent p-2 text-sm font-bold tracking-widest whitespace-nowrap uppercase transition duration-200;
   }
   .btn-secondary:hover {
-    @apply bg-grandiose-hover;
+    @apply bg-int-gold-bg;
   }
 
   .btn-danger {
-    @apply text-danger-text font-cinzel border-danger-text block w-full cursor-pointer rounded-md border bg-transparent p-2 text-center text-sm font-bold tracking-widest uppercase transition duration-200;
+    @apply text-danger font-cinzel border-danger-border block w-full cursor-pointer rounded-md border bg-transparent p-2 text-center text-sm font-bold tracking-widest uppercase transition duration-200;
   }
   .btn-danger:hover {
     background: rgba(224, 145, 110, 0.1);
@@ -548,10 +601,10 @@
 
   /* ── Error banner ── */
   .error-banner {
-    @apply bg-error-banner-bg border-error-banner-border mb-4 flex items-start gap-2 rounded-md border p-2;
+    @apply bg-danger-bg border-danger-border mb-4 flex items-start gap-2 rounded-md border p-2;
   }
   .error-text {
-    @apply font-lato text-danger-text text-sm leading-relaxed;
+    @apply font-lato text-danger text-sm leading-relaxed;
   }
 
   /* ── Step tracker ── */
@@ -562,7 +615,7 @@
     @apply flex flex-col items-center gap-1;
   }
   .step-circle {
-    @apply border-border bg-bg-sunken font-cinzel text-2xs text-text-muted flex h-7 w-7 items-center justify-center rounded-full border font-semibold;
+    @apply border-border bg-bg-sunken font-cinzel text-text-muted flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold;
   }
   .step-circle--done {
     @apply border-gold-bright text-gold-bright;
@@ -577,7 +630,7 @@
     );
   }
   .step-label {
-    @apply font-cinzel text-2xs text-text-muted tracking-widest uppercase;
+    @apply font-cinzel text-text-muted text-xs tracking-widest uppercase;
   }
   .step-label--current {
     @apply text-gold-bright;
@@ -607,7 +660,7 @@
     @apply opacity-100;
   }
   .avatar-overlay-text {
-    @apply font-cinzel text-2xs text-gold-bright text-center tracking-widest uppercase;
+    @apply font-cinzel text-gold-bright text-center text-xs tracking-widest uppercase;
   }
   .avatar-hint {
     @apply font-lato text-text-muted text-center text-sm italic;
@@ -615,7 +668,7 @@
 
   /* ── Success / session info ── */
   .success-icon {
-    @apply bg-grandiose-hover border-grandiose-hover mx-auto mb-6 flex h-15 w-15 items-center justify-center rounded-full text-2xl;
+    @apply bg-int-gold-bg border-int-gold-border mx-auto mb-6 flex h-15 w-15 items-center justify-center rounded-full text-2xl;
   }
   .session-info {
     @apply bg-bg-sunken border-border mb-4 rounded-md border p-4 text-left;
@@ -627,7 +680,7 @@
     @apply border-b-0;
   }
   .session-key {
-    @apply font-cinzel text-2xs text-text-muted tracking-widest uppercase;
+    @apply font-cinzel text-text-muted text-xs tracking-widest uppercase;
   }
   .session-val {
     @apply font-lato text-text-secondary text-sm;
@@ -658,7 +711,7 @@
     @apply font-cinzel text-text-primary text-xs font-semibold tracking-wider;
   }
   .nav-dropdown-email {
-    @apply text-2xs text-text-muted mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap;
+    @apply text-text-muted mt-0.5 overflow-hidden text-xs text-ellipsis whitespace-nowrap;
   }
 
   .nav-dropdown-item {
@@ -668,7 +721,7 @@
     background: var(--color-grandiose-hover);
   }
   .nav-dropdown-item--danger {
-    @apply text-danger-text;
+    @apply text-danger;
   }
   .nav-dropdown-divider {
     @apply bg-border h-px;
@@ -702,7 +755,7 @@
     @apply font-cinzel text-gold-bright border-gold-bright block rounded-md border bg-transparent px-4 py-3 text-center text-sm font-bold tracking-widest uppercase no-underline transition-colors duration-150;
   }
   .nav-drawer-btn-login:hover {
-    @apply bg-grandiose-hover;
+    @apply bg-int-gold-bg;
   }
   .nav-drawer-btn-signup {
     @apply font-cinzel text-bg-base mt-2 block rounded-md border-none px-4 py-3.5 text-center text-sm font-bold tracking-widest uppercase no-underline;
@@ -719,7 +772,7 @@
     @apply border-border bg-bg-raised mx-auto mb-4 flex h-15 w-15 items-center justify-center rounded-full border text-2xl;
   }
   .confirm-icon--danger {
-    @apply border-danger-deep bg-danger-icon-bg;
+    @apply border-danger-border bg-danger-bg;
   }
   .confirm-title {
     @apply font-cinzel text-text-primary mb-2 text-center text-xl font-semibold tracking-wider;

@@ -27,11 +27,12 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: {
-      default: "MY Chess Tour — Coming Soon",
+      default: "MY Chess Tour — Register for Chess Tournaments in Malaysia",
       template: "%s | MY Chess Tour",
     },
+    applicationName: "MY Chess Tour",
     description:
-      "Malaysia's premier competitive chess circuit. Join the waitlist.",
+      "Discover and sign up for chess tournaments across Malaysia. Browse upcoming events, register online in minutes, and pay securely — all in one place.",
     robots: noindex
       ? { index: false, follow: false }
       : { index: true, follow: true },
@@ -39,17 +40,17 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: "/mct-logo-square.svg",
     },
     openGraph: {
-      title: "MY Chess Tour — Coming Soon",
+      title: "MY Chess Tour — Register for Chess Tournaments in Malaysia",
       description:
-        "Malaysia's premier competitive chess circuit. Join the waitlist.",
+        "Malaysia's home for chess tournaments. Browse upcoming open events, register online, and pay in one step.",
       type: "website",
       siteName: "MY Chess Tour",
     },
     twitter: {
       card: "summary",
-      title: "MY Chess Tour — Coming Soon",
+      title: "MY Chess Tour — Register for Chess Tournaments in Malaysia",
       description:
-        "Malaysia's premier competitive chess circuit. Join the waitlist.",
+        "Malaysia's home for chess tournaments. Browse upcoming open events, register online, and pay in one step.",
     },
   };
 }

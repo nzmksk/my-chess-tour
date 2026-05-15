@@ -232,7 +232,7 @@ export default function StartingRankTab({
                   <td>
                     <div className="flex items-center gap-2">
                       {player.title && (
-                        <span className="font-cinzel text-2xs font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-gold-ghost text-gold-bright border border-gold-dim">
+                        <span className="font-cinzel text-xs font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-gold-ghost text-gold-bright border border-gold-dim">
                           {player.title}
                         </span>
                       )}
