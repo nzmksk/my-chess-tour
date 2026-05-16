@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { Cinzel, Lato } from "next/font/google";
 import "@/styles/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import Footer from "@/components/Footer";
 
 const themeScript = `(function(){try{var t=localStorage.getItem("theme");if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}})();`;
 
@@ -71,10 +70,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <ThemeProvider>
-          {children}
-          <Footer />
-        </ThemeProvider>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

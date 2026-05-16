@@ -10,7 +10,7 @@ export default function Footer() {
 
   return (
     <footer className="bg-bg-sunken border-border border-t-2">
-      <div className="mx-auto max-w-300 px-10 py-8">
+      <div className="mx-auto max-w-300 px-6 py-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           <div className="flex flex-col gap-3">
             <span className="text--brand">MY Chess Tour</span>

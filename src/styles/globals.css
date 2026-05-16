@@ -132,7 +132,7 @@
   }
 
   h2 {
-    @apply font-cinzel text-text-secondary text-2xl font-semibold tracking-wide;
+    @apply font-cinzel text-text-primary text-2xl font-semibold tracking-wide;
   }
 
   h3 {

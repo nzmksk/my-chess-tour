@@ -14,14 +14,14 @@ export default function WaitlistForm() {
 
   if (success) {
     return (
-      <p className="text-sm font-light text-gold-bright">
+      <p className="text-gold-bright text-sm font-light">
         You&apos;re on the list. We&apos;ll be in touch.
       </p>
     );
   }
 
   return (
-    <form action={formAction} className="flex w-full flex-col gap-2">
+    <form action={formAction} className="flex w-full flex-col gap-4">
       <input
         type="email"
         name="email"
@@ -29,6 +29,7 @@ export default function WaitlistForm() {
         placeholder="Your email address"
         disabled={pending}
         className="input disabled:opacity-50"
+        autoComplete="email"
       />
       <select
         name="user_type"
@@ -42,13 +43,11 @@ export default function WaitlistForm() {
       <button
         type="submit"
         disabled={pending}
-        className="btn-primary mt-2 disabled:opacity-50"
+        className="btn-primary disabled:opacity-50"
       >
         {pending ? "Joining…" : "Join the Waitlist"}
       </button>
-      {state.error && (
-        <p className="text-xs text-danger">{state.error}</p>
-      )}
+      {state.error && <p className="text-danger text-xs">{state.error}</p>}
     </form>
   );
 }
