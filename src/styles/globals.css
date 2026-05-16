@@ -151,27 +151,27 @@
 
 @layer components {
   .text--brand {
-    @apply font-cinzel text-xl font-bold tracking-widest uppercase;
+    @apply font-cinzel text-gold-bright text-xl font-bold tracking-widest uppercase;
   }
 
   .text--eyebrow {
-    @apply font-cinzel text-xs font-semibold tracking-widest uppercase;
+    @apply font-cinzel text-gold-bright text-sm font-semibold tracking-widest uppercase;
   }
 
   .text--body {
-    @apply font-lato text-base leading-relaxed font-light;
+    @apply font-lato text-base leading-relaxed font-normal;
   }
 
   .text--small {
-    @apply font-lato text-text-secondary text-sm font-light;
+    @apply font-lato text-text-secondary text-sm font-normal;
   }
 
   .text--meta {
-    @apply font-lato text-text-muted text-xs font-light tracking-wide;
+    @apply font-lato text-text-muted text-xs font-normal tracking-wide;
   }
 
   .text--ui-label {
-    @apply font-cinzel text-xs font-semibold tracking-widest uppercase;
+    @apply font-cinzel text-gold-bright text-xs font-semibold tracking-widest uppercase;
   }
 
   .text--button {
@@ -786,7 +786,7 @@
 
   /* ── Footer ── */
   .footer-link {
-    @apply font-lato text-text-secondary text-sm no-underline transition-colors duration-200;
+    @apply font-lato text-text-secondary text-xs transition-colors duration-200;
   }
   .footer-link:hover {
     @apply text-gold-bright;
