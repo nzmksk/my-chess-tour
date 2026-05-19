@@ -24,8 +24,12 @@ afterEach(() => {
   mockReplace.mockClear();
 });
 
-const detailsContent = <div data-testid="details">Tournament Details Content</div>;
-const startingRankContent = <div data-testid="starting-rank">Starting Rank Content</div>;
+const detailsContent = (
+  <div data-testid="details">Tournament Details Content</div>
+);
+const startingRankContent = (
+  <div data-testid="starting-rank">Starting Rank Content</div>
+);
 
 // ── Initial rendering ──────────────────────────────────────────
 
@@ -140,7 +144,9 @@ describe("TournamentTabs — active tab styling", () => {
         startingRankContent={startingRankContent}
       />,
     );
-    const detailsBtn = screen.getByText("Tournament Details").closest("button")!;
+    const detailsBtn = screen
+      .getByText("Tournament Details")
+      .closest("button")!;
     expect(detailsBtn.className).toContain("border-gold-bright");
     expect(detailsBtn.className).toContain("text-text-primary");
   });
@@ -178,7 +184,9 @@ describe("TournamentTabs — active tab styling", () => {
         startingRankContent={startingRankContent}
       />,
     );
-    const detailsBtn = screen.getByText("Tournament Details").closest("button")!;
+    const detailsBtn = screen
+      .getByText("Tournament Details")
+      .closest("button")!;
     expect(detailsBtn.className).toContain("border-transparent");
   });
 });

@@ -1,8 +1,10 @@
-import { createClient } from '@/services/supabase/server';
+import { createClient } from "@/services/supabase/server";
 
 export async function getCurrentUser() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   return user;
 }
 
@@ -13,15 +15,14 @@ export async function getCurrentUser() {
 export async function hasOrgPermission(
   userId: string,
   organizationId: string,
-  permissionKey: string
+  permissionKey: string,
 ): Promise<boolean> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .rpc('has_org_permission', {
-      p_user_id: userId,
-      p_org_id: organizationId,
-      p_permission: permissionKey,
-    });
+  const { data } = await supabase.rpc("has_org_permission", {
+    p_user_id: userId,
+    p_org_id: organizationId,
+    p_permission: permissionKey,
+  });
   return data === true;
 }
 
@@ -31,14 +32,13 @@ export async function hasOrgPermission(
  */
 export async function hasGlobalPermission(
   userId: string,
-  permissionKey: string
+  permissionKey: string,
 ): Promise<boolean> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .rpc('has_global_permission', {
-      p_user_id: userId,
-      p_permission: permissionKey,
-    });
+  const { data } = await supabase.rpc("has_global_permission", {
+    p_user_id: userId,
+    p_permission: permissionKey,
+  });
   return data === true;
 }
 
@@ -48,11 +48,11 @@ export async function hasGlobalPermission(
 export async function requireOrgPermission(
   userId: string,
   organizationId: string,
-  permissionKey: string
+  permissionKey: string,
 ): Promise<void> {
   const allowed = await hasOrgPermission(userId, organizationId, permissionKey);
   if (!allowed) {
-    throw new Error('Insufficient permissions');
+    throw new Error("Insufficient permissions");
   }
 }
 
@@ -61,10 +61,10 @@ export async function requireOrgPermission(
  */
 export async function requireGlobalPermission(
   userId: string,
-  permissionKey: string
+  permissionKey: string,
 ): Promise<void> {
   const allowed = await hasGlobalPermission(userId, permissionKey);
   if (!allowed) {
-    throw new Error('Insufficient permissions');
+    throw new Error("Insufficient permissions");
   }
 }

@@ -12,8 +12,10 @@ const { mockTournamentsBuilder, mockRpc, mockFrom } = vi.hoisted(() => {
     for (const m of methods) {
       chain[m] = vi.fn(() => chain);
     }
-    chain.then = (onfulfilled: (v: unknown) => unknown, onrejected?: (r: unknown) => unknown) =>
-      Promise.resolve(finalResult).then(onfulfilled, onrejected);
+    chain.then = (
+      onfulfilled: (v: unknown) => unknown,
+      onrejected?: (r: unknown) => unknown,
+    ) => Promise.resolve(finalResult).then(onfulfilled, onrejected);
     return chain;
   }
   const mockTournamentsBuilder = makeBuilder({ data: [], error: null });
@@ -59,7 +61,7 @@ function setTournamentsResult(data: unknown, error: unknown = null) {
   const result = { data, error };
   (mockTournamentsBuilder as Record<string, unknown>).then = (
     onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown
+    onrejected?: (r: unknown) => unknown,
   ) => Promise.resolve(result).then(onfulfilled, onrejected);
 }
 
@@ -106,7 +108,11 @@ describe("GET /api/v1/tournaments", () => {
       });
       expect(item.start_date).toBe("2026-03-15");
       expect(item.end_date).toBe("2026-03-16");
-      expect(item.format).toEqual({ type: "rapid", system: "swiss", rounds: 7 });
+      expect(item.format).toEqual({
+        type: "rapid",
+        system: "swiss",
+        rounds: 7,
+      });
       expect(item.is_fide_rated).toBe(true);
       expect(item.is_mcf_rated).toBe(false);
       expect(item.max_participants).toBe(120);
@@ -139,14 +145,19 @@ describe("GET /api/v1/tournaments", () => {
 
       await GET();
 
-      const orderMock = mockTournamentsBuilder.order as ReturnType<typeof vi.fn>;
+      const orderMock = mockTournamentsBuilder.order as ReturnType<
+        typeof vi.fn
+      >;
       expect(orderMock).toHaveBeenCalledWith("start_date", { ascending: true });
     });
   });
 
   describe("current_participants", () => {
     it("uses RPC to count confirmed registrations per tournament", async () => {
-      setTournamentsResult([makeTournament({ id: "t-1" }), makeTournament({ id: "t-2" })]);
+      setTournamentsResult([
+        makeTournament({ id: "t-1" }),
+        makeTournament({ id: "t-2" }),
+      ]);
       mockRpc.mockResolvedValue({
         data: [
           { tournament_id: "t-1", count: 2 },

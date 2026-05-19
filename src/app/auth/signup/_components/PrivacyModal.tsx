@@ -109,9 +109,7 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             <li>Payment records (amounts, dates, transaction IDs)</li>
           </ul>
 
-          <h3 className="modal-section-title">
-            2. Sensitive Personal Data
-          </h3>
+          <h3 className="modal-section-title">2. Sensitive Personal Data</h3>
           <p className="modal-paragraph">
             Under the PDPA, certain data requires your explicit consent before
             collection:
@@ -134,7 +132,9 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               </tr>
               <tr>
                 <td>Gender</td>
-                <td>Gender-restricted event categories (e.g. Women&apos;s Open)</td>
+                <td>
+                  Gender-restricted event categories (e.g. Women&apos;s Open)
+                </td>
               </tr>
             </tbody>
           </table>
@@ -153,9 +153,7 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               To send you tournament updates, results, and important
               notifications.
             </li>
-            <li>
-              To comply with legal obligations under Malaysian law.
-            </li>
+            <li>To comply with legal obligations under Malaysian law.</li>
           </ul>
           <p className="modal-paragraph">
             We do not sell, rent, or trade your personal data to third parties
@@ -180,7 +178,9 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               </tr>
               <tr>
                 <td>Financial / payment records</td>
-                <td>7 years from transaction date (Income Tax Act requirement)</td>
+                <td>
+                  7 years from transaction date (Income Tax Act requirement)
+                </td>
               </tr>
               <tr>
                 <td>Tournament results &amp; pairings</td>
@@ -206,8 +206,13 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               Sensitive personal data (OKU status, date of birth, gender) and
               financial data (bank details) are encrypted at rest.
             </li>
-            <li>All data is transmitted over encrypted connections (HTTPS/TLS).</li>
-            <li>Access to personal data is restricted to authorised personnel only.</li>
+            <li>
+              All data is transmitted over encrypted connections (HTTPS/TLS).
+            </li>
+            <li>
+              Access to personal data is restricted to authorised personnel
+              only.
+            </li>
           </ul>
 
           <h3 className="modal-section-title">6. Your Rights Under PDPA</h3>
@@ -230,7 +235,8 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             </li>
             <li>
               <strong>Data deletion</strong> — request deletion of your account
-              and associated personal data, subject to our retention obligations.
+              and associated personal data, subject to our retention
+              obligations.
             </li>
           </ul>
           <p className="modal-paragraph">
@@ -271,8 +277,8 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
           <h3 className="modal-section-title">9. Changes to This Policy</h3>
           <p className="modal-paragraph">
             We may update this Privacy Policy from time to time. We will notify
-            you of significant changes via email or a platform notice at least 14
-            days before they take effect.
+            you of significant changes via email or a platform notice at least
+            14 days before they take effect.
           </p>
 
           <h3 className="modal-section-title">10. Contact Us</h3>

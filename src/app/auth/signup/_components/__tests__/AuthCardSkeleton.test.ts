@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import AuthCardSkeleton from "../AuthCardSkeleton";
 
-function findInTree(node: unknown, predicate: (el: Record<string, unknown>) => boolean): Record<string, unknown> | null {
+function findInTree(
+  node: unknown,
+  predicate: (el: Record<string, unknown>) => boolean,
+): Record<string, unknown> | null {
   if (!node || typeof node !== "object") return null;
   const el = node as Record<string, unknown>;
   if (predicate(el)) return el;
@@ -34,14 +37,17 @@ describe("AuthCardSkeleton", () => {
   it("contains shimmer elements", () => {
     const result = AuthCardSkeleton({});
     const shimmer = findInTree(result, (el) => {
-      const className = (el.props as Record<string, unknown> | undefined)?.className;
-      return typeof className === "string" && className.includes("skeleton-shimmer");
+      const className = (el.props as Record<string, unknown> | undefined)
+        ?.className;
+      return (
+        typeof className === "string" && className.includes("skeleton-shimmer")
+      );
     });
     expect(shimmer).not.toBeNull();
   });
 
   it("has the auth-page container class", () => {
-    const result = AuthCardSkeleton({}) as Record<string, unknown>;
+    const result = AuthCardSkeleton({}) as unknown as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
     expect(props.className).toContain("auth-page");
   });
@@ -49,7 +55,8 @@ describe("AuthCardSkeleton", () => {
   it("has the auth-card class", () => {
     const result = AuthCardSkeleton({});
     const card = findInTree(result, (el) => {
-      const className = (el.props as Record<string, unknown> | undefined)?.className;
+      const className = (el.props as Record<string, unknown> | undefined)
+        ?.className;
       return typeof className === "string" && className.includes("auth-card");
     });
     expect(card).not.toBeNull();

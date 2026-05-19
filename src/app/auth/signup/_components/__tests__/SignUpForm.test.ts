@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: unknown; href: string }) => ({ type: "a", props: { href, children } }),
+  default: ({ children, href }: { children: unknown; href: string }) => ({
+    type: "a",
+    props: { href, children },
+  }),
 }));
 
 vi.mock("@/lib/auth-validation", async () => {

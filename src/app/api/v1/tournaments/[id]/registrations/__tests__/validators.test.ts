@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { checkRestrictions, checkFeeTierEligibility, normalizeRestrictions } from "../validators";
+import {
+  checkRestrictions,
+  checkFeeTierEligibility,
+  normalizeRestrictions,
+} from "../validators";
 import type { EligibilityProfile, FeeTier } from "../validators";
 
 // ---------------------------------------------------------------------------
@@ -13,7 +17,9 @@ const DOB_18 = "2008-05-12";
 const DOB_17 = "2008-05-13";
 const DOB_19 = "2007-05-12";
 
-function makeProfile(overrides: Partial<EligibilityProfile> = {}): EligibilityProfile {
+function makeProfile(
+  overrides: Partial<EligibilityProfile> = {},
+): EligibilityProfile {
   return {
     date_of_birth: null,
     gender: "male",
@@ -59,12 +65,21 @@ describe("normalizeRestrictions", () => {
   });
 
   it("merges multiple restriction types from an array", () => {
-    const raw = [{ type: "rating", max: 1799 }, { type: "age", max: 20 }];
-    expect(normalizeRestrictions(raw)).toEqual({ max_rating: 1799, max_age: 20 });
+    const raw = [
+      { type: "rating", max: 1799 },
+      { type: "age", max: 20 },
+    ];
+    expect(normalizeRestrictions(raw)).toEqual({
+      max_rating: 1799,
+      max_age: 20,
+    });
   });
 
   it("maps both min and max for rating and age", () => {
-    const raw = [{ type: "rating", min: 1000, max: 1799 }, { type: "age", min: 16, max: 20 }];
+    const raw = [
+      { type: "rating", min: 1000, max: 1799 },
+      { type: "age", min: 16, max: 20 },
+    ];
     expect(normalizeRestrictions(raw)).toEqual({
       min_rating: 1000,
       max_rating: 1799,
@@ -83,7 +98,10 @@ describe("normalizeRestrictions", () => {
   });
 
   it("handles combined seed-style restrictions", () => {
-    const raw = [{ type: "nationality", value: "Malaysian" }, { type: "age", max: 20 }];
+    const raw = [
+      { type: "nationality", value: "Malaysian" },
+      { type: "age", max: 20 },
+    ];
     expect(normalizeRestrictions(raw)).toEqual({ max_age: 20 });
   });
 });
@@ -259,7 +277,9 @@ describe("checkRestrictions", () => {
     it("uses the blitz key for blitz format tournaments", async () => {
       const result = checkRestrictions(
         { min_rating: 1800 },
-        makeProfile({ fide_rating: { standard: 2000, rapid: 2000, blitz: 1600 } }),
+        makeProfile({
+          fide_rating: { standard: 2000, rapid: 2000, blitz: 1600 },
+        }),
         "blitz",
         NOW,
       );
@@ -371,7 +391,11 @@ describe("checkFeeTierEligibility", () => {
   describe("gender restriction", () => {
     it("returns 400 when tier is female-only and player is male", async () => {
       const tier: FeeTier = { gender: "female" };
-      const result = checkFeeTierEligibility(tier, makeProfile({ gender: "male" }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ gender: "male" }),
+        NOW,
+      );
       expect(result!.status).toBe(400);
       const json = await result!.json();
       expect(json.error.code).toBe("INVALID_FEE_TIER");
@@ -380,7 +404,11 @@ describe("checkFeeTierEligibility", () => {
 
     it("returns null when tier is female-only and player is female", () => {
       const tier: FeeTier = { gender: "female" };
-      const result = checkFeeTierEligibility(tier, makeProfile({ gender: "female" }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ gender: "female" }),
+        NOW,
+      );
       expect(result).toBeNull();
     });
   });
@@ -392,7 +420,11 @@ describe("checkFeeTierEligibility", () => {
   describe("OKU restriction", () => {
     it("returns 400 when tier is OKU-only and player is not OKU", async () => {
       const tier: FeeTier = { oku: true };
-      const result = checkFeeTierEligibility(tier, makeProfile({ is_oku: false }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ is_oku: false }),
+        NOW,
+      );
       expect(result!.status).toBe(400);
       const json = await result!.json();
       expect(json.error.code).toBe("INVALID_FEE_TIER");
@@ -400,7 +432,11 @@ describe("checkFeeTierEligibility", () => {
 
     it("returns null when tier is OKU-only and player is OKU", () => {
       const tier: FeeTier = { oku: true };
-      const result = checkFeeTierEligibility(tier, makeProfile({ is_oku: true }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ is_oku: true }),
+        NOW,
+      );
       expect(result).toBeNull();
     });
   });
@@ -412,7 +448,11 @@ describe("checkFeeTierEligibility", () => {
   describe("title restriction", () => {
     it("returns 400 when tier requires titles and player has no title", async () => {
       const tier: FeeTier = { titles: ["GM", "IM"] };
-      const result = checkFeeTierEligibility(tier, makeProfile({ title: null }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ title: null }),
+        NOW,
+      );
       expect(result!.status).toBe(400);
       const json = await result!.json();
       expect(json.error.code).toBe("INVALID_FEE_TIER");
@@ -420,13 +460,21 @@ describe("checkFeeTierEligibility", () => {
 
     it("returns 400 when tier requires titles and player has wrong title", async () => {
       const tier: FeeTier = { titles: ["GM", "IM"] };
-      const result = checkFeeTierEligibility(tier, makeProfile({ title: "FM" }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ title: "FM" }),
+        NOW,
+      );
       expect(result!.status).toBe(400);
     });
 
     it("returns null when player has a title matching the tier", () => {
       const tier: FeeTier = { titles: ["GM", "IM", "FM"] };
-      const result = checkFeeTierEligibility(tier, makeProfile({ title: "FM" }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ title: "FM" }),
+        NOW,
+      );
       expect(result).toBeNull();
     });
   });
@@ -438,7 +486,11 @@ describe("checkFeeTierEligibility", () => {
   describe("age restriction", () => {
     it("returns 422 when date_of_birth is missing for age-restricted tier", async () => {
       const tier: FeeTier = { age_max: 18 };
-      const result = checkFeeTierEligibility(tier, makeProfile({ date_of_birth: null }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ date_of_birth: null }),
+        NOW,
+      );
       expect(result!.status).toBe(422);
       const json = await result!.json();
       expect(json.error.code).toBe("VALIDATION_ERROR");
@@ -446,7 +498,11 @@ describe("checkFeeTierEligibility", () => {
 
     it("returns 400 when player is below the tier's min_age", async () => {
       const tier: FeeTier = { age_min: 18 };
-      const result = checkFeeTierEligibility(tier, makeProfile({ date_of_birth: DOB_17 }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ date_of_birth: DOB_17 }),
+        NOW,
+      );
       expect(result!.status).toBe(400);
       const json = await result!.json();
       expect(json.error.code).toBe("INVALID_FEE_TIER");
@@ -454,7 +510,11 @@ describe("checkFeeTierEligibility", () => {
 
     it("returns 400 when player exceeds the tier's max_age", async () => {
       const tier: FeeTier = { age_max: 17 };
-      const result = checkFeeTierEligibility(tier, makeProfile({ date_of_birth: DOB_18 }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ date_of_birth: DOB_18 }),
+        NOW,
+      );
       expect(result!.status).toBe(400);
       const json = await result!.json();
       expect(json.error.code).toBe("INVALID_FEE_TIER");
@@ -480,7 +540,11 @@ describe("checkFeeTierEligibility", () => {
 
     it("returns null for an under-19 tier when player is 18 (within range)", () => {
       const tier: FeeTier = { age_min: 0, age_max: 19 };
-      const result = checkFeeTierEligibility(tier, makeProfile({ date_of_birth: DOB_18 }), NOW);
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ date_of_birth: DOB_18 }),
+        NOW,
+      );
       expect(result).toBeNull();
     });
   });

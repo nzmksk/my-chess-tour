@@ -99,14 +99,14 @@ describe("requireOrgPermission", () => {
   it("does not throw when user has the permission", async () => {
     createClient.mockResolvedValue(makeClient({ rpcResult: true }) as never);
     await expect(
-      requireOrgPermission("u1", "org1", "tournament.create")
+      requireOrgPermission("u1", "org1", "tournament.create"),
     ).resolves.toBeUndefined();
   });
 
   it("throws when user lacks the permission", async () => {
     createClient.mockResolvedValue(makeClient({ rpcResult: false }) as never);
     await expect(
-      requireOrgPermission("u1", "org1", "tournament.create")
+      requireOrgPermission("u1", "org1", "tournament.create"),
     ).rejects.toThrow("Insufficient permissions");
   });
 });
@@ -117,14 +117,14 @@ describe("requireGlobalPermission", () => {
   it("does not throw when user has the permission", async () => {
     createClient.mockResolvedValue(makeClient({ rpcResult: true }) as never);
     await expect(
-      requireGlobalPermission("u1", "platform.manage")
+      requireGlobalPermission("u1", "platform.manage"),
     ).resolves.toBeUndefined();
   });
 
   it("throws when user lacks the permission", async () => {
     createClient.mockResolvedValue(makeClient({ rpcResult: false }) as never);
     await expect(
-      requireGlobalPermission("u1", "platform.manage")
+      requireGlobalPermission("u1", "platform.manage"),
     ).rejects.toThrow("Insufficient permissions");
   });
 });

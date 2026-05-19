@@ -12,19 +12,9 @@ const {
   mockGetUser,
   resetOrgCallCount,
 } = vi.hoisted(() => {
-  function makeBuilder(finalResult: {
-    data?: unknown;
-    error?: unknown;
-  }) {
+  function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
     const b: Record<string, unknown> = {};
-    for (const m of [
-      "select",
-      "eq",
-      "in",
-      "single",
-      "maybeSingle",
-      "insert",
-    ]) {
+    for (const m of ["select", "eq", "in", "single", "maybeSingle", "insert"]) {
       b[m] = vi.fn(() => b);
     }
     b.then = (
@@ -196,7 +186,9 @@ describe("POST /api/v1/organizer/apply", () => {
     });
 
     it("returns 400 when name is empty string", async () => {
-      const res = await POST(makeRequest({ name: "  ", email: "chess@klca.com" }));
+      const res = await POST(
+        makeRequest({ name: "  ", email: "chess@klca.com" }),
+      );
       expect(res.status).toBe(400);
       const json = await res.json();
       expect(json.error.message).toMatch(/name/i);

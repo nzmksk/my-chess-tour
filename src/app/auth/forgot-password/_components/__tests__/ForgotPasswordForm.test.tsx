@@ -8,9 +8,13 @@ import { cleanup, render, screen } from "@testing-library/react";
 // ---------------------------------------------------------------------------
 
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
+  default: ({
+    children,
+    href,
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => <a href={href}>{children}</a>,
 }));
 
 vi.mock("@/services/supabase/admin", () => ({
@@ -38,7 +42,11 @@ vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
-    useActionState: (_action: unknown, _initial: unknown) => [mockState, mockFormAction, mockPending],
+    useActionState: (_action: unknown, _initial: unknown) => [
+      mockState,
+      mockFormAction,
+      mockPending,
+    ],
   };
 });
 
@@ -80,7 +88,9 @@ describe("ForgotPasswordForm", () => {
 
   it("renders Send Reset Link button", () => {
     render(<ForgotPasswordForm />);
-    expect(screen.getByRole("button", { name: "Send Reset Link" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Send Reset Link" }),
+    ).toBeDefined();
   });
 
   it("renders Back to sign in link pointing to /auth/login", () => {
@@ -105,7 +115,9 @@ describe("ForgotPasswordForm", () => {
   it("shows error message text in banner", () => {
     mockState.error = "Please enter a valid email address.";
     render(<ForgotPasswordForm />);
-    expect(screen.getByText(/Please enter a valid email address/)).toBeDefined();
+    expect(
+      screen.getByText(/Please enter a valid email address/),
+    ).toBeDefined();
   });
 
   it("does not show error banner in clean state", () => {
@@ -130,7 +142,9 @@ describe("ForgotPasswordForm", () => {
   it("does not show the form after submission", () => {
     mockState.submitted = true;
     render(<ForgotPasswordForm />);
-    expect(screen.queryByRole("button", { name: "Send Reset Link" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Send Reset Link" }),
+    ).toBeNull();
     expect(screen.queryByLabelText("Email Address")).toBeNull();
   });
 

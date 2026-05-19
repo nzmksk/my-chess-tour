@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 import { createClient } from "@/services/supabase/client";
 import { ThemeToggle } from "./ThemeToggle";
+import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 
 const NAV_LINKS = [
   { href: "/organizations/apply", label: "Become an Organizer", ghost: true },
@@ -97,10 +98,10 @@ export default function NavBar() {
 
   return (
     <>
-      <nav className="bg-bg-sunken border-b border-border sticky top-0 z-50">
-        <div className="max-w-300 mx-auto px-10 flex items-center justify-between h-16">
+      <nav className="bg-bg-sunken border-border sticky top-0 z-50 border-b">
+        <div className="mx-auto flex h-16 max-w-300 items-center justify-between px-10">
           {/* Brand logo */}
-          <Link href="/tournaments" className="flex items-center shrink-0">
+          <Link href="/tournaments" className="flex shrink-0 items-center">
             <Image
               src="/mct-logo-horizontal.svg"
               alt="MY Chess Tour"
@@ -111,7 +112,7 @@ export default function NavBar() {
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden items-center gap-2 sm:flex">
             {NAV_LINKS.map(({ href, label, ghost }) => (
               <Link
                 key={href}
@@ -119,7 +120,7 @@ export default function NavBar() {
                 className={
                   ghost
                     ? "nav-link-organizer"
-                    : `nav-link${pathname === href ? " nav-link--active" : ""}`
+                    : `nav-link${pathname === href ? "nav-link--active" : ""}`
                 }
               >
                 {label}
@@ -132,7 +133,7 @@ export default function NavBar() {
               <>
                 <Link
                   href="/registrations"
-                  className={`nav-link${pathname === "/registrations" ? " nav-link--active" : ""}`}
+                  className={`nav-link${pathname === "/registrations" ? "nav-link--active" : ""}`}
                 >
                   My Tournaments
                 </Link>
@@ -140,7 +141,7 @@ export default function NavBar() {
                 {/* Avatar + dropdown */}
                 <div className="relative ml-2" ref={dropdownRef}>
                   <button
-                    className={`nav-avatar${dropdownOpen ? " nav-avatar--open" : ""}`}
+                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""}`}
                     onClick={() => setDropdownOpen((v) => !v)}
                     aria-label="Account menu"
                     aria-expanded={dropdownOpen}
@@ -203,25 +204,13 @@ export default function NavBar() {
 
           {/* Hamburger button — visible on small screens only */}
           <button
-            className="flex sm:hidden items-center bg-transparent border-0 cursor-pointer p-2 text-text-secondary"
+            className="text-text-secondary flex cursor-pointer items-center border-0 bg-transparent p-2 sm:hidden"
             onClick={() => setDrawerState(openDrawer(pathname ?? ""))}
             aria-label="Open navigation menu"
             aria-expanded={drawerOpen}
             aria-controls="nav-drawer"
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            <MenuIcon />
           </button>
         </div>
       </nav>
@@ -244,31 +233,20 @@ export default function NavBar() {
         aria-label="Navigation menu"
       >
         {/* Close button */}
-        <div className="flex justify-end mb-8">
+        <div className="mb-8 flex justify-end">
           <button
             onClick={() => setDrawerState((current) => closeDrawer(current))}
             aria-label="Close navigation menu"
-            className="bg-transparent border-0 cursor-pointer p-2 text-text-secondary"
+            className="text-text-secondary cursor-pointer border-0 bg-transparent p-2"
           >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <CloseIcon />
           </button>
         </div>
 
         {/* Theme toggle in drawer */}
-        <div className="flex items-center gap-3 mb-4 px-1">
+        <div className="mb-4 flex items-center gap-3 px-1">
           <ThemeToggle />
-          <span className="text-sm text-text-muted) font-lato uppercase tracking-widest">
+          <span className="text-text-muted) font-lato text-sm tracking-widest uppercase">
             Theme
           </span>
         </div>
@@ -280,7 +258,7 @@ export default function NavBar() {
               key={href}
               href={href}
               onClick={() => setDrawerState((current) => closeDrawer(current))}
-              className={`nav-drawer-link${pathname === href ? " nav-drawer-link--active" : ""}`}
+              className={`nav-drawer-link${pathname === href ? "nav-drawer-link--active" : ""}`}
             >
               {label}
             </Link>
@@ -293,7 +271,7 @@ export default function NavBar() {
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
                 }
-                className={`nav-drawer-link${pathname === "/registrations" ? " nav-drawer-link--active" : ""}`}
+                className={`nav-drawer-link${pathname === "/registrations" ? "nav-drawer-link--active" : ""}`}
               >
                 My Tournaments
               </Link>

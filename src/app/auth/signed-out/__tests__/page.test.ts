@@ -18,7 +18,7 @@ describe("SignedOutPage", () => {
   });
 
   it("has a min-h-screen container", () => {
-    const result = SignedOutPage() as Record<string, unknown>;
+    const result = SignedOutPage() as unknown as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
     expect(props.className).toContain("min-h-screen");
   });

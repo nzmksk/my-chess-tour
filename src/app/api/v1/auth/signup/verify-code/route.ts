@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
       {
         error: {
           code: "VALIDATION_ERROR",
-          message: "First name can only contain letters, spaces, hyphens, and apostrophes",
+          message:
+            "First name can only contain letters, spaces, hyphens, and apostrophes",
         },
       },
       { status: 400 },
@@ -84,7 +85,8 @@ export async function POST(request: NextRequest) {
       {
         error: {
           code: "VALIDATION_ERROR",
-          message: "Last name can only contain letters, spaces, hyphens, and apostrophes",
+          message:
+            "Last name can only contain letters, spaces, hyphens, and apostrophes",
         },
       },
       { status: 400 },
@@ -208,7 +210,7 @@ export async function POST(request: NextRequest) {
   const { error: profileError } = await supabaseAdmin
     .from("player_profiles")
     .update({
-      gender: gender ? gender.toLowerCase() as "male" | "female" : null,
+      gender: gender ? (gender.toLowerCase() as "male" | "female") : null,
       nationality: nationality || null,
       date_of_birth: dateOfBirth || null,
       fide_id: fideId || null,
@@ -218,7 +220,11 @@ export async function POST(request: NextRequest) {
     .eq("user_id", userId);
 
   if (profileError) {
-    console.error("Failed to update player profile for user ID:", userId, profileError);
+    console.error(
+      "Failed to update player profile for user ID:",
+      userId,
+      profileError,
+    );
     return NextResponse.json(
       {
         error: {

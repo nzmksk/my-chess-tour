@@ -72,7 +72,7 @@ function Section({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="font-cinzel text-2xs font-semibold uppercase tracking-widest text-text-muted">
+      <dt className="font-cinzel text-xs font-semibold uppercase tracking-widest text-text-muted">
         {label}
       </dt>
       <dd className="font-lato text-sm text-text-body">{value}</dd>
@@ -436,9 +436,7 @@ export default function TournamentDetail({
             <span className="badge-format">
               {capitalise(t.format?.type ?? "") || "—"}
             </span>
-            {t.is_fide_rated && (
-              <span className="badge-fide">FIDE Rated</span>
-            )}
+            {t.is_fide_rated && <span className="badge-fide">FIDE Rated</span>}
             {t.is_mcf_rated && <span className="badge-mcf">MCF Rated</span>}
             {!t.is_fide_rated && !t.is_mcf_rated && (
               <span className="badge-unrated">Unrated</span>

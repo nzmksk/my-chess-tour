@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
-import { cleanup, fireEvent, render, screen, act } from "@testing-library/react";
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  act,
+} from "@testing-library/react";
 import ApplyForm from "../ApplyForm";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +49,9 @@ function getRemoveLinkButtons() {
 }
 
 function getSubmitButton() {
-  return screen.getByRole("button", { name: "Submit Application" }) as HTMLButtonElement;
+  return screen.getByRole("button", {
+    name: "Submit Application",
+  }) as HTMLButtonElement;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +114,9 @@ describe("ApplyForm", () => {
     it("updates the URL field of a link row", () => {
       render(<ApplyForm />);
       fireEvent.click(getAddLinkButton());
-      const urlInput = screen.getByPlaceholderText("https://...") as HTMLInputElement;
+      const urlInput = screen.getByPlaceholderText(
+        "https://...",
+      ) as HTMLInputElement;
       fireEvent.change(urlInput, { target: { value: "https://example.com" } });
       expect(urlInput.value).toBe("https://example.com");
     });
@@ -134,7 +137,9 @@ describe("ApplyForm", () => {
 
     it("shows the success state after a successful API response", async () => {
       render(<ApplyForm />);
-      const nameInput = screen.getByPlaceholderText("e.g., KL Chess Association");
+      const nameInput = screen.getByPlaceholderText(
+        "e.g., KL Chess Association",
+      );
       const emailInput = screen.getByPlaceholderText("chess@org.com");
       fireEvent.change(nameInput, { target: { value: "Test Org" } });
       fireEvent.change(emailInput, { target: { value: "test@org.com" } });
@@ -150,11 +155,15 @@ describe("ApplyForm", () => {
     it("passes filtered links (non-empty URLs only) in the request body", async () => {
       render(<ApplyForm />);
       fireEvent.click(getAddLinkButton()); // add a link row
-      const urlInput = screen.getByPlaceholderText("https://...") as HTMLInputElement;
+      const urlInput = screen.getByPlaceholderText(
+        "https://...",
+      ) as HTMLInputElement;
       fireEvent.change(urlInput, { target: { value: "https://fb.com/chess" } });
 
       fireEvent.click(getAddLinkButton()); // add a second (empty) link row
-      const nameInput = screen.getByPlaceholderText("e.g., KL Chess Association");
+      const nameInput = screen.getByPlaceholderText(
+        "e.g., KL Chess Association",
+      );
       const emailInput = screen.getByPlaceholderText("chess@org.com");
       fireEvent.change(nameInput, { target: { value: "Test Org" } });
       fireEvent.change(emailInput, { target: { value: "test@org.com" } });
@@ -172,7 +181,9 @@ describe("ApplyForm", () => {
       render(<ApplyForm />);
       fireEvent.click(getAddLinkButton());
       // leave URL empty
-      const nameInput = screen.getByPlaceholderText("e.g., KL Chess Association");
+      const nameInput = screen.getByPlaceholderText(
+        "e.g., KL Chess Association",
+      );
       const emailInput = screen.getByPlaceholderText("chess@org.com");
       fireEvent.change(nameInput, { target: { value: "Test Org" } });
       fireEvent.change(emailInput, { target: { value: "test@org.com" } });
@@ -209,7 +220,9 @@ describe("ApplyForm", () => {
         fireEvent.submit(document.querySelector("form")!);
       });
 
-      expect(screen.getByText("Submission failed. Please try again.")).toBeDefined();
+      expect(
+        screen.getByText("Submission failed. Please try again."),
+      ).toBeDefined();
     });
 
     it("shows a network error when fetch throws", async () => {
@@ -233,7 +246,9 @@ describe("ApplyForm", () => {
         fireEvent.submit(document.querySelector("form")!);
       });
 
-      const btn = document.querySelector("button[type='submit']") as HTMLButtonElement;
+      const btn = document.querySelector(
+        "button[type='submit']",
+      ) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
   });
@@ -252,7 +267,9 @@ describe("ApplyForm", () => {
         fireEvent.submit(document.querySelector("form")!);
       });
 
-      const btn = document.querySelector("button[type='submit']") as HTMLButtonElement;
+      const btn = document.querySelector(
+        "button[type='submit']",
+      ) as HTMLButtonElement;
       expect(btn.disabled).toBe(true);
 
       // Resolve to avoid hanging

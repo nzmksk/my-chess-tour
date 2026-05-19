@@ -399,7 +399,10 @@ describe("register card", () => {
   });
 
   it("shows full status when no spots remain", () => {
-    const html = render({ max_participants: 100, current_participants: 100 }, true);
+    const html = render(
+      { max_participants: 100, current_participants: 100 },
+      true,
+    );
     expect(html).toContain("Full Capacity");
   });
 
@@ -475,7 +478,11 @@ describe("CTA button auth states", () => {
   it("shows 'Registration Closed' over 'Full Capacity' when deadline passed and tournament is full", () => {
     const pastDeadline = new Date(Date.now() - 1000).toISOString();
     const html = render(
-      { max_participants: 100, current_participants: 100, registration_deadline: pastDeadline },
+      {
+        max_participants: 100,
+        current_participants: 100,
+        registration_deadline: pastDeadline,
+      },
       true,
     );
     expect(html).toContain("Registration Closed");

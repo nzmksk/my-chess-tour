@@ -5,16 +5,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks — must be hoisted so vi.mock factories can reference them
 // ---------------------------------------------------------------------------
 
-const { mockMaybeSingle, mockEq, mockSelect, mockFrom, mockStoreVerificationCode, mockSendVerificationEmail } =
-  vi.hoisted(() => {
-    const mockMaybeSingle = vi.fn();
-    const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
-    const mockSelect = vi.fn(() => ({ eq: mockEq }));
-    const mockFrom = vi.fn(() => ({ select: mockSelect }));
-    const mockStoreVerificationCode = vi.fn();
-    const mockSendVerificationEmail = vi.fn();
-    return { mockMaybeSingle, mockEq, mockSelect, mockFrom, mockStoreVerificationCode, mockSendVerificationEmail };
-  });
+const {
+  mockMaybeSingle,
+  mockEq,
+  mockSelect,
+  mockFrom,
+  mockStoreVerificationCode,
+  mockSendVerificationEmail,
+} = vi.hoisted(() => {
+  const mockMaybeSingle = vi.fn();
+  const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
+  const mockSelect = vi.fn(() => ({ eq: mockEq }));
+  const mockFrom = vi.fn(() => ({ select: mockSelect }));
+  const mockStoreVerificationCode = vi.fn();
+  const mockSendVerificationEmail = vi.fn();
+  return {
+    mockMaybeSingle,
+    mockEq,
+    mockSelect,
+    mockFrom,
+    mockStoreVerificationCode,
+    mockSendVerificationEmail,
+  };
+});
 
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom },
@@ -133,7 +146,10 @@ describe("POST /api/v1/auth/signup/request-code", () => {
   // --- Email-exists check ---------------------------------------------------
 
   it("returns 409 EMAIL_EXISTS when email is already taken", async () => {
-    mockMaybeSingle.mockResolvedValue({ data: { id: "existing-user" }, error: null });
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "existing-user" },
+      error: null,
+    });
 
     const res = await POST(makeRequest({ email: "existing@example.com" }));
     const json = await res.json();
@@ -144,7 +160,10 @@ describe("POST /api/v1/auth/signup/request-code", () => {
   });
 
   it("does not store or send code when email already exists", async () => {
-    mockMaybeSingle.mockResolvedValue({ data: { id: "existing-user" }, error: null });
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "existing-user" },
+      error: null,
+    });
 
     await POST(makeRequest({ email: "existing@example.com" }));
 
@@ -161,7 +180,10 @@ describe("POST /api/v1/auth/signup/request-code", () => {
   // --- External service errors ----------------------------------------------
 
   it("returns 500 when Supabase db check fails", async () => {
-    mockMaybeSingle.mockResolvedValue({ data: null, error: { message: "DB error" } });
+    mockMaybeSingle.mockResolvedValue({
+      data: null,
+      error: { message: "DB error" },
+    });
 
     const res = await POST(makeRequest({ email: "player@example.com" }));
     const json = await res.json();

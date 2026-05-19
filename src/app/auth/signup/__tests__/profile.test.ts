@@ -22,7 +22,7 @@ describe("RegisterProfilePage", () => {
   });
 
   it("has a min-h-screen container", () => {
-    const result = RegisterProfilePage() as Record<string, unknown>;
+    const result = RegisterProfilePage() as unknown as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
     expect(props.className).toContain("min-h-screen");
   });
@@ -30,6 +30,8 @@ describe("RegisterProfilePage", () => {
   it("exports metadata with a title", async () => {
     const mod = await import("../profile/page");
     expect(mod.metadata).toBeDefined();
-    expect((mod.metadata as { title: string }).title).toContain("MY Chess Tour");
+    expect((mod.metadata as { title: string }).title).toContain(
+      "MY Chess Tour",
+    );
   });
 });

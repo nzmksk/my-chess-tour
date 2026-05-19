@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -54,15 +60,17 @@ afterEach(cleanup);
 // ---------------------------------------------------------------------------
 
 function getSubmitButton(): HTMLButtonElement {
-  return screen.getAllByRole("button").find(
-    (b) => (b as HTMLButtonElement).type === "submit"
-  ) as HTMLButtonElement;
+  return screen
+    .getAllByRole("button")
+    .find(
+      (b) => (b as HTMLButtonElement).type === "submit",
+    ) as HTMLButtonElement;
 }
 
 function getBackButton(): HTMLElement {
-  return screen.getAllByRole("button").find(
-    (b) => b.textContent?.trim() === "Back"
-  )!;
+  return screen
+    .getAllByRole("button")
+    .find((b) => b.textContent?.trim() === "Back")!;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +111,6 @@ describe("ProfileForm", () => {
     expect(avatar.textContent).toContain("AW");
   });
 
-
   it("renders Back and Continue/Sending buttons", () => {
     render(<ProfileForm />);
     expect(getBackButton()).toBeDefined();
@@ -115,7 +122,9 @@ describe("ProfileForm", () => {
   it("fires onChange on the Gender select", async () => {
     render(<ProfileForm />);
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "Male" } });
+      fireEvent.change(screen.getByLabelText("Gender"), {
+        target: { value: "Male" },
+      });
     });
     // setForm was called (the updater executed successfully)
     expect(true).toBe(true);
@@ -204,7 +213,7 @@ describe("ProfileForm", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ message: "Verification code sent" }),
-      })
+      }),
     );
 
     render(<ProfileForm />);
@@ -221,8 +230,10 @@ describe("ProfileForm", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: { code: "INTERNAL_ERROR", message: "Something went wrong" } }),
-      })
+        json: async () => ({
+          error: { code: "INTERNAL_ERROR", message: "Something went wrong" },
+        }),
+      }),
     );
 
     render(<ProfileForm />);
@@ -230,7 +241,9 @@ describe("ProfileForm", () => {
       fireEvent.submit(getSubmitButton().closest("form")!);
     });
 
-    expect(screen.getByRole("alert").textContent).toContain("Something went wrong");
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Something went wrong",
+    );
   });
 
   it("shows a 'Sign in instead' link on EMAIL_EXISTS error", async () => {
@@ -240,9 +253,12 @@ describe("ProfileForm", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         json: async () => ({
-          error: { code: "EMAIL_EXISTS", message: "An account with this email already exists" },
+          error: {
+            code: "EMAIL_EXISTS",
+            message: "An account with this email already exists",
+          },
         }),
-      })
+      }),
     );
 
     render(<ProfileForm />);
@@ -250,7 +266,9 @@ describe("ProfileForm", () => {
       fireEvent.submit(getSubmitButton().closest("form")!);
     });
 
-    expect(screen.getByRole("link", { name: /sign in instead/i })).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: /sign in instead/i }),
+    ).toBeDefined();
   });
 
   it("shows fallback error message when API response has no error field", async () => {
@@ -275,7 +293,10 @@ describe("ProfileForm", () => {
 
   it("shows 'Network error' message when fetch throws", async () => {
     process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network down")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network down")),
+    );
 
     render(<ProfileForm />);
     await act(async () => {

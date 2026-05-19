@@ -50,7 +50,11 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (dbError) {
-    console.error("Database error while checking existing email: %s", normalized, dbError);
+    console.error(
+      "Database error while checking existing email: %s",
+      normalized,
+      dbError,
+    );
     return NextResponse.json(
       {
         error: { code: "INTERNAL_ERROR", message: "Failed to validate email" },
@@ -60,7 +64,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (existing) {
-    console.error(`Attempt to request verification code for already existing email: ${normalized}`);
+    console.error(
+      `Attempt to request verification code for already existing email: ${normalized}`,
+    );
     return NextResponse.json(
       {
         error: {
@@ -94,7 +100,9 @@ export async function POST(request: NextRequest) {
   try {
     await sendVerificationEmail(email, code);
   } catch (err) {
-    console.error(`Failed to send verification email for: ${email} with error: ${err}`);
+    console.error(
+      `Failed to send verification email for: ${email} with error: ${err}`,
+    );
     return NextResponse.json(
       {
         error: {

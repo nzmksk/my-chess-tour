@@ -8,7 +8,7 @@ const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL!;
 function loadTemplate(name: string): string {
   return fs.readFileSync(
     path.join(process.cwd(), "src/services/email/templates", name),
-    "utf-8"
+    "utf-8",
   );
 }
 
@@ -29,7 +29,10 @@ export async function sendVerificationEmail(email: string, code: string) {
 }
 
 export async function sendPasswordResetEmail(email: string, resetLink: string) {
-  const html = loadTemplate("reset-password.html").replace(/\{\{resetLink\}\}/g, resetLink);
+  const html = loadTemplate("reset-password.html").replace(
+    /\{\{resetLink\}\}/g,
+    resetLink,
+  );
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,

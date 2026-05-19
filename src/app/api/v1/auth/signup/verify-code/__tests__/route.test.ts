@@ -147,7 +147,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
       expect.objectContaining({
         email: "player@example.com",
         email_confirm: true,
-      })
+      }),
     );
   });
 
@@ -161,7 +161,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
           first_name: "Alice",
           last_name: "Wong",
         }),
-      })
+      }),
     );
   });
 
@@ -175,7 +175,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
         nationality: "Malaysian",
         date_of_birth: "1990-01-01",
         is_oku: false,
-      })
+      }),
     );
     expect(mockEq).toHaveBeenCalledWith("user_id", "new-user-id");
   });
@@ -187,7 +187,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
       expect.objectContaining({
         fide_id: null,
         mcf_id: null,
-      })
+      }),
     );
   });
 
@@ -196,7 +196,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     await POST(makeRequest(bodyWithoutIsOku));
 
     expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ is_oku: false })
+      expect.objectContaining({ is_oku: false }),
     );
   });
 

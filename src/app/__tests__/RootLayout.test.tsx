@@ -50,8 +50,4 @@ describe("RootLayout", () => {
     expect(html).toContain('<span id="child">hello</span>');
   });
 
-  it("renders a footer element", () => {
-    const html = renderToStaticMarkup(<RootLayout>test</RootLayout>);
-    expect(html).toContain("<footer");
-  });
 });

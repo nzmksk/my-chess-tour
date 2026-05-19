@@ -8,7 +8,11 @@ import { NextRequest } from "next/server";
 
 const { mockTournamentBuilder, mockRegistrationsBuilder, mockFrom } =
   vi.hoisted(() => {
-    function makeBuilder(finalResult: { data?: unknown; count?: unknown; error: unknown }) {
+    function makeBuilder(finalResult: {
+      data?: unknown;
+      count?: unknown;
+      error: unknown;
+    }) {
       const chain: Record<string, unknown> = {};
       const methods = ["select", "eq", "single", "in"];
       for (const m of methods) {
@@ -218,7 +222,9 @@ describe("GET /api/v1/tournaments/:id", () => {
     });
 
     it("unwraps organization from array when join returns an array", async () => {
-      setTournamentResult(makeTournament({ organizations: [mockOrganization] }));
+      setTournamentResult(
+        makeTournament({ organizations: [mockOrganization] }),
+      );
 
       const res = await GET(makeRequest(VALID_UUID), {
         params: Promise.resolve({ id: VALID_UUID }),

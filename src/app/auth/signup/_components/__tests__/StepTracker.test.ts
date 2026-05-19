@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import StepTracker from "../StepTracker";
 import type { Step } from "../StepTracker";
 
-function findInTree(node: unknown, predicate: (el: Record<string, unknown>) => boolean): Record<string, unknown> | null {
+function findInTree(
+  node: unknown,
+  predicate: (el: Record<string, unknown>) => boolean,
+): Record<string, unknown> | null {
   if (!node || typeof node !== "object") return null;
   const el = node as Record<string, unknown>;
   if (predicate(el)) return el;
@@ -70,8 +73,12 @@ describe("StepTracker", () => {
   it("applies current class to the current step circle", () => {
     const result = StepTracker({ steps: threeSteps });
     const currentCircle = findInTree(result, (el) => {
-      const className = (el.props as Record<string, unknown> | undefined)?.className;
-      return typeof className === "string" && className.includes("step-circle--current");
+      const className = (el.props as Record<string, unknown> | undefined)
+        ?.className;
+      return (
+        typeof className === "string" &&
+        className.includes("step-circle--current")
+      );
     });
     expect(currentCircle).not.toBeNull();
   });
@@ -84,8 +91,11 @@ describe("StepTracker", () => {
     ];
     const result = StepTracker({ steps });
     const doneCircle = findInTree(result, (el) => {
-      const className = (el.props as Record<string, unknown> | undefined)?.className;
-      return typeof className === "string" && className.includes("step-circle--done");
+      const className = (el.props as Record<string, unknown> | undefined)
+        ?.className;
+      return (
+        typeof className === "string" && className.includes("step-circle--done")
+      );
     });
     expect(doneCircle).not.toBeNull();
   });
@@ -93,8 +103,11 @@ describe("StepTracker", () => {
   it("renders connectors between steps", () => {
     const result = StepTracker({ steps: threeSteps });
     const connector = findInTree(result, (el) => {
-      const className = (el.props as Record<string, unknown> | undefined)?.className;
-      return typeof className === "string" && className.includes("step-connector");
+      const className = (el.props as Record<string, unknown> | undefined)
+        ?.className;
+      return (
+        typeof className === "string" && className.includes("step-connector")
+      );
     });
     expect(connector).not.toBeNull();
   });
@@ -107,8 +120,12 @@ describe("StepTracker", () => {
     ];
     const result = StepTracker({ steps });
     const doneConnector = findInTree(result, (el) => {
-      const className = (el.props as Record<string, unknown> | undefined)?.className;
-      return typeof className === "string" && className.includes("step-connector--done");
+      const className = (el.props as Record<string, unknown> | undefined)
+        ?.className;
+      return (
+        typeof className === "string" &&
+        className.includes("step-connector--done")
+      );
     });
     expect(doneConnector).not.toBeNull();
   });

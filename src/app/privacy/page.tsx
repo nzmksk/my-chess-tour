@@ -21,9 +21,9 @@ export default function PrivacyPage() {
 
           <div className="font-lato text-sm text-text-body leading-relaxed space-y-6">
             <p className="text-text-secondary">
-              MY Chess Tour (&quot;MCT&quot;, &quot;we&quot;, &quot;us&quot;,
-              or &quot;our&quot;) is committed to protecting your personal data
-              in accordance with the{" "}
+              MY Chess Tour (&quot;MCT&quot;, &quot;we&quot;, &quot;us&quot;, or
+              &quot;our&quot;) is committed to protecting your personal data in
+              accordance with the{" "}
               <strong>Personal Data Protection Act 2010 (PDPA)</strong> of
               Malaysia. This Privacy Policy explains what data we collect, how
               we use it, and your rights.
@@ -116,7 +116,8 @@ export default function PrivacyPage() {
                     <tr>
                       <td className="px-3 py-2 text-text-secondary">Gender</td>
                       <td className="px-3 py-2 text-text-secondary">
-                        Gender-restricted event categories (e.g. Women&apos;s Open)
+                        Gender-restricted event categories (e.g. Women&apos;s
+                        Open)
                       </td>
                     </tr>
                   </tbody>
@@ -134,18 +135,14 @@ export default function PrivacyPage() {
               </h2>
               <ul className="list-disc pl-5 space-y-1 text-text-secondary mb-2">
                 <li>To create and manage your MCT account.</li>
-                <li>
-                  To register you for tournaments and verify eligibility.
-                </li>
+                <li>To register you for tournaments and verify eligibility.</li>
                 <li>To submit ratings to FIDE and MCF on your behalf.</li>
                 <li>To process prize payouts via bank transfer.</li>
                 <li>
                   To send you tournament updates, results, and important
                   notifications.
                 </li>
-                <li>
-                  To comply with legal obligations under Malaysian law.
-                </li>
+                <li>To comply with legal obligations under Malaysian law.</li>
               </ul>
               <p className="text-text-secondary">
                 We do not sell, rent, or trade your personal data to third
@@ -186,7 +183,8 @@ export default function PrivacyPage() {
                         Financial / payment records
                       </td>
                       <td className="px-3 py-2 border-b border-border text-text-secondary">
-                        7 years from transaction date (Income Tax Act requirement)
+                        7 years from transaction date (Income Tax Act
+                        requirement)
                       </td>
                     </tr>
                     <tr>
@@ -254,7 +252,8 @@ export default function PrivacyPage() {
                 <li>
                   <strong>Withdrawal of consent</strong> — withdraw consent for
                   the processing of sensitive personal data at any time (note:
-                  this may affect your ability to participate in certain events).
+                  this may affect your ability to participate in certain
+                  events).
                 </li>
                 <li>
                   <strong>Data deletion</strong> — request deletion of your

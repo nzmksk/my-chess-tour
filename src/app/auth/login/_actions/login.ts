@@ -17,11 +17,21 @@ export async function login(
   const password = formData.get("password")?.toString() ?? "";
   const keepSignedIn = formData.get("keepSignedIn") === "on";
 
-  const { errors, isValid } = validateLoginForm({ email, password, keepSignedIn });
+  const { errors, isValid } = validateLoginForm({
+    email,
+    password,
+    keepSignedIn,
+  });
 
   if (!isValid) {
-    const firstError = errors.email ?? errors.password ?? "Please fill in all required fields.";
-    return { error: firstError, attemptsRemaining: null, locked: false, lockedSeconds: null };
+    const firstError =
+      errors.email ?? errors.password ?? "Please fill in all required fields.";
+    return {
+      error: firstError,
+      attemptsRemaining: null,
+      locked: false,
+      lockedSeconds: null,
+    };
   }
 
   const lockKey = `login:lock:${email.toLowerCase()}`;
@@ -30,11 +40,19 @@ export async function login(
   const isLocked = await redis.exists(lockKey);
   if (isLocked) {
     const ttl = await redis.ttl(lockKey);
-    return { error: null, attemptsRemaining: 0, locked: true, lockedSeconds: ttl };
+    return {
+      error: null,
+      attemptsRemaining: 0,
+      locked: true,
+      lockedSeconds: ttl,
+    };
   }
 
   const supabase = await createClient();
-  const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+  const { error: authError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
   if (authError) {
     const attempts = await redis.incr(attemptsKey);

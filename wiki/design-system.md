@@ -21,46 +21,46 @@ All colors are defined as CSS custom properties to be declared on `:root`.
 ```css
 :root {
   /* ── Backgrounds ── */
-  --color-bg-base:      #0e0e0e;   /* Page / outermost background */
-  --color-bg-surface:   #141414;   /* Cards, panels, email wrapper */
-  --color-bg-raised:    #1a1a1a;   /* Slightly elevated surfaces */
-  --color-bg-sunken:    #0a0a0a;   /* Headers, footers, recessed areas */
+  --color-bg-base: #0e0e0e; /* Page / outermost background */
+  --color-bg-surface: #141414; /* Cards, panels, email wrapper */
+  --color-bg-raised: #1a1a1a; /* Slightly elevated surfaces */
+  --color-bg-sunken: #0a0a0a; /* Headers, footers, recessed areas */
 
   /* ── Gold (Primary Accent) ── */
-  --color-gold-bright:  #c9a84c;   /* Primary gold — borders, icons, key text */
-  --color-gold-deep:    #a07c2c;   /* Gradient end, hover states */
-  --color-gold-muted:   #7a6e55;   /* Subtext, meta labels */
-  --color-gold-dim:     #5a5040;   /* Disabled, placeholder text */
-  --color-gold-ghost:   #2e2a1e;   /* Subtle borders, dividers */
+  --color-gold-bright: #c9a84c; /* Primary gold — borders, icons, key text */
+  --color-gold-deep: #a07c2c; /* Gradient end, hover states */
+  --color-gold-muted: #7a6e55; /* Subtext, meta labels */
+  --color-gold-dim: #5a5040; /* Disabled, placeholder text */
+  --color-gold-ghost: #2e2a1e; /* Subtle borders, dividers */
 
   /* ── Text ── */
-  --color-text-primary:   #e8d9b4; /* Headlines */
-  --color-text-body:      #d4c5a0; /* Body copy */
+  --color-text-primary: #e8d9b4; /* Headlines */
+  --color-text-body: #d4c5a0; /* Body copy */
   --color-text-secondary: #a89878; /* Supporting text */
-  --color-text-muted:     #7a6e55; /* Captions, meta */
-  --color-text-disabled:  #4a4030; /* Footer copy, de-emphasised */
+  --color-text-muted: #7a6e55; /* Captions, meta */
+  --color-text-disabled: #4a4030; /* Footer copy, de-emphasised */
 
   /* ── Semantic ── */
-  --color-border:       #2e2a1e;   /* Standard border */
-  --color-border-gold:  #c9a84c;   /* Highlighted/active border */
-  --color-link:         #8a7040;   /* Inline link */
-  --color-link-hover:   #c9a84c;   /* Link hover */
+  --color-border: #2e2a1e; /* Standard border */
+  --color-border-gold: #c9a84c; /* Highlighted/active border */
+  --color-link: #8a7040; /* Inline link */
+  --color-link-hover: #c9a84c; /* Link hover */
 }
 ```
 
 ### Usage guidelines
 
-| Role | Token |
-|---|---|
-| Page background | `--color-bg-base` |
-| Card / panel background | `--color-bg-surface` |
-| Section header / footer | `--color-bg-sunken` |
-| Primary CTA fill | gradient `--color-gold-bright` → `--color-gold-deep` |
-| Active borders & underlines | `--color-gold-bright` |
-| H1 / H2 | `--color-text-primary` |
-| Body paragraphs | `--color-text-body` |
-| Supporting / meta text | `--color-text-secondary` |
-| Borders | `--color-border` |
+| Role                        | Token                                                |
+| --------------------------- | ---------------------------------------------------- |
+| Page background             | `--color-bg-base`                                    |
+| Card / panel background     | `--color-bg-surface`                                 |
+| Section header / footer     | `--color-bg-sunken`                                  |
+| Primary CTA fill            | gradient `--color-gold-bright` → `--color-gold-deep` |
+| Active borders & underlines | `--color-gold-bright`                                |
+| H1 / H2                     | `--color-text-primary`                               |
+| Body paragraphs             | `--color-text-body`                                  |
+| Supporting / meta text      | `--color-text-secondary`                             |
+| Borders                     | `--color-border`                                     |
 
 **Never** place light text on `--color-bg-raised` without sufficient contrast. Always test with WCAG AA (4.5:1 for body, 3:1 for large text).
 
@@ -69,17 +69,17 @@ All colors are defined as CSS custom properties to be declared on `:root`.
 ## 3. Typography
 
 ```css
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lato:wght@300;400&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lato:wght@300;400&display=swap");
 ```
 
-| Role | Family | Weight | Size | Letter-spacing |
-|---|---|---|---|---|
-| Brand wordmark | Cinzel | 700 | 22px (email) / 1.75–2.25rem (web) | 0.14em |
-| Page / section headings (H1) | Cinzel | 600 | 1.75–2rem | 0.05em |
-| Sub-headings (H2, H3) | Cinzel | 400 | 1.125–1.375rem | 0.04em |
-| Body copy | Lato | 300–400 | 0.9375–1rem | 0 |
-| UI labels / buttons | Cinzel | 700 | 0.75–0.875rem | 0.15em (uppercase) |
-| Captions / meta | Lato | 300 | 0.6875–0.75rem | 0.06–0.3em |
+| Role                         | Family | Weight  | Size                              | Letter-spacing     |
+| ---------------------------- | ------ | ------- | --------------------------------- | ------------------ |
+| Brand wordmark               | Cinzel | 700     | 22px (email) / 1.75–2.25rem (web) | 0.14em             |
+| Page / section headings (H1) | Cinzel | 600     | 1.75–2rem                         | 0.05em             |
+| Sub-headings (H2, H3)        | Cinzel | 400     | 1.125–1.375rem                    | 0.04em             |
+| Body copy                    | Lato   | 300–400 | 0.9375–1rem                       | 0                  |
+| UI labels / buttons          | Cinzel | 700     | 0.75–0.875rem                     | 0.15em (uppercase) |
+| Captions / meta              | Lato   | 300     | 0.6875–0.75rem                    | 0.06–0.3em         |
 
 ### Rules
 
@@ -94,28 +94,28 @@ All colors are defined as CSS custom properties to be declared on `:root`.
 
 A base-8 spacing scale keeps all layouts consistent.
 
-| Token | Value | Usage |
-|---|---|---|
-| `--space-xs`  | 0.25rem  | Icon gap, tight inline spacing |
-| `--space-sm`  | 0.5rem   | Between small elements |
-| `--space-md`  | 1rem     | Component internal padding |
-| `--space-lg`  | 1.5rem   | Between sections within a component |
-| `--space-xl`  | 2.5rem   | Card / panel padding |
-| `--space-2xl` | 4rem     | Page section separation |
+| Token         | Value   | Usage                               |
+| ------------- | ------- | ----------------------------------- |
+| `--space-xs`  | 0.25rem | Icon gap, tight inline spacing      |
+| `--space-sm`  | 0.5rem  | Between small elements              |
+| `--space-md`  | 1rem    | Component internal padding          |
+| `--space-lg`  | 1.5rem  | Between sections within a component |
+| `--space-xl`  | 2.5rem  | Card / panel padding                |
+| `--space-2xl` | 4rem    | Page section separation             |
 
 **Max content width:** 75rem (web), 560px (email).
 **Gutter (web):** 1.5rem on mobile, 2.5rem on desktop.
 
 ### CSS unit guidelines
 
-| Use case | Unit |
-|---|---|
-| Font size | `rem` or `em` |
-| Layout spacing | `rem` |
-| Borders, border-radius | `px` |
-| Icons, decorative strip heights | `px` |
-| Fine adjustments (shadows, small offsets) | `px` |
-| Component scaling | `%` / `rem` |
+| Use case                                  | Unit          |
+| ----------------------------------------- | ------------- |
+| Font size                                 | `rem` or `em` |
+| Layout spacing                            | `rem`         |
+| Borders, border-radius                    | `px`          |
+| Icons, decorative strip heights           | `px`          |
+| Fine adjustments (shadows, small offsets) | `px`          |
+| Component scaling                         | `%` / `rem`   |
 
 > **Email templates:** use `px` throughout — email clients do not reliably support `rem` or CSS custom properties.
 
@@ -128,9 +128,13 @@ A base-8 spacing scale keeps all layouts consistent.
 ```css
 /* Primary CTA */
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep));
+  background: linear-gradient(
+    135deg,
+    var(--color-gold-bright),
+    var(--color-gold-deep)
+  );
   color: #0e0e0e;
-  font-family: 'Cinzel', serif;
+  font-family: "Cinzel", serif;
   font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.15em;
@@ -140,7 +144,9 @@ A base-8 spacing scale keeps all layouts consistent.
   border: none;
   box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
   cursor: pointer;
-  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
 }
 .btn-primary:hover {
   box-shadow: 0 6px 28px rgba(201, 168, 76, 0.4);
@@ -151,7 +157,7 @@ A base-8 spacing scale keeps all layouts consistent.
 .btn-secondary {
   background: transparent;
   color: var(--color-gold-bright);
-  font-family: 'Cinzel', serif;
+  font-family: "Cinzel", serif;
   font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.15em;
@@ -160,7 +166,9 @@ A base-8 spacing scale keeps all layouts consistent.
   border-radius: 2px;
   border: 1px solid var(--color-gold-bright);
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 .btn-secondary:hover {
   background: rgba(201, 168, 76, 0.08);
@@ -189,7 +197,12 @@ A base-8 spacing scale keeps all layouts consistent.
 .divider-gold {
   width: 3rem;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--color-gold-bright), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-gold-bright),
+    transparent
+  );
   margin: 0 auto var(--space-lg);
   border: none;
 }
@@ -202,11 +215,17 @@ Used as a top/bottom accent bar on emails and web section headers.
 ```css
 .board-strip {
   display: flex;
-  height: 8px;          /* 4px for subtle / 8px for prominent */
+  height: 8px; /* 4px for subtle / 8px for prominent */
 }
-.board-strip span { flex: 1; }
-.board-strip span:nth-child(odd)  { background: var(--color-gold-bright); }
-.board-strip span:nth-child(even) { background: var(--color-bg-raised); }
+.board-strip span {
+  flex: 1;
+}
+.board-strip span:nth-child(odd) {
+  background: var(--color-gold-bright);
+}
+.board-strip span:nth-child(even) {
+  background: var(--color-bg-raised);
+}
 ```
 
 Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
@@ -224,7 +243,7 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
 }
 
 .nav-logo {
-  font-family: 'Cinzel', serif;
+  font-family: "Cinzel", serif;
   font-weight: 700;
   font-size: 1.125rem;
   letter-spacing: 0.14em;
@@ -234,7 +253,7 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
 }
 
 .nav-link {
-  font-family: 'Lato', sans-serif;
+  font-family: "Lato", sans-serif;
   font-size: 0.8125rem;
   letter-spacing: 0.08em;
   color: var(--color-text-secondary);
@@ -244,7 +263,9 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
   transition: color 0.15s ease;
 }
 .nav-link:hover,
-.nav-link.active { color: var(--color-gold-bright); }
+.nav-link.active {
+  color: var(--color-gold-bright);
+}
 ```
 
 ### 5.6 Form Inputs
@@ -255,21 +276,25 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
   border: 1px solid var(--color-border);
   border-radius: 2px;
   color: var(--color-text-body);
-  font-family: 'Lato', sans-serif;
+  font-family: "Lato", sans-serif;
   font-size: 0.9375rem;
   padding: 0.75rem 1rem;
   width: 100%;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .input:focus {
   border-color: var(--color-gold-bright);
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
 }
-.input::placeholder { color: var(--color-text-disabled); }
+.input::placeholder {
+  color: var(--color-text-disabled);
+}
 
 .input-label {
-  font-family: 'Cinzel', serif;
+  font-family: "Cinzel", serif;
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -286,11 +311,11 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-family: 'Lato', sans-serif;
+  font-family: "Lato", sans-serif;
   font-size: 0.875rem;
 }
 .table th {
-  font-family: 'Cinzel', serif;
+  font-family: "Cinzel", serif;
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -305,14 +330,16 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--color-border);
 }
-.table tr:hover td { background: rgba(201, 168, 76, 0.04); }
+.table tr:hover td {
+  background: rgba(201, 168, 76, 0.04);
+}
 ```
 
 ### 5.8 Badges / Status Pills
 
 ```css
 .badge {
-  font-family: 'Cinzel', serif;
+  font-family: "Cinzel", serif;
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -321,8 +348,16 @@ Use **16 `<span>` elements** inside `.board-strip` for a balanced pattern.
   border-radius: 2px;
   display: inline-block;
 }
-.badge--gold    { background: rgba(201,168,76,0.15); color: var(--color-gold-bright); border: 1px solid rgba(201,168,76,0.3); }
-.badge--neutral { background: rgba(255,255,255,0.05); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+.badge--gold {
+  background: rgba(201, 168, 76, 0.15);
+  color: var(--color-gold-bright);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+}
+.badge--neutral {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
 ```
 
 ---
@@ -348,16 +383,16 @@ All email templates share the same structural shell. Use the following base layo
 
 ### Available email templates
 
-| Template | Supabase Trigger | File |
-|---|---|---|
-| Confirm signup | `confirm_signup` | [confirm-signup](./email-templates/confirm-signup.html) |
-| Invite user | `invite_user` | [invite-user](./email-templates/invite-user.html) |
-| Magic link / OTP | `magic_link` | [magic-link](./email-templates/magic-link.html) |
-| Change email address | `change_email` | [change-email-address](./email-templates/change-email-address.html) |
-| Reset password | `reset_password` | [reset-password](./email-templates/reset-password.html) |
-| Reauthentication | `reauthentication` | [reauthentication](./email-templates/reauthentication.html) |
-| Tournament registration | Custom | *(to be created)* |
-| Match reminder | Custom | *(to be created)* |
+| Template                | Supabase Trigger   | File                                                                |
+| ----------------------- | ------------------ | ------------------------------------------------------------------- |
+| Confirm signup          | `confirm_signup`   | [confirm-signup](./email-templates/confirm-signup.html)             |
+| Invite user             | `invite_user`      | [invite-user](./email-templates/invite-user.html)                   |
+| Magic link / OTP        | `magic_link`       | [magic-link](./email-templates/magic-link.html)                     |
+| Change email address    | `change_email`     | [change-email-address](./email-templates/change-email-address.html) |
+| Reset password          | `reset_password`   | [reset-password](./email-templates/reset-password.html)             |
+| Reauthentication        | `reauthentication` | [reauthentication](./email-templates/reauthentication.html)         |
+| Tournament registration | Custom             | _(to be created)_                                                   |
+| Match reminder          | Custom             | _(to be created)_                                                   |
 
 ### Email-specific rules
 
@@ -375,14 +410,14 @@ All email templates share the same structural shell. Use the following base layo
 
 Use Unicode chess pieces as decorative glyphs. They render natively across all platforms with no image dependency.
 
-| Piece | Glyph | Recommended use |
-|---|---|---|
-| King (white) | ♔ | Logo / brand mark |
-| Queen (white) | ♕ | Hero sections, premium features |
-| Rook (white) | ♖ | Structure / architecture pages |
-| Bishop (white) | ♗ | Strategy / tips content |
-| Knight (white) | ♘ | Events, dynamic content |
-| Pawn (white) | ♙ | Community / players section |
+| Piece          | Glyph | Recommended use                 |
+| -------------- | ----- | ------------------------------- |
+| King (white)   | ♔     | Logo / brand mark               |
+| Queen (white)  | ♕     | Hero sections, premium features |
+| Rook (white)   | ♖     | Structure / architecture pages  |
+| Bishop (white) | ♗     | Strategy / tips content         |
+| Knight (white) | ♘     | Events, dynamic content         |
+| Pawn (white)   | ♙     | Community / players section     |
 
 Render chess piece glyphs in `--color-gold-bright` at 36–52px for display use, or `--color-text-muted` at 16–20px for decorative watermarks.
 
@@ -398,7 +433,7 @@ Keep animations purposeful and restrained — reinforcing prestige, not playfuln
 
 /* Gold glow on focus/hover */
 --shadow-gold-sm: 0 4px 20px rgba(201, 168, 76, 0.25);
---shadow-gold-md: 0 6px 28px rgba(201, 168, 76, 0.40);
+--shadow-gold-md: 0 6px 28px rgba(201, 168, 76, 0.4);
 ```
 
 - **Hover:** subtle opacity shift (`0.92`) or border-color change to gold. No scale transforms.
@@ -410,15 +445,15 @@ Keep animations purposeful and restrained — reinforcing prestige, not playfuln
 
 ## 9. Do's and Don'ts
 
-| ✅ Do | ❌ Don't |
-|---|---|
-| Use Cinzel for all headings and labels | Use system fonts (Arial, Inter, Roboto) for any branded surface |
-| Keep backgrounds very dark (`#0e0e0e` to `#1a1a1a`) | Use white or light backgrounds except for print/export contexts |
-| Use the gold gradient for primary CTAs only | Overuse gold — it loses its accent power |
-| Add the chessboard strip as a branded separator | Use the strip more than twice per layout |
-| Write button labels in Cinzel, ALL CAPS, tracked wide | Use sentence case or lowercase on buttons |
-| Test all email templates in dark-mode email clients | Assume email clients render CSS as expected |
-| Keep email max-width at 560px | Exceed 600px on email containers |
+| ✅ Do                                                 | ❌ Don't                                                        |
+| ----------------------------------------------------- | --------------------------------------------------------------- |
+| Use Cinzel for all headings and labels                | Use system fonts (Arial, Inter, Roboto) for any branded surface |
+| Keep backgrounds very dark (`#0e0e0e` to `#1a1a1a`)   | Use white or light backgrounds except for print/export contexts |
+| Use the gold gradient for primary CTAs only           | Overuse gold — it loses its accent power                        |
+| Add the chessboard strip as a branded separator       | Use the strip more than twice per layout                        |
+| Write button labels in Cinzel, ALL CAPS, tracked wide | Use sentence case or lowercase on buttons                       |
+| Test all email templates in dark-mode email clients   | Assume email clients render CSS as expected                     |
+| Keep email max-width at 560px                         | Exceed 600px on email containers                                |
 
 ---
 
@@ -429,54 +464,54 @@ Paste this block into your root stylesheet:
 ```css
 :root {
   /* Backgrounds */
-  --color-bg-base:     #0e0e0e;
-  --color-bg-surface:  #141414;
-  --color-bg-raised:   #1a1a1a;
-  --color-bg-sunken:   #0a0a0a;
+  --color-bg-base: #0e0e0e;
+  --color-bg-surface: #141414;
+  --color-bg-raised: #1a1a1a;
+  --color-bg-sunken: #0a0a0a;
 
   /* Gold accent */
   --color-gold-bright: #c9a84c;
-  --color-gold-deep:   #a07c2c;
-  --color-gold-muted:  #7a6e55;
-  --color-gold-dim:    #5a5040;
-  --color-gold-ghost:  #2e2a1e;
+  --color-gold-deep: #a07c2c;
+  --color-gold-muted: #7a6e55;
+  --color-gold-dim: #5a5040;
+  --color-gold-ghost: #2e2a1e;
 
   /* Text */
-  --color-text-primary:   #e8d9b4;
-  --color-text-body:      #d4c5a0;
+  --color-text-primary: #e8d9b4;
+  --color-text-body: #d4c5a0;
   --color-text-secondary: #a89878;
-  --color-text-muted:     #7a6e55;
-  --color-text-disabled:  #4a4030;
+  --color-text-muted: #7a6e55;
+  --color-text-disabled: #4a4030;
 
   /* Borders */
-  --color-border:      #2e2a1e;
+  --color-border: #2e2a1e;
   --color-border-gold: #c9a84c;
 
   /* Links */
-  --color-link:        #8a7040;
-  --color-link-hover:  #c9a84c;
+  --color-link: #8a7040;
+  --color-link-hover: #c9a84c;
 
   /* Spacing (rem — scales with root font size) */
-  --space-xs:  0.25rem;
-  --space-sm:  0.5rem;
-  --space-md:  1rem;
-  --space-lg:  1.5rem;
-  --space-xl:  2.5rem;
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
   --space-2xl: 4rem;
 
   /* Motion */
   --transition-base: 0.2s ease;
 
   /* Shadows (px — fine adjustments, not scaled) */
-  --shadow-gold-sm:  0 4px 20px rgba(201, 168, 76, 0.25);
-  --shadow-gold-md:  0 6px 28px rgba(201, 168, 76, 0.40);
+  --shadow-gold-sm: 0 4px 20px rgba(201, 168, 76, 0.25);
+  --shadow-gold-md: 0 6px 28px rgba(201, 168, 76, 0.4);
 
   /* Typography */
-  --font-display: 'Cinzel', serif;
-  --font-body:    'Lato', sans-serif;
+  --font-display: "Cinzel", serif;
+  --font-body: "Lato", sans-serif;
 }
 ```
 
 ---
 
-*MY Chess Tour Design System · Maintained by the MY Chess Tour product team*
+_MY Chess Tour Design System · Maintained by the MY Chess Tour product team_

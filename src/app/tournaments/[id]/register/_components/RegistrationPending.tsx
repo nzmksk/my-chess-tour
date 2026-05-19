@@ -7,7 +7,10 @@ interface Props {
   tournamentId: string;
 }
 
-export default function RegistrationPending({ registration, tournamentId }: Props) {
+export default function RegistrationPending({
+  registration,
+  tournamentId,
+}: Props) {
   return (
     <div className="max-w-lg mx-auto">
       <div className="card card--featured p-8 flex flex-col text-center">

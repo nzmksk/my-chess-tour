@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
-    Promise.resolve({ auth: { exchangeCodeForSession: mocks.exchangeCodeForSession } })
+    Promise.resolve({
+      auth: { exchangeCodeForSession: mocks.exchangeCodeForSession },
+    }),
   ),
 }));
 
@@ -43,7 +45,9 @@ describe("GET /v1/auth/callback", () => {
   });
 
   it("redirects to next param on successful session exchange", async () => {
-    await GET(makeRequest("/v1/auth/callback?code=abc123&next=/auth/update-password"));
+    await GET(
+      makeRequest("/v1/auth/callback?code=abc123&next=/auth/update-password"),
+    );
 
     expect(mocks.redirect).toHaveBeenCalledWith(
       expect.stringContaining("/auth/update-password"),
@@ -53,13 +57,13 @@ describe("GET /v1/auth/callback", () => {
   it("redirects to / when next param is absent (default)", async () => {
     await GET(makeRequest("/v1/auth/callback?code=abc123"));
 
-    expect(mocks.redirect).toHaveBeenCalledWith(
-      "https://mychessstour.com/",
-    );
+    expect(mocks.redirect).toHaveBeenCalledWith("https://mychessstour.com/");
   });
 
   it("redirects to error page when exchange fails", async () => {
-    mocks.exchangeCodeForSession.mockResolvedValue({ error: { message: "Invalid code" } });
+    mocks.exchangeCodeForSession.mockResolvedValue({
+      error: { message: "Invalid code" },
+    });
 
     await GET(makeRequest("/v1/auth/callback?code=badcode"));
 

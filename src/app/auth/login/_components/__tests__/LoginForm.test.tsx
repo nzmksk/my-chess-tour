@@ -1,16 +1,26 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, act } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  act,
+} from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted so they run before imports
 // ---------------------------------------------------------------------------
 
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
+  default: ({
+    children,
+    href,
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => <a href={href}>{children}</a>,
 }));
 
 vi.mock("../_actions/login", () => ({
@@ -31,7 +41,11 @@ vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
-    useActionState: (_action: unknown, _initial: unknown) => [mockState, mockFormAction, mockPending],
+    useActionState: (_action: unknown, _initial: unknown) => [
+      mockState,
+      mockFormAction,
+      mockPending,
+    ],
   };
 });
 
@@ -83,7 +97,9 @@ describe("LoginForm", () => {
 
   it("renders Keep me signed in checkbox checked by default", () => {
     render(<LoginForm />);
-    const checkbox = screen.getByLabelText("Keep me signed in") as HTMLInputElement;
+    const checkbox = screen.getByLabelText(
+      "Keep me signed in",
+    ) as HTMLInputElement;
     expect(checkbox).toBeDefined();
   });
 
@@ -229,7 +245,9 @@ describe("LoginForm", () => {
 
   it("preserves the email value when the form re-renders after a failed login", async () => {
     const { rerender } = render(<LoginForm />);
-    const emailInput = screen.getByLabelText("Email Address") as HTMLInputElement;
+    const emailInput = screen.getByLabelText(
+      "Email Address",
+    ) as HTMLInputElement;
 
     await act(async () => {
       fireEvent.change(emailInput, { target: { value: "player@example.com" } });
@@ -241,7 +259,9 @@ describe("LoginForm", () => {
     mockState.attemptsRemaining = 4;
     rerender(<LoginForm />);
 
-    expect((screen.getByLabelText("Email Address") as HTMLInputElement).value).toBe("player@example.com");
+    expect(
+      (screen.getByLabelText("Email Address") as HTMLInputElement).value,
+    ).toBe("player@example.com");
   });
 
   // --- Singular minute in locked state ---------------------------------------

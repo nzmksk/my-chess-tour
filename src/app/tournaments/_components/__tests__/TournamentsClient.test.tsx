@@ -19,14 +19,20 @@ vi.mock("react", async () => {
   // Map of useState call index (1-based) → injected initial value.
   let _overridesMap: Record<number, unknown> = {};
   // Expose setters so tests can drive the behavior:
-  (globalThis as Record<string, unknown>).__setReactUseStateOverride = (v: string | null) => {
+  (globalThis as Record<string, unknown>).__setReactUseStateOverride = (
+    v: string | null,
+  ) => {
     _override = v;
     _callCount = 0;
   };
-  (globalThis as Record<string, unknown>).__resetReactUseStateCounter = () => { _callCount = 0; };
+  (globalThis as Record<string, unknown>).__resetReactUseStateCounter = () => {
+    _callCount = 0;
+  };
   // General-purpose override: keys are 1-based useState call indices.
   // useState call order in TournamentsClient: 1=search, 2=formats, 3=states, 4=ratings, 5=dateFilter
-  (globalThis as Record<string, unknown>).__setReactUseStateOverrides = (map: Record<number, unknown>) => {
+  (globalThis as Record<string, unknown>).__setReactUseStateOverrides = (
+    map: Record<number, unknown>,
+  ) => {
     _overridesMap = { ...map };
     _callCount = 0;
   };
@@ -49,6 +55,12 @@ vi.mock("react", async () => {
 });
 
 import * as React from "react";
+
+type TestGlobal = typeof globalThis & {
+  __setReactUseStateOverride: (v: string | null) => void;
+  __resetReactUseStateCounter: () => void;
+  __setReactUseStateOverrides: (map: Record<number, unknown>) => void;
+};
 
 vi.mock("next/link", () => ({
   default: ({
@@ -95,7 +107,6 @@ function makeTournament(overrides: Partial<Tournament> = {}): Tournament {
     entry_fees: { standard: { amount_cents: 5000 } },
     max_participants: 100,
     current_participants: 50,
-    poster_url: null,
     status: "published",
     organizer: null,
     ...overrides,
@@ -205,7 +216,9 @@ describe("search filter", () => {
 
   it("excludes tournaments that do not match the query", () => {
     const result = filterTournaments(tournaments, { search: "selangor" });
-    expect(result.map((t) => t.name)).not.toContain("KL Rapid Chess Championship");
+    expect(result.map((t) => t.name)).not.toContain(
+      "KL Rapid Chess Championship",
+    );
   });
 
   it("returns all tournaments when search is empty", () => {
@@ -223,9 +236,21 @@ describe("search filter", () => {
 
 describe("format filter", () => {
   const tournaments = [
-    makeTournament({ id: "1", name: "Blitz", format: { type: "blitz", system: "swiss", rounds: 9 } }),
-    makeTournament({ id: "2", name: "Rapid", format: { type: "rapid", system: "swiss", rounds: 7 } }),
-    makeTournament({ id: "3", name: "Classical", format: { type: "classical", system: "swiss", rounds: 5 } }),
+    makeTournament({
+      id: "1",
+      name: "Blitz",
+      format: { type: "blitz", system: "swiss", rounds: 9 },
+    }),
+    makeTournament({
+      id: "2",
+      name: "Rapid",
+      format: { type: "rapid", system: "swiss", rounds: 7 },
+    }),
+    makeTournament({
+      id: "3",
+      name: "Classical",
+      format: { type: "classical", system: "swiss", rounds: 5 },
+    }),
   ];
 
   it("includes only tournaments matching the selected format", () => {
@@ -234,12 +259,16 @@ describe("format filter", () => {
   });
 
   it("supports multiple selected formats", () => {
-    const result = filterTournaments(tournaments, { formats: ["blitz", "rapid"] });
+    const result = filterTournaments(tournaments, {
+      formats: ["blitz", "rapid"],
+    });
     expect(result.map((t) => t.name)).toEqual(["Blitz", "Rapid"]);
   });
 
   it("is case-insensitive when matching format types", () => {
-    const t = makeTournament({ format: { type: "Rapid", system: "swiss", rounds: 7 } });
+    const t = makeTournament({
+      format: { type: "Rapid", system: "swiss", rounds: 7 },
+    });
     const result = filterTournaments([t], { formats: ["rapid"] });
     expect(result).toHaveLength(1);
   });
@@ -254,9 +283,21 @@ describe("format filter", () => {
 
 describe("state filter", () => {
   const tournaments = [
-    makeTournament({ id: "1", name: "Johor Open", venue: { name: "Test Venue", state: "Johor" } }),
-    makeTournament({ id: "2", name: "Selangor Open", venue: { name: "Test Venue", state: "Selangor" } }),
-    makeTournament({ id: "3", name: "Perak Open", venue: { name: "Test Venue", state: "Perak" } }),
+    makeTournament({
+      id: "1",
+      name: "Johor Open",
+      venue: { name: "Test Venue", state: "Johor" },
+    }),
+    makeTournament({
+      id: "2",
+      name: "Selangor Open",
+      venue: { name: "Test Venue", state: "Selangor" },
+    }),
+    makeTournament({
+      id: "3",
+      name: "Perak Open",
+      venue: { name: "Test Venue", state: "Perak" },
+    }),
   ];
 
   it("includes only tournaments in the selected state", () => {
@@ -265,7 +306,9 @@ describe("state filter", () => {
   });
 
   it("supports multiple selected states", () => {
-    const result = filterTournaments(tournaments, { states: ["Johor", "Perak"] });
+    const result = filterTournaments(tournaments, {
+      states: ["Johor", "Perak"],
+    });
     expect(result.map((t) => t.name)).toEqual(["Johor Open", "Perak Open"]);
   });
 
@@ -278,10 +321,30 @@ describe("state filter", () => {
 // ── Rating filter ─────────────────────────────────────────────
 
 describe("rating filter", () => {
-  const fide = makeTournament({ id: "1", name: "FIDE", is_fide_rated: true, is_mcf_rated: false });
-  const mcf = makeTournament({ id: "2", name: "MCF", is_fide_rated: false, is_mcf_rated: true });
-  const both = makeTournament({ id: "3", name: "Both", is_fide_rated: true, is_mcf_rated: true });
-  const unrated = makeTournament({ id: "4", name: "Unrated", is_fide_rated: false, is_mcf_rated: false });
+  const fide = makeTournament({
+    id: "1",
+    name: "FIDE",
+    is_fide_rated: true,
+    is_mcf_rated: false,
+  });
+  const mcf = makeTournament({
+    id: "2",
+    name: "MCF",
+    is_fide_rated: false,
+    is_mcf_rated: true,
+  });
+  const both = makeTournament({
+    id: "3",
+    name: "Both",
+    is_fide_rated: true,
+    is_mcf_rated: true,
+  });
+  const unrated = makeTournament({
+    id: "4",
+    name: "Unrated",
+    is_fide_rated: false,
+    is_mcf_rated: false,
+  });
   const all = [fide, mcf, both, unrated];
 
   it("returns only FIDE-rated when 'fide' is selected", () => {
@@ -314,106 +377,201 @@ describe("rating filter", () => {
 
 describe("date filter — this-week (now = 2026-03-10)", () => {
   it("includes a tournament starting today", () => {
-    const t = makeTournament({ start_date: "2026-03-10", end_date: "2026-03-10" });
-    expect(filterTournaments([t], { dateFilter: "this-week", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-10",
+      end_date: "2026-03-10",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("includes a tournament fully within the next 7 days", () => {
-    const t = makeTournament({ start_date: "2026-03-12", end_date: "2026-03-14" });
-    expect(filterTournaments([t], { dateFilter: "this-week", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-12",
+      end_date: "2026-03-14",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("includes a tournament that started before today but ends within next 7 days", () => {
-    const t = makeTournament({ start_date: "2026-03-08", end_date: "2026-03-11" });
-    expect(filterTournaments([t], { dateFilter: "this-week", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-08",
+      end_date: "2026-03-11",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("includes a tournament that starts within the window but ends after it", () => {
     // window: 2026-03-10 to 2026-03-17; tournament starts inside, ends outside → overlaps
-    const t = makeTournament({ start_date: "2026-03-15", end_date: "2026-03-20" });
-    expect(filterTournaments([t], { dateFilter: "this-week", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-15",
+      end_date: "2026-03-20",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("excludes a tournament that ended before today", () => {
-    const t = makeTournament({ start_date: "2026-03-01", end_date: "2026-03-09" });
-    expect(filterTournaments([t], { dateFilter: "this-week", now: NOW })).toHaveLength(0);
+    const t = makeTournament({
+      start_date: "2026-03-01",
+      end_date: "2026-03-09",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+    ).toHaveLength(0);
   });
 
   it("excludes a tournament starting after the 7-day window", () => {
-    const t = makeTournament({ start_date: "2026-03-18", end_date: "2026-03-20" });
-    expect(filterTournaments([t], { dateFilter: "this-week", now: NOW })).toHaveLength(0);
+    const t = makeTournament({
+      start_date: "2026-03-18",
+      end_date: "2026-03-20",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+    ).toHaveLength(0);
   });
 
   it("includes a tournament starting on exactly the last day of the window (boundary)", () => {
     // window: 2026-03-10 to 2026-03-17; start on Mar 17 must be included
-    const t = makeTournament({ start_date: "2026-03-17", end_date: "2026-03-17" });
-    expect(filterTournaments([t], { dateFilter: "this-week", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-17",
+      end_date: "2026-03-17",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+    ).toHaveLength(1);
   });
 });
 
 describe("date filter — this-month (now = 2026-03-10, month = March)", () => {
   it("includes a tournament fully within this month", () => {
-    const t = makeTournament({ start_date: "2026-03-15", end_date: "2026-03-20" });
-    expect(filterTournaments([t], { dateFilter: "this-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-15",
+      end_date: "2026-03-20",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("includes a tournament spanning from last month into this month", () => {
-    const t = makeTournament({ start_date: "2026-02-25", end_date: "2026-03-05" });
-    expect(filterTournaments([t], { dateFilter: "this-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-02-25",
+      end_date: "2026-03-05",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("includes a tournament spanning from this month into next month", () => {
-    const t = makeTournament({ start_date: "2026-03-28", end_date: "2026-04-05" });
-    expect(filterTournaments([t], { dateFilter: "this-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-28",
+      end_date: "2026-04-05",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("excludes a tournament fully in the previous month", () => {
-    const t = makeTournament({ start_date: "2026-02-01", end_date: "2026-02-28" });
-    expect(filterTournaments([t], { dateFilter: "this-month", now: NOW })).toHaveLength(0);
+    const t = makeTournament({
+      start_date: "2026-02-01",
+      end_date: "2026-02-28",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+    ).toHaveLength(0);
   });
 
   it("excludes a tournament fully in the next month", () => {
-    const t = makeTournament({ start_date: "2026-04-01", end_date: "2026-04-10" });
-    expect(filterTournaments([t], { dateFilter: "this-month", now: NOW })).toHaveLength(0);
+    const t = makeTournament({
+      start_date: "2026-04-01",
+      end_date: "2026-04-10",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+    ).toHaveLength(0);
   });
 
   it("includes a tournament starting on the last day of the month (boundary)", () => {
     // window end: 2026-03-31; start on Mar 31 must be included
-    const t = makeTournament({ start_date: "2026-03-31", end_date: "2026-03-31" });
-    expect(filterTournaments([t], { dateFilter: "this-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-31",
+      end_date: "2026-03-31",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+    ).toHaveLength(1);
   });
 });
 
 describe("date filter — next-month (now = 2026-03-10, next month = April)", () => {
   it("includes a tournament fully within next month", () => {
-    const t = makeTournament({ start_date: "2026-04-10", end_date: "2026-04-15" });
-    expect(filterTournaments([t], { dateFilter: "next-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-04-10",
+      end_date: "2026-04-15",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("includes a tournament spanning from this month into next month", () => {
-    const t = makeTournament({ start_date: "2026-03-28", end_date: "2026-04-05" });
-    expect(filterTournaments([t], { dateFilter: "next-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-03-28",
+      end_date: "2026-04-05",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("includes a tournament spanning from next month into the month after", () => {
-    const t = makeTournament({ start_date: "2026-04-28", end_date: "2026-05-03" });
-    expect(filterTournaments([t], { dateFilter: "next-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-04-28",
+      end_date: "2026-05-03",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+    ).toHaveLength(1);
   });
 
   it("excludes a tournament fully in the current month", () => {
-    const t = makeTournament({ start_date: "2026-03-01", end_date: "2026-03-31" });
-    expect(filterTournaments([t], { dateFilter: "next-month", now: NOW })).toHaveLength(0);
+    const t = makeTournament({
+      start_date: "2026-03-01",
+      end_date: "2026-03-31",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+    ).toHaveLength(0);
   });
 
   it("excludes a tournament fully two months ahead", () => {
-    const t = makeTournament({ start_date: "2026-05-01", end_date: "2026-05-10" });
-    expect(filterTournaments([t], { dateFilter: "next-month", now: NOW })).toHaveLength(0);
+    const t = makeTournament({
+      start_date: "2026-05-01",
+      end_date: "2026-05-10",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+    ).toHaveLength(0);
   });
 
   it("includes a tournament starting on the last day of next month (boundary)", () => {
     // window end: 2026-04-30; start on Apr 30 must be included
-    const t = makeTournament({ start_date: "2026-04-30", end_date: "2026-04-30" });
-    expect(filterTournaments([t], { dateFilter: "next-month", now: NOW })).toHaveLength(1);
+    const t = makeTournament({
+      start_date: "2026-04-30",
+      end_date: "2026-04-30",
+    });
+    expect(
+      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+    ).toHaveLength(1);
   });
 });
 
@@ -424,7 +582,10 @@ describe("date filter — any", () => {
       makeTournament({ start_date: "2026-03-10", end_date: "2026-03-10" }),
       makeTournament({ start_date: "2027-12-01", end_date: "2027-12-31" }),
     ];
-    const result = filterTournaments(tournaments, { dateFilter: "any", now: NOW });
+    const result = filterTournaments(tournaments, {
+      dateFilter: "any",
+      now: NOW,
+    });
     expect(result).toHaveLength(3);
   });
 });
@@ -455,11 +616,13 @@ function renderWithFilters(
   if (overrides.ratings !== undefined) map[4] = overrides.ratings;
   if (overrides.dateFilter !== undefined) map[5] = overrides.dateFilter;
 
-  (globalThis as Record<string, unknown>).__setReactUseStateOverrides(map);
+  (globalThis as TestGlobal).__setReactUseStateOverrides(map);
   try {
-    return renderToStaticMarkup(<TournamentsClient tournaments={tournaments} />);
+    return renderToStaticMarkup(
+      <TournamentsClient tournaments={tournaments} />,
+    );
   } finally {
-    (globalThis as Record<string, unknown>).__setReactUseStateOverrides({});
+    (globalThis as TestGlobal).__setReactUseStateOverrides({});
   }
 }
 
@@ -500,14 +663,14 @@ describe("date filter branches — component level", () => {
     tournaments: Tournament[],
   ): string {
     // Arm the intercept
-    (globalThis as Record<string, unknown>).__setReactUseStateOverride(dateFilter);
+    (globalThis as TestGlobal).__setReactUseStateOverride(dateFilter);
     try {
       return renderToStaticMarkup(
         <TournamentsClient tournaments={tournaments} />,
       );
     } finally {
       // Disarm for subsequent tests
-      (globalThis as Record<string, unknown>).__setReactUseStateOverride(null);
+      (globalThis as TestGlobal).__setReactUseStateOverride(null);
     }
   }
 
@@ -642,7 +805,10 @@ describe("search filter — component level", () => {
   it("shows matching tournament and hides non-matching one", () => {
     const matching = makeTournament({ id: "1", name: "Selangor Open" });
     const nonMatching = makeTournament({ id: "2", name: "KL Rapid" });
-    const html = renderWithFilters({ search: "selangor" }, [matching, nonMatching]);
+    const html = renderWithFilters({ search: "selangor" }, [
+      matching,
+      nonMatching,
+    ]);
     expect(html).toContain("Selangor Open");
     expect(html).not.toContain("KL Rapid");
   });
@@ -656,15 +822,25 @@ describe("search filter — component level", () => {
 
 describe("format filter — component level", () => {
   it("shows matching format and hides non-matching one", () => {
-    const blitz = makeTournament({ id: "1", name: "Blitz Open", format: { type: "blitz", system: "swiss", rounds: 9 } });
-    const rapid = makeTournament({ id: "2", name: "Rapid Open", format: { type: "rapid", system: "swiss", rounds: 7 } });
+    const blitz = makeTournament({
+      id: "1",
+      name: "Blitz Open",
+      format: { type: "blitz", system: "swiss", rounds: 9 },
+    });
+    const rapid = makeTournament({
+      id: "2",
+      name: "Rapid Open",
+      format: { type: "rapid", system: "swiss", rounds: 7 },
+    });
     const html = renderWithFilters({ formats: ["blitz"] }, [blitz, rapid]);
     expect(html).toContain("Blitz Open");
     expect(html).not.toContain("Rapid Open");
   });
 
   it("shows 'no match' message when format excludes all tournaments", () => {
-    const t = makeTournament({ format: { type: "classical", system: "swiss", rounds: 5 } });
+    const t = makeTournament({
+      format: { type: "classical", system: "swiss", rounds: 5 },
+    });
     const html = renderWithFilters({ formats: ["blitz"] }, [t]);
     expect(html).toContain("No tournaments match your current filters.");
   });
@@ -672,24 +848,49 @@ describe("format filter — component level", () => {
 
 describe("state filter — component level", () => {
   it("shows matching state and hides non-matching one", () => {
-    const johor = makeTournament({ id: "1", name: "Johor Open", venue: { name: "Test Venue", state: "Johor" } });
-    const selangor = makeTournament({ id: "2", name: "Selangor Open", venue: { name: "Test Venue", state: "Selangor" } });
+    const johor = makeTournament({
+      id: "1",
+      name: "Johor Open",
+      venue: { name: "Test Venue", state: "Johor" },
+    });
+    const selangor = makeTournament({
+      id: "2",
+      name: "Selangor Open",
+      venue: { name: "Test Venue", state: "Selangor" },
+    });
     const html = renderWithFilters({ states: ["Johor"] }, [johor, selangor]);
     expect(html).toContain("Johor Open");
     expect(html).not.toContain("Selangor Open");
   });
 
   it("shows 'no match' message when state excludes all tournaments", () => {
-    const t = makeTournament({ venue: { name: "Test Venue", state: "Selangor" } });
+    const t = makeTournament({
+      venue: { name: "Test Venue", state: "Selangor" },
+    });
     const html = renderWithFilters({ states: ["Johor"] }, [t]);
     expect(html).toContain("No tournaments match your current filters.");
   });
 });
 
 describe("rating filter — component level", () => {
-  const fide = makeTournament({ id: "1", name: "FIDE Open", is_fide_rated: true, is_mcf_rated: false });
-  const mcf = makeTournament({ id: "2", name: "MCF Open", is_fide_rated: false, is_mcf_rated: true });
-  const unrated = makeTournament({ id: "3", name: "Unrated Open", is_fide_rated: false, is_mcf_rated: false });
+  const fide = makeTournament({
+    id: "1",
+    name: "FIDE Open",
+    is_fide_rated: true,
+    is_mcf_rated: false,
+  });
+  const mcf = makeTournament({
+    id: "2",
+    name: "MCF Open",
+    is_fide_rated: false,
+    is_mcf_rated: true,
+  });
+  const unrated = makeTournament({
+    id: "3",
+    name: "Unrated Open",
+    is_fide_rated: false,
+    is_mcf_rated: false,
+  });
 
   it("shows FIDE-rated tournament when 'fide' is selected", () => {
     const html = renderWithFilters({ ratings: ["fide"] }, [fide, unrated]);
@@ -715,7 +916,11 @@ describe("rating filter — component level", () => {
   });
 
   it("shows both FIDE and MCF tournaments when both ratings are selected", () => {
-    const html = renderWithFilters({ ratings: ["fide", "mcf"] }, [fide, mcf, unrated]);
+    const html = renderWithFilters({ ratings: ["fide", "mcf"] }, [
+      fide,
+      mcf,
+      unrated,
+    ]);
     expect(html).toContain("FIDE Open");
     expect(html).toContain("MCF Open");
     expect(html).not.toContain("Unrated Open");

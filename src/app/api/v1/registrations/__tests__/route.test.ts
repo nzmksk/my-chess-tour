@@ -64,7 +64,11 @@ function makeRegistration(overrides: Record<string, unknown> = {}) {
       venue_name: "Kuala Lumpur Convention Centre",
       venue_state: "Kuala Lumpur",
       format: { type: "rapid", system: "swiss", rounds: 7 },
-      time_control: { base_minutes: 10, increment_seconds: 5, delay_seconds: 0 },
+      time_control: {
+        base_minutes: 10,
+        increment_seconds: 5,
+        delay_seconds: 0,
+      },
       entry_fees: { standard: { amount_cents: 5000 }, additional: [] },
       status: "published",
     },
@@ -157,7 +161,11 @@ describe("GET /api/v1/player/registrations", () => {
         venue_name: "Kuala Lumpur Convention Centre",
         venue_state: "Kuala Lumpur",
         format: { type: "rapid", system: "swiss", rounds: 7 },
-        time_control: { base_minutes: 10, increment_seconds: 5, delay_seconds: 0 },
+        time_control: {
+          base_minutes: 10,
+          increment_seconds: 5,
+          delay_seconds: 0,
+        },
         status: "published",
       });
     });
@@ -182,11 +190,19 @@ describe("GET /api/v1/player/registrations", () => {
             venue_name: "KLCC",
             venue_state: "Kuala Lumpur",
             format: { type: "rapid", system: "swiss", rounds: 7 },
-            time_control: { base_minutes: 10, increment_seconds: 5, delay_seconds: 0 },
+            time_control: {
+              base_minutes: 10,
+              increment_seconds: 5,
+              delay_seconds: 0,
+            },
             entry_fees: {
               standard: { amount_cents: 5000 },
               additional: [
-                { type: "early_bird", amount_cents: 3500, valid_until: "2026-03-01" },
+                {
+                  type: "early_bird",
+                  amount_cents: 3500,
+                  valid_until: "2026-03-01",
+                },
               ],
             },
             status: "published",

@@ -21,7 +21,9 @@ export function validateApplyRequest(
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return {
       error: NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Invalid request body" } },
+        {
+          error: { code: "VALIDATION_ERROR", message: "Invalid request body" },
+        },
         { status: 400 },
       ),
     };
@@ -138,12 +140,12 @@ export function validateApplyRequest(
       name: b.name.trim(),
       description:
         typeof b.description === "string" ? b.description.trim() || null : null,
-      links: Array.isArray(b.links) && b.links.length > 0
-        ? (b.links as OrgLink[])
-        : null,
+      links:
+        Array.isArray(b.links) && b.links.length > 0
+          ? (b.links as OrgLink[])
+          : null,
       email: (b.email as string).trim(),
-      phone:
-        typeof b.phone === "string" ? b.phone.trim() || null : null,
+      phone: typeof b.phone === "string" ? b.phone.trim() || null : null,
       past_tournament_refs:
         typeof b.past_tournament_refs === "string"
           ? b.past_tournament_refs.trim() || null

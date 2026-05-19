@@ -6,14 +6,14 @@ Tailwind v4 removed deprecated utilities. Always use the replacement option.
 
 ### Opacity Utilities
 
-| Deprecated | Replacement | Example |
-|------------|-------------|---------|
-| `bg-opacity-*` | `bg-{color}/*` | `bg-black/50` (50% opacity) |
-| `text-opacity-*` | `text-{color}/*` | `text-blue-600/75` |
-| `border-opacity-*` | `border-{color}/*` | `border-gray-300/60` |
-| `divide-opacity-*` | `divide-{color}/*` | `divide-gray-200/50` |
-| `ring-opacity-*` | `ring-{color}/*` | `ring-blue-500/30` |
-| `placeholder-opacity-*` | `placeholder-{color}/*` | `placeholder-gray-400/50` |
+| Deprecated              | Replacement             | Example                     |
+| ----------------------- | ----------------------- | --------------------------- |
+| `bg-opacity-*`          | `bg-{color}/*`          | `bg-black/50` (50% opacity) |
+| `text-opacity-*`        | `text-{color}/*`        | `text-blue-600/75`          |
+| `border-opacity-*`      | `border-{color}/*`      | `border-gray-300/60`        |
+| `divide-opacity-*`      | `divide-{color}/*`      | `divide-gray-200/50`        |
+| `ring-opacity-*`        | `ring-{color}/*`        | `ring-blue-500/30`          |
+| `placeholder-opacity-*` | `placeholder-{color}/*` | `placeholder-gray-400/50`   |
 
 **Important**: Opacity values are still numeric (0-100), not percentages.
 
@@ -29,10 +29,10 @@ Tailwind v4 removed deprecated utilities. Always use the replacement option.
 
 ### Flex Utilities
 
-| Deprecated | Replacement |
-|------------|-------------|
-| `flex-shrink-*` | `shrink-*` |
-| `flex-grow-*` | `grow-*` |
+| Deprecated      | Replacement |
+| --------------- | ----------- |
+| `flex-shrink-*` | `shrink-*`  |
+| `flex-grow-*`   | `grow-*`    |
 
 ```html
 <!-- ❌ OLD -->
@@ -44,11 +44,11 @@ Tailwind v4 removed deprecated utilities. Always use the replacement option.
 
 ### Text and Decoration Utilities
 
-| Deprecated | Replacement |
-|------------|-------------|
-| `overflow-ellipsis` | `text-ellipsis` |
-| `decoration-slice` | `box-decoration-slice` |
-| `decoration-clone` | `box-decoration-clone` |
+| Deprecated          | Replacement            |
+| ------------------- | ---------------------- |
+| `overflow-ellipsis` | `text-ellipsis`        |
+| `decoration-slice`  | `box-decoration-slice` |
+| `decoration-clone`  | `box-decoration-clone` |
 
 ```html
 <!-- ❌ OLD -->
@@ -78,7 +78,7 @@ Tailwind v4 uses a slash notation for opacity:
 <div class="border border-gray-300/50">Subtle border</div>
 
 <!-- Ring colors -->
-<input class="ring-2 ring-blue-500/30">
+<input class="ring-2 ring-blue-500/30" />
 ```
 
 ### Full Color Palette
@@ -356,7 +356,7 @@ Tailwind v4 uses a slash notation for opacity:
 <a class="text-blue-600 hover:text-blue-800 hover:underline">Link</a>
 
 <!-- Focus -->
-<input class="border focus:border-blue-500 focus:ring-2 focus:ring-blue-500">
+<input class="border focus:border-blue-500 focus:ring-2 focus:ring-blue-500" />
 
 <!-- Active -->
 <button class="bg-blue-500 active:bg-blue-700">Click me</button>
@@ -365,7 +365,9 @@ Tailwind v4 uses a slash notation for opacity:
 <button class="disabled:opacity-50 disabled:cursor-not-allowed">Button</button>
 
 <!-- Combination -->
-<button class="bg-blue-500 hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 active:bg-blue-700">
+<button
+  class="bg-blue-500 hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 active:bg-blue-700"
+>
   Interactive button
 </button>
 ```
@@ -374,9 +376,7 @@ Tailwind v4 uses a slash notation for opacity:
 
 ```html
 <!-- Mobile first approach -->
-<div class="text-sm md:text-base lg:text-lg xl:text-xl">
-  Responsive text
-</div>
+<div class="text-sm md:text-base lg:text-lg xl:text-xl">Responsive text</div>
 
 <!-- Breakpoints: sm (640px), md (768px), lg (1024px), xl (1280px), 2xl (1536px) -->
 
@@ -385,7 +385,9 @@ Tailwind v4 uses a slash notation for opacity:
 <div class="block md:hidden">Visible on mobile, hidden on md+</div>
 
 <!-- Responsive grid -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+<div
+  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+>
   Items
 </div>
 ```

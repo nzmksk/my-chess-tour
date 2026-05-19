@@ -9,21 +9,21 @@ import type { Tournament } from "./types";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "Tournaments",
+  title: "Upcoming Chess Tournaments in Malaysia",
   description:
-    "Browse upcoming and ongoing chess tournaments across Malaysia. Find events by date, location, and format.",
+    "See all upcoming open chess tournaments in Malaysia. Filter by state, format, and rating. Register online and pay securely with FPX, DuitNow QR, or e-wallet.",
   openGraph: {
-    title: "Tournaments | MY Chess Tour",
+    title: "Upcoming Chess Tournaments in Malaysia | MY Chess Tour",
     description:
-      "Browse upcoming and ongoing chess tournaments across Malaysia. Find events by date, location, and format.",
+      "See all upcoming open chess tournaments in Malaysia. Filter by state, format, and rating. Register online and pay securely with FPX, DuitNow QR, or e-wallet.",
     type: "website",
     siteName: "MY Chess Tour",
   },
   twitter: {
     card: "summary",
-    title: "Tournaments | MY Chess Tour",
+    title: "Upcoming Chess Tournaments in Malaysia | MY Chess Tour",
     description:
-      "Browse upcoming and ongoing chess tournaments across Malaysia. Find events by date, location, and format.",
+      "See all upcoming open chess tournaments in Malaysia. Filter by state, format, and rating. Register online and pay securely with FPX, DuitNow QR, or e-wallet.",
   },
 };
 
@@ -55,7 +55,7 @@ async function TournamentsData() {
 
 export default function TournamentsPage() {
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
       <Suspense fallback={<TournamentsGridSkeleton />}>
         <TournamentsData />

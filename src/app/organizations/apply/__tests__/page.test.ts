@@ -12,12 +12,9 @@ vi.mock("@/components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock(
-  "@/app/organizations/apply/_components/ApplyForm",
-  () => ({
-    default: vi.fn().mockReturnValue(null),
-  }),
-);
+vi.mock("@/app/organizations/apply/_components/ApplyForm", () => ({
+  default: vi.fn().mockReturnValue(null),
+}));
 
 const mockGetUser = vi.hoisted(() => vi.fn());
 

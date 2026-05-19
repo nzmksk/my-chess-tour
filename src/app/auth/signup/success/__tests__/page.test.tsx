@@ -70,9 +70,7 @@ describe("SignUpSuccessPage", () => {
   });
 
   it("renders without searchParams (uses all defaults)", async () => {
-    const html = renderToStaticMarkup(
-      await SignUpSuccessPage({}),
-    );
+    const html = renderToStaticMarkup(await SignUpSuccessPage({}));
 
     expect(html).toContain("Player");
     expect(html).toContain("Browse Tournaments");

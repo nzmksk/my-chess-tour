@@ -75,7 +75,9 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             tournament records and FIDE/MCF registration.
           </p>
           <ul className="modal-list">
-            <li>You are responsible for maintaining the security of your account.</li>
+            <li>
+              You are responsible for maintaining the security of your account.
+            </li>
             <li>You must not share your credentials with any other person.</li>
             <li>
               You must notify us immediately if you suspect unauthorised access
@@ -123,7 +125,9 @@ export default function TermsModal({ onClose }: TermsModalProps) {
               MY Chess Tour may collect a platform service fee, which will be
               disclosed at the time of registration.
             </li>
-            <li>All fees are in Malaysian Ringgit (MYR) unless stated otherwise.</li>
+            <li>
+              All fees are in Malaysian Ringgit (MYR) unless stated otherwise.
+            </li>
           </ul>
 
           <h3 className="modal-section-title">5. Code of Conduct</h3>
@@ -132,12 +136,16 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             users must:
           </p>
           <ul className="modal-list">
-            <li>Treat fellow players, organisers, and arbiters with respect.</li>
+            <li>
+              Treat fellow players, organisers, and arbiters with respect.
+            </li>
             <li>
               Refrain from harassment, discrimination, or abusive language on
               the platform or at events.
             </li>
-            <li>Not engage in cheating, sandbagging, or manipulation of ratings.</li>
+            <li>
+              Not engage in cheating, sandbagging, or manipulation of ratings.
+            </li>
             <li>
               Comply with any anti-doping requirements applicable to the event.
             </li>
@@ -168,8 +176,8 @@ export default function TermsModal({ onClose }: TermsModalProps) {
           <p className="modal-paragraph">
             We may update these Terms from time to time. We will notify you of
             material changes via email or a prominent notice on the platform.
-            Continued use of the platform after changes constitutes acceptance of
-            the revised Terms.
+            Continued use of the platform after changes constitutes acceptance
+            of the revised Terms.
           </p>
 
           <h3 className="modal-section-title">9. Governing Law</h3>

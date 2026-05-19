@@ -97,7 +97,10 @@ describe("forgotPassword action", () => {
       isValid: true,
     });
 
-    await forgotPassword(INITIAL, makeFormData({ email: "  user@example.com  " }));
+    await forgotPassword(
+      INITIAL,
+      makeFormData({ email: "  user@example.com  " }),
+    );
 
     expect(mocks.validateForgotPasswordForm).toHaveBeenCalledWith(
       "user@example.com",

@@ -3,7 +3,6 @@ export default function DetailSkeleton() {
     <div className="min-h-screen bg-bg-base">
       <main className="max-w-300 mx-auto px-6 md:px-10 py-8">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-8 items-start animate-pulse">
-
           {/* Left column skeleton */}
           <div className="flex flex-col gap-6">
             {/* Title */}

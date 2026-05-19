@@ -45,9 +45,7 @@ export default function ApplyForm() {
 
   function updateLink(index: number, field: keyof LinkEntry, value: string) {
     setLinks((prev) =>
-      prev.map((link, i) =>
-        i === index ? { ...link, [field]: value } : link,
-      ),
+      prev.map((link, i) => (i === index ? { ...link, [field]: value } : link)),
     );
   }
 
@@ -108,7 +106,8 @@ export default function ApplyForm() {
         <p className="font-lato text-text-secondary text-sm mb-2">
           Your application for{" "}
           <strong className="text-text-primary">{pendingOrg.name}</strong> is
-          under review. We&apos;ll notify you by email once it&apos;s been processed.
+          under review. We&apos;ll notify you by email once it&apos;s been
+          processed.
         </p>
         <p className="font-lato text-text-muted text-xs">
           Typically reviewed within 1–2 business days.
