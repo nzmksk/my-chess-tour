@@ -15,7 +15,7 @@ export default function Footer() {
           <div className="flex flex-col gap-3">
             <span className="text--brand">MY Chess Tour</span>
             <p className="text--meta max-w-48">
-              Discover, register, and compete — all in one place.
+              Malaysia&apos;s premier competitive chess circuit.
             </p>
           </div>
 
@@ -35,7 +35,7 @@ export default function Footer() {
             <h3>Follow Us</h3>
             <div className="flex flex-col gap-2">
               <a
-                href="https://www.facebook.com/share/1CoY9s3RZx/"
+                href="https://www.facebook.com/mychesstour"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="footer-link flex items-center gap-2"

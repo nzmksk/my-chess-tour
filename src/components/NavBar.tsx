@@ -141,7 +141,7 @@ export default function NavBar() {
                 {/* Avatar + dropdown */}
                 <div className="relative ml-2" ref={dropdownRef}>
                   <button
-                    className={`nav-avatar${dropdownOpen ? "nav-avatar--open" : ""}`}
+                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""}`}
                     onClick={() => setDropdownOpen((v) => !v)}
                     aria-label="Account menu"
                     aria-expanded={dropdownOpen}
