@@ -19,7 +19,7 @@ export default function LandingPage() {
 
       <div className="mx-auto max-w-2xl px-6 pb-8">
         {/* Eyebrow */}
-        <p className="text--eyebrow">♟ Coming Soon</p>
+        <p className="text--eyebrow">♟ Coming Soon 2026</p>
         {/* Headline */}
         <h1 className="my-2">
           Malaysia&apos;s tournament circuit, finally online.
