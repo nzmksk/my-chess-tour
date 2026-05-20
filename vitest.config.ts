@@ -5,17 +5,20 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
+    env: {
+      UPSTASH_REDIS_REST_URL: "https://dummy.upstash.io",
+      UPSTASH_REDIS_REST_TOKEN: "dummy",
+    },
     css: false,
     coverage: {
       provider: "v8",
       reporter: ["text"],
-      exclude: [
-        "node_modules/**",
-        ".next/**",
-        "**/__tests__/**",
-        "**/*.config.*",
-        "**/migrations/**",
-      ],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
     },
   },
 });

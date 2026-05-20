@@ -4,15 +4,17 @@
       "Bash(cd:*)",
       "Bash(cp:*)",
       "Bash(find:*)",
-      "Bash(gh issue:*)",
-      "Bash(gh pr:*)",
+      "Bash(gh:*)",
       "Bash(git:*)",
       "Bash(ls:*)",
+      "Bash(node:*)",
       "Bash(npm install:*)",
       "Bash(npm run:*)",
       "Bash(npm test:*)",
       "Bash(npm uninstall:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

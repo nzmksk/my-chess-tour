@@ -1,0 +1,529 @@
+import { describe, it, expect, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import TournamentDetail from "../TournamentDetail";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => "/tournaments/t1",
+  useSearchParams: () => ({ get: () => null, toString: () => "" }),
+}));
+import type { TournamentDetail as TournamentDetailType } from "../../types";
+import type { StartingRankPlayer } from "../../types";
+
+// ── Fixtures ─────────────────────────────────────────────────
+
+const base: TournamentDetailType = {
+  id: "t1",
+  name: "KL Open Rapid Championship 2026",
+  description: "Annual rapid chess championship in Kuala Lumpur.",
+  venue: {
+    name: "Dewan Bandaraya KL",
+    state: "W.P. Kuala Lumpur",
+    address: "Jalan Raja Laut, 50350 Kuala Lumpur",
+  },
+  start_date: "2026-06-01",
+  end_date: "2026-06-02",
+  registration_deadline: "2026-05-28T08:00:00Z",
+  format: { type: "rapid", system: "swiss", rounds: 7 },
+  time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
+  is_fide_rated: true,
+  is_mcf_rated: false,
+  entry_fees: {
+    standard: { amount_cents: 5000 },
+    additional: [
+      { type: "Early Bird", amount_cents: 3500, valid_until: "2026-05-01" },
+    ],
+  },
+  prizes: {
+    categories: [
+      {
+        name: "Open",
+        entries: [
+          { place: "1st Place", amount_cents: 300000 },
+          { place: "2nd Place", amount_cents: 200000 },
+          { place: "3rd Place", amount_cents: 100000 },
+        ],
+      },
+    ],
+  },
+  restrictions: {
+    min_rating: null,
+    max_rating: 2200,
+    min_age: null,
+    max_age: null,
+  },
+  max_participants: 120,
+  current_participants: 78,
+  status: "published",
+  organization: {
+    id: "org-1",
+    name: "KL Chess Association",
+    description: "Premier chess organization in KL.",
+    links: [{ url: "https://klchess.org", label: "Website" }],
+    email: "info@klchess.org",
+    phone: "+60123456789",
+  },
+};
+
+const samplePlayers: StartingRankPlayer[] = [
+  {
+    rank: 1,
+    user_id: "u1",
+    name: "Alice Wong",
+    title: "WFM",
+    fide_id: 123456,
+    fide_rating: 2100,
+    national_rating: null,
+    nationality: "Malaysia",
+    mcf_id: 10001,
+    gender: "female",
+  },
+  {
+    rank: 2,
+    user_id: "u2",
+    name: "Bob Lee",
+    title: null,
+    fide_id: null,
+    fide_rating: null,
+    national_rating: 1500,
+    nationality: "Singapore",
+    mcf_id: null,
+    gender: "male",
+  },
+];
+
+function render(
+  overrides: Partial<TournamentDetailType> = {},
+  isAuthenticated = false,
+  isRegistered = false,
+  canViewStartingRank = false,
+  startingRank: StartingRankPlayer[] | null = null,
+): string {
+  return renderToStaticMarkup(
+    <TournamentDetail
+      tournament={{ ...base, ...overrides }}
+      isAuthenticated={isAuthenticated}
+      isRegistered={isRegistered}
+      canViewStartingRank={canViewStartingRank}
+      startingRank={startingRank}
+    />,
+  );
+}
+
+// ── Tab structure ─────────────────────────────────────────────
+
+describe("tab structure", () => {
+  it("renders Tournament Details tab", () => {
+    const html = render();
+    expect(html).toContain("Tournament Details");
+  });
+
+  it("renders Starting Rank tab", () => {
+    const html = render();
+    expect(html).toContain("Starting Rank");
+  });
+});
+
+// ── Tournament header ─────────────────────────────────────────
+
+describe("tournament header", () => {
+  it("renders the tournament name", () => {
+    const html = render();
+    expect(html).toContain("KL Open Rapid Championship 2026");
+  });
+
+  it("renders the organizer name when organizer is present", () => {
+    const html = render();
+    expect(html).toContain("KL Chess Association");
+  });
+
+  it("does not render organizer line when organizer is null", () => {
+    const html = render({ organization: null });
+    expect(html).not.toContain("Organized by");
+  });
+});
+
+// ── Rating badges ─────────────────────────────────────────────
+
+describe("rating badges", () => {
+  it("shows FIDE badge when FIDE rated", () => {
+    const html = render({ is_fide_rated: true, is_mcf_rated: false });
+    expect(html).toContain("FIDE");
+  });
+
+  it("shows MCF badge when MCF rated", () => {
+    const html = render({ is_fide_rated: false, is_mcf_rated: true });
+    expect(html).toContain("MCF");
+  });
+
+  it("shows Unrated badge when neither FIDE nor MCF rated", () => {
+    const html = render({ is_fide_rated: false, is_mcf_rated: false });
+    expect(html).toContain("Unrated");
+  });
+});
+
+// ── Tournament details section ────────────────────────────────
+
+describe("tournament details section", () => {
+  it("renders the venue name and state", () => {
+    const html = render();
+    expect(html).toContain("Dewan Bandaraya KL");
+    expect(html).toContain("W.P. Kuala Lumpur");
+  });
+
+  it("renders the format type and rounds", () => {
+    const html = render();
+    expect(html).toContain("Rapid");
+    expect(html).toContain("7");
+  });
+
+  it("renders the time control with increment", () => {
+    const html = render();
+    expect(html).toContain("15 min");
+    expect(html).toContain("10 sec");
+  });
+
+  it("renders time control without increment when increment is 0", () => {
+    const html = render({
+      time_control: {
+        base_minutes: 90,
+        increment_seconds: 0,
+        delay_seconds: 0,
+      },
+    });
+    expect(html).toContain("90 min");
+    expect(html).not.toContain("+ 0 sec");
+  });
+
+  it("renders capacity with spots remaining", () => {
+    const html = render({ max_participants: 120, current_participants: 78 });
+    expect(html).toContain("120");
+    expect(html).toContain("42");
+  });
+
+  it("renders date range when start and end differ", () => {
+    const html = render({ start_date: "2026-06-01", end_date: "2026-06-02" });
+    expect(html).toContain("–");
+  });
+
+  it("renders single date when start and end are the same", () => {
+    const html = render({ start_date: "2026-06-01", end_date: "2026-06-01" });
+    expect(html).not.toContain("–");
+  });
+
+  it("renders the venue address when present", () => {
+    const html = render();
+    expect(html).toContain("Jalan Raja Laut");
+  });
+
+  it("omits venue address when not present", () => {
+    const html = render({ venue: { ...base.venue, address: null } });
+    expect(html).not.toContain("Jalan Raja Laut");
+  });
+});
+
+// ── Entry fees section ────────────────────────────────────────
+
+describe("entry fees section", () => {
+  it("renders the standard fee", () => {
+    const html = render({ entry_fees: { standard: { amount_cents: 5000 } } });
+    expect(html).toContain("RM50");
+  });
+
+  it("renders 'Free' for zero standard fee", () => {
+    const html = render({ entry_fees: { standard: { amount_cents: 0 } } });
+    expect(html).toContain("Free");
+  });
+
+  it("renders additional fee tiers when present", () => {
+    const html = render();
+    expect(html).toContain("Early Bird");
+    expect(html).toContain("RM35");
+  });
+
+  it("omits additional fees section when not present", () => {
+    const html = render({ entry_fees: { standard: { amount_cents: 5000 } } });
+    expect(html).not.toContain("Early Bird");
+  });
+});
+
+// ── Prizes section ────────────────────────────────────────────
+
+describe("prizes section", () => {
+  it("renders prizes section when prizes are present", () => {
+    const html = render();
+    expect(html).toContain("Prizes");
+    expect(html).toContain("1st Place");
+    expect(html).toContain("RM3,000");
+  });
+
+  it("renders prize category headers", () => {
+    const html = render();
+    expect(html).toContain("Open");
+  });
+
+  it("hides prizes section when prizes are null", () => {
+    const html = render({ prizes: null });
+    expect(html).not.toContain("1st Place");
+  });
+
+  it("renders multiple categories when provided", () => {
+    const html = render({
+      prizes: {
+        categories: [
+          {
+            name: "Open",
+            entries: [{ place: "1st Place", amount_cents: 300000 }],
+          },
+          {
+            name: "Under-12",
+            entries: [{ place: "1st Place", amount_cents: 50000 }],
+          },
+        ],
+      },
+    });
+    expect(html).toContain("Open");
+    expect(html).toContain("Under-12");
+  });
+});
+
+// ── Restrictions section ──────────────────────────────────────
+
+describe("restrictions section", () => {
+  it("renders restrictions section when restrictions are present", () => {
+    const html = render({ restrictions: { max_rating: 2200 } });
+    expect(html).toContain("2200");
+  });
+
+  it("hides restrictions section when restrictions are null", () => {
+    const html = render({ restrictions: null });
+    // Section header should not appear when no restrictions
+    expect(html).not.toContain("Restrictions");
+  });
+
+  it("shows 'Open to all' when all restriction fields are null/absent", () => {
+    const html = render({
+      restrictions: {
+        min_rating: null,
+        max_rating: null,
+        min_age: null,
+        max_age: null,
+      },
+    });
+    expect(html).toContain("Open to all");
+  });
+
+  it("renders min and max rating when both are set", () => {
+    const html = render({
+      restrictions: { min_rating: 1200, max_rating: 2200 },
+    });
+    expect(html).toContain("1200");
+    expect(html).toContain("2200");
+  });
+
+  it("renders max age restriction when set", () => {
+    const html = render({
+      restrictions: {
+        min_rating: null,
+        max_rating: null,
+        min_age: null,
+        max_age: 18,
+      },
+    });
+    expect(html).toContain("18");
+  });
+});
+
+// ── Description section ───────────────────────────────────────
+
+describe("description section", () => {
+  it("renders description when present", () => {
+    const html = render();
+    expect(html).toContain("Annual rapid chess championship in Kuala Lumpur.");
+  });
+
+  it("hides description section when description is null", () => {
+    const html = render({ description: null });
+    expect(html).not.toContain("Annual rapid chess championship");
+  });
+});
+
+// ── Organizer section ─────────────────────────────────────────
+
+describe("organizer section", () => {
+  it("renders organizer description when present", () => {
+    const html = render();
+    expect(html).toContain("Premier chess organization in KL.");
+  });
+
+  it("renders organizer email", () => {
+    const html = render();
+    expect(html).toContain("info@klchess.org");
+  });
+
+  it("renders organizer phone when present", () => {
+    const html = render();
+    expect(html).toContain("+60123456789");
+  });
+
+  it("omits phone when not present", () => {
+    const html = render({
+      organization: { ...base.organization!, phone: null },
+    });
+    expect(html).not.toContain("+60123456789");
+  });
+
+  it("hides organizer section when organizer is null", () => {
+    const html = render({ organization: null });
+    expect(html).not.toContain("info@klchess.org");
+  });
+
+  it("renders organizer links when present as array", () => {
+    const html = render();
+    expect(html).toContain("Website");
+  });
+});
+
+// ── Register card (sidebar) ───────────────────────────────────
+
+describe("register card", () => {
+  it("shows the lowest applicable fee in the register card", () => {
+    const html = render();
+    // Early Bird at RM35 is lower than standard RM50
+    expect(html).toContain("RM35");
+  });
+
+  it("shows spots remaining", () => {
+    const html = render({ max_participants: 120, current_participants: 78 });
+    expect(html).toContain("42");
+  });
+
+  it("shows full status when no spots remain", () => {
+    const html = render(
+      { max_participants: 100, current_participants: 100 },
+      true,
+    );
+    expect(html).toContain("Full Capacity");
+  });
+
+  it("applies low-spots colour class when spots ratio is at or below 20%", () => {
+    // 4 spots left out of 100 → 4% ≤ 20%, not full
+    const html = render({ max_participants: 100, current_participants: 96 });
+    expect(html).toContain("text-amber-400");
+  });
+
+  it("shows registration deadline", () => {
+    const html = render();
+    expect(html).toContain("28 May");
+  });
+});
+
+// ── CTA button auth states ────────────────────────────────────
+
+describe("CTA button auth states", () => {
+  it("shows 'Register Now' when authenticated and spots available", () => {
+    const html = render({}, true);
+    expect(html).toContain("Register Now");
+  });
+
+  it("shows 'Sign In to Register' when not authenticated and spots available", () => {
+    const html = render({}, false);
+    expect(html).toContain("Sign In to Register");
+  });
+
+  it("disables CTA button when not authenticated", () => {
+    const html = render({}, false);
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Full Capacity' and disables button for authenticated when no spots remain", () => {
+    const htmlAuth = render(
+      { max_participants: 100, current_participants: 100 },
+      true,
+    );
+    expect(htmlAuth).toContain("Full Capacity");
+    expect(htmlAuth).toContain("disabled");
+  });
+
+  it("shows 'Sign In to Register' for unauthenticated users even when no spots remain", () => {
+    const htmlNoAuth = render(
+      { max_participants: 100, current_participants: 100 },
+      false,
+    );
+    expect(htmlNoAuth).toContain("Sign In to Register");
+    expect(htmlNoAuth).toContain("disabled");
+  });
+
+  it("shows 'Registration Closed' when deadline has passed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render({ registration_deadline: pastDeadline }, true);
+    expect(html).toContain("Registration Closed");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Registration Closed' for unauthenticated users when deadline has passed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render({ registration_deadline: pastDeadline }, false);
+    expect(html).toContain("Registration Closed");
+    expect(html).not.toContain("Sign In to Register");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Registered' when authenticated user has already registered", () => {
+    const html = render({}, true, true);
+    expect(html).toContain("Registered");
+    expect(html).toContain("disabled");
+  });
+
+  it("shows 'Registration Closed' over 'Full Capacity' when deadline passed and tournament is full", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render(
+      {
+        max_participants: 100,
+        current_participants: 100,
+        registration_deadline: pastDeadline,
+      },
+      true,
+    );
+    expect(html).toContain("Registration Closed");
+    expect(html).not.toContain("Full Capacity");
+  });
+
+  it("shows 'Registered' over 'Registration Closed' when user is registered and deadline passed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = render({ registration_deadline: pastDeadline }, true, true);
+    expect(html).toContain("Registered");
+    expect(html).not.toContain("Registration Closed");
+  });
+
+  it("shows 'Registered' over 'Full Capacity' when user is registered and tournament is full", () => {
+    const html = render(
+      { max_participants: 100, current_participants: 100 },
+      true,
+      true,
+    );
+    expect(html).toContain("Registered");
+    expect(html).not.toContain("Full Capacity");
+  });
+});
+
+// ── Starting rank tab visibility ──────────────────────────────
+// StartingRankTab display logic is tested in StartingRankTab.test.tsx.
+// Here we only verify it renders without error under various prop combinations.
+
+describe("starting rank tab integration", () => {
+  it("renders without error when startingRank is null", () => {
+    const html = render({}, false, false, false, null);
+    expect(html).toContain("Starting Rank");
+  });
+
+  it("renders without error when startingRank is an empty array", () => {
+    const html = render({}, true, true, true, []);
+    expect(html).toContain("Starting Rank");
+  });
+
+  it("renders without error when startingRank has players", () => {
+    const html = render({}, true, true, true, samplePlayers);
+    expect(html).toContain("Starting Rank");
+  });
+});

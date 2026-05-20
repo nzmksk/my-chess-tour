@@ -18,15 +18,15 @@
 
 ## Milestone Overview
 
-| # | Milestone | Weeks | What you'll have at the end |
-|---|---|---|---|
-| M0 | Project Setup | 1 | Repo, CI/CD, database, auth, deployed skeleton |
-| M1 | Player: Browse & View | 2–3 | Public tournament listing and detail pages |
-| M2 | Player: Register & Pay | 3–4 | Full registration flow with CHIP payment |
-| M3 | Organizer: Apply & Dashboard | 2–3 | Organizer application and dashboard shell |
-| M4 | Organizer: Create & Manage | 3–4 | Tournament creation wizard and participant management |
-| M5 | Admin Panel | 2–3 | Application review, tournament oversight, transactions |
-| M6 | Polish & Launch Prep | 2–3 | Bug fixes, responsive design, emails, seed organizers |
+| #   | Milestone                    | Weeks | What you'll have at the end                            |
+| --- | ---------------------------- | ----- | ------------------------------------------------------ |
+| M0  | Project Setup                | 1     | Repo, CI/CD, database, auth, deployed skeleton         |
+| M1  | Player: Browse & View        | 2–3   | Public tournament listing and detail pages             |
+| M2  | Player: Register & Pay       | 3–4   | Full registration flow with CHIP payment               |
+| M3  | Organizer: Apply & Dashboard | 2–3   | Organizer application and dashboard shell              |
+| M4  | Organizer: Create & Manage   | 3–4   | Tournament creation wizard and participant management  |
+| M5  | Admin Panel                  | 2–3   | Application review, tournament oversight, transactions |
+| M6  | Polish & Launch Prep         | 2–3   | Bug fixes, responsive design, emails, seed organizers  |
 
 **Total: 15–21 weeks** (target ~18 weeks)
 
@@ -53,6 +53,9 @@ The most important week. Get the boring stuff out of the way so everything after
 - [x] Set up domain
 - [x] Create signup, login, and logout endpoints
 - [x] Add workflows for CI, Claude Code, and automatic dependency updates
+- [x] Basic landing page with waitlist
+- [x] Set up Upstash for serverless Redis
+- [x] Set up Resend for email communication
 
 **Deliverable:** A deployed app at `staging.mychesstour.com` with auth working (signup, login, logout) and a seeded database.
 
@@ -66,17 +69,20 @@ The player's first impression. This is also the public face of the platform — 
 
 **Week 2 — Browse tournaments:**
 
-- [ ] `GET /tournaments` API route with search, filtering, pagination
-- [ ] Browse page layout: search bar, filter dropdowns (format, state, rating, date)
-- [ ] Tournament card component (poster, name, date, venue, format badge, spots indicator)
-- [ ] Empty states and loading skeletons
-- [ ] Mobile-responsive card grid
+- [x] `GET /tournaments` API route with search, filtering, pagination
+- [x] Browse page layout: search bar, filter dropdowns (format, state, rating, date)
+- [x] Tournament card component (poster, name, date, venue, format badge, spots indicator)
+- [x] Empty states and loading skeletons
+- [x] Mobile-responsive card grid
+- [x] Signup with verification code
+- [x] Login and forgot password
+- [x] Logout
 
 **Week 3 — Tournament detail + player nav:**
 
 - [ ] `GET /tournaments/:id` API route
 - [ ] Detail page: poster, full info, entry fees with player-pays breakdown, prizes, restrictions, organizer info
-- [ ] Top navigation bar (Tournaments, My Tournaments, Profile, Become an Organizer)
+- [x] Top and drawer navigation bar (Tournaments, My Tournaments, Profile, Become an Organizer)
 - [ ] Registration CTA button (links to register flow, or "Login to register" if not authenticated)
 
 **Week 4 (buffer) — Polish and edge cases:**
@@ -98,7 +104,7 @@ The core money flow. This is the most critical milestone — if this doesn't wor
 
 **Week 5 — Registration flow:**
 
-- [ ] `POST /tournaments/:id/register` API route with fee tier validation
+- [ ] `POST /tournaments/:id/sign-up` API route with fee tier validation
 - [ ] Register page: fee tier selection with player-pays breakdown
 - [ ] Server-side validation: eligibility checks (title, rating, age, deadline, capacity)
 - [ ] Create registration + payment records in a transaction
@@ -313,13 +319,13 @@ Week 21  ████████
 
 ## Risk Mitigation
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| CHIP integration complexity | Medium | High | Start sandbox testing in M2 week 1. CHIP has good docs and Malaysian support. |
-| Scope creep on wizard forms | High | Medium | Stick to the wireframe exactly. No extra fields or "nice to have" validations. |
-| Burnout at 10hrs/week | Medium | High | Buffer weeks built into every milestone. Skip a week if needed — no deadline. |
-| Supabase RLS complexity | Medium | Medium | Start simple: basic policies in M0, refine as each feature is built. |
-| Mobile responsiveness debt | Medium | Low | Test on mobile every milestone, not just at the end. |
+| Risk                        | Likelihood | Impact | Mitigation                                                                     |
+| --------------------------- | ---------- | ------ | ------------------------------------------------------------------------------ |
+| CHIP integration complexity | Medium     | High   | Start sandbox testing in M2 week 1. CHIP has good docs and Malaysian support.  |
+| Scope creep on wizard forms | High       | Medium | Stick to the wireframe exactly. No extra fields or "nice to have" validations. |
+| Burnout at 10hrs/week       | Medium     | High   | Buffer weeks built into every milestone. Skip a week if needed — no deadline.  |
+| Supabase RLS complexity     | Medium     | Medium | Start simple: basic policies in M0, refine as each feature is built.           |
+| Mobile responsiveness debt  | Medium     | Low    | Test on mobile every milestone, not just at the end.                           |
 
 ---
 
