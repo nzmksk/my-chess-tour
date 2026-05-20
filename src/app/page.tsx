@@ -74,10 +74,7 @@ export default function LandingPage() {
         </div>
         {/* Waitlist form */}
         <WaitlistForm />
-        <p className="text--meta mt-2 sm:text-center">
-          No spam. We will only reach out when the platform is ready — or to ask
-          for your feedback before launch.
-        </p>
+        
       </div>
       {/* Build progress — second section */}
       <section
