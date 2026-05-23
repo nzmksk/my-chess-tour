@@ -37,9 +37,10 @@ const MALAYSIAN_STATES = [
 
 interface Props {
   tournaments: Tournament[];
+  today: string; // "YYYY-MM-DD" from server — keeps SSR and hydration in sync
 }
 
-export default function TournamentsClient({ tournaments }: Props) {
+export default function TournamentsClient({ tournaments, today }: Props) {
   const [search, setSearch] = useState("");
   const [formats, setFormats] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
@@ -47,7 +48,7 @@ export default function TournamentsClient({ tournaments }: Props) {
   const [dateFilter, setDateFilter] = useState("any");
 
   const filtered = useMemo(() => {
-    const now = new Date();
+    const now = new Date(today + "T00:00:00");
 
     return tournaments.filter((t) => {
       // Search
@@ -108,12 +109,11 @@ export default function TournamentsClient({ tournaments }: Props) {
 
       return true;
     });
-  }, [tournaments, search, formats, states, ratings, dateFilter]);
+  }, [tournaments, search, formats, states, ratings, dateFilter, today]);
 
   const { ongoing, upcoming, past } = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const todayStart = new Date(today + "T00:00:00");
+    const lastMonthStart = new Date(todayStart.getFullYear(), todayStart.getMonth() - 1, 1);
 
     const ongoing: Tournament[] = [];
     const upcoming: Tournament[] = [];
@@ -134,7 +134,7 @@ export default function TournamentsClient({ tournaments }: Props) {
     }
 
     return { ongoing, upcoming, past };
-  }, [filtered]);
+  }, [filtered, today]);
 
   const totalVisible = ongoing.length + upcoming.length + past.length;
 

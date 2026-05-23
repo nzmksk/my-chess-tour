@@ -50,7 +50,8 @@ async function TournamentsData() {
     // Network error — render page with empty list rather than crashing
   }
 
-  return <TournamentsClient tournaments={tournaments} />;
+  const today = new Date().toISOString().split("T")[0];
+  return <TournamentsClient tournaments={tournaments} today={today} />;
 }
 
 export default function TournamentsPage() {

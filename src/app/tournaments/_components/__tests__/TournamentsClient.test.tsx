@@ -189,14 +189,16 @@ describe("initial render", () => {
       makeTournament({ id: "2", name: "Beta" }),
     ];
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={tournaments} />,
+      <TournamentsClient tournaments={tournaments} today="2026-01-01" />,
     );
     expect(html).toContain("Alpha");
     expect(html).toContain("Beta");
   });
 
   it("renders empty-state message when no tournaments are provided", () => {
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[]} today="2026-01-01" />,
+    );
     expect(html).toContain("No tournaments are currently published.");
   });
 });
@@ -619,7 +621,7 @@ function renderWithFilters(
   (globalThis as TestGlobal).__setReactUseStateOverrides(map);
   try {
     return renderToStaticMarkup(
-      <TournamentsClient tournaments={tournaments} />,
+      <TournamentsClient tournaments={tournaments} today="2026-01-01" />,
     );
   } finally {
     (globalThis as TestGlobal).__setReactUseStateOverrides({});
@@ -666,7 +668,7 @@ describe("date filter branches — component level", () => {
     (globalThis as TestGlobal).__setReactUseStateOverride(dateFilter);
     try {
       return renderToStaticMarkup(
-        <TournamentsClient tournaments={tournaments} />,
+        <TournamentsClient tournaments={tournaments} today="2026-03-10" />,
       );
     } finally {
       // Disarm for subsequent tests
@@ -950,7 +952,9 @@ describe("tournament categorisation — component level", () => {
       start_date: "2026-05-20",
       end_date: "2026-05-25",
     });
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+    );
     expect(html).toContain("Ongoing");
     expect(html).toContain("Live Open");
     expect(html).not.toContain("Upcoming");
@@ -963,7 +967,9 @@ describe("tournament categorisation — component level", () => {
       start_date: "2026-06-10",
       end_date: "2026-06-12",
     });
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+    );
     expect(html).toContain("Upcoming");
     expect(html).toContain("Future Open");
     expect(html).not.toContain("Ongoing");
@@ -977,7 +983,9 @@ describe("tournament categorisation — component level", () => {
       start_date: "2026-05-08",
       end_date: "2026-05-10",
     });
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+    );
     expect(html).toContain("Past Tournaments");
     expect(html).toContain("Recent Past");
     expect(html).toContain("opacity-50");
@@ -992,7 +1000,9 @@ describe("tournament categorisation — component level", () => {
       start_date: "2026-04-14",
       end_date: "2026-04-15",
     });
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+    );
     expect(html).toContain("Past Tournaments");
     expect(html).toContain("Last Month");
     expect(html).toContain("opacity-50");
@@ -1005,7 +1015,9 @@ describe("tournament categorisation — component level", () => {
       start_date: "2026-03-29",
       end_date: "2026-03-31",
     });
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+    );
     expect(html).not.toContain("Old Tournament");
   });
 
@@ -1029,7 +1041,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-05-05",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[live, future, recent]} />,
+      <TournamentsClient tournaments={[live, future, recent]} today="2026-05-23" />,
     );
     expect(html).toContain("Ongoing");
     expect(html).toContain("Live Open");
@@ -1045,7 +1057,9 @@ describe("tournament categorisation — component level", () => {
       start_date: "2026-03-01",
       end_date: "2026-03-31",
     });
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[old]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[old]} today="2026-05-23" />,
+    );
     expect(html).not.toContain("Very Old");
     expect(html).toContain("No tournaments match your current filters.");
   });
@@ -1056,7 +1070,9 @@ describe("tournament categorisation — component level", () => {
       start_date: "2026-05-20",
       end_date: "2026-05-25",
     });
-    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+    );
     expect(html).not.toContain("opacity-50");
   });
 });
