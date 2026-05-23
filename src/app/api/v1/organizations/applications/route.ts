@@ -3,6 +3,38 @@ import { createClient } from "@/services/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApplyRequest } from "./validators";
 
+export async function GET(_request: NextRequest): Promise<NextResponse> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
+      { status: 401 },
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("organizations")
+    .select(
+      "id, name, approval_status, rejection_reason, created_at, reviewed_at",
+    )
+    .eq("created_by", user.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ data: data ?? [] }, { status: 200 });
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const supabase = await createClient();
   const {
