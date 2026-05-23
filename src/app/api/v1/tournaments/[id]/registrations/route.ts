@@ -228,16 +228,15 @@ export async function POST(
     );
   }
 
-  const { data: registration, error: insertErr } = await supabaseAdmin
-    .from("registrations")
-    .insert({
-      user_id: user.id,
-      tournament_id: id,
-      fee_tier,
-      status: "pending_payment",
-    })
-    .select()
-    .single();
+  const { data: registration, error: insertErr } = await supabaseAdmin.rpc(
+    "create_registration_with_payment",
+    {
+      p_user_id: user.id,
+      p_tournament_id: id,
+      p_fee_tier: fee_tier,
+      p_amount_cents: matchedTier.amount_cents,
+    },
+  );
 
   if (insertErr) {
     if (
