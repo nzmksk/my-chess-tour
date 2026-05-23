@@ -10,8 +10,9 @@ const {
   mockProfileBuilder,
   mockCapacityBuilder,
   mockExistingBuilder,
-  mockInsertBuilder,
+  mockRpcBuilder,
   mockFrom,
+  mockRpc,
   mockGetUser,
   resetRegCallCount,
 } = vi.hoisted(() => {
@@ -35,7 +36,7 @@ const {
   const mockProfileBuilder = makeBuilder({ data: null, error: null });
   const mockCapacityBuilder = makeBuilder({ count: 0, error: null });
   const mockExistingBuilder = makeBuilder({ data: null, error: null });
-  const mockInsertBuilder = makeBuilder({ data: null, error: null });
+  const mockRpcBuilder = makeBuilder({ data: null, error: null });
 
   let regCallCount = 0;
   const resetRegCallCount = () => {
@@ -45,31 +46,29 @@ const {
     if (table === "tournaments") return mockTournamentBuilder;
     if (table === "player_profiles") return mockProfileBuilder;
     if (table === "registrations") {
-      const builders = [
-        mockCapacityBuilder,
-        mockExistingBuilder,
-        mockInsertBuilder,
-      ];
-      return builders[regCallCount++] ?? mockInsertBuilder;
+      const builders = [mockCapacityBuilder, mockExistingBuilder];
+      return builders[regCallCount++] ?? mockExistingBuilder;
     }
     return makeBuilder({ data: null, error: null });
   });
 
+  const mockRpc = vi.fn(() => mockRpcBuilder);
   const mockGetUser = vi.fn();
   return {
     mockTournamentBuilder,
     mockProfileBuilder,
     mockCapacityBuilder,
     mockExistingBuilder,
-    mockInsertBuilder,
+    mockRpcBuilder,
     mockFrom,
+    mockRpc,
     mockGetUser,
     resetRegCallCount,
   };
 });
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
 vi.mock("@/services/supabase/server", () => ({
@@ -161,8 +160,8 @@ function setExistingResult(data: unknown, error: unknown = null) {
   ) => Promise.resolve({ data, error }).then(r);
 }
 
-function setInsertResult(data: unknown, error: unknown = null) {
-  (mockInsertBuilder as Record<string, unknown>).then = (
+function setRpcResult(data: unknown, error: unknown = null) {
+  (mockRpcBuilder as Record<string, unknown>).then = (
     r: (v: unknown) => unknown,
   ) => Promise.resolve({ data, error }).then(r);
 }
@@ -188,7 +187,7 @@ describe("POST /api/v1/tournaments/:id/register", () => {
     setCapacityResult(0);
     setProfileResult(null);
     setExistingResult(null);
-    setInsertResult(makeRegistration());
+    setRpcResult(makeRegistration());
   });
 
   afterEach(() => {
@@ -574,7 +573,7 @@ describe("POST /api/v1/tournaments/:id/register", () => {
     });
 
     it("returns 422 when insert fails due to tournament capacity trigger", async () => {
-      setInsertResult(null, {
+      setRpcResult(null, {
         code: "P0001",
         message: "Tournament is full (100 / 100 participants)",
       });
@@ -587,7 +586,7 @@ describe("POST /api/v1/tournaments/:id/register", () => {
     });
 
     it("returns 500 on an unexpected insert error", async () => {
-      setInsertResult(null, { code: "23505", message: "Unexpected DB error" });
+      setRpcResult(null, { code: "23505", message: "Unexpected DB error" });
       const res = await POST(makeRequest(VALID_UUID), {
         params: Promise.resolve({ id: VALID_UUID }),
       });
