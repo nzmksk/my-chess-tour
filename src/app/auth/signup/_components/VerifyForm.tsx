@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
-import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
 
 const CODE_LENGTH = 6;
 const CODE_EXPIRY_SECONDS = 15 * 60; // 10 minutes
@@ -79,14 +78,6 @@ export default function VerifyForm() {
           email,
           code: value,
           password: form.password,
-          firstName: form.firstName,
-          lastName: form.lastName,
-          gender: form.gender,
-          nationality: form.nationality,
-          dateOfBirth: form.dateOfBirth,
-          fideId: form.fideId,
-          mcfId: form.mcfId,
-          isOku: form.isOku,
         }),
       });
       const data = await res.json();
@@ -96,8 +87,7 @@ export default function VerifyForm() {
         );
         return;
       }
-      document.cookie = `${SIGNUP_STEP_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
-      router.push("/auth/signup/success");
+      router.push("/auth/signup/profile");
     } catch {
       setVerifyError("Network error. Please try again.");
     } finally {
@@ -123,7 +113,7 @@ export default function VerifyForm() {
 
     setIsResending(true);
     try {
-      await fetch("/api/v1/auth/signup/request-code", {
+      await fetch("/api/v1/auth/signup/resend-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -158,8 +148,8 @@ export default function VerifyForm() {
           <StepTracker
             steps={[
               { label: "Account", state: "done" },
-              { label: "Profile", state: "done" },
               { label: "Verify", state: "current" },
+              { label: "Profile", state: "pending" },
             ]}
           />
 

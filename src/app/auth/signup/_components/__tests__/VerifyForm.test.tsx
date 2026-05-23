@@ -147,12 +147,12 @@ describe("VerifyForm", () => {
     );
   });
 
-  it("navigates to /sign-up/success after successful verification", async () => {
+  it("navigates to /auth/signup/profile after successful verification", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ message: "Account created successfully" }),
+        json: async () => ({ message: "Email verified successfully" }),
       }),
     );
 
@@ -161,7 +161,7 @@ describe("VerifyForm", () => {
       fireEvent.change(getCodeInput(), { target: { value: VALID_CODE } });
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/auth/signup/success");
+    expect(mockPush).toHaveBeenCalledWith("/auth/signup/profile");
   });
 
   it("shows an inline error when verification fails", async () => {
@@ -216,12 +216,12 @@ describe("VerifyForm", () => {
 
   // --- Resend ---------------------------------------------------------------
 
-  it("calls the request-code API when Resend code is clicked", async () => {
+  it("calls the resend-code API when Resend code is clicked", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ message: "Verification code sent" }),
+        json: async () => ({ message: "Verification code resent" }),
       }),
     );
 
@@ -235,7 +235,7 @@ describe("VerifyForm", () => {
     });
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      "/api/v1/auth/signup/request-code",
+      "/api/v1/auth/signup/resend-code",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -309,7 +309,7 @@ describe("VerifyForm", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({}),
+        json: async () => ({ message: "Verification code resent" }),
       }),
     );
 
@@ -344,7 +344,7 @@ describe("VerifyForm", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({}),
+        json: async () => ({ message: "Verification code resent" }),
       }),
     );
 

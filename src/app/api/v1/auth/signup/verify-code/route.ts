@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getVerificationCode } from "@/services/redis/redis";
@@ -17,30 +16,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const {
-    email,
-    code,
-    password,
-    firstName,
-    lastName,
-    gender,
-    nationality,
-    dateOfBirth,
-    fideId,
-    mcfId,
-    isOku,
-  } = body as {
+  const { email, code, password } = body as {
     email?: string;
     code?: string;
     password?: string;
-    firstName?: string;
-    lastName?: string;
-    gender?: string;
-    nationality?: string;
-    dateOfBirth?: string;
-    fideId?: string;
-    mcfId?: string;
-    isOku?: boolean;
   };
 
   if (!email || typeof email !== "string") {
@@ -49,94 +28,17 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+
   if (!code || typeof code !== "string") {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Code is required" } },
       { status: 400 },
     );
   }
-  if (!password || !firstName || !lastName) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Missing required registration fields",
-        },
-      },
-      { status: 400 },
-    );
-  }
 
-  const NAME_PATTERN = /^[a-zA-ZÀ-ɏ\s'.\-]+$/;
-  if (!NAME_PATTERN.test(firstName.trim())) {
+  if (!password || typeof password !== "string") {
     return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message:
-            "First name can only contain letters, spaces, hyphens, and apostrophes",
-        },
-      },
-      { status: 400 },
-    );
-  }
-  if (!NAME_PATTERN.test(lastName.trim())) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message:
-            "Last name can only contain letters, spaces, hyphens, and apostrophes",
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  if (password.length < 8) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Password must be at least 8 characters",
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  if (gender && !["male", "female"].includes(gender.toLowerCase())) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Gender must be Male or Female",
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  if (fideId && !/^\d+$/.test(fideId)) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "FIDE ID must contain digits only",
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  if (mcfId && !/^\d+$/.test(mcfId)) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "MCF ID must contain digits only",
-        },
-      },
+      { error: { code: "VALIDATION_ERROR", message: "Password is required" } },
       { status: 400 },
     );
   }
@@ -166,70 +68,25 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Hash password for public.users — the trigger reads this from user metadata
-  const passwordHash = await bcrypt.hash(password, 12);
+  const normalized = email.toLowerCase().trim();
 
-  // Create auth user (email already verified by our code)
-  const { data: authData, error: authError } =
-    await supabaseAdmin.auth.admin.createUser({
-      email: email.toLowerCase().trim(),
-      password,
-      email_confirm: true,
-      user_metadata: {
-        first_name: firstName,
-        last_name: lastName,
-        password_hash: passwordHash,
-      },
-    });
+  // Mark the user as verified in public.users
+  const { error: updateError } = await supabaseAdmin
+    .from("users")
+    .update({ is_verified: true, verified_at: new Date().toISOString() })
+    .eq("email", normalized);
 
-  if (authError) {
-    if (
-      authError.code === "email_exists" ||
-      authError.message?.toLowerCase().includes("already registered")
-    ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "VERIFICATION_FAILED",
-            message: "Verification failed. Please request a new code.",
-          },
-        },
-        { status: 400 },
-      );
-    }
-    console.error("Failed to create auth user", authError);
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: authError.message } },
-      { status: 400 },
-    );
-  }
-
-  const userId = authData.user.id;
-
-  // Update the player_profile row created by the handle_new_user trigger
-  const { error: profileError } = await supabaseAdmin
-    .from("player_profiles")
-    .update({
-      gender: gender ? (gender.toLowerCase() as "male" | "female") : null,
-      nationality: nationality || null,
-      date_of_birth: dateOfBirth || null,
-      fide_id: fideId || null,
-      mcf_id: mcfId || null,
-      is_oku: isOku ?? false,
-    })
-    .eq("user_id", userId);
-
-  if (profileError) {
+  if (updateError) {
     console.error(
-      "Failed to update player profile for user ID:",
-      userId,
-      profileError,
+      "Failed to update verification status for:",
+      normalized,
+      updateError,
     );
     return NextResponse.json(
       {
         error: {
           code: "INTERNAL_ERROR",
-          message: "Account created but failed to save profile",
+          message: "Failed to verify account",
         },
       },
       { status: 500 },
@@ -238,13 +95,30 @@ export async function POST(request: NextRequest) {
 
   // Sign the user in so the SSR client writes session cookies to the response
   const supabase = await createClient();
-  await supabase.auth.signInWithPassword({
-    email: email.toLowerCase().trim(),
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: normalized,
     password,
   });
 
+  if (signInError) {
+    console.error(
+      "Failed to sign in after verification:",
+      normalized,
+      signInError,
+    );
+    return NextResponse.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Account verified but failed to sign in",
+        },
+      },
+      { status: 500 },
+    );
+  }
+
   return NextResponse.json(
-    { message: "Account created successfully" },
-    { status: 201 },
+    { message: "Email verified successfully" },
+    { status: 200 },
   );
 }

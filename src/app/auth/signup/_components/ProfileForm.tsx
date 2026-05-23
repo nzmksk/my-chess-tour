@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
-import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 const GENDERS = ["Male", "Female"] as const;
 
@@ -15,51 +13,46 @@ export default function ProfileForm() {
   const avatarInitials =
     `${form.firstName[0]}${form.lastName[0]}`.toUpperCase() || "CT";
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<{
-    message: string;
-    emailExists: boolean;
-  } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitError(null);
-
-    if (process.env.NEXT_PUBLIC_ENVIRONMENT !== "production") return;
-
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/v1/auth/signup/request-code", {
+      const res = await fetch("/api/v1/auth/signup/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email }),
+        body: JSON.stringify({
+          gender: form.gender,
+          nationality: form.nationality,
+          dateOfBirth: form.dateOfBirth,
+          fideId: form.fideId,
+          mcfId: form.mcfId,
+          isOku: form.isOku,
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setSubmitError({
-          message:
-            data.error?.message ?? "Something went wrong. Please try again.",
-          emailExists: data.error?.code === "EMAIL_EXISTS",
-        });
+        setSubmitError(
+          data.error?.message ?? "Something went wrong. Please try again.",
+        );
         return;
       }
 
-      document.cookie = `${SIGNUP_STEP_COOKIE}=verify; path=/; max-age=${SIGNUP_STEP_MAX_AGE}; SameSite=Lax`;
-      router.push("/auth/signup/verify");
+      router.push("/tournaments");
     } catch {
-      setSubmitError({
-        message: "Network error. Please try again.",
-        emailExists: false,
-      });
+      setSubmitError("Network error. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  function handleBack() {
-    router.push("/auth/signup");
+  function handleSkip() {
+    router.push("/tournaments");
   }
 
   return (
@@ -69,8 +62,8 @@ export default function ProfileForm() {
           <StepTracker
             steps={[
               { label: "Account", state: "done" },
+              { label: "Verify", state: "done" },
               { label: "Profile", state: "current" },
-              { label: "Verify", state: "pending" },
             ]}
           />
 
@@ -106,15 +99,7 @@ export default function ProfileForm() {
           {submitError && (
             <div className="error-banner" role="alert">
               <span className="text-sm shrink-0 mt-px">&#9888;</span>
-              <p className="error-text">
-                {submitError.message}
-                {submitError.emailExists && (
-                  <>
-                    {" "}
-                    <Link href="/auth/login">Sign in instead</Link>
-                  </>
-                )}
-              </p>
+              <p className="error-text">{submitError}</p>
             </div>
           )}
 
@@ -291,10 +276,10 @@ export default function ProfileForm() {
               <button
                 type="button"
                 className="btn-secondary w-full"
-                onClick={handleBack}
+                onClick={handleSkip}
                 disabled={isSubmitting}
               >
-                Back
+                Skip
               </button>
               <button
                 type="submit"
@@ -302,14 +287,13 @@ export default function ProfileForm() {
                 disabled={isSubmitting}
                 aria-disabled={isSubmitting}
               >
-                {isSubmitting ? "Sending code…" : "Continue"}
+                {isSubmitting ? "Saving…" : "Complete Profile"}
               </button>
             </div>
           </form>
 
           <p className="auth-footer text-xs">
-            All fields except gender and nationality are optional — editable
-            later in settings
+            All fields are optional — editable later in settings
           </p>
         </div>
       </div>

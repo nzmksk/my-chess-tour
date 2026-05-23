@@ -7,28 +7,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockGetVerificationCode,
-  mockCreateUser,
   mockEq,
   mockUpdate,
   mockFrom,
   mockSignInWithPassword,
-  mockGetUser,
 } = vi.hoisted(() => {
   const mockGetVerificationCode = vi.fn();
-  const mockCreateUser = vi.fn();
   const mockEq = vi.fn();
   const mockUpdate = vi.fn(() => ({ eq: mockEq }));
   const mockFrom = vi.fn(() => ({ update: mockUpdate }));
   const mockSignInWithPassword = vi.fn();
-  const mockGetUser = vi.fn();
   return {
     mockGetVerificationCode,
-    mockCreateUser,
     mockEq,
     mockUpdate,
     mockFrom,
     mockSignInWithPassword,
-    mockGetUser,
   };
 });
 
@@ -36,13 +30,8 @@ vi.mock("@/services/redis/redis", () => ({
   getVerificationCode: mockGetVerificationCode,
 }));
 
-vi.mock("bcryptjs", () => ({
-  default: { hash: vi.fn().mockResolvedValue("$2b$12$mockedhash") },
-}));
-
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
-    auth: { admin: { createUser: mockCreateUser } },
     from: mockFrom,
   },
 }));
@@ -51,7 +40,6 @@ vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: {
       signInWithPassword: mockSignInWithPassword,
-      getUser: mockGetUser,
     },
   }),
 }));
@@ -73,14 +61,6 @@ const validBody = {
   email: "player@example.com",
   code: "ABC123",
   password: "securepass",
-  firstName: "Alice",
-  lastName: "Wong",
-  gender: "female",
-  nationality: "Malaysian",
-  dateOfBirth: "1990-01-01",
-  fideId: "",
-  mcfId: "",
-  isOku: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -111,10 +91,6 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetVerificationCode.mockResolvedValue("ABC123");
-    mockCreateUser.mockResolvedValue({
-      data: { user: { id: "new-user-id" } },
-      error: null,
-    });
     mockEq.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockFrom.mockReturnValue({ update: mockUpdate });
@@ -123,15 +99,28 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
 
   // --- Success --------------------------------------------------------------
 
-  it("returns 201 on valid code and creates user", async () => {
+  it("returns 200 on valid code and updates verified status", async () => {
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
-    expect(res.status).toBe(201);
-    expect(json.message).toMatch(/account created/i);
+    expect(res.status).toBe(200);
+    expect(json.message).toMatch(/verified/i);
   });
 
-  it("signs the user in after account creation", async () => {
+  it("updates is_verified and verified_at in users table", async () => {
+    await POST(makeRequest(validBody));
+
+    expect(mockFrom).toHaveBeenCalledWith("users");
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        is_verified: true,
+        verified_at: expect.any(String),
+      }),
+    );
+    expect(mockEq).toHaveBeenCalledWith("email", "player@example.com");
+  });
+
+  it("signs the user in after verification", async () => {
     await POST(makeRequest(validBody));
 
     expect(mockSignInWithPassword).toHaveBeenCalledWith({
@@ -140,70 +129,10 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     });
   });
 
-  it("calls createUser with email_confirm: true", async () => {
-    await POST(makeRequest(validBody));
-
-    expect(mockCreateUser).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: "player@example.com",
-        email_confirm: true,
-      }),
-    );
-  });
-
-  it("includes password_hash in user_metadata", async () => {
-    await POST(makeRequest(validBody));
-
-    expect(mockCreateUser).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_metadata: expect.objectContaining({
-          password_hash: "$2b$12$mockedhash",
-          first_name: "Alice",
-          last_name: "Wong",
-        }),
-      }),
-    );
-  });
-
-  it("updates player_profiles with all profile fields", async () => {
-    await POST(makeRequest(validBody));
-
-    expect(mockFrom).toHaveBeenCalledWith("player_profiles");
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        gender: "female",
-        nationality: "Malaysian",
-        date_of_birth: "1990-01-01",
-        is_oku: false,
-      }),
-    );
-    expect(mockEq).toHaveBeenCalledWith("user_id", "new-user-id");
-  });
-
-  it("stores null for empty optional string fields", async () => {
-    await POST(makeRequest({ ...validBody, fideId: "", mcfId: "" }));
-
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        fide_id: null,
-        mcf_id: null,
-      }),
-    );
-  });
-
-  it("defaults is_oku to false when not provided", async () => {
-    const { isOku: _, ...bodyWithoutIsOku } = validBody;
-    await POST(makeRequest(bodyWithoutIsOku));
-
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ is_oku: false }),
-    );
-  });
-
   it("accepts code match case-insensitively", async () => {
     mockGetVerificationCode.mockResolvedValue("abc123");
     const res = await POST(makeRequest({ ...validBody, code: "ABC123" }));
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
   });
 
   // --- Validation errors ----------------------------------------------------
@@ -240,33 +169,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error.message).toMatch(/missing required registration fields/i);
-  });
-
-  it("returns 400 when firstName is missing", async () => {
-    const { firstName: _, ...body } = validBody;
-    const res = await POST(makeRequest(body));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.message).toMatch(/missing required registration fields/i);
-  });
-
-  it("returns 400 when lastName is missing", async () => {
-    const { lastName: _, ...body } = validBody;
-    const res = await POST(makeRequest(body));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.message).toMatch(/missing required registration fields/i);
-  });
-
-  it("returns 400 when password is shorter than 8 characters", async () => {
-    const res = await POST(makeRequest({ ...validBody, password: "short" }));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.message).toMatch(/8 characters/i);
+    expect(json.error.message).toMatch(/password is required/i);
   });
 
   // --- Code validation ------------------------------------------------------
@@ -291,76 +194,50 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     expect(json.error.code).toBe("CODE_INVALID");
   });
 
-  it("does not call createUser when code is expired", async () => {
+  it("does not update users table when code is expired", async () => {
     mockGetVerificationCode.mockResolvedValue(null);
     await POST(makeRequest(validBody));
-    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("does not call createUser when code is wrong", async () => {
+  it("does not update users table when code is wrong", async () => {
     mockGetVerificationCode.mockResolvedValue("ZZZZZZ");
     await POST(makeRequest(validBody));
-    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  // --- Auth errors ----------------------------------------------------------
+  // --- Update errors --------------------------------------------------------
 
-  it("returns 400 VERIFICATION_FAILED when Supabase reports email_exists code", async () => {
-    mockCreateUser.mockResolvedValue({
-      data: { user: null },
-      error: { code: "email_exists", message: "User already registered" },
-    });
-
-    const res = await POST(makeRequest(validBody));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.code).toBe("VERIFICATION_FAILED");
-  });
-
-  it("returns 400 VERIFICATION_FAILED when error message contains 'already registered'", async () => {
-    mockCreateUser.mockResolvedValue({
-      data: { user: null },
-      error: { code: "other_code", message: "User already registered" },
-    });
-
-    const res = await POST(makeRequest(validBody));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.code).toBe("VERIFICATION_FAILED");
-  });
-
-  it("returns 400 for other auth errors", async () => {
-    mockCreateUser.mockResolvedValue({
-      data: { user: null },
-      error: { code: "unexpected", message: "Something went wrong" },
-    });
-
-    const res = await POST(makeRequest(validBody));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.message).toBe("Something went wrong");
-  });
-
-  // --- Profile update errors ------------------------------------------------
-
-  it("returns 500 when profile update fails", async () => {
-    mockEq.mockResolvedValue({ error: { message: "Profile update failed" } });
+  it("returns 500 when users table update fails", async () => {
+    mockEq.mockResolvedValue({ error: { message: "Update failed" } });
 
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
     expect(res.status).toBe(500);
-    expect(json.error.message).toMatch(/failed to save profile/i);
+    expect(json.error.message).toMatch(/failed to verify account/i);
   });
 
-  it("does not sign in when profile update fails", async () => {
-    mockEq.mockResolvedValue({ error: { message: "Profile update failed" } });
+  it("does not sign in when users table update fails", async () => {
+    mockEq.mockResolvedValue({ error: { message: "Update failed" } });
 
     await POST(makeRequest(validBody));
 
     expect(mockSignInWithPassword).not.toHaveBeenCalled();
+  });
+
+  // --- Sign-in errors -------------------------------------------------------
+
+  it("returns 500 when sign-in fails after verification", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      data: {},
+      error: { message: "Sign-in failed" },
+    });
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error.message).toMatch(/failed to sign in/i);
   });
 });
