@@ -7,6 +7,7 @@ interface MultiSelectProps {
   options: Array<{ value: string; label: string }>;
   selected: string[];
   onChange: (values: string[]) => void;
+  multiColumn?: boolean;
 }
 
 function MultiSelectDropdown({
@@ -14,6 +15,7 @@ function MultiSelectDropdown({
   options,
   selected,
   onChange,
+  multiColumn = false,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,14 +60,18 @@ function MultiSelectDropdown({
       </button>
 
       {open && (
-        <div className="filter-panel">
+        <div
+          className={
+            multiColumn ? "filter-panel grid grid-cols-2" : "filter-panel"
+          }
+        >
           {options.map((opt) => (
             <label key={opt.value} className="filter-checkbox-item">
               <input
                 type="checkbox"
                 checked={selected.includes(opt.value)}
                 onChange={() => toggle(opt.value)}
-                className="accent-gold-bright) size-3.75 shrink-0"
+                className="accent-gold-bright size-3.75 shrink-0"
               />
               {opt.label}
             </label>
@@ -141,8 +147,8 @@ export default function FilterBar({
   }
 
   return (
-    <div className="bg-bg-surface border-b border-border py-4">
-      <div className="max-w-300 mx-auto px-10">
+    <div className="bg-bg-surface border-border border-b py-4">
+      <div className="mx-auto max-w-300 px-10">
         {/* Search */}
         <input
           id="search-tournaments"
@@ -154,7 +160,7 @@ export default function FilterBar({
         />
 
         {/* Filter row */}
-        <div className="flex items-center gap-2.5 flex-wrap mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2.5">
           <MultiSelectDropdown
             label="Format"
             options={FORMAT_OPTIONS}
@@ -166,6 +172,7 @@ export default function FilterBar({
             options={stateOptions}
             selected={states}
             onChange={onStatesChange}
+            multiColumn
           />
           <MultiSelectDropdown
             label="Rating"

@@ -68,7 +68,7 @@
   --color-skeleton-base: #1c1c1c;
   --color-skeleton-highlight: #303030;
 
-  --breakpoint-xs: 32rem; /* Mobile */
+  --breakpoint-xs: 30rem; /* Mobile */
 }
 
 [data-theme="light"] {
@@ -267,7 +267,7 @@
   }
 
   .filter-panel {
-    @apply bg-bg-raised border-border-gold absolute left-0 z-100 min-w-45 rounded border py-1.5;
+    @apply bg-bg-raised border-border-gold absolute left-0 z-100 min-w-60 rounded border py-1.5;
     top: calc(100% + 0.25rem);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   }
