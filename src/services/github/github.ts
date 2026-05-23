@@ -20,19 +20,22 @@ export async function getIssueProgress(): Promise<number> {
   try {
     const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
+    const EXCLUDED_LABELS = "-label:invalid -label:duplicate -label:wontfix";
     const [closedResult, allResult] = await Promise.all([
       octokit.rest.search.issuesAndPullRequests({
-        q: `repo:${REPO_OWNER}/${REPO_NAME} type:issue state:closed`,
+        q: `repo:${REPO_OWNER}/${REPO_NAME} type:issue state:closed ${EXCLUDED_LABELS}`,
         per_page: 1,
       }),
       octokit.rest.search.issuesAndPullRequests({
-        q: `repo:${REPO_OWNER}/${REPO_NAME} type:issue`,
+        q: `repo:${REPO_OWNER}/${REPO_NAME} type:issue ${EXCLUDED_LABELS}`,
         per_page: 1,
       }),
     ]);
 
     const resolved = closedResult.data.total_count;
     const total = allResult.data.total_count;
+    console.log("resolved", resolved);
+    console.log("total", total);
     const percentage = total > 0 ? Math.round((resolved / total) * 100) : 0;
 
     cache = { value: percentage, timestamp: now };
