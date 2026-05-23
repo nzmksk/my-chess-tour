@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
+import { supabaseAdmin } from "@/services/supabase/admin";
 import ApplicationsClient from "./_components/ApplicationsClient";
 import type { OrgApplication } from "./types";
 
@@ -10,31 +10,6 @@ export const metadata: Metadata = {
   title: "My Organizations",
   description: "Track your organizer applications and their review status.",
 };
-
-async function fetchApplications(
-  host: string,
-  cookieHeader: string,
-): Promise<OrgApplication[]> {
-  const protocol =
-    host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https";
-
-  try {
-    const res = await fetch(
-      `${protocol}://${host}/api/v1/organizations/applications`,
-      {
-        cache: "no-store",
-        headers: { cookie: cookieHeader },
-      },
-    );
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.data ?? [];
-  } catch {
-    return [];
-  }
-}
 
 export default async function MyOrganizationsPage() {
   const supabase = await createClient();
@@ -46,10 +21,16 @@ export default async function MyOrganizationsPage() {
     redirect("/auth/login");
   }
 
-  const headersList = await headers();
-  const host = headersList.get("host") ?? "localhost:3000";
-  const cookieHeader = headersList.get("cookie") ?? "";
-  const applications = await fetchApplications(host, cookieHeader);
+  const { data } = await supabaseAdmin
+    .from("organizations")
+    .select(
+      "id, name, approval_status, rejection_reason, created_at, reviewed_at",
+    )
+    .eq("created_by", user.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  const applications: OrgApplication[] = data ?? [];
 
   return (
     <div className="min-h-screen bg-bg-base">
