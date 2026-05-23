@@ -43,7 +43,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const stored = await getVerificationCode(email);
+  const normalized = email.toLowerCase().trim();
+
+  const stored = await getVerificationCode(normalized);
   if (!stored) {
     return NextResponse.json(
       {
@@ -67,8 +69,6 @@ export async function POST(request: NextRequest) {
       { status: 422 },
     );
   }
-
-  const normalized = email.toLowerCase().trim();
 
   // Mark the user as verified in public.users
   const { error: updateError } = await supabaseAdmin
