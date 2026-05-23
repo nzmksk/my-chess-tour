@@ -129,11 +129,12 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     } else if (
       typeof body.fide_id === "number" &&
       Number.isInteger(body.fide_id) &&
-      body.fide_id > 0
+      body.fide_id > 0 &&
+      body.fide_id <= 2147483647
     ) {
       update.fide_id = body.fide_id;
     } else {
-      errors.push("fide_id must be a positive integer or null");
+      errors.push("fide_id must be a positive integer no greater than 2147483647 or null");
     }
   }
 
@@ -143,11 +144,12 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     } else if (
       typeof body.mcf_id === "number" &&
       Number.isInteger(body.mcf_id) &&
-      body.mcf_id > 0
+      body.mcf_id > 0 &&
+      body.mcf_id <= 2147483647
     ) {
       update.mcf_id = body.mcf_id;
     } else {
-      errors.push("mcf_id must be a positive integer or null");
+      errors.push("mcf_id must be a positive integer no greater than 2147483647 or null");
     }
   }
 
@@ -157,11 +159,12 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     } else if (
       typeof body.national_rating === "number" &&
       Number.isInteger(body.national_rating) &&
-      body.national_rating >= 0
+      body.national_rating >= 0 &&
+      body.national_rating <= 3000
     ) {
       update.national_rating = body.national_rating;
     } else {
-      errors.push("national_rating must be a non-negative integer or null");
+      errors.push("national_rating must be a non-negative integer no greater than 3000 or null");
     }
   }
 

@@ -1,7 +1,7 @@
 export type ChessTitle = "GM" | "WGM" | "IM" | "WIM" | "FM" | "WFM" | "CM" | "WCM";
 export type Gender = "male" | "female";
 
-export type FideRating = {
+type FideRating = {
   standard?: number | null;
   rapid?: number | null;
   blitz?: number | null;
