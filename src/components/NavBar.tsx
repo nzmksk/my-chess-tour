@@ -10,7 +10,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 
 const NAV_LINKS = [
-  { href: "/organizations/apply", label: "Become an Organizer", ghost: true },
+  { href: "/organizations/landing", label: "Become an Organizer", ghost: true },
 ];
 
 type AuthUser = {
