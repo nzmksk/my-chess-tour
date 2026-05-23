@@ -23,7 +23,7 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
-vi.mock("../_actions/login", () => ({
+vi.mock("../../_actions/login", () => ({
   login: vi.fn(),
 }));
 
