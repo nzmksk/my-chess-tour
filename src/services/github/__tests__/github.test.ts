@@ -67,6 +67,17 @@ describe("getIssueProgress", () => {
       expect(args.q).toContain("repo:nzmksk/my-chess-tour");
     }
   });
+
+  it("excludes invalid, duplicate, and wontfix labels from both queries", async () => {
+    mockCounts(0, 0);
+    await getIssueProgress();
+
+    for (const [args] of mockSearch.mock.calls) {
+      expect(args.q).toContain("-label:invalid");
+      expect(args.q).toContain("-label:duplicate");
+      expect(args.q).toContain("-label:wontfix");
+    }
+  });
 });
 
 describe("error handling", () => {
