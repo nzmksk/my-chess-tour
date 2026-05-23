@@ -35,9 +35,10 @@ function capitalise(s: string): string {
 
 interface Props {
   tournament: Tournament;
+  dimmed?: boolean;
 }
 
-export default function TournamentCard({ tournament: t }: Props) {
+export default function TournamentCard({ tournament: t, dimmed = false }: Props) {
   const spotsLeft = t.max_participants - t.current_participants;
   const spotsRatio =
     t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
@@ -60,7 +61,7 @@ export default function TournamentCard({ tournament: t }: Props) {
   }
 
   return (
-    <article className="card tournament-card">
+    <article className={`card tournament-card${dimmed ? " opacity-50" : ""}`}>
       {/* Body */}
       <div className="p-4 flex flex-col h-full">
         {/* Format + rating + spots badges */}

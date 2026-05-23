@@ -5,6 +5,17 @@ import type { Tournament } from "../types";
 import FilterBar from "./FilterBar";
 import TournamentCard from "./TournamentCard";
 
+function SectionBanner({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-4 mb-4">
+      <span className="font-cinzel text-text-muted text-xs tracking-widest uppercase shrink-0">
+        {label}
+      </span>
+      <div className="h-px bg-border flex-1" />
+    </div>
+  );
+}
+
 const MALAYSIAN_STATES = [
   "Johor",
   "Kedah",
@@ -99,6 +110,34 @@ export default function TournamentsClient({ tournaments }: Props) {
     });
   }, [tournaments, search, formats, states, ratings, dateFilter]);
 
+  const { ongoing, upcoming, past } = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const ongoing: Tournament[] = [];
+    const upcoming: Tournament[] = [];
+    const past: Tournament[] = [];
+
+    for (const t of filtered) {
+      const start = new Date(t.start_date + "T00:00:00");
+      const end = new Date(t.end_date + "T00:00:00");
+
+      if (start <= todayStart && end >= todayStart) {
+        ongoing.push(t);
+      } else if (start > todayStart) {
+        upcoming.push(t);
+      } else if (end >= lastMonthStart) {
+        past.push(t);
+      }
+      // else: ended before last calendar month — hidden
+    }
+
+    return { ongoing, upcoming, past };
+  }, [filtered]);
+
+  const totalVisible = ongoing.length + upcoming.length + past.length;
+
   return (
     <>
       {/* Filter bar */}
@@ -116,10 +155,10 @@ export default function TournamentsClient({ tournaments }: Props) {
         allStates={MALAYSIAN_STATES}
       />
 
-      {/* Tournament grid */}
+      {/* Tournament sections */}
       <div className="max-w-300 mx-auto px-10 py-6">
-        {filtered.length === 0 ? (
-          <div className="text-center py-20 px-5 text-text-muted)">
+        {totalVisible === 0 ? (
+          <div className="text-center py-20 px-5 text-text-muted">
             <div className="text-4xl mb-4 opacity-30">♟</div>
             <p className="text-sm leading-relaxed">
               {tournaments.length === 0
@@ -128,10 +167,37 @@ export default function TournamentsClient({ tournaments }: Props) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
-            {filtered.map((t) => (
-              <TournamentCard key={t.id} tournament={t} />
-            ))}
+          <div className="flex flex-col gap-8">
+            {ongoing.length > 0 && (
+              <section>
+                <SectionBanner label="Ongoing" />
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
+                  {ongoing.map((t) => (
+                    <TournamentCard key={t.id} tournament={t} />
+                  ))}
+                </div>
+              </section>
+            )}
+            {upcoming.length > 0 && (
+              <section>
+                <SectionBanner label="Upcoming" />
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
+                  {upcoming.map((t) => (
+                    <TournamentCard key={t.id} tournament={t} />
+                  ))}
+                </div>
+              </section>
+            )}
+            {past.length > 0 && (
+              <section>
+                <SectionBanner label="Past Tournaments" />
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
+                  {past.map((t) => (
+                    <TournamentCard key={t.id} tournament={t} dimmed />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>

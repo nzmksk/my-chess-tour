@@ -97,9 +97,9 @@ function makeTournament(overrides: Partial<Tournament> = {}): Tournament {
     id: "1",
     name: "Default Tournament",
     venue: { name: "Test Venue", state: "Selangor" },
-    start_date: "2026-03-10",
-    end_date: "2026-03-10",
-    registration_deadline: "2026-03-09",
+    start_date: "2026-08-10",
+    end_date: "2026-08-10",
+    registration_deadline: "2026-08-09",
     format: { type: "rapid", system: "swiss", rounds: 7 },
     time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
     is_fide_rated: false,
@@ -924,5 +924,139 @@ describe("rating filter — component level", () => {
     expect(html).toContain("FIDE Open");
     expect(html).toContain("MCF Open");
     expect(html).not.toContain("Unrated Open");
+  });
+});
+
+// ── Tournament categorisation ─────────────────────────────────
+//
+// These tests verify that tournaments are grouped into the correct sections
+// (Ongoing / Upcoming / Past Tournaments) and that past ones carry the
+// dimmed class. Fixed "now" = 2026-05-23 via fake timers.
+
+describe("tournament categorisation — component level", () => {
+  // Fixed "now": 2026-05-23
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 23)); // month is 0-indexed → 4 = May
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("places a currently-running tournament in the Ongoing section", () => {
+    const t = makeTournament({
+      name: "Live Open",
+      start_date: "2026-05-20",
+      end_date: "2026-05-25",
+    });
+    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    expect(html).toContain("Ongoing");
+    expect(html).toContain("Live Open");
+    expect(html).not.toContain("Upcoming");
+    expect(html).not.toContain("Past Tournaments");
+  });
+
+  it("places a future tournament in the Upcoming section", () => {
+    const t = makeTournament({
+      name: "Future Open",
+      start_date: "2026-06-10",
+      end_date: "2026-06-12",
+    });
+    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    expect(html).toContain("Upcoming");
+    expect(html).toContain("Future Open");
+    expect(html).not.toContain("Ongoing");
+    expect(html).not.toContain("Past Tournaments");
+  });
+
+  it("places a recently-ended tournament (this month) in the Past section with dimmed class", () => {
+    // ended May 10 — within this calendar month (May 2026), so visible but dimmed
+    const t = makeTournament({
+      name: "Recent Past",
+      start_date: "2026-05-08",
+      end_date: "2026-05-10",
+    });
+    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    expect(html).toContain("Past Tournaments");
+    expect(html).toContain("Recent Past");
+    expect(html).toContain("opacity-50");
+    expect(html).not.toContain("Ongoing");
+    expect(html).not.toContain("Upcoming");
+  });
+
+  it("places a tournament that ended last calendar month in the Past section", () => {
+    // ended April 15 — within last calendar month (April 2026), so visible but dimmed
+    const t = makeTournament({
+      name: "Last Month",
+      start_date: "2026-04-14",
+      end_date: "2026-04-15",
+    });
+    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    expect(html).toContain("Past Tournaments");
+    expect(html).toContain("Last Month");
+    expect(html).toContain("opacity-50");
+  });
+
+  it("hides a tournament that ended before last calendar month", () => {
+    // ended March 31 — before April 1 (start of last month), so hidden
+    const t = makeTournament({
+      name: "Old Tournament",
+      start_date: "2026-03-29",
+      end_date: "2026-03-31",
+    });
+    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    expect(html).not.toContain("Old Tournament");
+  });
+
+  it("renders multiple sections when ongoing, upcoming, and past all exist", () => {
+    const live = makeTournament({
+      id: "1",
+      name: "Live Open",
+      start_date: "2026-05-20",
+      end_date: "2026-05-25",
+    });
+    const future = makeTournament({
+      id: "2",
+      name: "Future Open",
+      start_date: "2026-06-10",
+      end_date: "2026-06-12",
+    });
+    const recent = makeTournament({
+      id: "3",
+      name: "Recent Past",
+      start_date: "2026-05-01",
+      end_date: "2026-05-05",
+    });
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[live, future, recent]} />,
+    );
+    expect(html).toContain("Ongoing");
+    expect(html).toContain("Live Open");
+    expect(html).toContain("Upcoming");
+    expect(html).toContain("Future Open");
+    expect(html).toContain("Past Tournaments");
+    expect(html).toContain("Recent Past");
+  });
+
+  it("shows empty state when all tournaments are older than last calendar month", () => {
+    const old = makeTournament({
+      name: "Very Old",
+      start_date: "2026-03-01",
+      end_date: "2026-03-31",
+    });
+    const html = renderToStaticMarkup(<TournamentsClient tournaments={[old]} />);
+    expect(html).not.toContain("Very Old");
+    expect(html).toContain("No tournaments match your current filters.");
+  });
+
+  it("ongoing cards do not carry the dimmed class", () => {
+    const t = makeTournament({
+      name: "Live Open",
+      start_date: "2026-05-20",
+      end_date: "2026-05-25",
+    });
+    const html = renderToStaticMarkup(<TournamentsClient tournaments={[t]} />);
+    expect(html).not.toContain("opacity-50");
   });
 });
