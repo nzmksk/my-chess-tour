@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { validateLoginForm } from "@/services/auth/auth-validation";
 import { createClient } from "@/services/supabase/server";
+import { supabaseAdmin } from "@/services/supabase/admin";
 import { redis } from "@/services/redis/redis";
 import type { LoginState } from "../types";
 
@@ -74,6 +75,24 @@ export async function login(
     return {
       error: "Incorrect email or password.",
       attemptsRemaining: remaining,
+      locked: false,
+      lockedSeconds: null,
+    };
+  }
+
+  // Check that the account has been verified
+  const { data: userRecord } = await supabaseAdmin
+    .from("users")
+    .select("is_verified")
+    .eq("email", email.toLowerCase().trim())
+    .maybeSingle();
+
+  if (!userRecord?.is_verified) {
+    await supabase.auth.signOut();
+    return {
+      error:
+        "Your email address has not been verified. Please check your inbox and complete verification before signing in.",
+      attemptsRemaining: null,
       locked: false,
       lockedSeconds: null,
     };

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   del: vi.fn(),
   signInWithPassword: vi.fn(),
   redirect: vi.fn(),
+  maybeSingle: vi.fn(),
 }));
 
 vi.mock("@/services/redis/redis", () => ({
@@ -30,6 +31,18 @@ vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({ auth: { signInWithPassword: mocks.signInWithPassword } }),
   ),
+}));
+
+vi.mock("@/services/supabase/admin", () => ({
+  supabaseAdmin: {
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: mocks.maybeSingle,
+        })),
+      })),
+    })),
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -57,8 +70,9 @@ const VALID = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Default: account not locked
+  // Default: account not locked, user is verified
   mocks.exists.mockResolvedValue(0);
+  mocks.maybeSingle.mockResolvedValue({ data: { is_verified: true } });
 });
 
 // ---------------------------------------------------------------------------

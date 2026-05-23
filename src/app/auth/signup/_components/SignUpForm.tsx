@@ -12,7 +12,6 @@ import {
 } from "@/services/auth/auth-validation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
-import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 import TermsModal from "./TermsModal";
 import PrivacyModal from "./PrivacyModal";
 
@@ -23,6 +22,8 @@ export default function SignUpForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
@@ -32,15 +33,39 @@ export default function SignUpForm() {
 
   const submittable = isRegistrationFormSubmittable(form);
 
-  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitted(true);
+    setSubmitError(null);
     const { errors: validationErrors, isValid } =
       validateRegistrationForm(form);
     setErrors(validationErrors);
-    if (isValid) {
-      document.cookie = `${SIGNUP_STEP_COOKIE}=profile; path=/; max-age=${SIGNUP_STEP_MAX_AGE}; SameSite=Lax`;
-      router.push("/auth/signup/profile");
+    if (!isValid) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/v1/auth/signup/create-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+          firstName: form.firstName,
+          lastName: form.lastName,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSubmitError(
+          data.error?.message ?? "Something went wrong. Please try again.",
+        );
+        return;
+      }
+      router.push("/auth/signup/verify");
+    } catch {
+      setSubmitError("Network error. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -53,8 +78,8 @@ export default function SignUpForm() {
           <StepTracker
             steps={[
               { label: "Account", state: "current" },
-              { label: "Profile", state: "pending" },
               { label: "Verify", state: "pending" },
+              { label: "Profile", state: "pending" },
             ]}
           />
 
@@ -73,6 +98,13 @@ export default function SignUpForm() {
               <p className="error-text">
                 Please correct the errors below before continuing.
               </p>
+            </div>
+          )}
+
+          {submitError && (
+            <div className="error-banner" role="alert">
+              <span className="text-sm shrink-0 mt-px">&#9888;</span>
+              <p className="error-text">{submitError}</p>
             </div>
           )}
 
@@ -364,10 +396,10 @@ export default function SignUpForm() {
             <button
               type="submit"
               className="btn-primary"
-              disabled={submitted && !submittable}
-              aria-disabled={submitted && !submittable}
+              disabled={isSubmitting || (submitted && !submittable)}
+              aria-disabled={isSubmitting || (submitted && !submittable)}
             >
-              Create Account
+              {isSubmitting ? "Creating account…" : "Create Account"}
             </button>
           </form>
 

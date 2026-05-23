@@ -114,7 +114,15 @@ describe("SignUpForm", () => {
 
   // --- Valid submission ------------------------------------------------------
 
-  it("navigates to /sign-up/profile on a valid form submit", async () => {
+  it("navigates to /auth/signup/verify on a valid form submit", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ message: "Account created. Verification code sent." }),
+      }),
+    );
+
     renderForm();
 
     fireEvent.change(screen.getByLabelText("First Name"), {
@@ -138,7 +146,47 @@ describe("SignUpForm", () => {
       fireEvent.submit(getForm());
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/auth/signup/profile");
+    expect(mockPush).toHaveBeenCalledWith("/auth/signup/verify");
+    vi.unstubAllGlobals();
+  });
+
+  it("shows error banner when account creation API fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          error: { code: "EMAIL_EXISTS", message: "An account with this email already exists" },
+        }),
+      }),
+    );
+
+    renderForm();
+
+    fireEvent.change(screen.getByLabelText("First Name"), {
+      target: { value: "Alice" },
+    });
+    fireEvent.change(screen.getByLabelText("Last Name"), {
+      target: { value: "Wong" },
+    });
+    fireEvent.change(screen.getByLabelText("Email Address"), {
+      target: { value: "alice@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "Password1!" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirm Password"), {
+      target: { value: "Password1!" },
+    });
+    fireEvent.click(screen.getByRole("checkbox"));
+
+    await act(async () => {
+      fireEvent.submit(getForm());
+    });
+
+    expect(screen.getByRole("alert")).toBeDefined();
+    expect(mockPush).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   // --- Password visibility toggles ------------------------------------------

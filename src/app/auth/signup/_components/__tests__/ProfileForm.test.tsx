@@ -19,11 +19,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) =>
-    React.createElement("a", { href }, children),
-}));
-
 vi.mock("../StepTracker", () => ({ default: () => null }));
 
 // Make setForm call the updater so inner arrow-function callbacks are covered.
@@ -67,10 +62,10 @@ function getSubmitButton(): HTMLButtonElement {
     ) as HTMLButtonElement;
 }
 
-function getBackButton(): HTMLElement {
+function getSkipButton(): HTMLElement {
   return screen
     .getAllByRole("button")
-    .find((b) => b.textContent?.trim() === "Back")!;
+    .find((b) => b.textContent?.trim() === "Skip")!;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,14 +73,12 @@ function getBackButton(): HTMLElement {
 // ---------------------------------------------------------------------------
 
 describe("ProfileForm", () => {
-  const savedEnv = process.env.NEXT_PUBLIC_ENVIRONMENT;
-
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   afterEach(() => {
-    process.env.NEXT_PUBLIC_ENVIRONMENT = savedEnv;
     vi.unstubAllGlobals();
   });
 
@@ -111,9 +104,9 @@ describe("ProfileForm", () => {
     expect(avatar.textContent).toContain("AW");
   });
 
-  it("renders Back and Continue/Sending buttons", () => {
+  it("renders Skip and Complete Profile buttons", () => {
     render(<ProfileForm />);
-    expect(getBackButton()).toBeDefined();
+    expect(getSkipButton()).toBeDefined();
     expect(getSubmitButton()).toBeDefined();
   });
 
@@ -126,7 +119,6 @@ describe("ProfileForm", () => {
         target: { value: "Male" },
       });
     });
-    // setForm was called (the updater executed successfully)
     expect(true).toBe(true);
   });
 
@@ -180,39 +172,20 @@ describe("ProfileForm", () => {
 
   // --- Navigation -----------------------------------------------------------
 
-  it("Back button calls router.push('/sign-up')", async () => {
+  it("Skip button navigates to /tournaments", async () => {
     render(<ProfileForm />);
     await act(async () => {
-      fireEvent.click(getBackButton());
+      fireEvent.click(getSkipButton());
     });
-    expect(mockPush).toHaveBeenCalledWith("/auth/signup");
+    expect(mockPush).toHaveBeenCalledWith("/tournaments");
   });
 
-  // --- Non-production behaviour ---------------------------------------------
-
-  it("skips fetch and navigation in non-production environment", async () => {
-    delete process.env.NEXT_PUBLIC_ENVIRONMENT;
-    const mockFetch = vi.fn();
-    vi.stubGlobal("fetch", mockFetch);
-
-    render(<ProfileForm />);
-    await act(async () => {
-      fireEvent.submit(getSubmitButton().closest("form")!);
-    });
-
-    expect(mockFetch).not.toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalled();
-  });
-
-  // --- Production behaviour -------------------------------------------------
-
-  it("navigates to /sign-up/verify on successful code request", async () => {
-    process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
+  it("navigates to /tournaments on successful profile completion", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ message: "Verification code sent" }),
+        json: async () => ({ message: "Profile updated" }),
       }),
     );
 
@@ -221,11 +194,30 @@ describe("ProfileForm", () => {
       fireEvent.submit(getSubmitButton().closest("form")!);
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/auth/signup/verify");
+    expect(mockPush).toHaveBeenCalledWith("/tournaments");
+  });
+
+  it("calls the complete-profile API endpoint on submit", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ message: "Profile updated" }),
+      }),
+    );
+
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.submit(getSubmitButton().closest("form")!);
+    });
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/v1/auth/signup/complete-profile",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("shows error banner when the API returns an error", async () => {
-    process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -246,38 +238,12 @@ describe("ProfileForm", () => {
     );
   });
 
-  it("shows a 'Sign in instead' link on EMAIL_EXISTS error", async () => {
-    process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        json: async () => ({
-          error: {
-            code: "EMAIL_EXISTS",
-            message: "An account with this email already exists",
-          },
-        }),
-      }),
-    );
-
-    render(<ProfileForm />);
-    await act(async () => {
-      fireEvent.submit(getSubmitButton().closest("form")!);
-    });
-
-    expect(
-      screen.getByRole("link", { name: /sign in instead/i }),
-    ).toBeDefined();
-  });
-
   it("shows fallback error message when API response has no error field", async () => {
-    process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({}), // no error field
+        json: async () => ({}),
       }),
     );
 
@@ -292,7 +258,6 @@ describe("ProfileForm", () => {
   });
 
   it("shows 'Network error' message when fetch throws", async () => {
-    process.env.NEXT_PUBLIC_ENVIRONMENT = "production";
     vi.stubGlobal(
       "fetch",
       vi.fn().mockRejectedValue(new Error("Network down")),
