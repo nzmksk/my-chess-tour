@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { storeVerificationCode } from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
 import { validateEmail } from "@/services/auth/auth-validation";
+import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 function generateCode(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -213,8 +214,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json(
+  const response = NextResponse.json(
     { message: "Account created. Verification code sent." },
     { status: 201 },
   );
+  response.cookies.set(SIGNUP_STEP_COOKIE, "verify", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: SIGNUP_STEP_MAX_AGE,
+  });
+  return response;
 }
