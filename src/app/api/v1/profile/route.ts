@@ -175,9 +175,19 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       typeof body.date_of_birth === "string" &&
       /^\d{4}-\d{2}-\d{2}$/.test(body.date_of_birth)
     ) {
-      update.date_of_birth = body.date_of_birth;
+      const [y, m, d] = body.date_of_birth.split("-").map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      if (
+        dt.getUTCFullYear() === y &&
+        dt.getUTCMonth() + 1 === m &&
+        dt.getUTCDate() === d
+      ) {
+        update.date_of_birth = body.date_of_birth;
+      } else {
+        errors.push("date_of_birth must be a valid calendar date (YYYY-MM-DD) or null");
+      }
     } else {
-      errors.push("date_of_birth must be a date string (YYYY-MM-DD) or null");
+      errors.push("date_of_birth must be a valid calendar date (YYYY-MM-DD) or null");
     }
   }
 
