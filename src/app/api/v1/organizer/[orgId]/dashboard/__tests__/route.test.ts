@@ -112,10 +112,13 @@ const ORG_ID = "bbbbbbbb-0000-0000-0000-000000000001";
 const TOUR_ID_1 = "cccccccc-0000-0000-0000-000000000001";
 const TOUR_ID_2 = "cccccccc-0000-0000-0000-000000000002";
 
+const OTHER_USER_ID = "aaaaaaaa-0000-0000-0000-000000000002";
+
 const APPROVED_ORG = {
   id: ORG_ID,
   name: "KL Chess Association",
   approval_status: "approved",
+  created_by: USER_ID,
 };
 
 const PUBLISHED_TOURNAMENT = {
@@ -313,7 +316,8 @@ describe("GET /api/v1/organizer/:orgId/dashboard", () => {
       expect(res.status).toBe(403);
     });
 
-    it("returns 403 when user is not a member of the organization", async () => {
+    it("returns 403 when user is not a member and not the creator", async () => {
+      setOrgResult({ ...APPROVED_ORG, created_by: OTHER_USER_ID });
       setMemberResult(0);
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
@@ -324,12 +328,21 @@ describe("GET /api/v1/organizer/:orgId/dashboard", () => {
       expect(json.error.message).toMatch(/access denied/i);
     });
 
-    it("returns 403 when member count is null", async () => {
+    it("returns 403 when member count is null and user is not the creator", async () => {
+      setOrgResult({ ...APPROVED_ORG, created_by: OTHER_USER_ID });
       setMemberResult(null);
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
       expect(res.status).toBe(403);
+    });
+
+    it("returns 200 when user is the creator but not an explicit member", async () => {
+      setMemberResult(0);
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(res.status).toBe(200);
     });
   });
 
