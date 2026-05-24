@@ -34,8 +34,6 @@ export async function getIssueProgress(): Promise<number> {
 
     const resolved = closedResult.data.total_count;
     const total = allResult.data.total_count;
-    console.log("resolved", resolved);
-    console.log("total", total);
     const percentage = total > 0 ? Math.round((resolved / total) * 100) : 0;
 
     cache = { value: percentage, timestamp: now };
