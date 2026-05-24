@@ -103,6 +103,26 @@ export default function DashboardClient({ data }: Props) {
         <StatCard label="Pending Payout" value={formatCents(stats.pending_payout_cents)} />
       </div>
 
+      {/* Quick Links */}
+      <div className="mb-8">
+        <h2 className="font-cinzel text-base font-bold text-text-primary tracking-wide mb-3">
+          Manage
+        </h2>
+        <Link
+          href={`/organizer/${organization.id}/members`}
+          className="flex items-center justify-between card px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl text-gold-bright">♟</span>
+            <div>
+              <p className="font-lato text-sm font-semibold text-text-primary">Members</p>
+              <p className="font-lato text-xs text-text-muted mt-0.5">View and manage organization members</p>
+            </div>
+          </div>
+          <span className="text-text-muted text-lg">›</span>
+        </Link>
+      </div>
+
       {/* Recent Tournaments */}
       <div>
         <h2 className="font-cinzel text-base font-bold text-text-primary tracking-wide mb-3">
