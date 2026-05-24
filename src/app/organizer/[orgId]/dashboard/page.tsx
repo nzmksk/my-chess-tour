@@ -24,7 +24,7 @@ interface DashboardData {
     start_date: string;
     current_participants: number;
     max_participants: number;
-    status: string;
+    status: "draft" | "published" | "ongoing" | "completed" | "cancelled";
   }[];
 }
 
