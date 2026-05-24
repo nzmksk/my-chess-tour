@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const LINK_TYPES = [
   { value: "website", label: "Website" },
@@ -25,6 +26,7 @@ interface PendingOrg {
 }
 
 export default function ApplyForm() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [links, setLinks] = useState<LinkEntry[]>([]);
@@ -34,6 +36,17 @@ export default function ApplyForm() {
   const [status, setStatus] = useState<FormStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingOrg, setPendingOrg] = useState<PendingOrg | null>(null);
+  const [countdown, setCountdown] = useState(5);
+
+  useEffect(() => {
+    if (status !== "success") return;
+    if (countdown <= 0) {
+      router.push("/my/organizations");
+      return;
+    }
+    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [status, countdown, router]);
 
   function addLink() {
     setLinks((prev) => [...prev, { type: "website", url: "" }]);
@@ -109,9 +122,26 @@ export default function ApplyForm() {
           under review. We&apos;ll notify you by email once it&apos;s been
           processed.
         </p>
-        <p className="font-lato text-text-muted text-xs">
+        <p className="font-lato text-text-muted text-xs mb-8">
           Typically reviewed within 1–2 business days.
         </p>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => router.push("/my/organizations")}
+            className="btn-primary rounded-md w-full"
+          >
+            View My Organizations
+            <span className="ml-2 font-lato text-xs opacity-70">
+              ({countdown}s)
+            </span>
+          </button>
+          <button
+            onClick={() => router.push("/tournaments")}
+            className="btn-secondary rounded-md w-full"
+          >
+            Back to Tournaments
+          </button>
+        </div>
       </div>
     );
   }
