@@ -12,6 +12,7 @@ const { mockBuilder, mockFrom, mockGetUser } = vi.hoisted(() => {
       "select",
       "eq",
       "in",
+      "ilike",
       "is",
       "order",
       "single",
@@ -344,29 +345,20 @@ describe("POST /api/v1/organizations/applications", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Duplicate application check
+  // Name uniqueness check
   // -------------------------------------------------------------------------
 
-  describe("duplicate check", () => {
-    it("returns 409 when user already has a pending application", async () => {
-      setQueryResult({ id: ORG_ID, approval_status: "pending" });
+  describe("name uniqueness", () => {
+    it("returns 409 when an organization with the same name already exists", async () => {
+      setQueryResult({ id: ORG_ID });
       const res = await POST(makePostRequest());
       expect(res.status).toBe(409);
       const json = await res.json();
-      expect(json.error.code).toBe("ALREADY_APPLIED");
-      expect(json.error.message).toMatch(/pending/i);
+      expect(json.error.code).toBe("NAME_TAKEN");
+      expect(json.error.message).toMatch(/already exists/i);
     });
 
-    it("returns 409 when user already has an approved organization", async () => {
-      setQueryResult({ id: ORG_ID, approval_status: "approved" });
-      const res = await POST(makePostRequest());
-      expect(res.status).toBe(409);
-      const json = await res.json();
-      expect(json.error.code).toBe("ALREADY_APPLIED");
-      expect(json.error.message).toMatch(/approved/i);
-    });
-
-    it("returns 500 when the duplicate check query fails", async () => {
+    it("returns 500 when the name uniqueness check query fails", async () => {
       setQueryResult(null, { message: "DB connection error" });
       const res = await POST(makePostRequest());
       expect(res.status).toBe(500);
