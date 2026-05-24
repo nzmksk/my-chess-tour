@@ -192,9 +192,11 @@ describe("ApplyForm", () => {
 
     it("auto-redirects to /my/organizations after 5 seconds", async () => {
       await submitForm();
-      await act(async () => {
-        vi.advanceTimersByTime(5000);
-      });
+      for (let i = 0; i < 5; i++) {
+        await act(async () => {
+          vi.advanceTimersByTime(1000);
+        });
+      }
       expect(mockPush).toHaveBeenCalledWith("/my/organizations");
     });
 
