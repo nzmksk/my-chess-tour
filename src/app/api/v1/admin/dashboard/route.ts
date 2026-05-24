@@ -30,10 +30,17 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const { data: isAdmin } = await supabase.rpc("has_global_permission", {
-    p_user_id: user.id,
-    p_permission: "platform.manage",
-  });
+  const { data: isAdmin, error: permissionError } = await supabase.rpc(
+    "has_global_permission",
+    { p_user_id: user.id, p_permission: "platform.manage" },
+  );
+
+  if (permissionError) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
+      { status: 500 },
+    );
+  }
 
   if (!isAdmin) {
     return NextResponse.json(
