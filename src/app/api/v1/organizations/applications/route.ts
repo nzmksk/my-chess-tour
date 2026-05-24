@@ -62,10 +62,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if ("error" in validated) return validated.error;
   const body = validated.data;
 
+  // Escape ILIKE wildcards so names containing % or _ match literally
+  const escapedName = body.name.replace(/[\\%_]/g, "\\$&");
   const { data: nameConflict, error: nameErr } = await supabaseAdmin
     .from("organizations")
     .select("id")
-    .ilike("name", body.name)
+    .ilike("name", escapedName)
     .is("deleted_at", null)
     .maybeSingle();
 
