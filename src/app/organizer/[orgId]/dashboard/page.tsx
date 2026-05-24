@@ -30,17 +30,14 @@ interface DashboardData {
 
 async function fetchDashboard(
   orgId: string,
-  host: string,
   cookieHeader: string,
 ): Promise<DashboardData | null> {
-  const protocol =
-    host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
   try {
     const res = await fetch(
-      `${protocol}://${host}/api/v1/organizer/${orgId}/dashboard`,
+      `${baseUrl}/api/v1/organizer/${orgId}/dashboard`,
       {
         cache: "no-store",
         headers: { cookie: cookieHeader },
@@ -73,10 +70,9 @@ export default async function OrganizerDashboardPage({
   }
 
   const headersList = await headers();
-  const host = headersList.get("host") ?? "localhost:3000";
   const cookieHeader = headersList.get("cookie") ?? "";
 
-  const data = await fetchDashboard(orgId, host, cookieHeader);
+  const data = await fetchDashboard(orgId, cookieHeader);
 
   if (!data) {
     notFound();
