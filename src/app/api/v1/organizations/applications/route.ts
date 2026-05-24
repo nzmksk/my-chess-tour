@@ -62,29 +62,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if ("error" in validated) return validated.error;
   const body = validated.data;
 
-  const { data: existing, error: existingErr } = await supabaseAdmin
+  // Escape ILIKE wildcards so names containing % or _ match literally
+  const escapedName = body.name.replace(/[\\%_]/g, "\\$&");
+  const { data: nameConflict, error: nameErr } = await supabaseAdmin
     .from("organizations")
-    .select("id, approval_status")
-    .eq("created_by", user.id)
-    .in("approval_status", ["pending", "approved"])
+    .select("id")
+    .ilike("name", escapedName)
+    .is("deleted_at", null)
     .maybeSingle();
 
-  if (existingErr) {
+  if (nameErr) {
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: existingErr.message } },
+      { error: { code: "INTERNAL_ERROR", message: nameErr.message } },
       { status: 500 },
     );
   }
 
-  if (existing) {
+  if (nameConflict) {
     return NextResponse.json(
       {
         error: {
-          code: "ALREADY_APPLIED",
-          message:
-            existing.approval_status === "approved"
-              ? "You already have an approved organization"
-              : "You already have a pending application",
+          code: "NAME_TAKEN",
+          message: "An organization with this name already exists",
         },
       },
       { status: 409 },
