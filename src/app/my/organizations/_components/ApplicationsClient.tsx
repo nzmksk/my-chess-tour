@@ -34,7 +34,7 @@ function StatusBadge({ status }: { status: ApprovalStatus }) {
   );
 }
 
-function ApplicationCard({ application }: { application: OrgApplication }) {
+function ApplicationCardContent({ application }: { application: OrgApplication }) {
   const submittedDate = new Date(application.created_at);
   const month = submittedDate
     .toLocaleString("en-MY", { month: "short" })
@@ -42,7 +42,7 @@ function ApplicationCard({ application }: { application: OrgApplication }) {
   const day = submittedDate.getDate();
 
   return (
-    <div className="flex items-center gap-4 card px-5 py-4">
+    <>
       {/* Date block */}
       <div className="text-center min-w-12 shrink-0">
         <div className="font-cinzel text-xs font-bold tracking-widest text-gold-bright">
@@ -75,6 +75,25 @@ function ApplicationCard({ application }: { application: OrgApplication }) {
 
       {/* Status badge */}
       <StatusBadge status={application.approval_status} />
+    </>
+  );
+}
+
+function ApplicationCard({ application }: { application: OrgApplication }) {
+  if (application.approval_status === "approved") {
+    return (
+      <Link
+        href={`/organizer/${application.id}/dashboard`}
+        className="flex items-center gap-4 card px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
+      >
+        <ApplicationCardContent application={application} />
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-4 card px-5 py-4">
+      <ApplicationCardContent application={application} />
     </div>
   );
 }
