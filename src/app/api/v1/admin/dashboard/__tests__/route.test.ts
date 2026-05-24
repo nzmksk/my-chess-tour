@@ -601,6 +601,14 @@ describe("GET /api/v1/admin/dashboard", () => {
       const json = await res.json();
       expect(json.error.code).toBe("INTERNAL_ERROR");
     });
+
+    it("returns 500 when has_global_permission RPC call fails", async () => {
+      mockRpc.mockResolvedValue({ data: null, error: { message: "RPC error" } });
+      const res = await GET(makeRequest());
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error.code).toBe("INTERNAL_ERROR");
+    });
   });
 
   // -------------------------------------------------------------------------
