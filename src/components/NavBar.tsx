@@ -120,7 +120,7 @@ export default function NavBar() {
                 className={
                   ghost
                     ? "nav-link-organizer"
-                    : `nav-link${pathname === href ? "nav-link--active" : ""}`
+                    : `nav-link ${pathname === href ? "nav-link--active" : ""}`
                 }
               >
                 {label}
@@ -132,8 +132,8 @@ export default function NavBar() {
             {authUser ? (
               <>
                 <Link
-                  href="/registrations"
-                  className={`nav-link${pathname === "/registrations" ? "nav-link--active" : ""}`}
+                  href="/my/tournaments"
+                  className={`nav-link ${pathname === "/my/tournaments" ? "nav-link--active" : ""}`}
                 >
                   My Tournaments
                 </Link>
@@ -164,11 +164,11 @@ export default function NavBar() {
                           My Profile
                         </Link>
                         <Link
-                          href="/registrations"
+                          href="/my/tournaments"
                           className="nav-dropdown-item"
                           onClick={() => setDropdownOpen(false)}
                         >
-                          My Registrations
+                          My Tournaments
                         </Link>
                         <Link
                           href="/settings"
@@ -258,7 +258,7 @@ export default function NavBar() {
               key={href}
               href={href}
               onClick={() => setDrawerState((current) => closeDrawer(current))}
-              className={`nav-drawer-link${pathname === href ? "nav-drawer-link--active" : ""}`}
+              className={`nav-drawer-link ${pathname === href ? "nav-drawer-link--active" : ""}`}
             >
               {label}
             </Link>
@@ -267,11 +267,11 @@ export default function NavBar() {
           {authUser ? (
             <>
               <Link
-                href="/registrations"
+                href="/my/tournaments"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
                 }
-                className={`nav-drawer-link${pathname === "/registrations" ? "nav-drawer-link--active" : ""}`}
+                className={`nav-drawer-link ${pathname === "/my/tournaments" ? "nav-drawer-link--active" : ""}`}
               >
                 My Tournaments
               </Link>
