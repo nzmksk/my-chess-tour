@@ -14,6 +14,11 @@ import ApplyForm from "../ApplyForm";
 // Mocks
 // ---------------------------------------------------------------------------
 
+const mockPush = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
@@ -133,9 +138,14 @@ describe("ApplyForm", () => {
   describe("handleSubmit — success", () => {
     beforeEach(() => {
       mockFetch.mockResolvedValueOnce(makeSuccessFetch("Test Org"));
+      vi.useFakeTimers();
     });
 
-    it("shows the success state after a successful API response", async () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function submitForm() {
       render(<ApplyForm />);
       const nameInput = screen.getByPlaceholderText(
         "e.g., KL Chess Association",
@@ -143,13 +153,51 @@ describe("ApplyForm", () => {
       const emailInput = screen.getByPlaceholderText("chess@org.com");
       fireEvent.change(nameInput, { target: { value: "Test Org" } });
       fireEvent.change(emailInput, { target: { value: "test@org.com" } });
-
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
       });
+    }
 
+    it("shows the success state after a successful API response", async () => {
+      await submitForm();
       expect(screen.getByText("Application Submitted")).toBeDefined();
       expect(screen.getByText(/Test Org/)).toBeDefined();
+    });
+
+    it("shows navigation buttons after successful submission", async () => {
+      await submitForm();
+      expect(
+        screen.getByRole("button", { name: /View My Organizations/ }),
+      ).toBeDefined();
+      expect(
+        screen.getByRole("button", { name: "Back to Tournaments" }),
+      ).toBeDefined();
+    });
+
+    it("redirects to /my/organizations when primary button is clicked", async () => {
+      await submitForm();
+      fireEvent.click(
+        screen.getByRole("button", { name: /View My Organizations/ }),
+      );
+      expect(mockPush).toHaveBeenCalledWith("/my/organizations");
+    });
+
+    it("redirects to /tournaments when secondary button is clicked", async () => {
+      await submitForm();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Back to Tournaments" }),
+      );
+      expect(mockPush).toHaveBeenCalledWith("/tournaments");
+    });
+
+    it("auto-redirects to /my/organizations after 5 seconds", async () => {
+      await submitForm();
+      for (let i = 0; i < 5; i++) {
+        await act(async () => {
+          vi.advanceTimersByTime(1000);
+        });
+      }
+      expect(mockPush).toHaveBeenCalledWith("/my/organizations");
     });
 
     it("passes filtered links (non-empty URLs only) in the request body", async () => {
