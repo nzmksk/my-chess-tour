@@ -160,7 +160,10 @@ export async function GET(
   const participantCounts: Record<string, number> = {};
 
   if (allIds.length > 0) {
-    const [{ count: regCount }, { data: recentRegs }] = await Promise.all([
+    const [
+      { count: regCount, error: regCountError },
+      { data: recentRegs, error: recentRegsError },
+    ] = await Promise.all([
       supabaseAdmin
         .from("registrations")
         .select("*", { count: "exact", head: true })
@@ -172,6 +175,25 @@ export async function GET(
         .in("tournament_id", recentIds)
         .eq("status", "confirmed"),
     ]);
+
+    if (regCountError) {
+      return NextResponse.json(
+        { error: { code: "INTERNAL_ERROR", message: regCountError.message } },
+        { status: 500 },
+      );
+    }
+
+    if (recentRegsError) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: recentRegsError.message,
+          },
+        },
+        { status: 500 },
+      );
+    }
 
     totalRegistrations = regCount ?? 0;
 
