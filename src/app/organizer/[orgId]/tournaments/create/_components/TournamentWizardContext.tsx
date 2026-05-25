@@ -74,6 +74,34 @@ const initialFeesData: FeesData = {
   tiers: [],
 };
 
+export interface PrizeRow {
+  id: string;
+  placement: string;
+  amount: number | "";
+}
+
+export interface PrizeCategory {
+  id: string;
+  name: string;
+  prizes: PrizeRow[];
+}
+
+export interface SpecialPrize {
+  id: string;
+  name: string;
+  amount: number | "";
+}
+
+export interface PrizesData {
+  categories: PrizeCategory[];
+  specialPrizes: SpecialPrize[];
+}
+
+const initialPrizesData: PrizesData = {
+  categories: [],
+  specialPrizes: [],
+};
+
 export interface FormatData {
   formatType: string;
   system: string;
@@ -119,6 +147,8 @@ interface TournamentWizardContextType {
   setFormatData: React.Dispatch<React.SetStateAction<FormatData>>;
   feesData: FeesData;
   setFeesData: React.Dispatch<React.SetStateAction<FeesData>>;
+  prizesData: PrizesData;
+  setPrizesData: React.Dispatch<React.SetStateAction<PrizesData>>;
   registerStepHandler: (index: number, handler: () => Promise<void>) => void;
   triggerStepHandler: (index: number) => Promise<void>;
 }
@@ -141,6 +171,8 @@ export function TournamentWizardProvider({
     useState<FormatData>(initialFormatData);
   const [feesData, setFeesData] =
     useState<FeesData>(initialFeesData);
+  const [prizesData, setPrizesData] =
+    useState<PrizesData>(initialPrizesData);
 
   const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
 
@@ -207,6 +239,8 @@ export function TournamentWizardProvider({
         setFormatData,
         feesData,
         setFeesData,
+        prizesData,
+        setPrizesData,
         registerStepHandler,
         triggerStepHandler,
       }}
