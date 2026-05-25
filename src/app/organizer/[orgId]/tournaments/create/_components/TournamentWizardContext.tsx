@@ -50,6 +50,30 @@ export interface Restriction {
   value: string;
 }
 
+export type TierType = "early-bird" | "titled" | "rating-based" | "age-based";
+
+export interface FeeTier {
+  id: string;
+  type: TierType;
+  amount: number | "";
+  validUntil: string;
+  titles: string[];
+  ratingFrom: number | "";
+  ratingTo: number | "";
+  ageFrom: number | "";
+  ageTo: number | "";
+}
+
+export interface FeesData {
+  standardFee: number | "";
+  tiers: FeeTier[];
+}
+
+const initialFeesData: FeesData = {
+  standardFee: "",
+  tiers: [],
+};
+
 export interface FormatData {
   formatType: string;
   system: string;
@@ -93,6 +117,8 @@ interface TournamentWizardContextType {
   setBasicInfoData: React.Dispatch<React.SetStateAction<BasicInfoData>>;
   formatData: FormatData;
   setFormatData: React.Dispatch<React.SetStateAction<FormatData>>;
+  feesData: FeesData;
+  setFeesData: React.Dispatch<React.SetStateAction<FeesData>>;
   registerStepHandler: (index: number, handler: () => Promise<void>) => void;
   triggerStepHandler: (index: number) => Promise<void>;
 }
@@ -113,6 +139,8 @@ export function TournamentWizardProvider({
     useState<BasicInfoData>(initialBasicInfo);
   const [formatData, setFormatData] =
     useState<FormatData>(initialFormatData);
+  const [feesData, setFeesData] =
+    useState<FeesData>(initialFeesData);
 
   const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
 
@@ -177,6 +205,8 @@ export function TournamentWizardProvider({
         setBasicInfoData,
         formatData,
         setFormatData,
+        feesData,
+        setFeesData,
         registerStepHandler,
         triggerStepHandler,
       }}
