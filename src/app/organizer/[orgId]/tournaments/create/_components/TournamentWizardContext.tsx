@@ -34,7 +34,6 @@ export interface BasicInfoData {
   venueName: string;
   venueState: string;
   venueAddress: string;
-  posterFile: File | null;
 }
 
 const initialBasicInfo: BasicInfoData = {
@@ -43,7 +42,6 @@ const initialBasicInfo: BasicInfoData = {
   venueName: "",
   venueState: "",
   venueAddress: "",
-  posterFile: null,
 };
 
 interface TournamentWizardContextType {

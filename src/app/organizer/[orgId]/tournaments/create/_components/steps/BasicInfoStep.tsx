@@ -23,8 +23,6 @@ const MALAYSIAN_STATES = [
   "W.P. Putrajaya",
 ];
 
-const MAX_POSTER_BYTES = 5 * 1024 * 1024;
-
 type NameStatus = "idle" | "checking" | "available" | "taken" | "error";
 
 type FieldErrors = {
@@ -32,7 +30,6 @@ type FieldErrors = {
   venueName?: string;
   venueState?: string;
   venueAddress?: string;
-  posterFile?: string;
 };
 
 async function checkNameAvailability(name: string): Promise<NameStatus> {
@@ -83,11 +80,7 @@ export default function BasicInfoStep() {
   const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showErrors, setShowErrors] = useState(false);
-  const [posterPreview, setPosterPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const nameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragCounter = useRef(0);
-  const [dragging, setDragging] = useState(false);
 
   const handleNameChange = (value: string) => {
     setForm((f) => ({ ...f, name: value }));
@@ -103,63 +96,6 @@ export default function BasicInfoStep() {
       setNameStatus(status);
     }, 600);
   };
-
-  const handlePosterFile = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setErrors((e) => ({ ...e, posterFile: "Only image files are accepted." }));
-      return;
-    }
-    if (file.size > MAX_POSTER_BYTES) {
-      setErrors((e) => ({ ...e, posterFile: "File must be under 5 MB." }));
-      return;
-    }
-    setErrors((e) => ({ ...e, posterFile: undefined }));
-    setForm((f) => ({ ...f, posterFile: file }));
-    const url = URL.createObjectURL(file);
-    setPosterPreview(url);
-  }, []);
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handlePosterFile(file);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    dragCounter.current = 0;
-    setDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handlePosterFile(file);
-  };
-
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    dragCounter.current += 1;
-    setDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    dragCounter.current -= 1;
-    if (dragCounter.current === 0) setDragging(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  };
-
-  const removePoster = () => {
-    setForm((f) => ({ ...f, posterFile: null }));
-    setPosterPreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setErrors((e) => ({ ...e, posterFile: undefined }));
-  };
-
-  useEffect(() => {
-    return () => {
-      if (posterPreview) URL.revokeObjectURL(posterPreview);
-    };
-  }, [posterPreview]);
 
   const attemptNext = useCallback(async () => {
     setShowErrors(true);
@@ -260,69 +196,6 @@ export default function BasicInfoStep() {
           onChange={(e) => field("description", e.target.value)}
           rows={3}
         />
-      </div>
-
-      {/* Tournament Poster */}
-      <div className="form-group">
-        <div className="label-row">
-          <label className="input-label">Tournament Poster</label>
-          <span className="label-optional">(optional)</span>
-        </div>
-
-        {posterPreview ? (
-          <div className="relative inline-block">
-            <img
-              src={posterPreview}
-              alt="Tournament poster preview"
-              className="max-h-48 rounded-md border border-border object-cover"
-            />
-            <button
-              type="button"
-              onClick={removePoster}
-              className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-bg-raised text-text-muted text-xs transition hover:border-danger hover:text-danger"
-              aria-label="Remove poster"
-            >
-              ×
-            </button>
-          </div>
-        ) : (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => fileInputRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
-            }}
-            onDrop={handleDrop}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition duration-200 ${
-              dragging
-                ? "border-gold-bright bg-int-gold-bg"
-                : "border-border hover:border-gold-muted hover:bg-bg-raised"
-            }`}
-          >
-            <span className="text-2xl text-text-muted">📁</span>
-            <span className="font-lato text-sm text-text-muted">
-              Click to upload or drag and drop
-            </span>
-            <span className="font-lato text-xs text-text-disabled">
-              Portrait format recommended (3:4 ratio) · Max 5 MB
-            </span>
-          </div>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileInput}
-          aria-label="Tournament poster"
-        />
-        {errors.posterFile && (
-          <p className="input-hint error">{errors.posterFile}</p>
-        )}
       </div>
 
       {/* Venue Name + State row */}
