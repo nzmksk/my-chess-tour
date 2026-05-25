@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-export type WizardStepId =
+type WizardStepId =
   | "basic-info"
   | "format"
   | "fees"
