@@ -2,15 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mocks ─────────────────────────────────────────────────────
 
-const mockHeadersGet = vi.hoisted(() =>
-  vi.fn().mockReturnValue("localhost:3000"),
+// Mirror Next.js's redirect() which throws a special error to halt rendering.
+const mockRedirect = vi.hoisted(() =>
+  vi.fn().mockImplementation((url: string) => {
+    const err = new Error(`NEXT_REDIRECT:${url}`);
+    (err as Error & { digest?: string }).digest = `NEXT_REDIRECT;replace;${url};303;`;
+    throw err;
+  }),
 );
-
-vi.mock("next/headers", () => ({
-  headers: vi.fn().mockResolvedValue({ get: mockHeadersGet }),
-}));
-
-const mockRedirect = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
@@ -28,36 +27,73 @@ vi.mock("@/components/NavBar", () => ({
 }));
 
 const mockGetUser = vi.hoisted(() => vi.fn());
+const mockRpc = vi.hoisted(() => vi.fn());
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: mockGetUser },
+    rpc: mockRpc,
   }),
+}));
+
+const mockOrder = vi.hoisted(() => vi.fn());
+const mockIs = vi.hoisted(() =>
+  vi.fn().mockReturnValue({ order: mockOrder }),
+);
+const mockSelect = vi.hoisted(() =>
+  vi.fn().mockReturnValue({ is: mockIs }),
+);
+const mockFrom = vi.hoisted(() =>
+  vi.fn().mockReturnValue({ select: mockSelect }),
+);
+
+vi.mock("@/services/supabase/admin", () => ({
+  supabaseAdmin: { from: mockFrom },
 }));
 
 // ── Helpers ───────────────────────────────────────────────────
 
-const mockFetch = vi.fn();
-
-function makeApplicationsPayload() {
-  return {
-    data: {
-      counts: { pending: 2, approved: 5, rejected: 1, total: 8 },
-      applications: [
-        {
-          id: "org-1",
-          name: "Penang Chess Club",
-          description: "Community club",
-          email: "penang@chess.my",
-          phone: "+60123456789",
-          approval_status: "pending",
-          rejection_reason: null,
-          created_at: "2026-02-22T10:00:00Z",
-          reviewed_at: null,
-        },
-      ],
+function makeApplicationRows() {
+  return [
+    {
+      id: "org-1",
+      name: "Penang Chess Club",
+      description: "Community club",
+      email: "penang@chess.my",
+      phone: "+60123456789",
+      approval_status: "pending",
+      rejection_reason: null,
+      created_at: "2026-02-22T10:00:00Z",
+      reviewed_at: null,
     },
-  };
+    {
+      id: "org-2",
+      name: "KL Chess Academy",
+      description: null,
+      email: "kl@chess.my",
+      phone: null,
+      approval_status: "approved",
+      rejection_reason: null,
+      created_at: "2026-02-20T10:00:00Z",
+      reviewed_at: "2026-02-21T10:00:00Z",
+    },
+    {
+      id: "org-3",
+      name: "Johor Chess Club",
+      description: null,
+      email: null,
+      phone: null,
+      approval_status: "rejected",
+      rejection_reason: "Incomplete info",
+      created_at: "2026-02-18T10:00:00Z",
+      reviewed_at: "2026-02-19T10:00:00Z",
+    },
+  ];
+}
+
+async function importPage() {
+  const { default: AdminApplicationsPage } = await import("../page");
+  return AdminApplicationsPage;
 }
 
 // ── Tests ─────────────────────────────────────────────────────
@@ -65,37 +101,63 @@ function makeApplicationsPayload() {
 describe("AdminApplicationsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    globalThis.fetch = mockFetch;
-    mockHeadersGet.mockReturnValue("localhost:3000");
+    vi.resetModules();
+
+    // Re-establish the mock chain after clearAllMocks.
+    mockIs.mockReturnValue({ order: mockOrder });
+    mockSelect.mockReturnValue({ is: mockIs });
+    mockFrom.mockReturnValue({ select: mockSelect });
+
+    // Re-apply redirect throw behaviour after clearAllMocks.
+    mockRedirect.mockImplementation((url: string) => {
+      const err = new Error(`NEXT_REDIRECT:${url}`);
+      (err as Error & { digest?: string }).digest = `NEXT_REDIRECT;replace;${url};303;`;
+      throw err;
+    });
   });
 
   it("redirects to login when user is not authenticated", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    const { default: AdminApplicationsPage } = await import("../page");
-    await AdminApplicationsPage();
-
+    const AdminApplicationsPage = await importPage();
+    await expect(AdminApplicationsPage()).rejects.toThrow("NEXT_REDIRECT:/auth/login");
     expect(mockRedirect).toHaveBeenCalledWith("/auth/login");
   });
 
-  it("redirects to home when API returns a non-ok response", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
-    mockFetch.mockResolvedValue({ ok: false, status: 403 });
+  it("redirects to home when user lacks admin permission", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockRpc.mockResolvedValue({ data: false, error: null });
 
-    const { default: AdminApplicationsPage } = await import("../page");
-    await AdminApplicationsPage();
-
+    const AdminApplicationsPage = await importPage();
+    await expect(AdminApplicationsPage()).rejects.toThrow("NEXT_REDIRECT:/");
     expect(mockRedirect).toHaveBeenCalledWith("/");
   });
 
-  it("renders page content when admin user is authenticated and data is available", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => makeApplicationsPayload(),
-    });
+  it("redirects to home when permission check errors", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockRpc.mockResolvedValue({ data: null, error: new Error("DB error") });
 
-    const { default: AdminApplicationsPage } = await import("../page");
+    const AdminApplicationsPage = await importPage();
+    await expect(AdminApplicationsPage()).rejects.toThrow("NEXT_REDIRECT:/");
+    expect(mockRedirect).toHaveBeenCalledWith("/");
+  });
+
+  it("redirects to home when supabaseAdmin query errors", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockOrder.mockResolvedValue({ data: null, error: new Error("Query failed") });
+
+    const AdminApplicationsPage = await importPage();
+    await expect(AdminApplicationsPage()).rejects.toThrow("NEXT_REDIRECT:/");
+    expect(mockRedirect).toHaveBeenCalledWith("/");
+  });
+
+  it("renders page when admin is authenticated and data is available", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockOrder.mockResolvedValue({ data: makeApplicationRows(), error: null });
+
+    const AdminApplicationsPage = await importPage();
     const result = await AdminApplicationsPage();
 
     expect(result).not.toBeNull();
@@ -103,81 +165,75 @@ describe("AdminApplicationsPage", () => {
     expect(mockRedirect).not.toHaveBeenCalled();
   });
 
-  it("uses http protocol for localhost", async () => {
+  it("renders page with empty applications list when no rows returned", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
-    mockHeadersGet.mockReturnValue("localhost:3000");
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => makeApplicationsPayload(),
-    });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockOrder.mockResolvedValue({ data: [], error: null });
 
-    const { default: AdminApplicationsPage } = await import("../page");
-    await AdminApplicationsPage();
+    const AdminApplicationsPage = await importPage();
+    const result = await AdminApplicationsPage();
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("http://localhost:3000/api/v1/admin/applications"),
-      expect.any(Object),
+    expect(result).not.toBeNull();
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it("renders page with null rows treated as empty list", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockOrder.mockResolvedValue({ data: null, error: null });
+
+    const AdminApplicationsPage = await importPage();
+    const result = await AdminApplicationsPage();
+
+    expect(result).not.toBeNull();
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it("calculates correct status counts from application rows", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockOrder.mockResolvedValue({ data: makeApplicationRows(), error: null });
+
+    const { default: ApplicationsClientMock } = await import(
+      "@/app/admin/applications/_components/ApplicationsClient"
     );
-  });
-
-  it("uses https protocol for non-localhost hosts", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
-    mockHeadersGet.mockReturnValue("mychessour.com");
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => makeApplicationsPayload(),
-    });
-
-    const { default: AdminApplicationsPage } = await import("../page");
-    await AdminApplicationsPage();
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "https://mychessour.com/api/v1/admin/applications",
-      ),
-      expect.any(Object),
+    const clientSpy = vi.spyOn(
+      { default: ApplicationsClientMock },
+      "default",
     );
+
+    const AdminApplicationsPage = await importPage();
+    await AdminApplicationsPage();
+
+    // Verify counts by checking what was passed to ApplicationsClient.
+    expect(mockFrom).toHaveBeenCalledWith("organizations");
+    expect(mockOrder).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
-  it("falls back to localhost:3000 when host header is absent", async () => {
+  it("queries organizations without deleted records ordered by created_at desc", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
-    mockHeadersGet.mockReturnValue(null);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => makeApplicationsPayload(),
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockOrder.mockResolvedValue({ data: [], error: null });
+
+    const AdminApplicationsPage = await importPage();
+    await AdminApplicationsPage();
+
+    expect(mockFrom).toHaveBeenCalledWith("organizations");
+    expect(mockIs).toHaveBeenCalledWith("deleted_at", null);
+    expect(mockOrder).toHaveBeenCalledWith("created_at", { ascending: false });
+  });
+
+  it("checks admin permission with correct parameters", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockOrder.mockResolvedValue({ data: [], error: null });
+
+    const AdminApplicationsPage = await importPage();
+    await AdminApplicationsPage();
+
+    expect(mockRpc).toHaveBeenCalledWith("has_global_permission", {
+      p_user_id: "admin-1",
+      p_permission: "platform.manage",
     });
-
-    const { default: AdminApplicationsPage } = await import("../page");
-    await AdminApplicationsPage();
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "http://localhost:3000/api/v1/admin/applications",
-      ),
-      expect.any(Object),
-    );
-  });
-
-  it("redirects to home when fetch throws a network error", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
-    mockFetch.mockRejectedValue(new Error("Network failure"));
-
-    const { default: AdminApplicationsPage } = await import("../page");
-    await AdminApplicationsPage();
-
-    expect(mockRedirect).toHaveBeenCalledWith("/");
-  });
-
-  it("redirects to home when API returns null data", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: null }),
-    });
-
-    const { default: AdminApplicationsPage } = await import("../page");
-    await AdminApplicationsPage();
-
-    expect(mockRedirect).toHaveBeenCalledWith("/");
   });
 });

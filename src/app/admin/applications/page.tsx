@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
+import { supabaseAdmin } from "@/services/supabase/admin";
 import ApplicationsClient from "./_components/ApplicationsClient";
 
 export const metadata: Metadata = {
@@ -36,31 +36,6 @@ interface ApplicationsData {
   applications: Application[];
 }
 
-async function fetchApplications(
-  host: string,
-  cookieHeader: string,
-): Promise<ApplicationsData | null> {
-  const protocol =
-    host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https";
-
-  try {
-    const res = await fetch(
-      `${protocol}://${host}/api/v1/admin/applications`,
-      {
-        cache: "no-store",
-        headers: { cookie: cookieHeader },
-      },
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export default async function AdminApplicationsPage() {
   const supabase = await createClient();
   const {
@@ -71,15 +46,38 @@ export default async function AdminApplicationsPage() {
     redirect("/auth/login");
   }
 
-  const headersList = await headers();
-  const host = headersList.get("host") ?? "localhost:3000";
-  const cookieHeader = headersList.get("cookie") ?? "";
+  const { data: isAdmin, error: permissionError } = await supabase.rpc(
+    "has_global_permission",
+    { p_user_id: user.id, p_permission: "platform.manage" },
+  );
 
-  const data = await fetchApplications(host, cookieHeader);
-
-  if (!data) {
+  if (permissionError || !isAdmin) {
     redirect("/");
   }
+
+  const { data: rows, error } = await supabaseAdmin
+    .from("organizations")
+    .select(
+      "id, name, description, email, phone, approval_status, rejection_reason, created_at, reviewed_at",
+    )
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    redirect("/");
+  }
+
+  const applications = (rows ?? []) as Application[];
+
+  const data: ApplicationsData = {
+    counts: {
+      pending: applications.filter((a) => a.approval_status === "pending").length,
+      approved: applications.filter((a) => a.approval_status === "approved").length,
+      rejected: applications.filter((a) => a.approval_status === "rejected").length,
+      total: applications.length,
+    },
+    applications,
+  };
 
   return (
     <div className="min-h-screen bg-bg-base">
