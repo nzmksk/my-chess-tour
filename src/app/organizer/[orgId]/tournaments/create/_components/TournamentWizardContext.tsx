@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+} from "react";
 
 export type WizardStepId =
   | "basic-info"
@@ -22,6 +28,24 @@ export const WIZARD_STEPS: WizardStep[] = [
   { id: "review", label: "Review" },
 ];
 
+export interface BasicInfoData {
+  name: string;
+  description: string;
+  venueName: string;
+  venueState: string;
+  venueAddress: string;
+  posterFile: File | null;
+}
+
+const initialBasicInfo: BasicInfoData = {
+  name: "",
+  description: "",
+  venueName: "",
+  venueState: "",
+  venueAddress: "",
+  posterFile: null,
+};
+
 interface TournamentWizardContextType {
   currentStepIndex: number;
   completedSteps: Set<number>;
@@ -29,6 +53,10 @@ interface TournamentWizardContextType {
   goBack: () => void;
   goToStep: (index: number) => void;
   markStepDone: (index: number) => void;
+  basicInfoData: BasicInfoData;
+  setBasicInfoData: React.Dispatch<React.SetStateAction<BasicInfoData>>;
+  registerStepHandler: (index: number, handler: () => Promise<void>) => void;
+  triggerStepHandler: (index: number) => Promise<void>;
 }
 
 const TournamentWizardContext =
@@ -42,6 +70,33 @@ export function TournamentWizardProvider({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(
     new Set(),
+  );
+  const [basicInfoData, setBasicInfoData] =
+    useState<BasicInfoData>(initialBasicInfo);
+
+  const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
+
+  const registerStepHandler = useCallback(
+    (index: number, handler: () => Promise<void>) => {
+      stepHandlers.current[index] = handler;
+    },
+    [],
+  );
+
+  const triggerStepHandler = useCallback(
+    async (index: number) => {
+      const handler = stepHandlers.current[index];
+      if (handler) {
+        await handler();
+      } else {
+        setCurrentStepIndex((prev) => {
+          const next = Math.min(prev + 1, WIZARD_STEPS.length - 1);
+          setCompletedSteps((done) => new Set(done).add(prev));
+          return next;
+        });
+      }
+    },
+    [],
   );
 
   const markStepDone = useCallback((index: number) => {
@@ -78,6 +133,10 @@ export function TournamentWizardProvider({
         goBack,
         goToStep,
         markStepDone,
+        basicInfoData,
+        setBasicInfoData,
+        registerStepHandler,
+        triggerStepHandler,
       }}
     >
       {children}

@@ -24,7 +24,8 @@ interface WizardShellProps {
 
 export default function WizardShell({ orgId, orgName }: WizardShellProps) {
   const router = useRouter();
-  const { currentStepIndex, goNext, goBack } = useTournamentWizard();
+  const { currentStepIndex, goNext, goBack, triggerStepHandler } =
+    useTournamentWizard();
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
@@ -37,6 +38,10 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
   function handlePublish() {
     // Placeholder — tournament creation API will be wired up in a follow-up issue
     router.push(`/organizer/${orgId}/dashboard`);
+  }
+
+  async function handleNext() {
+    await triggerStepHandler(currentStepIndex);
   }
 
   return (
@@ -98,7 +103,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
                   background:
                     "linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep))",
                 }}
-                onClick={goNext}
+                onClick={handleNext}
               >
                 Next →
               </button>
