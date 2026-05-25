@@ -1,0 +1,194 @@
+import { supabaseAdmin } from "@/services/supabase/admin";
+import { createClient } from "@/services/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function checkAdminAccess(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { user: null, isAdmin: false, error: null };
+  }
+
+  const { data: isAdmin, error } = await supabase.rpc("has_global_permission", {
+    p_user_id: user.id,
+    p_permission: "platform.manage",
+  });
+
+  return { user, isAdmin: !!isAdmin, error };
+}
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { id } = await params;
+
+  if (!UUID_RE.test(id)) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid application ID" } },
+      { status: 400 },
+    );
+  }
+
+  const supabase = await createClient();
+  const { user, isAdmin, error: permissionError } = await checkAdminAccess(supabase);
+
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
+      { status: 401 },
+    );
+  }
+
+  if (permissionError) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
+      { status: 500 },
+    );
+  }
+
+  if (!isAdmin) {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Admin access required" } },
+      { status: 403 },
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("organizations")
+    .select(
+      `id, name, description, links, email, phone, past_tournament_refs,
+       approval_status, rejection_reason, created_at, reviewed_at,
+       applicant:users!created_by(
+         id, first_name, last_name, email, created_at,
+         player_profiles(fide_id, fide_rating, title)
+       )`,
+    )
+    .eq("id", id)
+    .is("deleted_at", null)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Application not found" } },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ data }, { status: 200 });
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { id } = await params;
+
+  if (!UUID_RE.test(id)) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid application ID" } },
+      { status: 400 },
+    );
+  }
+
+  const supabase = await createClient();
+  const { user, isAdmin, error: permissionError } = await checkAdminAccess(supabase);
+
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
+      { status: 401 },
+    );
+  }
+
+  if (permissionError) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
+      { status: 500 },
+    );
+  }
+
+  if (!isAdmin) {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Admin access required" } },
+      { status: 403 },
+    );
+  }
+
+  let body: { action: string; rejection_reason?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const { action, rejection_reason } = body;
+
+  if (action !== "approve" && action !== "reject") {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "action must be 'approve' or 'reject'",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (action === "reject" && (!rejection_reason || !rejection_reason.trim())) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "rejection_reason is required when rejecting",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const updates: Record<string, unknown> = {
+    approval_status: action === "approve" ? "approved" : "rejected",
+    reviewed_by: user.id,
+    reviewed_at: new Date().toISOString(),
+    rejection_reason: action === "reject" ? rejection_reason!.trim() : null,
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("organizations")
+    .update(updates)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("id, name, approval_status, reviewed_at")
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Application not found" } },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ data }, { status: 200 });
+}
