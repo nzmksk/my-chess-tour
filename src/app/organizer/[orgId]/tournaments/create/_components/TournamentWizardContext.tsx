@@ -44,6 +44,44 @@ const initialBasicInfo: BasicInfoData = {
   venueAddress: "",
 };
 
+export interface Restriction {
+  id: string;
+  type: string;
+  value: string;
+}
+
+export interface FormatData {
+  formatType: string;
+  system: string;
+  rounds: number | "";
+  baseTime: number | "";
+  increment: number | "";
+  delay: number | "";
+  startDate: string;
+  endDate: string;
+  registrationDeadline: string;
+  maxParticipants: number | "";
+  fideRated: boolean;
+  mcfRated: boolean;
+  restrictions: Restriction[];
+}
+
+const initialFormatData: FormatData = {
+  formatType: "",
+  system: "",
+  rounds: "",
+  baseTime: "",
+  increment: 0,
+  delay: 0,
+  startDate: "",
+  endDate: "",
+  registrationDeadline: "",
+  maxParticipants: "",
+  fideRated: false,
+  mcfRated: false,
+  restrictions: [],
+};
+
 interface TournamentWizardContextType {
   currentStepIndex: number;
   completedSteps: Set<number>;
@@ -53,6 +91,8 @@ interface TournamentWizardContextType {
   markStepDone: (index: number) => void;
   basicInfoData: BasicInfoData;
   setBasicInfoData: React.Dispatch<React.SetStateAction<BasicInfoData>>;
+  formatData: FormatData;
+  setFormatData: React.Dispatch<React.SetStateAction<FormatData>>;
   registerStepHandler: (index: number, handler: () => Promise<void>) => void;
   triggerStepHandler: (index: number) => Promise<void>;
 }
@@ -71,6 +111,8 @@ export function TournamentWizardProvider({
   );
   const [basicInfoData, setBasicInfoData] =
     useState<BasicInfoData>(initialBasicInfo);
+  const [formatData, setFormatData] =
+    useState<FormatData>(initialFormatData);
 
   const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
 
@@ -133,6 +175,8 @@ export function TournamentWizardProvider({
         markStepDone,
         basicInfoData,
         setBasicInfoData,
+        formatData,
+        setFormatData,
         registerStepHandler,
         triggerStepHandler,
       }}
