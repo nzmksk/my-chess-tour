@@ -54,6 +54,8 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
     setTournamentId,
   } = useTournamentWizard();
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
@@ -179,9 +181,43 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
     }
   }
 
-  function handlePublish() {
-    // Publish API will be wired up in a follow-up issue
-    router.push(`/organizer/${orgId}/dashboard`);
+  async function handlePublish() {
+    setPublishError(null);
+    setIsPublishing(true);
+    try {
+      let draftId = tournamentId;
+      if (!draftId) {
+        if (!basicInfoData.name.trim()) {
+          router.push(`/organizer/${orgId}/dashboard`);
+          return;
+        }
+        draftId = await saveDraftToApi();
+        if (draftId) setTournamentId(draftId);
+      }
+      if (!draftId) {
+        setPublishError("Failed to save tournament before publishing. Please try again.");
+        return;
+      }
+      const res = await fetch(
+        `/api/v1/organizer/${orgId}/tournaments/${draftId}/publish`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const json = (await res.json()) as {
+          error?: { message?: string; details?: string[] };
+        };
+        const details = json.error?.details;
+        setPublishError(
+          details && details.length > 1
+            ? details.join(" · ")
+            : (json.error?.message ?? "Failed to publish tournament."),
+        );
+        return;
+      }
+      router.push(`/organizer/${orgId}/dashboard`);
+    } finally {
+      setIsPublishing(false);
+    }
   }
 
   async function handleNext() {
@@ -205,6 +241,12 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
         <div className="px-6 py-7 sm:px-8">
           <StepContent />
         </div>
+
+        {publishError && (
+          <div className="mx-6 mb-0 mt-4 rounded-md border border-red-400 bg-red-50 px-4 py-3 sm:mx-8">
+            <p className="font-lato text-xs text-red-700">{publishError}</p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between border-t border-border bg-bg-raised px-6 py-4 sm:px-8">
           <button
@@ -231,14 +273,15 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
             {isLastStep ? (
               <button
                 type="button"
-                className="font-cinzel text-bg-base cursor-pointer rounded-md border-0 px-5 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90"
+                className="font-cinzel text-bg-base cursor-pointer rounded-md border-0 px-5 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   background:
                     "linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep))",
                 }}
                 onClick={handlePublish}
+                disabled={isPublishing || isSaving}
               >
-                Publish
+                {isPublishing ? "Publishing…" : "Publish"}
               </button>
             ) : (
               <button

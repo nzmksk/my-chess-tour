@@ -132,7 +132,7 @@ export async function POST(
       );
     }
 
-    const roleName = (membership as unknown as { roles: { name: string }[] }).roles[0]?.name;
+    const roleName = (membership as unknown as { roles: { name: string } }).roles?.name;
     if (roleName !== "owner" && roleName !== "admin") {
       return NextResponse.json(
         {
