@@ -317,6 +317,16 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       );
       expect(res.status).toBe(400);
     });
+
+    it("returns 400 when rejection_reason is a non-string type", async () => {
+      const res = await PATCH(
+        makePatchRequest(APP_ID, { action: "reject", rejection_reason: {} as unknown as string }),
+        { params: Promise.resolve({ id: APP_ID }) },
+      );
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error.code).toBe("VALIDATION_ERROR");
+    });
   });
 
   // ── Authentication ────────────────────────────────────────────────────────

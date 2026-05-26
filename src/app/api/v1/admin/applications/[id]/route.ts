@@ -150,12 +150,12 @@ export async function PATCH(
     );
   }
 
-  if (action === "reject" && (!rejection_reason || !rejection_reason.trim())) {
+  if (action === "reject" && (typeof rejection_reason !== "string" || !rejection_reason.trim())) {
     return NextResponse.json(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message: "rejection_reason is required when rejecting",
+          message: "rejection_reason must be a non-empty string when rejecting",
         },
       },
       { status: 400 },
