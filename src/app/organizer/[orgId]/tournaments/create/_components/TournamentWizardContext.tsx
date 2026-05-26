@@ -149,6 +149,8 @@ interface TournamentWizardContextType {
   setFeesData: React.Dispatch<React.SetStateAction<FeesData>>;
   prizesData: PrizesData;
   setPrizesData: React.Dispatch<React.SetStateAction<PrizesData>>;
+  tournamentId: string | null;
+  setTournamentId: React.Dispatch<React.SetStateAction<string | null>>;
   registerStepHandler: (index: number, handler: () => Promise<void>) => void;
   triggerStepHandler: (index: number) => Promise<void>;
 }
@@ -173,6 +175,7 @@ export function TournamentWizardProvider({
     useState<FeesData>(initialFeesData);
   const [prizesData, setPrizesData] =
     useState<PrizesData>(initialPrizesData);
+  const [tournamentId, setTournamentId] = useState<string | null>(null);
 
   const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
 
@@ -241,6 +244,8 @@ export function TournamentWizardProvider({
         setFeesData,
         prizesData,
         setPrizesData,
+        tournamentId,
+        setTournamentId,
         registerStepHandler,
         triggerStepHandler,
       }}
