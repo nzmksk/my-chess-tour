@@ -6,6 +6,7 @@ import Link from "next/link";
 import type {
   ApplicationDetail,
   ApprovalStatus,
+  OrgLink,
   OrgLinks,
   PlayerProfile,
 } from "../page";
@@ -55,21 +56,13 @@ function DetailRow({
 }
 
 function LinksDisplay({ links }: { links: OrgLinks | null }) {
-  if (!links) return <span className="text-text-muted">—</span>;
-
-  const entries: { icon: string; label: string; url: string }[] = [];
-  if (links.website) entries.push({ icon: "🌐", label: "Website", url: links.website });
-  if (links.facebook) entries.push({ icon: "📘", label: "Facebook", url: links.facebook });
-  if (links.instagram) entries.push({ icon: "📸", label: "Instagram", url: links.instagram });
-  if (links.twitter) entries.push({ icon: "𝕏", label: "Twitter/X", url: links.twitter });
-
-  if (entries.length === 0) return <span className="text-text-muted">—</span>;
+  if (!links || links.length === 0) return <span className="text-text-muted">—</span>;
 
   return (
     <div className="flex flex-col gap-1">
-      {entries.map((entry) => (
+      {links.map((entry: OrgLink) => (
         <span key={entry.label}>
-          {entry.icon}{" "}
+          <span className="text-text-muted">{entry.label}:</span>{" "}
           <a
             href={entry.url}
             target="_blank"

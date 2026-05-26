@@ -15,12 +15,12 @@ const UUID_RE =
 
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
-export interface OrgLinks {
-  website?: string;
-  facebook?: string;
-  instagram?: string;
-  twitter?: string;
+export interface OrgLink {
+  label: string;
+  url: string;
 }
+
+export type OrgLinks = OrgLink[];
 
 export interface PlayerProfile {
   fide_id: number | null;

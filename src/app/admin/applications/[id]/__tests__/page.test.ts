@@ -57,7 +57,7 @@ function makeApplicationDetail() {
     id: APP_ID,
     name: "Penang Chess Club",
     description: "Community club",
-    links: { website: "https://penangchess.org" },
+    links: [{ label: "Website", url: "https://penangchess.org" }],
     email: "penang@chess.my",
     phone: "+60123456789",
     past_tournament_refs: "Penang Open 2025",
