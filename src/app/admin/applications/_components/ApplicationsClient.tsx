@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import type { Application, ApplicationCounts, ApprovalStatus } from "../page";
 
 type TabKey = "all" | ApprovalStatus;
@@ -52,7 +53,10 @@ function ApplicationRow({ app }: { app: Application }) {
   });
 
   return (
-    <div className="card px-5 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+    <Link
+      href={`/admin/applications/${app.id}`}
+      className="card px-5 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 hover:border-gold-dim transition-colors"
+    >
       <div className="flex-1 min-w-0">
         <h3 className="font-lato text-sm font-semibold text-text-primary">
           {app.name}
@@ -76,7 +80,7 @@ function ApplicationRow({ app }: { app: Application }) {
         <span className="font-lato text-xs text-text-muted">{appliedDate}</span>
         <StatusBadge status={app.approval_status} />
       </div>
-    </div>
+    </Link>
   );
 }
 
