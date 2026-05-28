@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState, type FormEvent } from "react";
 
 interface Member {
   user_id: string;
@@ -96,12 +97,118 @@ function MemberCard({
   );
 }
 
+function InviteBar({ orgId }: { orgId: string }) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"admin" | "member">("member");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await fetch(`/api/v1/organizer/${orgId}/members/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, role }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error?.message ?? "Failed to send invitation");
+      } else {
+        const msg =
+          json.data.status === "pending"
+            ? `Invitation sent to ${json.data.email}`
+            : `${json.data.email} has been added as a member`;
+        setSuccessMsg(msg);
+        setEmail("");
+        setRole("member");
+      }
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg bg-bg-raised border border-border px-5 py-4 mb-6">
+      <p className="font-cinzel text-xs font-bold tracking-widest uppercase text-gold-muted mb-3">
+        Invite Member
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex-1 min-w-0">
+          <label
+            htmlFor="invite-email"
+            className="font-lato text-xs text-text-muted mb-1 block"
+          >
+            Email address
+          </label>
+          <input
+            id="invite-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="colleague@example.com"
+            required
+            disabled={loading}
+            className="w-full rounded-md border border-border bg-bg-base px-3 py-2 font-lato text-sm text-text-primary placeholder:text-text-disabled focus:outline-none focus:border-gold-dim disabled:opacity-50"
+          />
+        </div>
+
+        <div className="sm:w-36">
+          <label
+            htmlFor="invite-role"
+            className="font-lato text-xs text-text-muted mb-1 block"
+          >
+            Role
+          </label>
+          <select
+            id="invite-role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as "admin" | "member")}
+            disabled={loading}
+            className="w-full rounded-md border border-border bg-bg-base px-3 py-2 font-lato text-sm text-text-primary focus:outline-none focus:border-gold-dim disabled:opacity-50"
+          >
+            <option value="admin">Admin</option>
+            <option value="member">Member</option>
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || !email.trim()}
+          className="font-cinzel text-xs font-bold tracking-widest uppercase px-4 py-2 rounded-md bg-gold-ghost border border-gold-dim text-gold-bright hover:bg-gold-dim hover:text-bg-base transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          {loading ? "Sending…" : "Send Invite"}
+        </button>
+      </form>
+
+      {error && (
+        <p className="font-lato text-xs text-red-400 mt-2">{error}</p>
+      )}
+      {successMsg && (
+        <p className="font-lato text-xs text-green-400 mt-2">{successMsg}</p>
+      )}
+    </div>
+  );
+}
+
 export default function MembersClient({
   orgId,
   orgName,
   members,
   currentUserId,
 }: Props) {
+  const currentMember = members.find((m) => m.user_id === currentUserId);
+  const isOwner = currentMember?.role === "owner";
+
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -118,6 +225,8 @@ export default function MembersClient({
           Members · {members.length} {members.length === 1 ? "person" : "people"}
         </p>
       </div>
+
+      {isOwner && <InviteBar orgId={orgId} />}
 
       {/* Role permissions reference */}
       <div className="rounded-lg bg-bg-raised border border-border px-5 py-4 mb-6">
