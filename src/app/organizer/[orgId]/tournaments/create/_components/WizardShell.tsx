@@ -61,7 +61,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
 
   const StepContent = STEP_COMPONENTS[currentStepIndex];
 
-  async function saveDraftToApi(): Promise<string | null> {
+  function buildDraftBody(): Record<string, unknown> {
     const entryFees = {
       standard: {
         amount_cents:
@@ -152,6 +152,24 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
 
     body.entry_fees = entryFees;
     if (prizes) body.prizes = prizes;
+
+    return body;
+  }
+
+  async function saveDraftToApi(): Promise<string | null> {
+    const body = buildDraftBody();
+
+    if (tournamentId) {
+      const res = await fetch(
+        `/api/v1/organizer/${orgId}/tournaments/${tournamentId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      return res.ok ? tournamentId : null;
+    }
 
     const res = await fetch(`/api/v1/organizer/${orgId}/tournaments`, {
       method: "POST",
