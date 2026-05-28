@@ -68,7 +68,7 @@ export default async function CreateTournamentPage({
   return (
     <div className="min-h-screen bg-bg-base">
       <NavBar />
-      <TournamentWizardProvider>
+      <TournamentWizardProvider orgId={orgId}>
         <WizardShell orgId={orgId} orgName={orgName} />
       </TournamentWizardProvider>
     </div>

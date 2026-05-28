@@ -52,6 +52,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
     prizesData,
     tournamentId,
     setTournamentId,
+    clearWizardStorage,
   } = useTournamentWizard();
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -184,17 +185,17 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
 
   async function handleSaveDraft() {
     if (!basicInfoData.name.trim()) {
+      clearWizardStorage();
       router.push(`/organizer/${orgId}/dashboard`);
       return;
     }
     setIsSaving(true);
     try {
-      if (!tournamentId) {
-        const id = await saveDraftToApi();
-        if (id) setTournamentId(id);
-      }
+      const id = await saveDraftToApi();
+      if (id) setTournamentId(id);
     } finally {
       setIsSaving(false);
+      clearWizardStorage();
       router.push(`/organizer/${orgId}/dashboard`);
     }
   }
@@ -232,6 +233,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
         );
         return;
       }
+      clearWizardStorage();
       router.push(`/organizer/${orgId}/dashboard`);
     } finally {
       setIsPublishing(false);

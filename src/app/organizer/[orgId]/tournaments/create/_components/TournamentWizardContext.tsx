@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -134,6 +135,36 @@ const initialFormatData: FormatData = {
   restrictions: [],
 };
 
+interface PersistedState {
+  basicInfoData: BasicInfoData;
+  formatData: FormatData;
+  feesData: FeesData;
+  prizesData: PrizesData;
+  tournamentId: string | null;
+  currentStepIndex: number;
+  completedSteps: number[];
+}
+
+function storageKey(orgId: string) {
+  return `tournament-wizard-${orgId}`;
+}
+
+function loadFromStorage(orgId: string): PersistedState | null {
+  try {
+    const raw = sessionStorage.getItem(storageKey(orgId));
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedState;
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(orgId: string, state: PersistedState): void {
+  try {
+    sessionStorage.setItem(storageKey(orgId), JSON.stringify(state));
+  } catch {}
+}
+
 interface TournamentWizardContextType {
   currentStepIndex: number;
   completedSteps: Set<number>;
@@ -153,14 +184,17 @@ interface TournamentWizardContextType {
   setTournamentId: React.Dispatch<React.SetStateAction<string | null>>;
   registerStepHandler: (index: number, handler: () => Promise<void>) => void;
   triggerStepHandler: (index: number) => Promise<void>;
+  clearWizardStorage: () => void;
 }
 
 const TournamentWizardContext =
   createContext<TournamentWizardContextType | null>(null);
 
 export function TournamentWizardProvider({
+  orgId,
   children,
 }: {
+  orgId: string;
   children: React.ReactNode;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -177,7 +211,60 @@ export function TournamentWizardProvider({
     useState<PrizesData>(initialPrizesData);
   const [tournamentId, setTournamentId] = useState<string | null>(null);
 
+  // isHydrated gates the persist effect so it never runs before the load
+  // effect has restored data from sessionStorage.
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  const orgIdRef = useRef(orgId);
   const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
+
+  // Restore persisted state once on mount (client-only, no SSR sessionStorage).
+  useEffect(() => {
+    const saved = loadFromStorage(orgIdRef.current);
+    if (saved) {
+      setBasicInfoData(saved.basicInfoData ?? initialBasicInfo);
+      setFormatData(saved.formatData ?? initialFormatData);
+      setFeesData(saved.feesData ?? initialFeesData);
+      setPrizesData(saved.prizesData ?? initialPrizesData);
+      setTournamentId(saved.tournamentId ?? null);
+      setCurrentStepIndex(saved.currentStepIndex ?? 0);
+      if (saved.completedSteps) {
+        setCompletedSteps(new Set(saved.completedSteps));
+      }
+    }
+    setIsHydrated(true);
+  }, []); // intentionally empty — runs once on mount
+
+  // Persist all wizard state to sessionStorage after every state change,
+  // but only after the initial load has completed.
+  useEffect(() => {
+    if (!isHydrated) return;
+    saveToStorage(orgId, {
+      basicInfoData,
+      formatData,
+      feesData,
+      prizesData,
+      tournamentId,
+      currentStepIndex,
+      completedSteps: [...completedSteps],
+    });
+  }, [
+    isHydrated,
+    orgId,
+    basicInfoData,
+    formatData,
+    feesData,
+    prizesData,
+    tournamentId,
+    currentStepIndex,
+    completedSteps,
+  ]);
+
+  const clearWizardStorage = useCallback(() => {
+    try {
+      sessionStorage.removeItem(storageKey(orgId));
+    } catch {}
+  }, [orgId]);
 
   const registerStepHandler = useCallback(
     (index: number, handler: () => Promise<void>) => {
@@ -248,6 +335,7 @@ export function TournamentWizardProvider({
         setTournamentId,
         registerStepHandler,
         triggerStepHandler,
+        clearWizardStorage,
       }}
     >
       {children}
