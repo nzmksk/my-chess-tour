@@ -75,7 +75,7 @@ interface Props {
   playerProfile: PlayerProfile | null;
 }
 
-type FormStatus = "idle" | "submitting" | "success" | "error";
+type FormStatus = "idle" | "submitting" | "redirecting" | "success" | "error";
 
 export default function RegisterForm({ tournament, playerProfile }: Props) {
   const now = new Date();
@@ -157,7 +157,8 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (status === "submitting" || eligibilityError) return;
+    if (status === "submitting" || status === "redirecting" || eligibilityError)
+      return;
     setStatus("submitting");
     setErrorMessage(null);
 
@@ -168,6 +169,11 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
         body: JSON.stringify({ fee_tier: selectedTier }),
       });
       const json = await res.json();
+      if (res.ok && json.data?.checkout_url) {
+        setStatus("redirecting");
+        window.location.href = json.data.checkout_url;
+        return;
+      }
       if (res.ok) {
         setRegistration(json.data);
         setStatus("success");
@@ -315,9 +321,17 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
         <button
           type="submit"
           className="btn-primary rounded-md w-full"
-          disabled={status === "submitting" || !!eligibilityError}
+          disabled={
+            status === "submitting" ||
+            status === "redirecting" ||
+            !!eligibilityError
+          }
         >
-          {status === "submitting" ? "Submitting…" : "Confirm & Pay"}
+          {status === "submitting"
+            ? "Submitting…"
+            : status === "redirecting"
+              ? "Redirecting to payment…"
+              : "Confirm & Pay"}
         </button>
 
         <Link
