@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import type { FeeTier, TierType } from "../TournamentWizardContext";
 
@@ -98,14 +99,10 @@ function InfoGrid({ rows }: { rows: [string, React.ReactNode][] }) {
       }}
     >
       {rows.map(([label, value]) => (
-        <>
-          <span key={`label-${label}`} className="text-text-disabled">
-            {label}
-          </span>
-          <span key={`value-${label}`} className="text-text-muted">
-            {value || "—"}
-          </span>
-        </>
+        <React.Fragment key={label}>
+          <span className="text-text-disabled">{label}</span>
+          <span className="text-text-muted">{value || "—"}</span>
+        </React.Fragment>
       ))}
     </div>
   );
@@ -236,8 +233,8 @@ export default function ReviewStep() {
             const playerPays = tier.organiserFee * (1 + COMMISSION);
             const isFree = tier.organiserFee === 0;
             return (
-              <>
-                <span key={`label-${tier.id}`}>
+              <React.Fragment key={tier.id}>
+                <span>
                   {tier.label}
                   {tier.subLabel && (
                     <span className="ml-1.5 text-xs text-text-disabled">
@@ -245,19 +242,15 @@ export default function ReviewStep() {
                     </span>
                   )}
                 </span>
-                <span
-                  key={`org-${tier.id}`}
-                  className="tabular-nums text-right font-mono"
-                >
+                <span className="tabular-nums text-right font-mono">
                   {fmtRM(tier.organiserFee)}
                 </span>
                 <span
-                  key={`player-${tier.id}`}
                   className={`tabular-nums text-right font-mono font-semibold ${isFree ? "text-text-muted" : "text-gold-bright"}`}
                 >
                   {isFree ? "Free" : fmtRM(playerPays)}
                 </span>
-              </>
+              </React.Fragment>
             );
           })}
         </div>
