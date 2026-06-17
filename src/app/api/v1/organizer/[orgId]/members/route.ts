@@ -98,8 +98,8 @@ export async function GET(
     );
   }
 
-  const isCreator = org.created_by === user.id;
-  if (!isCreator && !memberCount) {
+  const isOrgCreator = org.created_by === user.id;
+  if (!isOrgCreator && !memberCount) {
     return NextResponse.json(
       { error: { code: "FORBIDDEN", message: "Access denied" } },
       { status: 403 },
@@ -132,7 +132,7 @@ export async function GET(
         role: m.roles.name,
         joined_at: m.joined_at,
       })),
-      isOrgCreator,
+      isOrgCreator: isOrgCreator,
     },
     { status: 200 },
   );

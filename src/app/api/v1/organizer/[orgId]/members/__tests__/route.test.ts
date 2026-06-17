@@ -310,7 +310,7 @@ describe("GET /api/v1/organizer/:orgId/members", () => {
   // -------------------------------------------------------------------------
 
   describe("response shape", () => {
-    it("returns 200 with data array", async () => {
+    it("returns 200 with data array and isOrgCreator flag", async () => {
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
@@ -318,6 +318,7 @@ describe("GET /api/v1/organizer/:orgId/members", () => {
       const json = await res.json();
       expect(json).toHaveProperty("data");
       expect(Array.isArray(json.data)).toBe(true);
+      expect(json).toHaveProperty("isOrgCreator");
     });
 
     it("shapes each member entry correctly", async () => {
