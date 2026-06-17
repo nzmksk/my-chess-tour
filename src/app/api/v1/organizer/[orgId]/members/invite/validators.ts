@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { validateEmail } from "@/services/auth/auth-validation";
 
 const VALID_ROLES = ["admin", "member"] as const;
-export type InviteRole = (typeof VALID_ROLES)[number];
+type InviteRole = (typeof VALID_ROLES)[number];
 
 export interface InviteRequest {
   email: string;
