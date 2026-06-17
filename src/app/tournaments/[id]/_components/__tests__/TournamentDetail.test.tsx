@@ -23,7 +23,7 @@ const base: TournamentDetailType = {
   },
   start_date: "2026-06-01",
   end_date: "2026-06-02",
-  registration_deadline: "2026-05-28T08:00:00Z",
+  registration_deadline: "2026-12-28T08:00:00Z",
   format: { type: "rapid", system: "swiss", rounds: 7 },
   time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
   is_fide_rated: true,
@@ -414,7 +414,7 @@ describe("register card", () => {
 
   it("shows registration deadline", () => {
     const html = render();
-    expect(html).toContain("28 May");
+    expect(html).toContain("28 Dec");
   });
 });
 

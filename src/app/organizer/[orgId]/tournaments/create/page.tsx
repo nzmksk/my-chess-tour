@@ -3,35 +3,22 @@ import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
-import DashboardClient from "./_components/DashboardClient";
+import { TournamentWizardProvider } from "./_components/TournamentWizardContext";
+import WizardShell from "./_components/WizardShell";
 
 export const metadata: Metadata = {
-  title: "Organizer Dashboard",
-  description: "Manage your organization, tournaments, and registrations.",
+  title: "Create Tournament",
+  description: "Create a new chess tournament for your organization.",
 };
 
-interface DashboardData {
+interface OrgData {
   organization: { id: string; name: string; approval_status: string };
-  stats: {
-    active_tournaments: number;
-    total_registrations: number;
-    total_revenue_cents: number;
-    pending_payout_cents: number;
-  };
-  recent_tournaments: {
-    id: string;
-    name: string;
-    start_date: string;
-    current_participants: number;
-    max_participants: number;
-    status: "draft" | "published" | "ongoing" | "completed" | "cancelled";
-  }[];
 }
 
-async function fetchDashboard(
+async function fetchOrg(
   orgId: string,
   cookieHeader: string,
-): Promise<DashboardData | null> {
+): Promise<OrgData | null> {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -43,8 +30,6 @@ async function fetchDashboard(
         headers: { cookie: cookieHeader },
       },
     );
-    if (res.status === 404) return null;
-    if (res.status === 403 || res.status === 401) return null;
     if (!res.ok) return null;
     const json = await res.json();
     return json.data ?? null;
@@ -53,7 +38,7 @@ async function fetchDashboard(
   }
 }
 
-export default async function OrganizerDashboardPage({
+export default async function CreateTournamentPage({
   params,
 }: {
   params: Promise<{ orgId: string }>;
@@ -72,16 +57,20 @@ export default async function OrganizerDashboardPage({
   const headersList = await headers();
   const cookieHeader = headersList.get("cookie") ?? "";
 
-  const data = await fetchDashboard(orgId, cookieHeader);
+  const data = await fetchOrg(orgId, cookieHeader);
 
   if (!data) {
     notFound();
   }
 
+  const orgName = data!.organization.name;
+
   return (
     <div className="min-h-screen bg-bg-base">
       <NavBar />
-      <DashboardClient data={data} />
+      <TournamentWizardProvider orgId={orgId}>
+        <WizardShell orgId={orgId} orgName={orgName} />
+      </TournamentWizardProvider>
     </div>
   );
 }

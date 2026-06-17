@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type TournamentStatus = "draft" | "published" | "ongoing" | "completed" | "cancelled";
 
@@ -85,14 +86,30 @@ function TournamentRow({ tournament }: { tournament: RecentTournament }) {
 
 export default function DashboardClient({ data }: Props) {
   const { organization, stats, recent_tournaments } = data;
+  const router = useRouter();
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-cinzel text-2xl font-bold text-text-primary tracking-wide">
-          {organization.name}
-        </h1>
-        <p className="font-lato text-sm text-text-muted mt-1">Organizer Dashboard</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-cinzel text-2xl font-bold text-text-primary tracking-wide">
+            {organization.name}
+          </h1>
+          <p className="font-lato text-sm text-text-muted mt-1">Organizer Dashboard</p>
+        </div>
+        <button
+          type="button"
+          className="font-cinzel text-bg-base shrink-0 cursor-pointer rounded-md border-0 px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep))",
+          }}
+          onClick={() =>
+            router.push(`/organizer/${organization.id}/tournaments/create`)
+          }
+        >
+          + Create
+        </button>
       </div>
 
       {/* Stats */}
