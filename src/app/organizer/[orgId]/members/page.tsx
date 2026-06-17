@@ -23,6 +23,7 @@ interface Member {
 interface MembersData {
   members: Member[];
   orgName: string;
+  isOrgCreator: boolean;
 }
 
 async function fetchMembers(
@@ -58,6 +59,7 @@ async function fetchMembers(
 
     const membersJson = await membersRes.json();
     const members: Member[] = membersJson.data ?? [];
+    const isOrgCreator: boolean = membersJson.isOrgCreator ?? false;
 
     let orgName = "Organization";
     if (dashboardRes.ok) {
@@ -65,7 +67,7 @@ async function fetchMembers(
       orgName = dashJson.data?.organization?.name ?? orgName;
     }
 
-    return { members, orgName };
+    return { members, orgName, isOrgCreator };
   } catch {
     return null;
   }
@@ -105,6 +107,7 @@ export default async function OrganizerMembersPage({
         orgName={data.orgName}
         members={data.members}
         currentUserId={user.id}
+        isOrgCreator={data.isOrgCreator}
       />
     </div>
   );

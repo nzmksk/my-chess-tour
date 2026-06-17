@@ -18,6 +18,7 @@ interface Props {
   orgName: string;
   members: Member[];
   currentUserId: string;
+  isOrgCreator: boolean;
 }
 
 type Role = "owner" | "admin" | "member";
@@ -205,9 +206,10 @@ export default function MembersClient({
   orgName,
   members,
   currentUserId,
+  isOrgCreator,
 }: Props) {
   const currentMember = members.find((m) => m.user_id === currentUserId);
-  const isOwner = currentMember?.role === "owner";
+  const isOwner = isOrgCreator || currentMember?.role === "owner";
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">

@@ -132,6 +132,7 @@ export async function GET(
         role: m.roles.name,
         joined_at: m.joined_at,
       })),
+      isOrgCreator,
     },
     { status: 200 },
   );
