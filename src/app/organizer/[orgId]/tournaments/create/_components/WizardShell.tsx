@@ -204,15 +204,12 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
     setPublishError(null);
     setIsPublishing(true);
     try {
-      let draftId = tournamentId;
-      if (!draftId) {
-        if (!basicInfoData.name.trim()) {
-          router.push(`/organizer/${orgId}/dashboard`);
-          return;
-        }
-        draftId = await saveDraftToApi();
-        if (draftId) setTournamentId(draftId);
+      if (!basicInfoData.name.trim()) {
+        router.push(`/organizer/${orgId}/dashboard`);
+        return;
       }
+      const draftId = await saveDraftToApi();
+      if (draftId) setTournamentId(draftId);
       if (!draftId) {
         setPublishError("Failed to save tournament before publishing. Please try again.");
         return;
