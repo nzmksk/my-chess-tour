@@ -46,10 +46,19 @@ function getRoleConfig(role: string) {
 function MemberCard({
   member,
   isCurrentUser,
+  canManage,
+  onRoleChange,
+  onRemove,
 }: {
   member: Member;
   isCurrentUser: boolean;
+  canManage: boolean;
+  onRoleChange: (userId: string, newRole: "admin" | "member") => Promise<void>;
+  onRemove: (userId: string) => void;
 }) {
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
+
   const fullName = [member.first_name, member.last_name].filter(Boolean).join(" ");
   const initials =
     `${member.first_name[0] ?? ""}${member.last_name[0] ?? ""}`.toUpperCase() ||
@@ -64,8 +73,21 @@ function MemberCard({
 
   const roleConfig = getRoleConfig(member.role);
 
+  async function handleRoleSelect(newRole: "admin" | "member") {
+    if (newRole === member.role) return;
+    setRoleLoading(true);
+    setRoleError(null);
+    try {
+      await onRoleChange(member.user_id, newRole);
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setRoleLoading(false);
+    }
+  }
+
   return (
-    <div className="card px-5 py-4 flex items-center gap-4">
+    <div className="card px-5 py-4 flex items-center gap-4 flex-wrap">
       <div className="bg-gold-ghost border-2 border-gold-dim font-cinzel text-gold-bright flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
         {initials}
       </div>
@@ -87,13 +109,37 @@ function MemberCard({
         <p className="font-lato text-xs text-text-disabled mt-0.5">
           Joined {joinedDate}
         </p>
+        {roleError && (
+          <p className="font-lato text-xs text-red-400 mt-1">{roleError}</p>
+        )}
       </div>
 
-      <span
-        className={`font-cinzel text-xs font-bold tracking-widest uppercase px-2.5 py-1 rounded-md whitespace-nowrap ${roleConfig.className}`}
-      >
-        {roleConfig.label}
-      </span>
+      {canManage ? (
+        <div className="flex items-center gap-2 shrink-0">
+          <select
+            value={member.role as "admin" | "member"}
+            onChange={(e) => handleRoleSelect(e.target.value as "admin" | "member")}
+            disabled={roleLoading}
+            className="rounded-md border border-border bg-bg-base px-2 py-1 font-cinzel text-xs font-bold tracking-widest uppercase text-text-secondary focus:outline-none focus:border-gold-dim disabled:opacity-50"
+          >
+            <option value="admin">Admin</option>
+            <option value="member">Member</option>
+          </select>
+          <button
+            onClick={() => onRemove(member.user_id)}
+            disabled={roleLoading}
+            className="font-lato text-xs text-red-400 hover:text-red-300 border border-red-900/40 hover:border-red-400/60 px-2 py-1 rounded-md transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <span
+          className={`font-cinzel text-xs font-bold tracking-widest uppercase px-2.5 py-1 rounded-md whitespace-nowrap ${roleConfig.className}`}
+        >
+          {roleConfig.label}
+        </span>
+      )}
     </div>
   );
 }
@@ -208,8 +254,52 @@ export default function MembersClient({
   currentUserId,
   isOrgCreator,
 }: Props) {
-  const currentMember = members.find((m) => m.user_id === currentUserId);
+  const [memberList, setMemberList] = useState<Member[]>(members);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  const currentMember = memberList.find((m) => m.user_id === currentUserId);
   const isOwner = isOrgCreator || currentMember?.role === "owner";
+
+  async function handleRoleChange(userId: string, newRole: "admin" | "member") {
+    const res = await fetch(`/api/v1/organizer/${orgId}/members/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.error?.message ?? "Failed to update role");
+    }
+
+    setMemberList((prev) =>
+      prev.map((m) => (m.user_id === userId ? { ...m, role: newRole } : m))
+    );
+  }
+
+  function handleRemove(userId: string) {
+    const member = memberList.find((m) => m.user_id === userId);
+    const name = member
+      ? [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email
+      : "this member";
+
+    if (!confirm(`Remove ${name} from the organization?`)) return;
+
+    setRemoveError(null);
+    fetch(`/api/v1/organizer/${orgId}/members/${userId}`, { method: "DELETE" })
+      .then((res) => {
+        if (res.status === 204 || res.ok) {
+          setMemberList((prev) => prev.filter((m) => m.user_id !== userId));
+          return;
+        }
+        return res.json().then((j: { error?: { message?: string } }) => {
+          setRemoveError(j.error?.message ?? "Failed to remove member");
+        });
+      })
+      .catch(() => {
+        setRemoveError("An unexpected error occurred. Please try again.");
+      });
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
@@ -224,11 +314,17 @@ export default function MembersClient({
           {orgName}
         </h1>
         <p className="font-lato text-sm text-text-muted mt-1">
-          Members · {members.length} {members.length === 1 ? "person" : "people"}
+          Members · {memberList.length} {memberList.length === 1 ? "person" : "people"}
         </p>
       </div>
 
       {isOwner && <InviteBar orgId={orgId} />}
+
+      {removeError && (
+        <div className="mb-4 rounded-md bg-red-950/40 border border-red-900/40 px-4 py-2">
+          <p className="font-lato text-xs text-red-400">{removeError}</p>
+        </div>
+      )}
 
       {/* Role permissions reference */}
       <div className="rounded-lg bg-bg-raised border border-border px-5 py-4 mb-6">
@@ -260,7 +356,7 @@ export default function MembersClient({
       </div>
 
       {/* Members list */}
-      {members.length === 0 ? (
+      {memberList.length === 0 ? (
         <div className="text-center py-12 px-5">
           <div className="text-4xl mb-4 opacity-20">♟</div>
           <p className="font-lato text-sm text-text-muted leading-relaxed">
@@ -269,13 +365,20 @@ export default function MembersClient({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {members.map((member) => (
-            <MemberCard
-              key={member.user_id}
-              member={member}
-              isCurrentUser={member.user_id === currentUserId}
-            />
-          ))}
+          {memberList.map((member) => {
+            const isCurrentUser = member.user_id === currentUserId;
+            const canManage = isOwner && !isCurrentUser && member.role !== "owner";
+            return (
+              <MemberCard
+                key={member.user_id}
+                member={member}
+                isCurrentUser={isCurrentUser}
+                canManage={canManage}
+                onRoleChange={handleRoleChange}
+                onRemove={handleRemove}
+              />
+            );
+          })}
         </div>
       )}
     </div>
