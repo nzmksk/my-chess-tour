@@ -363,6 +363,7 @@ export default function SignUpForm() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, termsAccepted: e.target.checked }))
                 }
+                aria-label="I agree to the Terms of Service and Privacy Policy"
                 aria-describedby={errors.terms ? "terms-error" : undefined}
               />
               <label
