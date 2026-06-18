@@ -32,11 +32,12 @@ type FieldErrors = {
   venueAddress?: string;
 };
 
-async function checkNameAvailability(name: string): Promise<NameStatus> {
+async function checkNameAvailability(name: string, excludeId?: string | null): Promise<NameStatus> {
   try {
-    const res = await fetch(
-      `/api/v1/tournaments/name-check?name=${encodeURIComponent(name)}`,
-    );
+    const url = new URL("/api/v1/tournaments/name-check", window.location.origin);
+    url.searchParams.set("name", name);
+    if (excludeId) url.searchParams.set("excludeId", excludeId);
+    const res = await fetch(url.toString());
     if (!res.ok) return "error";
     const json = await res.json();
     return json.available ? "available" : "taken";
@@ -73,7 +74,7 @@ function validate(
 }
 
 export default function BasicInfoStep() {
-  const { setBasicInfoData, basicInfoData, goNext, registerStepHandler } =
+  const { setBasicInfoData, basicInfoData, goNext, registerStepHandler, excludeId } =
     useTournamentWizard();
 
   const [form, setForm] = useState<BasicInfoData>(basicInfoData);
@@ -92,7 +93,7 @@ export default function BasicInfoStep() {
 
     nameCheckTimer.current = setTimeout(async () => {
       setNameStatus("checking");
-      const status = await checkNameAvailability(value.trim());
+      const status = await checkNameAvailability(value.trim(), excludeId);
       setNameStatus(status);
     }, 600);
   };
@@ -104,7 +105,7 @@ export default function BasicInfoStep() {
 
     if (form.name.trim() && (nameStatus === "idle" || nameStatus === "checking")) {
       setNameStatus("checking");
-      currentNameStatus = await checkNameAvailability(form.name.trim());
+      currentNameStatus = await checkNameAvailability(form.name.trim(), excludeId);
       setNameStatus(currentNameStatus);
     }
 
