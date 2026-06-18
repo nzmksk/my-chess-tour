@@ -446,6 +446,24 @@ describe("POST /api/v1/webhooks/chip", () => {
       expect(json.error.code).toBe("INTERNAL_ERROR");
     });
 
+    it("returns 500 when registration update fails", async () => {
+      setRegistrationResult(null, { message: "registration write error" });
+      const body = makePayload("paid");
+      const sig = makeSignature(body);
+      const res = await POST(makeRequest(body, sig));
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error.code).toBe("INTERNAL_ERROR");
+    });
+
+    it("does not invalidate Redis cache when registration update fails", async () => {
+      setRegistrationResult(null, { message: "registration write error" });
+      const body = makePayload("paid");
+      const sig = makeSignature(body);
+      await POST(makeRequest(body, sig));
+      expect(mockRedisDel).not.toHaveBeenCalled();
+    });
+
     it("skips Redis del when user_id is null", async () => {
       setPaymentResult({ ...PENDING_PAYMENT, user_id: null });
       const body = makePayload("paid");
@@ -464,6 +482,75 @@ describe("POST /api/v1/webhooks/chip", () => {
         typeof vi.fn
       >;
       expect(updateMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Idempotent retry recovery
+  // -------------------------------------------------------------------------
+
+  describe("idempotent retry recovery", () => {
+    it("retries registration update when payment is already paid", async () => {
+      setPaymentResult({ ...PENDING_PAYMENT, status: "paid" });
+      const body = makePayload("paid");
+      const sig = makeSignature(body);
+      const res = await POST(makeRequest(body, sig));
+      expect(res.status).toBe(200);
+      const updateMock = mockRegistrationsBuilder.update as ReturnType<
+        typeof vi.fn
+      >;
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "confirmed" }),
+      );
+    });
+
+    it("retries registration update when payment is already failed", async () => {
+      setPaymentResult({ ...PENDING_PAYMENT, status: "failed" });
+      const body = makePayload("payment_failed");
+      const sig = makeSignature(body);
+      const res = await POST(makeRequest(body, sig));
+      expect(res.status).toBe(200);
+      const updateMock = mockRegistrationsBuilder.update as ReturnType<
+        typeof vi.fn
+      >;
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "failed_payment" }),
+      );
+    });
+
+    it("returns 500 on retry when registration recovery update fails", async () => {
+      setPaymentResult({ ...PENDING_PAYMENT, status: "paid" });
+      setRegistrationResult(null, { message: "recovery write error" });
+      const body = makePayload("paid");
+      const sig = makeSignature(body);
+      const res = await POST(makeRequest(body, sig));
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error.code).toBe("INTERNAL_ERROR");
+    });
+
+    it("skips registration update on retry when registration_id is null", async () => {
+      setPaymentResult({
+        ...PENDING_PAYMENT,
+        status: "paid",
+        registration_id: null,
+      });
+      const body = makePayload("paid");
+      const sig = makeSignature(body);
+      const res = await POST(makeRequest(body, sig));
+      expect(res.status).toBe(200);
+      const updateMock = mockRegistrationsBuilder.update as ReturnType<
+        typeof vi.fn
+      >;
+      expect(updateMock).not.toHaveBeenCalled();
+    });
+
+    it("invalidates Redis cache on successful recovery retry", async () => {
+      setPaymentResult({ ...PENDING_PAYMENT, status: "paid" });
+      const body = makePayload("paid");
+      const sig = makeSignature(body);
+      await POST(makeRequest(body, sig));
+      expect(mockRedisDel).toHaveBeenCalledWith(`registrations:${USER_ID}`);
     });
   });
 });

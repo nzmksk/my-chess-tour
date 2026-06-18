@@ -18,6 +18,22 @@ function verifySignature(rawBody: string, signature: string): boolean {
   return verifier.verify(publicKey, signature, "base64");
 }
 
+async function updateRegistrationStatus(
+  registrationId: string,
+  isPaid: boolean,
+  now: string,
+): Promise<string | null> {
+  const { error } = await supabaseAdmin
+    .from("registrations")
+    .update({
+      status: isPaid ? "confirmed" : "failed_payment",
+      confirmed_at: isPaid ? now : null,
+    })
+    .eq("id", registrationId);
+
+  return error ? error.message : null;
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const rawBody = await request.text();
   const signature = request.headers.get("x-signature") ?? "";
@@ -81,12 +97,35 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const now = new Date().toISOString();
+
   if (payment.status !== "pending") {
+    // Payment already finalized — attempt registration update to recover from a prior partial failure.
+    // Using payment.status (not the incoming status) ensures idempotency even on spurious retries.
+    if (payment.registration_id) {
+      const isPaidStatus = payment.status === "paid";
+      const regErr = await updateRegistrationStatus(
+        payment.registration_id,
+        isPaidStatus,
+        now,
+      );
+      if (regErr) {
+        console.error("Registration recovery update error:", regErr);
+        return NextResponse.json(
+          { error: { code: "INTERNAL_ERROR", message: regErr } },
+          { status: 500 },
+        );
+      }
+    }
+
+    if (payment.user_id) {
+      await redis.del(`registrations:${payment.user_id}`);
+    }
+
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
   const isPaid = status === "paid";
-  const now = new Date().toISOString();
 
   const { error: payUpdateErr } = await supabaseAdmin
     .from("payments")
@@ -104,16 +143,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (payment.registration_id) {
-    const { error: regUpdateErr } = await supabaseAdmin
-      .from("registrations")
-      .update({
-        status: isPaid ? "confirmed" : "failed_payment",
-        confirmed_at: isPaid ? now : null,
-      })
-      .eq("id", payment.registration_id);
-
-    if (regUpdateErr) {
-      console.error("Registration update error:", regUpdateErr);
+    const regErr = await updateRegistrationStatus(
+      payment.registration_id,
+      isPaid,
+      now,
+    );
+    if (regErr) {
+      console.error("Registration update error:", regErr);
+      return NextResponse.json(
+        { error: { code: "INTERNAL_ERROR", message: regErr } },
+        { status: 500 },
+      );
     }
   }
 
