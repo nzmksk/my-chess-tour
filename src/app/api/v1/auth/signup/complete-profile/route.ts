@@ -30,14 +30,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { gender, nationality, dateOfBirth, fideId, mcfId, isOku } = body as {
-    gender?: string;
-    nationality?: string;
-    dateOfBirth?: string;
-    fideId?: string;
-    mcfId?: string;
-    isOku?: boolean;
-  };
+  const { gender, nationality, dateOfBirth, fideId, mcfId, isOku, avatarUrl } =
+    body as {
+      gender?: string;
+      nationality?: string;
+      dateOfBirth?: string;
+      fideId?: string;
+      mcfId?: string;
+      isOku?: boolean;
+      avatarUrl?: string;
+    };
 
   if (gender && !["male", "female"].includes(gender.toLowerCase())) {
     return NextResponse.json(
@@ -84,6 +86,7 @@ export async function POST(request: NextRequest) {
       fide_id: fideId || null,
       mcf_id: mcfId || null,
       is_oku: isOku ?? false,
+      ...(avatarUrl !== undefined ? { avatar_url: avatarUrl || null } : {}),
     })
     .eq("user_id", user.id);
 
