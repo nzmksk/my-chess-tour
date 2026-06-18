@@ -497,7 +497,7 @@
     @apply font-cinzel text-text-muted mb-1 text-sm font-semibold tracking-widest uppercase;
   }
   .pw-req-grid {
-    @apply grid grid-cols-2 gap-x-3 gap-y-1;
+    @apply grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1;
   }
   .pw-req {
     @apply font-lato text-text-muted flex items-center gap-1.25 text-sm;
