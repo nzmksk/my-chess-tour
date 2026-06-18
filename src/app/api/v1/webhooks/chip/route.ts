@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createVerify } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { redis } from "@/services/redis/redis";
@@ -10,15 +10,12 @@ interface ChipWebhookPayload {
 }
 
 function verifySignature(rawBody: string, signature: string): boolean {
-  const secret = process.env.CHIP_WEBHOOK_SECRET;
-  if (!secret) throw new Error("CHIP_WEBHOOK_SECRET is not configured");
+  const publicKey = process.env.CHIP_WEBHOOK_PUBLIC_KEY;
+  if (!publicKey) throw new Error("CHIP_WEBHOOK_PUBLIC_KEY is not configured");
 
-  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  const sigBuf = Buffer.from(signature);
-  const expBuf = Buffer.from(expected);
-
-  if (sigBuf.length !== expBuf.length) return false;
-  return timingSafeEqual(sigBuf, expBuf);
+  const verifier = createVerify("SHA256");
+  verifier.update(rawBody);
+  return verifier.verify(publicKey, signature, "base64");
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

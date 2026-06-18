@@ -1,6 +1,14 @@
-import { createHmac } from "crypto";
+import { generateKeyPairSync, createSign } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+
+// RSA key pair used across all signature tests
+const { privateKey: TEST_PRIVATE_KEY, publicKey: TEST_PUBLIC_KEY } =
+  generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -56,13 +64,12 @@ import { POST } from "../route";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const WEBHOOK_SECRET = "test-secret-key";
 const PAYMENT_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const REGISTRATION_ID = "bbbbbbbb-0000-0000-0000-000000000002";
 const USER_ID = "cccccccc-0000-0000-0000-000000000003";
 
-function makeSignature(body: string, secret = WEBHOOK_SECRET): string {
-  return createHmac("sha256", secret).update(body).digest("hex");
+function makeSignature(body: string, privKey = TEST_PRIVATE_KEY): string {
+  return createSign("SHA256").update(body).sign(privKey, "base64");
 }
 
 function makePayload(status: string, referenceId = PAYMENT_ID): string {
@@ -117,7 +124,7 @@ const PENDING_PAYMENT = {
 describe("POST /api/v1/webhooks/chip", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("CHIP_WEBHOOK_SECRET", WEBHOOK_SECRET);
+    vi.stubEnv("CHIP_WEBHOOK_PUBLIC_KEY", TEST_PUBLIC_KEY);
     setPaymentResult(PENDING_PAYMENT);
     setRegistrationResult(null);
   });
@@ -150,8 +157,8 @@ describe("POST /api/v1/webhooks/chip", () => {
       expect(json.error.message).toMatch(/invalid signature/i);
     });
 
-    it("returns 500 when CHIP_WEBHOOK_SECRET is not set", async () => {
-      vi.stubEnv("CHIP_WEBHOOK_SECRET", "");
+    it("returns 500 when CHIP_WEBHOOK_PUBLIC_KEY is not set", async () => {
+      vi.stubEnv("CHIP_WEBHOOK_PUBLIC_KEY", "");
       const body = makePayload("paid");
       const sig = makeSignature(body);
       const res = await POST(makeRequest(body, sig));
@@ -160,7 +167,7 @@ describe("POST /api/v1/webhooks/chip", () => {
       expect(json.error.code).toBe("INTERNAL_ERROR");
     });
 
-    it("accepts a valid HMAC-SHA256 signature", async () => {
+    it("accepts a valid RSA signature", async () => {
       const body = makePayload("paid");
       const sig = makeSignature(body);
       const res = await POST(makeRequest(body, sig));
