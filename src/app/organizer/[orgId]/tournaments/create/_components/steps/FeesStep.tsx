@@ -418,7 +418,7 @@ export default function FeesStep() {
                       onChange={(v) => updateTier(tier.id, { amount: v })}
                       error={showErrors ? te.amount : undefined}
                     />
-                    <div className="min-w-[220px] flex-1">
+                    <div className="min-w-55 flex-1">
                       <p className="font-lato text-text-muted mb-2 text-xs">
                         Applies to titles:
                       </p>
