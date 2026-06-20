@@ -14,6 +14,7 @@ const {
   mockStartResendCooldown,
   mockClearResendCooldown,
   mockSendVerificationEmail,
+  mockRecordSignupAttempt,
 } = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn();
   const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
@@ -23,6 +24,7 @@ const {
   const mockStartResendCooldown = vi.fn();
   const mockClearResendCooldown = vi.fn();
   const mockSendVerificationEmail = vi.fn();
+  const mockRecordSignupAttempt = vi.fn();
   return {
     mockMaybeSingle,
     mockEq,
@@ -32,6 +34,7 @@ const {
     mockStartResendCooldown,
     mockClearResendCooldown,
     mockSendVerificationEmail,
+    mockRecordSignupAttempt,
   };
 });
 
@@ -43,6 +46,8 @@ vi.mock("@/services/redis/redis", () => ({
   storeVerificationCode: mockStoreVerificationCode,
   startResendCooldown: mockStartResendCooldown,
   clearResendCooldown: mockClearResendCooldown,
+  recordSignupAttempt: mockRecordSignupAttempt,
+  MAX_SIGNUP_ATTEMPTS_PER_IP: 30,
 }));
 
 vi.mock("@/services/email/email", () => ({
@@ -83,38 +88,103 @@ describe("POST /api/v1/auth/signup/resend-code", () => {
     mockStartResendCooldown.mockResolvedValue(0); // not on cooldown
     mockClearResendCooldown.mockResolvedValue(undefined);
     mockSendVerificationEmail.mockResolvedValue(undefined);
+    mockRecordSignupAttempt.mockResolvedValue(1); // under the per-IP limit
   });
 
   // --- Success --------------------------------------------------------------
 
-  it("returns 200 and sends a new code when not on cooldown", async () => {
+  it("sends a new code for an existing, unverified account", async () => {
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.message).toMatch(/resent/i);
+    expect(json.message).toMatch(/sent/i);
     expect(mockStartResendCooldown).toHaveBeenCalledWith("player@example.com");
     expect(mockStoreVerificationCode).toHaveBeenCalledOnce();
     expect(mockSendVerificationEmail).toHaveBeenCalledOnce();
   });
 
-  // --- Rate limiting --------------------------------------------------------
+  // --- Enumeration hardening: every account state looks identical -----------
 
-  it("returns 429 with Retry-After when still on cooldown", async () => {
+  it("returns a generic 200 without sending when the account is missing", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockStartResendCooldown).not.toHaveBeenCalled();
+    expect(mockStoreVerificationCode).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic 200 without sending when already verified", async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "u1", is_verified: true },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockStartResendCooldown).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic 200 without sending when on cooldown (never reveals the throttle)", async () => {
     mockStartResendCooldown.mockResolvedValue(900); // 15 min remaining
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBeNull();
+    expect(mockStoreVerificationCode).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns an identical response for missing, verified, and unverified accounts", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    const missing = await POST(makeRequest(validBody));
+    const missingBody = await missing.json();
+
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "u1", is_verified: true },
+      error: null,
+    });
+    const verified = await POST(makeRequest(validBody));
+    const verifiedBody = await verified.json();
+
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "u1", is_verified: false },
+      error: null,
+    });
+    const unverified = await POST(makeRequest(validBody));
+    const unverifiedBody = await unverified.json();
+
+    expect(missing.status).toBe(200);
+    expect(verified.status).toBe(200);
+    expect(unverified.status).toBe(200);
+    expect(missingBody).toEqual(verifiedBody);
+    expect(verifiedBody).toEqual(unverifiedBody);
+  });
+
+  // --- Per-IP rate limiting -------------------------------------------------
+
+  it("returns 429 once the per-IP attempt limit is exceeded", async () => {
+    mockRecordSignupAttempt.mockResolvedValue(31); // over the limit of 30
 
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
     expect(res.status).toBe(429);
     expect(json.error.code).toBe("RATE_LIMITED");
-    expect(res.headers.get("Retry-After")).toBe("900");
-    // No code is stored or emailed while throttled
-    expect(mockStoreVerificationCode).not.toHaveBeenCalled();
+    // Throttled before any account lookup or send
+    expect(mockFrom).not.toHaveBeenCalled();
     expect(mockSendVerificationEmail).not.toHaveBeenCalled();
   });
 
-  it("releases the cooldown when storing the code fails", async () => {
+  // --- Send failures (genuine infra errors still surface) -------------------
+
+  it("releases the cooldown and returns 500 when storing the code fails", async () => {
     mockStoreVerificationCode.mockRejectedValue(new Error("Redis down"));
 
     const res = await POST(makeRequest(validBody));
@@ -124,40 +194,13 @@ describe("POST /api/v1/auth/signup/resend-code", () => {
     expect(mockSendVerificationEmail).not.toHaveBeenCalled();
   });
 
-  it("releases the cooldown when sending the email fails", async () => {
+  it("releases the cooldown and returns 500 when sending the email fails", async () => {
     mockSendVerificationEmail.mockRejectedValue(new Error("SMTP error"));
 
     const res = await POST(makeRequest(validBody));
 
     expect(res.status).toBe(500);
     expect(mockClearResendCooldown).toHaveBeenCalledWith("player@example.com");
-  });
-
-  // --- Account state guards (cooldown only applies to valid candidates) -----
-
-  it("returns 404 and never starts a cooldown when the account is missing", async () => {
-    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
-
-    const res = await POST(makeRequest(validBody));
-    const json = await res.json();
-
-    expect(res.status).toBe(404);
-    expect(json.error.code).toBe("NOT_FOUND");
-    expect(mockStartResendCooldown).not.toHaveBeenCalled();
-  });
-
-  it("returns 409 and never starts a cooldown when already verified", async () => {
-    mockMaybeSingle.mockResolvedValue({
-      data: { id: "u1", is_verified: true },
-      error: null,
-    });
-
-    const res = await POST(makeRequest(validBody));
-    const json = await res.json();
-
-    expect(res.status).toBe(409);
-    expect(json.error.code).toBe("ALREADY_VERIFIED");
-    expect(mockStartResendCooldown).not.toHaveBeenCalled();
   });
 
   // --- Validation -----------------------------------------------------------

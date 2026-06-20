@@ -1,10 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { validateLoginForm } from "@/services/auth/auth-validation";
 import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { redis } from "@/services/redis/redis";
+import { sendSignupVerificationCode } from "@/services/auth/verification-code";
+import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 import type { LoginState } from "../types";
 
 const MAX_ATTEMPTS = 5;
@@ -88,13 +91,31 @@ export async function login(
     .maybeSingle();
 
   if (!userRecord?.is_verified) {
+    // Don't dead-end on an error message. Sign them out, send a fresh code, and
+    // signal the client to carry them into the verification step.
     await supabase.auth.signOut();
+
+    try {
+      await sendSignupVerificationCode(email.toLowerCase().trim());
+    } catch (err) {
+      console.error("Failed to send verification code during login:", err);
+    }
+
+    // Allow the verify route (the proxy gates it on this step cookie).
+    const cookieStore = await cookies();
+    cookieStore.set(SIGNUP_STEP_COOKIE, "verify", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: SIGNUP_STEP_MAX_AGE,
+    });
+
     return {
-      error:
-        "Your email address has not been verified. Please check your inbox and complete verification before signing in.",
+      error: null,
       attemptsRemaining: null,
       locked: false,
       lockedSeconds: null,
+      needsVerification: true,
     };
   }
 

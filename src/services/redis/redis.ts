@@ -91,3 +91,26 @@ export async function getVerifyAttempts(email: string): Promise<number> {
 export async function resetVerifyAttempts(email: string): Promise<void> {
   await redis.del(verifyAttemptsKey(email));
 }
+
+// ── Signup per-IP rate limiting (anti email-enumeration) ─────────────────────
+
+const SIGNUP_IP_PREFIX = "signup-ip:";
+const SIGNUP_IP_WINDOW_SECONDS = 10 * 60; // 10 minutes
+// Generous enough for legitimate (even bulk, shared-IP) signups, low enough to
+// make mass email-existence probing impractical. Tunable.
+export const MAX_SIGNUP_ATTEMPTS_PER_IP = 30;
+
+function signupIpKey(ip: string) {
+  return `${SIGNUP_IP_PREFIX}${ip}`;
+}
+
+// Fixed-window per-IP counter for the signup / email-existence endpoints.
+// Returns the new count; callers reject once it exceeds the max.
+export async function recordSignupAttempt(ip: string): Promise<number> {
+  const key = signupIpKey(ip);
+  const count = await redis.incr(key);
+  if (count === 1) {
+    await redis.expire(key, SIGNUP_IP_WINDOW_SECONDS);
+  }
+  return count;
+}

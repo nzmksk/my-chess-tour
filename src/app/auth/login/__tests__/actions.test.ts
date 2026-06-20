@@ -12,8 +12,11 @@ const mocks = vi.hoisted(() => ({
   set: vi.fn(),
   del: vi.fn(),
   signInWithPassword: vi.fn(),
+  signOut: vi.fn(),
   redirect: vi.fn(),
   maybeSingle: vi.fn(),
+  cookieSet: vi.fn(),
+  sendSignupVerificationCode: vi.fn(),
 }));
 
 vi.mock("@/services/redis/redis", () => ({
@@ -27,9 +30,22 @@ vi.mock("@/services/redis/redis", () => ({
   },
 }));
 
+vi.mock("@/services/auth/verification-code", () => ({
+  sendSignupVerificationCode: mocks.sendSignupVerificationCode,
+}));
+
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({ set: mocks.cookieSet }),
+}));
+
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
-    Promise.resolve({ auth: { signInWithPassword: mocks.signInWithPassword } }),
+    Promise.resolve({
+      auth: {
+        signInWithPassword: mocks.signInWithPassword,
+        signOut: mocks.signOut,
+      },
+    }),
   ),
 }));
 
@@ -188,6 +204,48 @@ describe("login action", () => {
     await login(INITIAL_LOGIN_STATE, fd);
 
     expect(mocks.expire).toHaveBeenCalled();
+  });
+
+  // --- Unverified account (correct password) --------------------------------
+
+  it("signals needsVerification instead of an error when the account is unverified", async () => {
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "abc-123" }, session: {} },
+      error: null,
+    });
+    mocks.maybeSingle.mockResolvedValue({ data: { is_verified: false } });
+
+    const fd = makeFormData(VALID);
+    const result = await login(INITIAL_LOGIN_STATE, fd);
+
+    expect(result.needsVerification).toBe(true);
+    expect(result.error).toBeNull();
+    expect(result.locked).toBe(false);
+    // Signed out, a fresh code sent, the verify-step cookie set, and NOT redirected
+    expect(mocks.signOut).toHaveBeenCalled();
+    expect(mocks.sendSignupVerificationCode).toHaveBeenCalledWith(
+      "user@example.com",
+    );
+    expect(mocks.cookieSet).toHaveBeenCalledWith(
+      "signup_step",
+      "verify",
+      expect.objectContaining({ httpOnly: true }),
+    );
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("still proceeds to needsVerification if sending the code throws", async () => {
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "abc-123" }, session: {} },
+      error: null,
+    });
+    mocks.maybeSingle.mockResolvedValue({ data: { is_verified: false } });
+    mocks.sendSignupVerificationCode.mockRejectedValue(new Error("email down"));
+
+    const result = await login(INITIAL_LOGIN_STATE, makeFormData(VALID));
+
+    expect(result.needsVerification).toBe(true);
+    expect(mocks.cookieSet).toHaveBeenCalled();
   });
 
   // --- Successful login ------------------------------------------------------

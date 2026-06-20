@@ -16,6 +16,7 @@ const {
   mockDeleteUser,
   mockStoreVerificationCode,
   mockSendVerificationEmail,
+  mockRecordSignupAttempt,
 } = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn();
   const mockSelectEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
@@ -27,6 +28,7 @@ const {
   const mockDeleteUser = vi.fn();
   const mockStoreVerificationCode = vi.fn();
   const mockSendVerificationEmail = vi.fn();
+  const mockRecordSignupAttempt = vi.fn();
   return {
     mockMaybeSingle,
     mockSelectEq,
@@ -38,6 +40,7 @@ const {
     mockDeleteUser,
     mockStoreVerificationCode,
     mockSendVerificationEmail,
+    mockRecordSignupAttempt,
   };
 });
 
@@ -50,6 +53,8 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/redis/redis", () => ({
   storeVerificationCode: mockStoreVerificationCode,
+  recordSignupAttempt: mockRecordSignupAttempt,
+  MAX_SIGNUP_ATTEMPTS_PER_IP: 30,
 }));
 
 vi.mock("@/services/email/email", () => ({
@@ -100,6 +105,7 @@ describe("POST /api/v1/auth/signup/create-account", () => {
     mockDeleteUser.mockResolvedValue({ error: null });
     mockStoreVerificationCode.mockResolvedValue(undefined);
     mockSendVerificationEmail.mockResolvedValue(undefined);
+    mockRecordSignupAttempt.mockResolvedValue(1); // under the per-IP limit
   });
 
   // --- Success --------------------------------------------------------------
@@ -134,6 +140,19 @@ describe("POST /api/v1/auth/signup/create-account", () => {
         }),
       }),
     );
+  });
+
+  // --- Per-IP rate limiting (anti-enumeration) ------------------------------
+
+  it("returns 429 once the per-IP attempt limit is exceeded", async () => {
+    mockRecordSignupAttempt.mockResolvedValue(31); // over the limit of 30
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("RATE_LIMITED");
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   // --- Password complexity (server-side) ------------------------------------

@@ -12,6 +12,7 @@ const {
   mockFrom,
   mockStoreVerificationCode,
   mockSendVerificationEmail,
+  mockRecordSignupAttempt,
 } = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn();
   const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
@@ -19,6 +20,7 @@ const {
   const mockFrom = vi.fn(() => ({ select: mockSelect }));
   const mockStoreVerificationCode = vi.fn();
   const mockSendVerificationEmail = vi.fn();
+  const mockRecordSignupAttempt = vi.fn();
   return {
     mockMaybeSingle,
     mockEq,
@@ -26,6 +28,7 @@ const {
     mockFrom,
     mockStoreVerificationCode,
     mockSendVerificationEmail,
+    mockRecordSignupAttempt,
   };
 });
 
@@ -35,6 +38,8 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/redis/redis", () => ({
   storeVerificationCode: mockStoreVerificationCode,
+  recordSignupAttempt: mockRecordSignupAttempt,
+  MAX_SIGNUP_ATTEMPTS_PER_IP: 30,
 }));
 
 vi.mock("@/services/email/email", () => ({
@@ -76,6 +81,7 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     mockFrom.mockReturnValue({ select: mockSelect });
     mockStoreVerificationCode.mockResolvedValue(undefined);
     mockSendVerificationEmail.mockResolvedValue(undefined);
+    mockRecordSignupAttempt.mockResolvedValue(1); // under the per-IP limit
   });
 
   // --- Success --------------------------------------------------------------
@@ -107,6 +113,20 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     const storedCode = mockStoreVerificationCode.mock.calls[0][1];
     const emailedCode = mockSendVerificationEmail.mock.calls[0][1];
     expect(storedCode).toBe(emailedCode);
+  });
+
+  // --- Per-IP rate limiting (anti-enumeration) ------------------------------
+
+  it("returns 429 once the per-IP attempt limit is exceeded", async () => {
+    mockRecordSignupAttempt.mockResolvedValue(31); // over the limit of 30
+
+    const res = await POST(makeRequest({ email: "player@example.com" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("RATE_LIMITED");
+    expect(mockStoreVerificationCode).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
   });
 
   // --- Validation errors ----------------------------------------------------

@@ -2,11 +2,11 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { type RegistrationFields } from "@/services/auth/auth-validation";
+import { SIGNUP_FORM_STORAGE_KEY as STORAGE_KEY } from "@/lib/signup-storage";
 
-// Tab-scoped storage key. sessionStorage (not localStorage) so the in-progress
-// signup — including the password needed by the verify step — is cleared when
-// the tab closes and never leaks across tabs.
-const STORAGE_KEY = "signup_form";
+// Persisted in sessionStorage (not localStorage) so the in-progress signup —
+// including the password needed by the verify step — is cleared when the tab
+// closes and never leaks across tabs.
 
 const defaultForm: RegistrationFields = {
   firstName: "",

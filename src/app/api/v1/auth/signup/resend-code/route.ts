@@ -4,18 +4,42 @@ import {
   storeVerificationCode,
   startResendCooldown,
   clearResendCooldown,
+  recordSignupAttempt,
+  MAX_SIGNUP_ATTEMPTS_PER_IP,
 } from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
 import { validateEmail } from "@/services/auth/auth-validation";
+import { getClientIp } from "@/lib/request-ip";
+import { generateCode } from "@/services/auth/verification-code";
 
-function generateCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+// A single response shared by every account-state outcome (missing account,
+// already verified, code sent, or silently throttled) so this endpoint can't
+// be used to discover whether an email is registered or its verification state.
+function genericOk() {
+  return NextResponse.json(
+    {
+      message: "If your account needs verification, a new code has been sent.",
+    },
+    { status: 200 },
+  );
 }
 
 export async function POST(request: NextRequest) {
+  // Per-IP rate limit (consistent with the other signup endpoints) to cap
+  // cross-email probing.
+  const ip = getClientIp(request);
+  if ((await recordSignupAttempt(ip)) > MAX_SIGNUP_ATTEMPTS_PER_IP) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many attempts. Please try again later.",
+        },
+      },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
 
   try {
@@ -66,39 +90,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Account not found" } },
-      { status: 404 },
-    );
+  // Only actually send for an existing, unverified account. Missing and
+  // already-verified accounts fall through to the same generic response so
+  // neither case is distinguishable from a successful resend.
+  if (!user || user.is_verified) {
+    return genericOk();
   }
 
-  if (user.is_verified) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "ALREADY_VERIFIED",
-          message: "This account is already verified",
-        },
-      },
-      { status: 409 },
-    );
-  }
-
-  // Server-side throttle: prevent email bombing of a valid unverified address
-  // by anyone calling this endpoint directly (the client cooldown isn't enough).
+  // Throttle real sends (anti email-bombing), but never surface the cooldown —
+  // a 429 here would reveal the address is registered and unverified.
   const cooldown = await startResendCooldown(normalized);
   if (cooldown > 0) {
-    const minutes = Math.ceil(cooldown / 60);
-    return NextResponse.json(
-      {
-        error: {
-          code: "RATE_LIMITED",
-          message: `Please wait ${minutes} minute${minutes === 1 ? "" : "s"} before requesting another code.`,
-        },
-      },
-      { status: 429, headers: { "Retry-After": String(cooldown) } },
-    );
+    return genericOk();
   }
 
   const code = generateCode();
@@ -140,8 +143,5 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json(
-    { message: "Verification code resent" },
-    { status: 200 },
-  );
+  return genericOk();
 }

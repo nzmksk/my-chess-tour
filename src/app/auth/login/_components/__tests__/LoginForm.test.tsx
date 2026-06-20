@@ -27,6 +27,11 @@ vi.mock("../../_actions/login", () => ({
   login: vi.fn(),
 }));
 
+const mockRouterPush = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockRouterPush }),
+}));
+
 // Control state returned by useActionState
 const mockState = {
   error: null as string | null,

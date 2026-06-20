@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { storeVerificationCode } from "@/services/redis/redis";
+import {
+  storeVerificationCode,
+  recordSignupAttempt,
+  MAX_SIGNUP_ATTEMPTS_PER_IP,
+} from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
 import {
   validateEmail,
   checkPasswordRequirements,
 } from "@/services/auth/auth-validation";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
-
-function generateCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
-}
+import { getClientIp } from "@/lib/request-ip";
+import { generateCode } from "@/services/auth/verification-code";
 
 // Undo a freshly-created account when a post-creation step (storing/sending the
 // verification code) fails — otherwise the half-provisioned account would block
@@ -45,6 +44,21 @@ async function rollbackAccount(userId: string): Promise<void> {
 }
 
 export async function POST(request: NextRequest) {
+  // Per-IP rate limit so the email-existence response can't be used to probe
+  // which addresses are registered at scale.
+  const ip = getClientIp(request);
+  if ((await recordSignupAttempt(ip)) > MAX_SIGNUP_ATTEMPTS_PER_IP) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many attempts. Please try again later.",
+        },
+      },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
 
   try {
