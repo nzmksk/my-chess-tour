@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
@@ -18,12 +18,6 @@ export default function ProfileForm() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    return () => {
-      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
-    };
-  }, [avatarPreview]);
 
   function handleAvatarClick() {
     fileInputRef.current?.click();
@@ -46,7 +40,12 @@ export default function ProfileForm() {
 
     setSubmitError(null);
     setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result;
+      if (typeof result === "string") setAvatarPreview(result);
+    };
+    reader.readAsDataURL(file);
     e.target.value = "";
   }
 
@@ -184,7 +183,7 @@ export default function ProfileForm() {
 
           {submitError && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px">&#9888;</span>
+              <span className="mt-px shrink-0 text-sm">&#9888;</span>
               <p className="error-text">{submitError}</p>
             </div>
           )}
@@ -344,7 +343,7 @@ export default function ProfileForm() {
               <label className="check-label" htmlFor="oku">
                 I am an OKU (Orang Kurang Upaya) card holder{" "}
                 <span
-                  className="help-icon align-middle ml-1"
+                  className="help-icon ml-1 align-middle"
                   tabIndex={0}
                   aria-label="OKU help"
                 >
@@ -358,7 +357,7 @@ export default function ProfileForm() {
               </label>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
                 className="btn-secondary w-full"
