@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { storeVerificationCode } from "@/services/redis/redis";
+import {
+  storeVerificationCode,
+  startResendCooldown,
+  clearResendCooldown,
+} from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
 import { validateEmail } from "@/services/auth/auth-validation";
 
@@ -81,6 +85,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Server-side throttle: prevent email bombing of a valid unverified address
+  // by anyone calling this endpoint directly (the client cooldown isn't enough).
+  const cooldown = await startResendCooldown(normalized);
+  if (cooldown > 0) {
+    const minutes = Math.ceil(cooldown / 60);
+    return NextResponse.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: `Please wait ${minutes} minute${minutes === 1 ? "" : "s"} before requesting another code.`,
+        },
+      },
+      { status: 429, headers: { "Retry-After": String(cooldown) } },
+    );
+  }
+
   const code = generateCode();
 
   try {
@@ -89,6 +109,8 @@ export async function POST(request: NextRequest) {
     console.error(
       `Failed to store verification code for: ${normalized} with error: ${err}`,
     );
+    // Release the cooldown so the user isn't locked out over a failed send.
+    await clearResendCooldown(normalized);
     return NextResponse.json(
       {
         error: {
@@ -106,6 +128,7 @@ export async function POST(request: NextRequest) {
     console.error(
       `Failed to send verification email for: ${normalized} with error: ${err}`,
     );
+    await clearResendCooldown(normalized);
     return NextResponse.json(
       {
         error: {

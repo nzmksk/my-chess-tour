@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
-import { getVerificationCode } from "@/services/redis/redis";
+import {
+  getVerificationCode,
+  getVerifyAttempts,
+  recordVerifyAttempt,
+  resetVerifyAttempts,
+  MAX_VERIFY_ATTEMPTS,
+} from "@/services/redis/redis";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 export async function POST(request: NextRequest) {
@@ -46,6 +52,21 @@ export async function POST(request: NextRequest) {
 
   const normalized = email.toLowerCase().trim();
 
+  // Brute-force guard: once too many wrong codes have been tried, stop checking
+  // until the code window expires (the user must request a fresh code).
+  const attempts = await getVerifyAttempts(normalized);
+  if (attempts >= MAX_VERIFY_ATTEMPTS) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "TOO_MANY_ATTEMPTS",
+          message: "Too many incorrect attempts. Please request a new code.",
+        },
+      },
+      { status: 429 },
+    );
+  }
+
   const stored = await getVerificationCode(normalized);
   if (!stored) {
     return NextResponse.json(
@@ -60,16 +81,32 @@ export async function POST(request: NextRequest) {
   }
 
   if (stored.toUpperCase() !== code.toUpperCase()) {
+    const count = await recordVerifyAttempt(normalized);
+    if (count >= MAX_VERIFY_ATTEMPTS) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "TOO_MANY_ATTEMPTS",
+            message: "Too many incorrect attempts. Please request a new code.",
+          },
+        },
+        { status: 429 },
+      );
+    }
+    const remaining = MAX_VERIFY_ATTEMPTS - count;
     return NextResponse.json(
       {
         error: {
           code: "CODE_INVALID",
-          message: "Incorrect code. Please try again.",
+          message: `Incorrect code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`,
         },
       },
       { status: 422 },
     );
   }
+
+  // Code is correct — clear the failed-attempt counter.
+  await resetVerifyAttempts(normalized);
 
   // Mark the user as verified in public.users
   const { error: updateError } = await supabaseAdmin

@@ -7,18 +7,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockGetVerificationCode,
+  mockGetVerifyAttempts,
+  mockRecordVerifyAttempt,
+  mockResetVerifyAttempts,
   mockEq,
   mockUpdate,
   mockFrom,
   mockSignInWithPassword,
 } = vi.hoisted(() => {
   const mockGetVerificationCode = vi.fn();
+  const mockGetVerifyAttempts = vi.fn();
+  const mockRecordVerifyAttempt = vi.fn();
+  const mockResetVerifyAttempts = vi.fn();
   const mockEq = vi.fn();
   const mockUpdate = vi.fn(() => ({ eq: mockEq }));
   const mockFrom = vi.fn(() => ({ update: mockUpdate }));
   const mockSignInWithPassword = vi.fn();
   return {
     mockGetVerificationCode,
+    mockGetVerifyAttempts,
+    mockRecordVerifyAttempt,
+    mockResetVerifyAttempts,
     mockEq,
     mockUpdate,
     mockFrom,
@@ -28,6 +37,10 @@ const {
 
 vi.mock("@/services/redis/redis", () => ({
   getVerificationCode: mockGetVerificationCode,
+  getVerifyAttempts: mockGetVerifyAttempts,
+  recordVerifyAttempt: mockRecordVerifyAttempt,
+  resetVerifyAttempts: mockResetVerifyAttempts,
+  MAX_VERIFY_ATTEMPTS: 5,
 }));
 
 vi.mock("@/services/supabase/admin", () => ({
@@ -91,6 +104,9 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetVerificationCode.mockResolvedValue("ABC123");
+    mockGetVerifyAttempts.mockResolvedValue(0);
+    mockRecordVerifyAttempt.mockResolvedValue(1);
+    mockResetVerifyAttempts.mockResolvedValue(undefined);
     mockEq.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockFrom.mockReturnValue({ update: mockUpdate });
@@ -200,6 +216,51 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
 
     expect(res.status).toBe(422);
     expect(json.error.code).toBe("CODE_INVALID");
+  });
+
+  // --- Brute-force rate limiting --------------------------------------------
+
+  it("resets the failed-attempt counter on successful verification", async () => {
+    await POST(makeRequest(validBody));
+    expect(mockResetVerifyAttempts).toHaveBeenCalledWith("player@example.com");
+  });
+
+  it("records a failed attempt and reports remaining tries on wrong code", async () => {
+    mockGetVerificationCode.mockResolvedValue("ZZZZZZ");
+    mockRecordVerifyAttempt.mockResolvedValue(2); // 2 of 5 used
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error.code).toBe("CODE_INVALID");
+    expect(json.error.message).toMatch(/3 attempts remaining/i);
+    expect(mockRecordVerifyAttempt).toHaveBeenCalledWith("player@example.com");
+  });
+
+  it("returns 429 when the wrong code reaches the attempt limit", async () => {
+    mockGetVerificationCode.mockResolvedValue("ZZZZZZ");
+    mockRecordVerifyAttempt.mockResolvedValue(5); // 5th and final attempt
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("TOO_MANY_ATTEMPTS");
+  });
+
+  it("returns 429 before checking the code once already locked out", async () => {
+    mockGetVerifyAttempts.mockResolvedValue(5);
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("TOO_MANY_ATTEMPTS");
+    // Should not even look at the stored code or sign the user in
+    expect(mockGetVerificationCode).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockSignInWithPassword).not.toHaveBeenCalled();
   });
 
   it("does not update users table when code is expired", async () => {
