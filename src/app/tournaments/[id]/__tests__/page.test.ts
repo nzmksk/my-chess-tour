@@ -579,6 +579,38 @@ describe("fetchStartingRank coverage", () => {
     expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
   });
 
+  it("covers classical format with fide_rating object: uses standard field", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2020-01-01",
+          end_date: "2020-01-02",
+          format: { type: "classical", system: "swiss", rounds: 9 },
+        }),
+    });
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }], error: null },
+        [{ id: "u1", first_name: "Diana", last_name: "Tan" }],
+        [
+          {
+            user_id: "u1",
+            title: "IM",
+            fide_id: 5551234,
+            fide_rating: { standard: 2250 },
+            national_rating: null,
+            nationality: "Malaysia",
+            mcf_id: null,
+            gender: "female",
+          },
+        ],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
   it("sorts MCF-only player above unrated player", async () => {
     mockFrom.mockImplementation(
       makeFromMock(
@@ -607,6 +639,100 @@ describe("fetchStartingRank coverage", () => {
             nationality: "Malaysia",
             mcf_id: 9999,
             gender: "female",
+          },
+        ],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("covers sort branch: unrated player compared against MCF-rated player", async () => {
+    // Array order [FIDE, unrated, MCF] forces the sort to compare (unrated, MCF),
+    // which hits the `if (hasMcfB) return 1` branch (line 141).
+    mockFrom.mockImplementation(
+      makeFromMock(
+        {
+          data: [
+            { user_id: "u1" },
+            { user_id: "u2" },
+            { user_id: "u3" },
+          ],
+          error: null,
+        },
+        [
+          { id: "u1", first_name: "FIDE", last_name: "Player" },
+          { id: "u2", first_name: "Unrated", last_name: "Player" },
+          { id: "u3", first_name: "MCF", last_name: "Player" },
+        ],
+        [
+          {
+            user_id: "u1",
+            title: null,
+            fide_id: 111,
+            fide_rating: { rapid: 1800 },
+            national_rating: null,
+            nationality: "Malaysia",
+            mcf_id: null,
+            gender: null,
+          },
+          {
+            user_id: "u2",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: null,
+            nationality: null,
+            mcf_id: null,
+            gender: null,
+          },
+          {
+            user_id: "u3",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: 1300,
+            nationality: "Malaysia",
+            mcf_id: 8888,
+            gender: null,
+          },
+        ],
+      ),
+    );
+    const { TournamentDetailData } = await import("../page");
+    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+
+  it("covers sort branch: two unrated players sorted alphabetically", async () => {
+    // Both players have no FIDE or MCF rating, so they are sorted alphabetically,
+    // hitting the `return a.name.localeCompare(b.name)` branch (line 142).
+    mockFrom.mockImplementation(
+      makeFromMock(
+        { data: [{ user_id: "u1" }, { user_id: "u2" }], error: null },
+        [
+          { id: "u1", first_name: "Zara", last_name: "Ahmad" },
+          { id: "u2", first_name: "Aaron", last_name: "Lim" },
+        ],
+        [
+          {
+            user_id: "u1",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: null,
+            nationality: null,
+            mcf_id: null,
+            gender: null,
+          },
+          {
+            user_id: "u2",
+            title: null,
+            fide_id: null,
+            fide_rating: null,
+            national_rating: null,
+            nationality: null,
+            mcf_id: null,
+            gender: null,
           },
         ],
       ),
