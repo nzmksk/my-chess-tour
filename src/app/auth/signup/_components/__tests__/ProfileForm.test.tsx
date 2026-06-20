@@ -92,6 +92,19 @@ describe("ProfileForm", () => {
     expect(screen.getByLabelText("Date of Birth")).toBeDefined();
   });
 
+  it("does not mark Gender or Nationality as required (profile is optional)", () => {
+    render(<ProfileForm />);
+    const gender = screen.getByLabelText("Gender") as HTMLSelectElement;
+    const nationality = screen.getByLabelText(
+      "Nationality",
+    ) as HTMLInputElement;
+
+    expect(gender.required).toBe(false);
+    expect(gender.getAttribute("aria-required")).toBeNull();
+    expect(nationality.required).toBe(false);
+    expect(nationality.getAttribute("aria-required")).toBeNull();
+  });
+
   it("renders FIDE ID, MCF ID, and OKU fields", () => {
     render(<ProfileForm />);
     expect(screen.getByLabelText("FIDE ID")).toBeDefined();

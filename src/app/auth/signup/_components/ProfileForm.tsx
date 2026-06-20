@@ -208,8 +208,6 @@ export default function ProfileForm() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, gender: e.target.value }))
                 }
-                required
-                aria-required="true"
               >
                 <option value="">Select…</option>
                 {GENDERS.map((g) => (
@@ -255,8 +253,6 @@ export default function ProfileForm() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, nationality: e.target.value }))
                 }
-                required
-                aria-required="true"
               />
             </div>
 
