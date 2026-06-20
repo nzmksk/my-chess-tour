@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import PrivacyModal from "../PrivacyModal";
 
 afterEach(cleanup);
@@ -30,7 +36,9 @@ describe("PrivacyModal", () => {
   it("calls onClose when the close button is clicked", () => {
     const onClose = vi.fn();
     render(<PrivacyModal onClose={onClose} />);
-    fireEvent.click(screen.getByRole("button", { name: /close privacy policy/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /close privacy policy/i }),
+    );
     expect(onClose).toHaveBeenCalledOnce();
   });
 

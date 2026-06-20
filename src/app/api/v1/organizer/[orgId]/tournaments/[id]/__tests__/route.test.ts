@@ -62,8 +62,9 @@ const {
     return mockOrgBuilder;
   });
 
-  (mockFrom as unknown as { _resetTournamentCallIndex: () => void })
-    ._resetTournamentCallIndex = () => {
+  (
+    mockFrom as unknown as { _resetTournamentCallIndex: () => void }
+  )._resetTournamentCallIndex = () => {
     tournamentCallIndex = 0;
   };
 
@@ -370,7 +371,10 @@ describe("PATCH /api/v1/organizer/[orgId]/tournaments/[id]", () => {
   describe("tournament checks", () => {
     it("returns 404 when tournament does not exist", async () => {
       setUser();
-      setTournamentFetchResult(null, { code: "PGRST116", message: "Not found" });
+      setTournamentFetchResult(null, {
+        code: "PGRST116",
+        message: "Not found",
+      });
       const res = await PATCH(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
       });
@@ -381,7 +385,10 @@ describe("PATCH /api/v1/organizer/[orgId]/tournaments/[id]", () => {
 
     it("returns 404 when tournament belongs to a different org", async () => {
       setUser();
-      setTournamentFetchResult(null, { code: "PGRST116", message: "Not found" });
+      setTournamentFetchResult(null, {
+        code: "PGRST116",
+        message: "Not found",
+      });
       const res = await PATCH(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
       });
@@ -412,10 +419,9 @@ describe("PATCH /api/v1/organizer/[orgId]/tournaments/[id]", () => {
 
     it("allows updating prizes to null", async () => {
       setUser();
-      const res = await PATCH(
-        makeRequest(ORG_ID, TOUR_ID, { prizes: null }),
-        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
-      );
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { prizes: null }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
       expect(res.status).toBe(200);
     });
 
@@ -480,7 +486,10 @@ describe("PATCH /api/v1/organizer/[orgId]/tournaments/[id]", () => {
 
     it("returns 500 when the tournament fetch fails with a generic DB error", async () => {
       setUser();
-      setTournamentFetchResult(null, { code: "DB_ERROR", message: "Query timeout" });
+      setTournamentFetchResult(null, {
+        code: "DB_ERROR",
+        message: "Query timeout",
+      });
       const res = await PATCH(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
       });

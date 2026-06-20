@@ -247,7 +247,10 @@ describe("GET /api/v1/organizer/[orgId]/tournaments/[id]", () => {
     });
 
     it("returns 403 when organization is not approved", async () => {
-      setResult(mockOrgBuilder, { ...APPROVED_ORG, approval_status: "pending" });
+      setResult(mockOrgBuilder, {
+        ...APPROVED_ORG,
+        approval_status: "pending",
+      });
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
       });

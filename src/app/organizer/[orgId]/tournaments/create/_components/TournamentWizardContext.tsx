@@ -9,12 +9,7 @@ import {
   useState,
 } from "react";
 
-type WizardStepId =
-  | "basic-info"
-  | "format"
-  | "fees"
-  | "prizes"
-  | "review";
+type WizardStepId = "basic-info" | "format" | "fees" | "prizes" | "review";
 
 export interface WizardStep {
   id: WizardStepId;
@@ -149,7 +144,10 @@ function storageKey(orgId: string, suffix?: string) {
   return `tournament-wizard-${orgId}${suffix ? `-${suffix}` : ""}`;
 }
 
-function loadFromStorage(orgId: string, suffix?: string): PersistedState | null {
+function loadFromStorage(
+  orgId: string,
+  suffix?: string,
+): PersistedState | null {
   try {
     const raw = sessionStorage.getItem(storageKey(orgId, suffix));
     if (!raw) return null;
@@ -159,7 +157,11 @@ function loadFromStorage(orgId: string, suffix?: string): PersistedState | null 
   }
 }
 
-function saveToStorage(orgId: string, state: PersistedState, suffix?: string): void {
+function saveToStorage(
+  orgId: string,
+  state: PersistedState,
+  suffix?: string,
+): void {
   try {
     sessionStorage.setItem(storageKey(orgId, suffix), JSON.stringify(state));
   } catch {}
@@ -206,17 +208,12 @@ export function TournamentWizardProvider({
   excludeId?: string | null;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(
-    new Set(),
-  );
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [basicInfoData, setBasicInfoData] =
     useState<BasicInfoData>(initialBasicInfo);
-  const [formatData, setFormatData] =
-    useState<FormatData>(initialFormatData);
-  const [feesData, setFeesData] =
-    useState<FeesData>(initialFeesData);
-  const [prizesData, setPrizesData] =
-    useState<PrizesData>(initialPrizesData);
+  const [formatData, setFormatData] = useState<FormatData>(initialFormatData);
+  const [feesData, setFeesData] = useState<FeesData>(initialFeesData);
+  const [prizesData, setPrizesData] = useState<PrizesData>(initialPrizesData);
   const [tournamentId, setTournamentId] = useState<string | null>(null);
 
   // isHydrated gates the persist effect so it never runs before the load
@@ -230,7 +227,10 @@ export function TournamentWizardProvider({
 
   // Restore persisted state once on mount (client-only, no SSR sessionStorage).
   useEffect(() => {
-    const saved = loadFromStorage(orgIdRef.current, storageKeySuffixRef.current) ?? initialDataRef.current ?? null;
+    const saved =
+      loadFromStorage(orgIdRef.current, storageKeySuffixRef.current) ??
+      initialDataRef.current ??
+      null;
     if (saved) {
       setBasicInfoData(saved.basicInfoData ?? initialBasicInfo);
       setFormatData(saved.formatData ?? initialFormatData);
@@ -249,15 +249,19 @@ export function TournamentWizardProvider({
   // but only after the initial load has completed.
   useEffect(() => {
     if (!isHydrated) return;
-    saveToStorage(orgId, {
-      basicInfoData,
-      formatData,
-      feesData,
-      prizesData,
-      tournamentId,
-      currentStepIndex,
-      completedSteps: [...completedSteps],
-    }, storageKeySuffix);
+    saveToStorage(
+      orgId,
+      {
+        basicInfoData,
+        formatData,
+        feesData,
+        prizesData,
+        tournamentId,
+        currentStepIndex,
+        completedSteps: [...completedSteps],
+      },
+      storageKeySuffix,
+    );
   }, [
     isHydrated,
     orgId,
@@ -284,21 +288,18 @@ export function TournamentWizardProvider({
     [],
   );
 
-  const triggerStepHandler = useCallback(
-    async (index: number) => {
-      const handler = stepHandlers.current[index];
-      if (handler) {
-        await handler();
-      } else {
-        setCurrentStepIndex((prev) => {
-          const next = Math.min(prev + 1, WIZARD_STEPS.length - 1);
-          setCompletedSteps((done) => new Set(done).add(prev));
-          return next;
-        });
-      }
-    },
-    [],
-  );
+  const triggerStepHandler = useCallback(async (index: number) => {
+    const handler = stepHandlers.current[index];
+    if (handler) {
+      await handler();
+    } else {
+      setCurrentStepIndex((prev) => {
+        const next = Math.min(prev + 1, WIZARD_STEPS.length - 1);
+        setCompletedSteps((done) => new Set(done).add(prev));
+        return next;
+      });
+    }
+  }, []);
 
   const markStepDone = useCallback((index: number) => {
     setCompletedSteps((prev) => new Set(prev).add(index));

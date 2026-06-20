@@ -356,8 +356,9 @@ function makeChain(resolveWith: unknown) {
       Promise.resolve(resolveWith).catch(r),
     select: vi.fn(() => chain),
     eq: vi.fn(() => chain),
-    in: vi.fn<() => Promise<{ count?: number; data: unknown; error: unknown }>>(() =>
-      Promise.resolve({ count: 0, data: null, error: null })),
+    in: vi.fn<() => Promise<{ count?: number; data: unknown; error: unknown }>>(
+      () => Promise.resolve({ count: 0, data: null, error: null }),
+    ),
   };
   return chain;
 }
@@ -653,11 +654,7 @@ describe("fetchStartingRank coverage", () => {
     mockFrom.mockImplementation(
       makeFromMock(
         {
-          data: [
-            { user_id: "u1" },
-            { user_id: "u2" },
-            { user_id: "u3" },
-          ],
+          data: [{ user_id: "u1" }, { user_id: "u2" }, { user_id: "u3" }],
           error: null,
         },
         [
@@ -771,7 +768,9 @@ describe("fetchStartingRank coverage", () => {
         regCallIdx++;
         if (regCallIdx === 1) {
           const c = makeChain({ count: 0 });
-          c.in = vi.fn(() => Promise.resolve({ count: 0, data: null, error: null }));
+          c.in = vi.fn(() =>
+            Promise.resolve({ count: 0, data: null, error: null }),
+          );
           return { select: vi.fn(() => c) };
         }
         return { select: vi.fn(() => makeChain({ data: [], error: null })) };

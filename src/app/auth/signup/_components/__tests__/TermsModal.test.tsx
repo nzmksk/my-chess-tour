@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import TermsModal from "../TermsModal";
 
 afterEach(cleanup);
@@ -30,7 +36,9 @@ describe("TermsModal", () => {
   it("calls onClose when the close button is clicked", () => {
     const onClose = vi.fn();
     render(<TermsModal onClose={onClose} />);
-    fireEvent.click(screen.getByRole("button", { name: /close terms of service/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /close terms of service/i }),
+    );
     expect(onClose).toHaveBeenCalledOnce();
   });
 

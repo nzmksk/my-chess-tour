@@ -51,20 +51,16 @@ describe("storeVerificationCode", () => {
   it("calls redis.set with the correct key, code, and 15-minute TTL", async () => {
     await storeVerificationCode("test@example.com", "123456");
     expect(mockSet).toHaveBeenCalledOnce();
-    expect(mockSet).toHaveBeenCalledWith(
-      "verify:test@example.com",
-      "123456",
-      { ex: 900 },
-    );
+    expect(mockSet).toHaveBeenCalledWith("verify:test@example.com", "123456", {
+      ex: 900,
+    });
   });
 
   it("lowercases the email in the stored key", async () => {
     await storeVerificationCode("CAPS@EXAMPLE.COM", "789012");
-    expect(mockSet).toHaveBeenCalledWith(
-      "verify:caps@example.com",
-      "789012",
-      { ex: 900 },
-    );
+    expect(mockSet).toHaveBeenCalledWith("verify:caps@example.com", "789012", {
+      ex: 900,
+    });
   });
 });
 

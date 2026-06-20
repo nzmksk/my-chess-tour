@@ -114,9 +114,9 @@ function NetBreakdown({ amount }: { amount: number | "" }) {
   const isFree = revenue === 0;
 
   return (
-    <div className="flex flex-wrap gap-5 items-center mt-3 px-3.5 py-2.5 bg-bg-base border border-border rounded-md">
+    <div className="bg-bg-base border-border mt-3 flex flex-wrap items-center gap-5 rounded-md border px-3.5 py-2.5">
       <div className="flex flex-col gap-0.5">
-        <span className="font-cinzel text-text-muted text-[10px] uppercase tracking-widest">
+        <span className="font-cinzel text-text-muted text-[10px] tracking-widest uppercase">
           Your revenue
         </span>
         <span className="font-lato text-text-body text-sm tabular-nums">
@@ -125,7 +125,7 @@ function NetBreakdown({ amount }: { amount: number | "" }) {
       </div>
       <span className="text-text-disabled text-sm">+</span>
       <div className="flex flex-col gap-0.5">
-        <span className="font-cinzel text-text-muted text-[10px] uppercase tracking-widest">
+        <span className="font-cinzel text-text-muted text-[10px] tracking-widest uppercase">
           Commission (10%)
         </span>
         <span className="font-lato text-text-body text-sm tabular-nums">
@@ -134,7 +134,7 @@ function NetBreakdown({ amount }: { amount: number | "" }) {
       </div>
       <span className="text-text-disabled text-sm">=</span>
       <div className="flex flex-col gap-0.5">
-        <span className="font-cinzel text-text-muted text-[10px] uppercase tracking-widest">
+        <span className="font-cinzel text-text-muted text-[10px] tracking-widest uppercase">
           Player pays
         </span>
         <span
@@ -194,15 +194,15 @@ function TierCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-bg-raised border border-border rounded-lg p-4">
-      <div className="flex justify-between items-center mb-3">
+    <div className="bg-bg-raised border-border rounded-lg border p-4">
+      <div className="mb-3 flex items-center justify-between">
         <span className="font-cinzel text-text-primary text-sm font-semibold">
           {label}
         </span>
         <button
           type="button"
           aria-label={`Remove ${label} tier`}
-          className="border-border text-text-muted hover:text-danger hover:border-danger-border flex items-center justify-center rounded-md border bg-transparent transition duration-200 cursor-pointer"
+          className="border-border text-text-muted hover:text-danger hover:border-danger-border flex cursor-pointer items-center justify-center rounded-md border bg-transparent transition duration-200"
           style={{ width: "28px", height: "28px", flexShrink: 0 }}
           onClick={onRemove}
         >
@@ -216,7 +216,7 @@ function TierCard({
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="font-cinzel text-gold-muted text-xs font-bold tracking-widest uppercase mt-0 mb-1 pt-4 border-t border-border">
+    <h3 className="font-cinzel text-gold-muted border-border mt-0 mb-1 border-t pt-4 text-xs font-bold tracking-widest uppercase">
       {children}
     </h3>
   );
@@ -285,8 +285,7 @@ export default function FeesStep() {
     const fieldErrors = validate(form);
     setErrors(fieldErrors);
     const hasErrors =
-      !!fieldErrors.standardFee ||
-      Object.keys(fieldErrors.tiers).length > 0;
+      !!fieldErrors.standardFee || Object.keys(fieldErrors.tiers).length > 0;
     if (hasErrors) return;
     setFeesData(form);
     goNext();
@@ -304,17 +303,17 @@ export default function FeesStep() {
 
   return (
     <div>
-      <h2 className="font-cinzel mb-1 text-lg font-bold text-text-primary tracking-wide">
+      <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
         Entry Fees
       </h2>
-      <p className="font-lato mb-6 text-sm text-text-muted">
+      <p className="font-lato text-text-muted mb-6 text-sm">
         Set the standard fee, then add optional tiers for early bird, titled
         players, rating-based, or age-based discounts.
       </p>
 
       {/* Commission info banner */}
-      <div className="flex items-start gap-2.5 mb-5 px-3.5 py-3 bg-bg-raised border border-border rounded-md">
-        <span className="text-base shrink-0 leading-snug">ℹ️</span>
+      <div className="bg-bg-raised border-border mb-5 flex items-start gap-2.5 rounded-md border px-3.5 py-3">
+        <span className="shrink-0 text-base leading-snug">ℹ️</span>
         <p className="font-lato text-text-muted text-xs leading-relaxed">
           A{" "}
           <strong className="text-text-secondary font-semibold">
@@ -326,11 +325,11 @@ export default function FeesStep() {
       </div>
 
       {/* Standard Fee */}
-      <h3 className="font-cinzel text-gold-muted text-xs font-bold tracking-widest uppercase mb-3">
+      <h3 className="font-cinzel text-gold-muted mb-3 text-xs font-bold tracking-widest uppercase">
         Standard Fee
       </h3>
-      <div className="bg-bg-raised border border-border rounded-lg p-4 mb-6">
-        <div className="flex flex-wrap items-center gap-3 mb-1.5">
+      <div className="bg-bg-raised border-border mb-6 rounded-lg border p-4">
+        <div className="mb-1.5 flex flex-wrap items-center gap-3">
           <span
             className="font-cinzel text-text-secondary text-sm font-semibold"
             style={{ minWidth: "90px" }}
@@ -353,12 +352,13 @@ export default function FeesStep() {
 
       {/* Additional Fee Tiers */}
       <SectionHeader>Additional Fee Tiers</SectionHeader>
-      <p className="font-lato text-text-muted text-xs mb-4">
-        Optional. Players who qualify will see these options during registration.
+      <p className="font-lato text-text-muted mb-4 text-xs">
+        Optional. Players who qualify will see these options during
+        registration.
       </p>
 
       {form.tiers.length > 0 && (
-        <div className="flex flex-col gap-3 mb-4">
+        <div className="mb-4 flex flex-col gap-3">
           {form.tiers.map((tier) => {
             const te = errors.tiers[tier.id] ?? {};
 
@@ -369,7 +369,7 @@ export default function FeesStep() {
                   label={TIER_LABELS[tier.type]}
                   onRemove={() => removeTier(tier.id)}
                 >
-                  <div className="flex flex-wrap gap-3 items-start mb-1.5">
+                  <div className="mb-1.5 flex flex-wrap items-start gap-3">
                     <AmountField
                       id={`${tier.id}-amount`}
                       value={tier.amount}
@@ -411,26 +411,26 @@ export default function FeesStep() {
                   label={TIER_LABELS[tier.type]}
                   onRemove={() => removeTier(tier.id)}
                 >
-                  <div className="flex flex-wrap gap-3 items-start mb-3">
+                  <div className="mb-3 flex flex-wrap items-start gap-3">
                     <AmountField
                       id={`${tier.id}-amount`}
                       value={tier.amount}
                       onChange={(v) => updateTier(tier.id, { amount: v })}
                       error={showErrors ? te.amount : undefined}
                     />
-                    <div className="flex-1 min-w-[220px]">
-                      <p className="font-lato text-text-muted text-xs mb-2">
+                    <div className="min-w-[220px] flex-1">
+                      <p className="font-lato text-text-muted mb-2 text-xs">
                         Applies to titles:
                       </p>
                       <div className="flex flex-wrap gap-x-4 gap-y-2">
                         {CHESS_TITLES.map((title) => (
                           <label
                             key={title}
-                            className="flex items-center gap-1.5 cursor-pointer select-none"
+                            className="flex cursor-pointer items-center gap-1.5 select-none"
                           >
                             <input
                               type="checkbox"
-                              className="accent-gold-bright w-3.5 h-3.5 cursor-pointer"
+                              className="accent-gold-bright h-3.5 w-3.5 cursor-pointer"
                               checked={tier.titles.includes(title)}
                               onChange={(e) => {
                                 const next = e.target.checked
@@ -462,7 +462,7 @@ export default function FeesStep() {
                   label={TIER_LABELS[tier.type]}
                   onRemove={() => removeTier(tier.id)}
                 >
-                  <div className="flex flex-wrap gap-3 items-start mb-1.5">
+                  <div className="mb-1.5 flex flex-wrap items-start gap-3">
                     <AmountField
                       id={`${tier.id}-amount`}
                       value={tier.amount}
@@ -479,7 +479,9 @@ export default function FeesStep() {
                           className={`input text-center tabular-nums ${showErrors && te.ratingFrom ? "input-error" : ""}`}
                           style={{ width: "80px" }}
                           value={
-                            tier.ratingFrom === "" ? "" : String(tier.ratingFrom)
+                            tier.ratingFrom === ""
+                              ? ""
+                              : String(tier.ratingFrom)
                           }
                           min={0}
                           onChange={(e) => {
@@ -531,7 +533,7 @@ export default function FeesStep() {
                   label={TIER_LABELS[tier.type]}
                   onRemove={() => removeTier(tier.id)}
                 >
-                  <div className="flex flex-wrap gap-3 items-start mb-1.5">
+                  <div className="mb-1.5 flex flex-wrap items-start gap-3">
                     <AmountField
                       id={`${tier.id}-amount`}
                       value={tier.amount}
@@ -547,7 +549,9 @@ export default function FeesStep() {
                           type="number"
                           className={`input text-center tabular-nums ${showErrors && te.ageFrom ? "input-error" : ""}`}
                           style={{ width: "70px" }}
-                          value={tier.ageFrom === "" ? "" : String(tier.ageFrom)}
+                          value={
+                            tier.ageFrom === "" ? "" : String(tier.ageFrom)
+                          }
                           min={0}
                           onChange={(e) => {
                             const raw = e.target.value;
@@ -608,14 +612,14 @@ export default function FeesStep() {
           </button>
           {dropdownOpen && (
             <div
-              className="absolute top-[calc(100%+4px)] left-0 bg-bg-surface border border-border rounded-lg py-1.5 min-w-44 z-10"
+              className="bg-bg-surface border-border absolute top-[calc(100%+4px)] left-0 z-10 min-w-44 rounded-lg border py-1.5"
               style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}
             >
               {availableTypes.map((t) => (
                 <button
                   key={t}
                   type="button"
-                  className="font-lato w-full text-left px-3.5 py-2 text-sm text-text-body hover:bg-int-gold-bg transition duration-100 cursor-pointer border-0 bg-transparent"
+                  className="font-lato text-text-body hover:bg-int-gold-bg w-full cursor-pointer border-0 bg-transparent px-3.5 py-2 text-left text-sm transition duration-100"
                   onClick={() => addTier(t)}
                 >
                   {TIER_LABELS[t]}
@@ -627,7 +631,7 @@ export default function FeesStep() {
       )}
 
       {/* Tip */}
-      <div className="mt-5 px-3.5 py-3 bg-int-gold-bg border border-gold-ghost rounded-md">
+      <div className="bg-int-gold-bg border-gold-ghost mt-5 rounded-md border px-3.5 py-3">
         <p className="font-lato text-gold-muted text-xs leading-relaxed">
           💡 Players will see the fee tiers they qualify for during
           registration. The breakdown updates automatically as you change

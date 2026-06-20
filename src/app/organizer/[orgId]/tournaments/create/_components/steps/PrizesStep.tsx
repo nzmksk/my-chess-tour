@@ -10,7 +10,10 @@ import type {
 import { useTournamentWizard } from "../TournamentWizardContext";
 
 type PrizeRowErrors = Partial<{ placement: string; amount: string }>;
-type CategoryErrors = Partial<{ name: string; prizes: Record<string, PrizeRowErrors> }>;
+type CategoryErrors = Partial<{
+  name: string;
+  prizes: Record<string, PrizeRowErrors>;
+}>;
 type SpecialPrizeErrors = Partial<{ name: string; amount: string }>;
 
 type PrizesErrors = {
@@ -59,12 +62,18 @@ function hasErrors(errors: PrizesErrors): boolean {
   );
 }
 
-function RemoveButton({ onClick, label }: { onClick: () => void; label: string }) {
+function RemoveButton({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label: string;
+}) {
   return (
     <button
       type="button"
       aria-label={label}
-      className="border-border text-text-muted hover:text-danger hover:border-danger-border flex items-center justify-center rounded-md border bg-transparent transition duration-200 cursor-pointer shrink-0"
+      className="border-border text-text-muted hover:text-danger hover:border-danger-border flex shrink-0 cursor-pointer items-center justify-center rounded-md border bg-transparent transition duration-200"
       style={{ width: "32px", height: "32px", fontSize: "16px" }}
       onClick={onClick}
     >
@@ -73,7 +82,13 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
   );
 }
 
-function AddRowButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function AddRowButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -107,9 +122,9 @@ function PrizeCategoryBlock({
   const prizeErrors = catErrors.prizes ?? {};
 
   return (
-    <div className="bg-bg-base border border-border rounded-lg p-4 mb-3">
-      <div className="flex justify-between items-center mb-3 gap-2">
-        <div className="flex-1 min-w-0">
+    <div className="bg-bg-base border-border mb-3 rounded-lg border p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <input
             type="text"
             className={`input font-semibold ${showErrors && catErrors.name ? "input-error" : ""}`}
@@ -124,25 +139,27 @@ function PrizeCategoryBlock({
         </div>
         <button
           type="button"
-          className="font-lato border-border text-text-muted hover:text-danger hover:border-danger-border cursor-pointer rounded-md border bg-transparent px-3 py-1 text-xs transition duration-200 shrink-0"
+          className="font-lato border-border text-text-muted hover:text-danger hover:border-danger-border shrink-0 cursor-pointer rounded-md border bg-transparent px-3 py-1 text-xs transition duration-200"
           onClick={onRemoveCategory}
         >
           Remove
         </button>
       </div>
 
-      <div className="flex flex-col gap-2 mb-3">
+      <div className="mb-3 flex flex-col gap-2">
         {category.prizes.map((row) => {
           const re = prizeErrors[row.id] ?? {};
           return (
-            <div key={row.id} className="flex gap-2 items-start">
-              <div className="flex-1 min-w-0">
+            <div key={row.id} className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
                 <input
                   type="text"
                   className={`input w-full ${showErrors && re.placement ? "input-error" : ""}`}
                   placeholder="Placement (e.g. 1st Place)"
                   value={row.placement}
-                  onChange={(e) => onUpdatePrize(row.id, { placement: e.target.value })}
+                  onChange={(e) =>
+                    onUpdatePrize(row.id, { placement: e.target.value })
+                  }
                 />
                 {showErrors && re.placement && (
                   <p className="input-hint error mt-0.5">{re.placement}</p>
@@ -150,16 +167,20 @@ function PrizeCategoryBlock({
               </div>
               <div style={{ width: "130px", flexShrink: 0 }}>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-lato text-text-muted text-sm shrink-0">RM</span>
+                  <span className="font-lato text-text-muted shrink-0 text-sm">
+                    RM
+                  </span>
                   <input
                     type="number"
-                    className={`input text-right tabular-nums w-full ${showErrors && re.amount ? "input-error" : ""}`}
+                    className={`input w-full text-right tabular-nums ${showErrors && re.amount ? "input-error" : ""}`}
                     placeholder="0"
                     min={0}
                     value={row.amount === "" ? "" : String(row.amount)}
                     onChange={(e) => {
                       const raw = e.target.value;
-                      onUpdatePrize(row.id, { amount: raw === "" ? "" : Number(raw) });
+                      onUpdatePrize(row.id, {
+                        amount: raw === "" ? "" : Number(raw),
+                      });
                     }}
                   />
                 </div>
@@ -245,7 +266,11 @@ export default function PrizesStep() {
     }));
   };
 
-  const updatePrize = (catId: string, rowId: string, changes: Partial<PrizeRow>) => {
+  const updatePrize = (
+    catId: string,
+    rowId: string,
+    changes: Partial<PrizeRow>,
+  ) => {
     setForm((f) => ({
       ...f,
       categories: f.categories.map((c) =>
@@ -307,10 +332,10 @@ export default function PrizesStep() {
 
   return (
     <div>
-      <h2 className="font-cinzel mb-1 text-lg font-bold text-text-primary tracking-wide">
+      <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
         Prizes
       </h2>
-      <p className="font-lato mb-6 text-sm text-text-muted">
+      <p className="font-lato text-text-muted mb-6 text-sm">
         Define prize categories and amounts. Add as many categories and
         placements as needed.
       </p>
@@ -327,7 +352,9 @@ export default function PrizesStep() {
             onUpdateName={(name) => updateCategoryName(cat.id, name)}
             onRemoveCategory={() => removeCategory(cat.id)}
             onAddPrize={() => addPrize(cat.id)}
-            onUpdatePrize={(rowId, changes) => updatePrize(cat.id, rowId, changes)}
+            onUpdatePrize={(rowId, changes) =>
+              updatePrize(cat.id, rowId, changes)
+            }
             onRemovePrize={(rowId) => removePrize(cat.id, rowId)}
           />
         );
@@ -336,21 +363,21 @@ export default function PrizesStep() {
       <AddRowButton onClick={addCategory}>+ Add Prize Category</AddRowButton>
 
       {/* Special Prizes */}
-      <h3 className="font-cinzel text-gold-muted text-xs font-bold tracking-widest uppercase mt-6 mb-3 pt-4 border-t border-border">
+      <h3 className="font-cinzel text-gold-muted border-border mt-6 mb-3 border-t pt-4 text-xs font-bold tracking-widest uppercase">
         Special Prizes
       </h3>
-      <p className="font-lato text-text-muted text-xs mb-4">
+      <p className="font-lato text-text-muted mb-4 text-xs">
         Optional. Awards for specific achievements (e.g. Best Female Player,
         Best Veteran).
       </p>
 
       {form.specialPrizes.length > 0 && (
-        <div className="flex flex-col gap-2 mb-4">
+        <div className="mb-4 flex flex-col gap-2">
           {form.specialPrizes.map((sp) => {
             const se = errors.specialPrizes[sp.id] ?? {};
             return (
-              <div key={sp.id} className="flex gap-2 items-start">
-                <div className="flex-1 min-w-0">
+              <div key={sp.id} className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
                   <input
                     type="text"
                     className={`input w-full ${showErrors && se.name ? "input-error" : ""}`}
@@ -366,10 +393,12 @@ export default function PrizesStep() {
                 </div>
                 <div style={{ width: "130px", flexShrink: 0 }}>
                   <div className="flex items-center gap-1.5">
-                    <span className="font-lato text-text-muted text-sm shrink-0">RM</span>
+                    <span className="font-lato text-text-muted shrink-0 text-sm">
+                      RM
+                    </span>
                     <input
                       type="number"
-                      className={`input text-right tabular-nums w-full ${showErrors && se.amount ? "input-error" : ""}`}
+                      className={`input w-full text-right tabular-nums ${showErrors && se.amount ? "input-error" : ""}`}
                       placeholder="0"
                       min={0}
                       value={sp.amount === "" ? "" : String(sp.amount)}
