@@ -188,6 +188,74 @@ describe("POST /api/v1/auth/signup/create-account", () => {
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
+  // --- Field validation -----------------------------------------------------
+
+  it("rejects a missing first name", async () => {
+    const res = await POST(makeRequest({ ...validBody, firstName: "" }));
+    expect(res.status).toBe(400);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing last name", async () => {
+    const res = await POST(makeRequest({ ...validBody, lastName: "" }));
+    expect(res.status).toBe(400);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid email format", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, email: "not-an-email" }),
+    );
+    const json = await res.json();
+    expect(res.status).toBe(400);
+    expect(json.error.message).toMatch(/invalid email/i);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a first name with invalid characters", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, firstName: "Ahmad123" }),
+    );
+    expect(res.status).toBe(400);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a last name with invalid characters", async () => {
+    const res = await POST(makeRequest({ ...validBody, lastName: "R@zif" }));
+    expect(res.status).toBe(400);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  // --- Auth-layer email_exists ----------------------------------------------
+
+  it("returns 409 when auth reports email_exists", async () => {
+    mockCreateUser.mockResolvedValue({
+      data: { user: null },
+      error: { code: "email_exists", message: "..." },
+    });
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.error.code).toBe("EMAIL_EXISTS");
+  });
+
+  it("returns 409 when auth says the email is already registered", async () => {
+    mockCreateUser.mockResolvedValue({
+      data: { user: null },
+      error: {
+        message: "A user with this email address has already registered",
+      },
+    });
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.error.code).toBe("EMAIL_EXISTS");
+  });
+
   // --- Rollback on post-creation failures -----------------------------------
 
   it("rolls back the account when storing the code fails", async () => {

@@ -38,6 +38,7 @@ const mockState = {
   attemptsRemaining: null as number | null,
   locked: false,
   lockedSeconds: null as number | null,
+  needsVerification: false,
 };
 const mockFormAction = vi.fn();
 let mockPending = false;
@@ -118,6 +119,32 @@ describe("LoginForm", () => {
     render(<LoginForm />);
     const link = screen.getByText("Create an account") as HTMLAnchorElement;
     expect(link.href).toContain("/auth/signup");
+  });
+
+  // --- Input handling --------------------------------------------------------
+
+  it("updates the password field on change", () => {
+    render(<LoginForm />);
+    const pw = screen.getByLabelText("Password") as HTMLInputElement;
+    fireEvent.change(pw, { target: { value: "secret123" } });
+    expect(pw.value).toBe("secret123");
+  });
+
+  // --- Needs verification (redirect into verify flow) ------------------------
+
+  it("seeds the verify step and redirects when needsVerification is set", async () => {
+    mockRouterPush.mockClear();
+    sessionStorage.clear();
+    mockState.needsVerification = true;
+
+    await act(async () => {
+      render(<LoginForm />);
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/auth/signup/verify");
+    const stored = sessionStorage.getItem("signup_form");
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored as string)).toHaveProperty("password");
   });
 
   // --- Error state (2B) -------------------------------------------------------
