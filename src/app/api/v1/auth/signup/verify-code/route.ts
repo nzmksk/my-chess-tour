@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getVerificationCode } from "@/services/redis/redis";
+import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -117,8 +118,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json(
+  // Advance the signup step so the route guard lets the user into the profile
+  // step — and only now, after the email is actually verified.
+  const response = NextResponse.json(
     { message: "Email verified successfully" },
     { status: 200 },
   );
+  response.cookies.set(SIGNUP_STEP_COOKIE, "profile", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: SIGNUP_STEP_MAX_AGE,
+  });
+  return response;
 }

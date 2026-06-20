@@ -135,6 +135,14 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     expect(res.status).toBe(200);
   });
 
+  it("advances the signup step cookie to 'profile' on success", async () => {
+    const res = await POST(makeRequest(validBody));
+    const cookie = res.cookies.get("signup_step");
+
+    expect(cookie?.value).toBe("profile");
+    expect(cookie?.httpOnly).toBe(true);
+  });
+
   // --- Validation errors ----------------------------------------------------
 
   it("returns 400 for malformed JSON", async () => {
