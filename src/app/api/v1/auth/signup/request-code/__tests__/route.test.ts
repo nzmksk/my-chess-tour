@@ -61,7 +61,7 @@ import { POST } from "../route";
 // ---------------------------------------------------------------------------
 
 function makeRequest(body: unknown): NextRequest {
-  return new NextRequest("http://localhost/api/v1/auth/signup/resend-code", {
+  return new NextRequest("http://localhost/api/v1/auth/signup/request-code", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -74,7 +74,7 @@ const validBody = { email: "player@example.com" };
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("POST /api/v1/auth/signup/resend-code", () => {
+describe("POST /api/v1/auth/signup/request-code", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMaybeSingle.mockResolvedValue({

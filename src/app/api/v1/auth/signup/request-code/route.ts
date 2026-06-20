@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch (err) {
-    console.error("Failed to parse JSON body in resend-code endpoint", err);
+    console.error("Failed to parse JSON body in request-code endpoint", err);
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Invalid JSON body" } },
       { status: 400 },

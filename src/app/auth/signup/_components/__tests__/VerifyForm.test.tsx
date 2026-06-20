@@ -216,7 +216,7 @@ describe("VerifyForm", () => {
 
   // --- Resend ---------------------------------------------------------------
 
-  it("calls the resend-code API when Resend code is clicked", async () => {
+  it("calls the request-code API when Resend code is clicked", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -235,7 +235,7 @@ describe("VerifyForm", () => {
     });
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      "/api/v1/auth/signup/resend-code",
+      "/api/v1/auth/signup/request-code",
       expect.objectContaining({ method: "POST" }),
     );
   });

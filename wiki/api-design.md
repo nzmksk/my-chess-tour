@@ -154,7 +154,7 @@ These are handled primarily by Supabase's client-side SDK. The API layer provide
 | ------ | ------------------------------- | ------------- | ------------------------------------------------------ |
 | POST   | `/auth/signup/create-account`   | Public        | Step 1: Create the account and send a 6-character code |
 | POST   | `/auth/signup/verify-code`      | Public        | Step 2: Verify the code, mark verified, and sign in    |
-| POST   | `/auth/signup/resend-code`      | Public        | Resend a verification code                             |
+| POST   | `/auth/signup/request-code`     | Public        | Request a new verification code                        |
 | POST   | `/auth/signup/complete-profile` | Authenticated | Step 3 (optional): Save the player profile             |
 | POST   | `/auth/login`                   | Public        | Supabase login. Returns `user_id`.                     |
 | POST   | `/auth/logout`                  | Authenticated | Destroys session.                                      |
@@ -220,9 +220,9 @@ Verifies the submitted code against the Redis-stored value. On success it marks 
 - `429` — `{ "error": { "code": "TOO_MANY_ATTEMPTS", "message": "Too many incorrect attempts. Please request a new code." } }`
 - `500` — Failed to verify the account or sign in
 
-#### `POST /auth/signup/resend-code`
+#### `POST /auth/signup/request-code`
 
-Resends a verification code. The response is intentionally generic for every account state (missing, already verified, or unverified) so it can't be used to discover whether an email is registered. A code is only actually sent for an existing, unverified account, subject to a per-email cooldown that throttles sends silently.
+Requests (resends) a verification code. The response is intentionally generic for every account state (missing, already verified, or unverified) so it can't be used to discover whether an email is registered. A code is only actually sent for an existing, unverified account, subject to a per-email cooldown that throttles sends silently.
 
 **Request:**
 
