@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import CountryDropdown from "./CountryDropdown";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
 
@@ -156,17 +157,12 @@ export default function ProfileForm() {
                   Nationality
                 </label>
               </div>
-              <input
+              <CountryDropdown
                 id="nationality"
-                className="input"
-                type="text"
-                placeholder="Malaysian"
                 value={form.nationality ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, nationality: e.target.value }))
+                onChange={(v) =>
+                  setForm((f) => ({ ...f, nationality: v }))
                 }
-                required
-                aria-required="true"
               />
             </div>
 

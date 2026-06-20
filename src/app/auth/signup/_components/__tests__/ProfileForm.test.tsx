@@ -21,6 +21,25 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("../StepTracker", () => ({ default: () => null }));
 
+vi.mock("../CountryDropdown", () => ({
+  default: ({
+    id,
+    value,
+    onChange,
+  }: {
+    id: string;
+    value: string;
+    onChange: (v: string) => void;
+  }) =>
+    React.createElement("input", {
+      id,
+      type: "text",
+      value,
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value),
+      placeholder: "Select country…",
+    }),
+}));
+
 // Make setForm call the updater so inner arrow-function callbacks are covered.
 const mockFormData = {
   firstName: "Alice",
