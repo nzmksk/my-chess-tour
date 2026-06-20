@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
+import { createClient } from "@/services/supabase/client";
 
 const GENDERS = ["Male", "Female"] as const;
 
@@ -14,6 +16,39 @@ export default function ProfileForm() {
     `${form.firstName[0]}${form.lastName[0]}`.toUpperCase() || "CT";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleAvatarClick() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setSubmitError("Please upload a JPG or PNG image.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setSubmitError("Image must be under 2 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setSubmitError(null);
+    setAvatarFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result;
+      if (typeof result === "string") setAvatarPreview(result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
 
   async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,6 +56,33 @@ export default function ProfileForm() {
     setIsSubmitting(true);
 
     try {
+      let avatarUrl: string | undefined;
+
+      if (avatarFile) {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const ext = avatarFile.name.split(".").pop();
+          const path = `users/${user.id}/${Date.now()}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("avatars")
+            .upload(path, avatarFile, { upsert: true });
+
+          if (uploadError) {
+            setSubmitError("Failed to upload photo. Please try again.");
+            return;
+          }
+
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("avatars").getPublicUrl(path);
+          avatarUrl = publicUrl;
+        }
+      }
+
       const res = await fetch("/api/v1/auth/signup/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,6 +93,7 @@ export default function ProfileForm() {
           fideId: form.fideId,
           mcfId: form.mcfId,
           isOku: form.isOku,
+          ...(avatarUrl ? { avatarUrl } : {}),
         }),
       });
 
@@ -82,23 +145,48 @@ export default function ProfileForm() {
               role="button"
               tabIndex={0}
               aria-label="Upload profile photo"
+              onClick={handleAvatarClick}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleAvatarClick();
+                }
+              }}
             >
-              {avatarInitials}
+              {avatarPreview ? (
+                <Image
+                  src={avatarPreview}
+                  alt="Profile photo preview"
+                  fill
+                  unoptimized
+                  className="rounded-full object-cover"
+                />
+              ) : (
+                avatarInitials
+              )}
               <div className="avatar-overlay">
                 <span className="avatar-overlay-text">
-                  Upload
+                  {avatarPreview ? "Change" : "Upload"}
                   <br />
                   Photo
                 </span>
               </div>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png"
+              className="sr-only"
+              onChange={handleFileChange}
+              aria-label="Profile photo file input"
+            />
             <p className="avatar-hint">Tap to upload a profile photo</p>
             <p className="avatar-hint">JPG or PNG, max 2 MB</p>
           </div>
 
           {submitError && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px">&#9888;</span>
+              <span className="mt-px shrink-0 text-sm">&#9888;</span>
               <p className="error-text">{submitError}</p>
             </div>
           )}
@@ -258,7 +346,7 @@ export default function ProfileForm() {
               <label className="check-label" htmlFor="oku">
                 I am an OKU (Orang Kurang Upaya) card holder{" "}
                 <span
-                  className="help-icon align-middle ml-1"
+                  className="help-icon ml-1 align-middle"
                   tabIndex={0}
                   aria-label="OKU help"
                 >
@@ -272,7 +360,7 @@ export default function ProfileForm() {
               </label>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
                 className="btn-secondary w-full"

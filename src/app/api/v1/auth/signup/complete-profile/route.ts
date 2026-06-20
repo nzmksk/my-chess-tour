@@ -30,14 +30,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { gender, nationality, dateOfBirth, fideId, mcfId, isOku } = body as {
-    gender?: string;
-    nationality?: string;
-    dateOfBirth?: string;
-    fideId?: string;
-    mcfId?: string;
-    isOku?: boolean;
-  };
+  const { gender, nationality, dateOfBirth, fideId, mcfId, isOku, avatarUrl } =
+    body as {
+      gender?: string;
+      nationality?: string;
+      dateOfBirth?: string;
+      fideId?: string;
+      mcfId?: string;
+      isOku?: boolean;
+      avatarUrl?: string;
+    };
 
   if (gender && !["male", "female"].includes(gender.toLowerCase())) {
     return NextResponse.json(
@@ -102,6 +104,30 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 },
     );
+  }
+
+  if (avatarUrl !== undefined) {
+    const { error: avatarError } = await supabaseAdmin
+      .from("users")
+      .update({ avatar_url: avatarUrl || null })
+      .eq("id", user.id);
+
+    if (avatarError) {
+      console.error(
+        "Failed to update avatar URL for user ID:",
+        user.id,
+        avatarError,
+      );
+      return NextResponse.json(
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Failed to save avatar",
+          },
+        },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ message: "Profile updated" }, { status: 200 });
