@@ -77,17 +77,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Upsert (not update) keyed on the user_id PK: the signup trigger normally
+  // pre-creates this row, but if it's ever missing a plain update would affect
+  // 0 rows and silently drop the profile data.
   const { error: profileError } = await supabaseAdmin
     .from("player_profiles")
-    .update({
-      gender: gender ? (gender.toLowerCase() as "male" | "female") : null,
-      nationality: nationality || null,
-      date_of_birth: dateOfBirth || null,
-      fide_id: fideId || null,
-      mcf_id: mcfId || null,
-      is_oku: isOku ?? false,
-    })
-    .eq("user_id", user.id);
+    .upsert(
+      {
+        user_id: user.id,
+        gender: gender ? (gender.toLowerCase() as "male" | "female") : null,
+        nationality: nationality || null,
+        date_of_birth: dateOfBirth || null,
+        fide_id: fideId || null,
+        mcf_id: mcfId || null,
+        is_oku: isOku ?? false,
+      },
+      { onConflict: "user_id" },
+    );
 
   if (profileError) {
     console.error(
