@@ -10,7 +10,7 @@ import { createClient } from "@/services/supabase/client";
 const GENDERS = ["Male", "Female"] as const;
 
 export default function ProfileForm() {
-  const { form, setForm } = useSignUpForm();
+  const { form, setForm, clearForm } = useSignUpForm();
   const router = useRouter();
   const avatarInitials =
     `${form.firstName[0]}${form.lastName[0]}`.toUpperCase() || "CT";
@@ -106,6 +106,7 @@ export default function ProfileForm() {
         return;
       }
 
+      clearForm();
       router.push("/tournaments");
     } catch {
       setSubmitError("Network error. Please try again.");
@@ -115,6 +116,7 @@ export default function ProfileForm() {
   }
 
   function handleSkip() {
+    clearForm();
     router.push("/tournaments");
   }
 

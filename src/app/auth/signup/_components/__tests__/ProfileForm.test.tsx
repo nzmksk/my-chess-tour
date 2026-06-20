@@ -43,6 +43,7 @@ vi.mock("../SignUpContext", () => ({
     setForm: vi.fn((updater: unknown) => {
       if (typeof updater === "function") updater(mockFormData);
     }),
+    clearForm: vi.fn(),
   }),
 }));
 
