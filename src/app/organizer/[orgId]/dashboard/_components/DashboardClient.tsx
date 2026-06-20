@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 type TournamentStatus = "draft" | "published" | "ongoing" | "completed" | "cancelled";
 
@@ -32,92 +31,160 @@ interface Props {
 }
 
 const STATUS_CONFIG: Record<TournamentStatus, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-bg-raised text-text-muted border border-border" },
-  published: { label: "Open", className: "bg-success/10 text-success border border-success/20" },
-  ongoing: { label: "Ongoing", className: "bg-warning/15 text-warning border border-warning/20" },
-  completed: { label: "Completed", className: "bg-bg-raised text-text-muted border border-border" },
-  cancelled: { label: "Cancelled", className: "bg-danger/15 text-danger border border-danger/20" },
+  draft: {
+    label: "Draft",
+    className: "bg-bg-raised text-text-muted border border-border",
+  },
+  published: {
+    label: "Published",
+    className: "bg-success/10 text-success border border-success/20",
+  },
+  ongoing: {
+    label: "Ongoing",
+    className: "bg-warning/15 text-warning border border-warning/20",
+  },
+  completed: {
+    label: "Completed",
+    className: "bg-bg-raised text-text-muted border border-border",
+  },
+  cancelled: {
+    label: "Cancelled",
+    className: "bg-danger/15 text-danger border border-danger/20",
+  },
 };
 
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-MY", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function formatCents(cents: number): string {
-  return `MYR ${(cents / 100).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `MYR ${(cents / 100).toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function getActionConfig(
+  status: TournamentStatus,
+): { label: string; pathSuffix: string } {
+  switch (status) {
+    case "draft":
+      return { label: "Edit", pathSuffix: "/edit" };
+    case "published":
+    case "ongoing":
+      return { label: "Manage", pathSuffix: "" };
+    case "completed":
+    case "cancelled":
+    default:
+      return { label: "View", pathSuffix: "" };
+  }
 }
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="card px-5 py-4 flex flex-col gap-1">
-      <p className="font-lato text-xs text-text-muted uppercase tracking-widest">{label}</p>
+      <p className="font-lato text-xs text-text-muted uppercase tracking-widest">
+        {label}
+      </p>
       <p className="font-cinzel text-2xl font-bold text-text-primary">{value}</p>
     </div>
   );
 }
 
-function TournamentRow({ tournament }: { tournament: RecentTournament }) {
-  const startDate = new Date(tournament.start_date + "T00:00:00");
-  const month = startDate.toLocaleString("en-MY", { month: "short" }).toUpperCase();
-  const day = startDate.getDate();
-  const statusConfig = STATUS_CONFIG[tournament.status] ?? STATUS_CONFIG.draft;
+interface TournamentRowProps {
+  tournament: RecentTournament;
+  orgId: string;
+}
+
+function TournamentRow({ tournament: t, orgId }: TournamentRowProps) {
+  const statusConfig = STATUS_CONFIG[t.status] ?? STATUS_CONFIG.draft;
+  const actionConfig = getActionConfig(t.status);
+  const basePath = `/organizer/${orgId}/tournaments/${t.id}`;
+  const isDimmed = t.status === "completed" || t.status === "cancelled";
 
   return (
-    <Link
-      href={`/tournaments/${tournament.id}`}
-      className="flex items-center gap-4 card px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
-    >
-      <div className="text-center min-w-12 shrink-0">
-        <div className="font-cinzel text-xs font-bold tracking-widest text-gold-bright">{month}</div>
-        <div className="font-cinzel text-2xl font-bold text-text-primary leading-tight">{day}</div>
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <h4 className="font-lato text-sm font-semibold text-text-primary truncate">{tournament.name}</h4>
-        <p className="font-lato text-xs text-text-muted mt-0.5">
-          {tournament.current_participants} / {tournament.max_participants} participants
-        </p>
-      </div>
-
-      <span
-        className={`font-cinzel text-xs font-bold tracking-widest uppercase px-2.5 py-1 rounded-md whitespace-nowrap ${statusConfig.className}`}
-      >
-        {statusConfig.label}
-      </span>
-    </Link>
+    <tr className={`border-b border-border last:border-b-0 hover:bg-bg-raised transition-colors duration-100${isDimmed ? " opacity-60" : ""}`}>
+      <td className="px-5 py-3.5">
+        <span className="font-lato text-sm font-semibold text-text-primary">
+          {t.name}
+        </span>
+      </td>
+      <td className="px-5 py-3.5 whitespace-nowrap">
+        <span className="font-lato text-sm text-text-secondary">
+          {formatDate(t.start_date)}
+        </span>
+      </td>
+      <td className="px-5 py-3.5 whitespace-nowrap">
+        <span className="font-lato text-sm text-text-secondary">
+          {t.current_participants} / {t.max_participants}
+        </span>
+      </td>
+      <td className="px-5 py-3.5">
+        <span
+          className={`font-cinzel text-xs font-bold tracking-widest uppercase px-2.5 py-1 rounded-md whitespace-nowrap ${statusConfig.className}`}
+        >
+          {statusConfig.label}
+        </span>
+      </td>
+      <td className="px-5 py-3.5 text-right">
+        <Link
+          href={`${basePath}${actionConfig.pathSuffix}`}
+          className="font-cinzel text-gold-bright border-gold-bright/40 hover:border-gold-bright hover:bg-int-gold-bg inline-flex cursor-pointer items-center rounded-md border bg-transparent px-3 py-1.5 text-xs font-bold tracking-widest uppercase transition duration-150"
+        >
+          {actionConfig.label}
+        </Link>
+      </td>
+    </tr>
   );
 }
 
 export default function DashboardClient({ data }: Props) {
   const { organization, stats, recent_tournaments } = data;
-  const router = useRouter();
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-8">
+      {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="font-cinzel text-2xl font-bold text-text-primary tracking-wide">
             {organization.name}
           </h1>
-          <p className="font-lato text-sm text-text-muted mt-1">Organizer Dashboard</p>
+          <p className="font-lato text-sm text-text-muted mt-1">
+            Organizer Dashboard
+          </p>
         </div>
-        <button
-          type="button"
+        <Link
+          href={`/organizer/${organization.id}/tournaments/create`}
           className="font-cinzel text-bg-base shrink-0 cursor-pointer rounded-md border-0 px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90"
           style={{
             background:
               "linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep))",
           }}
-          onClick={() =>
-            router.push(`/organizer/${organization.id}/tournaments/create`)
-          }
         >
           + Create
-        </button>
+        </Link>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 mb-8">
         <StatCard label="Active Tournaments" value={stats.active_tournaments} />
-        <StatCard label="Total Registrations" value={stats.total_registrations} />
-        <StatCard label="Total Revenue" value={formatCents(stats.total_revenue_cents)} />
-        <StatCard label="Pending Payout" value={formatCents(stats.pending_payout_cents)} />
+        <StatCard
+          label="Total Registrations"
+          value={stats.total_registrations}
+        />
+        <StatCard
+          label="Total Revenue"
+          value={formatCents(stats.total_revenue_cents)}
+        />
+        <StatCard
+          label="Pending Payout"
+          value={formatCents(stats.pending_payout_cents)}
+        />
       </div>
 
       {/* Quick Links */}
@@ -132,32 +199,61 @@ export default function DashboardClient({ data }: Props) {
           <div className="flex items-center gap-3">
             <span className="text-xl text-gold-bright">♟</span>
             <div>
-              <p className="font-lato text-sm font-semibold text-text-primary">Members</p>
-              <p className="font-lato text-xs text-text-muted mt-0.5">View and manage organization members</p>
+              <p className="font-lato text-sm font-semibold text-text-primary">
+                Members
+              </p>
+              <p className="font-lato text-xs text-text-muted mt-0.5">
+                View and manage organization members
+              </p>
             </div>
           </div>
           <span className="text-text-muted text-lg">›</span>
         </Link>
       </div>
 
-      {/* Recent Tournaments */}
+      {/* Tournament Table */}
       <div>
         <h2 className="font-cinzel text-base font-bold text-text-primary tracking-wide mb-3">
-          Recent Tournaments
+          Your Tournaments
         </h2>
 
         {recent_tournaments.length === 0 ? (
-          <div className="text-center py-12 px-5">
+          <div className="card text-center py-12 px-5">
             <div className="text-4xl mb-4 opacity-20">♟</div>
             <p className="font-lato text-sm text-text-muted leading-relaxed">
               No tournaments yet. Create your first tournament to get started.
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            {recent_tournaments.map((t) => (
-              <TournamentRow key={t.id} tournament={t} />
-            ))}
+          <div className="card overflow-hidden overflow-x-auto">
+            <table className="w-full border-collapse min-w-[600px]">
+              <thead>
+                <tr className="border-b border-border bg-bg-raised">
+                  <th className="font-cinzel text-left px-5 py-3 text-xs font-semibold tracking-widest uppercase text-text-muted">
+                    Tournament
+                  </th>
+                  <th className="font-cinzel text-left px-5 py-3 text-xs font-semibold tracking-widest uppercase text-text-muted whitespace-nowrap">
+                    Date
+                  </th>
+                  <th className="font-cinzel text-left px-5 py-3 text-xs font-semibold tracking-widest uppercase text-text-muted whitespace-nowrap">
+                    Registrations
+                  </th>
+                  <th className="font-cinzel text-left px-5 py-3 text-xs font-semibold tracking-widest uppercase text-text-muted">
+                    Status
+                  </th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {recent_tournaments.map((t) => (
+                  <TournamentRow
+                    key={t.id}
+                    tournament={t}
+                    orgId={organization.id}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

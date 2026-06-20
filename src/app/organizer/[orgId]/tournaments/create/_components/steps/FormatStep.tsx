@@ -86,17 +86,22 @@ function validate(data: FormatData): FieldErrors {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="font-cinzel text-gold-muted text-xs font-bold tracking-widest uppercase mt-6 mb-3 pt-5 border-t border-border">
+    <h3 className="font-cinzel text-gold-muted border-border mt-6 mb-3 border-t pt-5 text-xs font-bold tracking-widest uppercase">
       {children}
     </h3>
   );
 }
 
 export default function FormatStep() {
-  const { formatData, setFormatData, goNext, registerStepHandler } =
+  const { formatData, setFormatData, goNext, registerStepHandler, isHydrated } =
     useTournamentWizard();
 
   const [form, setForm] = useState<FormatData>(formatData);
+
+  useEffect(() => {
+    if (isHydrated) setForm(formatData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showErrors, setShowErrors] = useState(false);
   const uid = useId();
@@ -158,10 +163,10 @@ export default function FormatStep() {
 
   return (
     <div>
-      <h2 className="font-cinzel mb-1 text-lg font-bold text-text-primary tracking-wide">
+      <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
         Format &amp; Schedule
       </h2>
-      <p className="font-lato mb-6 text-sm text-text-muted">
+      <p className="font-lato text-text-muted mb-6 text-sm">
         Define the tournament format, time control, and schedule.
       </p>
 
@@ -172,7 +177,7 @@ export default function FormatStep() {
             <label htmlFor={`${uid}-format-type`} className="input-label">
               Format Type
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
@@ -199,7 +204,7 @@ export default function FormatStep() {
             <label htmlFor={`${uid}-system`} className="input-label">
               System
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
@@ -228,7 +233,7 @@ export default function FormatStep() {
           <label htmlFor={`${uid}-rounds`} className="input-label">
             Number of Rounds
           </label>
-          <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+          <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
             *
           </span>
         </div>
@@ -257,7 +262,7 @@ export default function FormatStep() {
             <label htmlFor={`${uid}-base-time`} className="input-label">
               Base Time (min)
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
@@ -327,7 +332,7 @@ export default function FormatStep() {
             <label htmlFor={`${uid}-start-date`} className="input-label">
               Start Date
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
@@ -348,7 +353,7 @@ export default function FormatStep() {
             <label htmlFor={`${uid}-end-date`} className="input-label">
               End Date
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
@@ -371,7 +376,7 @@ export default function FormatStep() {
             <label htmlFor={`${uid}-reg-deadline`} className="input-label">
               Registration Deadline
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
@@ -392,7 +397,7 @@ export default function FormatStep() {
             <label htmlFor={`${uid}-max-participants`} className="input-label">
               Max Participants
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
@@ -417,20 +422,20 @@ export default function FormatStep() {
 
       <SectionHeader>Rating</SectionHeader>
 
-      <div className="flex gap-6 mb-2">
-        <label className="font-lato flex items-center gap-2 cursor-pointer text-sm text-text-body select-none">
+      <div className="mb-2 flex gap-6">
+        <label className="font-lato text-text-body flex cursor-pointer items-center gap-2 text-sm select-none">
           <input
             type="checkbox"
-            className="accent-gold-bright w-4 h-4 cursor-pointer"
+            className="accent-gold-bright h-4 w-4 cursor-pointer"
             checked={form.fideRated}
             onChange={(e) => field("fideRated", e.target.checked)}
           />
           FIDE Rated
         </label>
-        <label className="font-lato flex items-center gap-2 cursor-pointer text-sm text-text-body select-none">
+        <label className="font-lato text-text-body flex cursor-pointer items-center gap-2 text-sm select-none">
           <input
             type="checkbox"
-            className="accent-gold-bright w-4 h-4 cursor-pointer"
+            className="accent-gold-bright h-4 w-4 cursor-pointer"
             checked={form.mcfRated}
             onChange={(e) => field("mcfRated", e.target.checked)}
           />
@@ -440,19 +445,21 @@ export default function FormatStep() {
 
       <SectionHeader>Restrictions</SectionHeader>
 
-      <p className="font-lato text-xs text-text-muted mb-3 -mt-1">
+      <p className="font-lato text-text-muted -mt-1 mb-3 text-xs">
         Optional. Leave empty if the tournament is open to all players.
       </p>
 
       {form.restrictions.length > 0 && (
-        <div className="flex flex-col gap-2 mb-3">
+        <div className="mb-3 flex flex-col gap-2">
           {form.restrictions.map((r) => (
-            <div key={r.id} className="flex gap-2 items-start">
+            <div key={r.id} className="flex items-start gap-2">
               <select
                 className="input"
                 style={{ width: "175px", flexShrink: 0 }}
                 value={r.type}
-                onChange={(e) => updateRestriction(r.id, "type", e.target.value)}
+                onChange={(e) =>
+                  updateRestriction(r.id, "type", e.target.value)
+                }
                 aria-label="Restriction type"
               >
                 {RESTRICTION_TYPES.map((t) => (
@@ -461,7 +468,7 @@ export default function FormatStep() {
                   </option>
                 ))}
               </select>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 <input
                   type="text"
                   className={`input ${
@@ -485,7 +492,7 @@ export default function FormatStep() {
               <button
                 type="button"
                 aria-label="Remove restriction"
-                className="font-lato border-border text-text-muted hover:text-danger hover:border-danger-border flex items-center justify-center rounded-md border bg-transparent transition duration-200 cursor-pointer"
+                className="font-lato border-border text-text-muted hover:text-danger hover:border-danger-border flex cursor-pointer items-center justify-center rounded-md border bg-transparent transition duration-200"
                 style={{ width: "36px", height: "38px", flexShrink: 0 }}
                 onClick={() => removeRestriction(r.id)}
               >
