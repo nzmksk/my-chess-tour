@@ -118,6 +118,24 @@ describe("ProfileForm", () => {
     expect(avatar.textContent).toContain("AW");
   });
 
+  it("falls back to 'CT' initials (not 'UNDEFINED') when names are empty", () => {
+    const origFirst = mockFormData.firstName;
+    const origLast = mockFormData.lastName;
+    mockFormData.firstName = "";
+    mockFormData.lastName = "";
+    try {
+      render(<ProfileForm />);
+      const avatar = screen.getByRole("button", {
+        name: "Upload profile photo",
+      });
+      expect(avatar.textContent).toContain("CT");
+      expect(avatar.textContent?.toUpperCase()).not.toContain("UNDEFINED");
+    } finally {
+      mockFormData.firstName = origFirst;
+      mockFormData.lastName = origLast;
+    }
+  });
+
   it("renders Skip and Complete Profile buttons", () => {
     render(<ProfileForm />);
     expect(getSkipButton()).toBeDefined();

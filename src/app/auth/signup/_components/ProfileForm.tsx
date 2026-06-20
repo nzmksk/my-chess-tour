@@ -13,7 +13,7 @@ export default function ProfileForm() {
   const { form, setForm, clearForm } = useSignUpForm();
   const router = useRouter();
   const avatarInitials =
-    `${form.firstName[0]}${form.lastName[0]}`.toUpperCase() || "CT";
+    `${form.firstName[0] ?? ""}${form.lastName[0] ?? ""}`.toUpperCase() || "CT";
   // Date-of-birth bounds for the native picker (UTC date string, so it matches
   // between server and client render). Server-side validation is authoritative.
   const maxDob = new Date().toISOString().slice(0, 10);
