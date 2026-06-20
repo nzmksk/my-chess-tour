@@ -137,7 +137,7 @@ export default function BasicInfoStep() {
 
     setBasicInfoData(form);
     goNext();
-  }, [form, nameStatus, setBasicInfoData, goNext]);
+  }, [form, nameStatus, excludeId, setBasicInfoData, goNext]);
 
   useEffect(() => {
     registerStepHandler(0, attemptNext);
