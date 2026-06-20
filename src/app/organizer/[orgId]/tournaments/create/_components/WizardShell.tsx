@@ -25,6 +25,9 @@ const STEP_COMPONENTS = [
 interface WizardShellProps {
   orgId: string;
   orgName: string;
+  title?: string;
+  redirectPath?: string;
+  mode?: "create" | "edit";
 }
 
 function mapTierType(t: FeeTier["type"]): string {
@@ -40,7 +43,7 @@ function mapTierType(t: FeeTier["type"]): string {
   }
 }
 
-export default function WizardShell({ orgId, orgName }: WizardShellProps) {
+export default function WizardShell({ orgId, orgName, title = "Create Tournament", redirectPath, mode = "create" }: WizardShellProps) {
   const router = useRouter();
   const {
     currentStepIndex,
@@ -183,10 +186,12 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
     return json.data.id;
   }
 
+  const afterSaveRedirect = redirectPath ?? `/organizer/${orgId}/dashboard`;
+
   async function handleSaveDraft() {
     if (!basicInfoData.name.trim()) {
       clearWizardStorage();
-      router.push(`/organizer/${orgId}/dashboard`);
+      router.push(afterSaveRedirect);
       return;
     }
     setIsSaving(true);
@@ -196,7 +201,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
     } finally {
       setIsSaving(false);
       clearWizardStorage();
-      router.push(`/organizer/${orgId}/dashboard`);
+      router.push(afterSaveRedirect);
     }
   }
 
@@ -205,7 +210,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
     setIsPublishing(true);
     try {
       if (!basicInfoData.name.trim()) {
-        router.push(`/organizer/${orgId}/dashboard`);
+        router.push(afterSaveRedirect);
         return;
       }
       const draftId = await saveDraftToApi();
@@ -231,7 +236,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
         return;
       }
       clearWizardStorage();
-      router.push(`/organizer/${orgId}/dashboard`);
+      router.push(afterSaveRedirect);
     } finally {
       setIsPublishing(false);
     }
@@ -248,7 +253,7 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
           {orgName}
         </p>
         <h1 className="font-cinzel text-xl font-bold text-text-primary tracking-wide">
-          Create Tournament
+          {title}
         </h1>
       </div>
 
@@ -287,7 +292,20 @@ export default function WizardShell({ orgId, orgName }: WizardShellProps) {
               {isSaving ? "Saving…" : "Save Draft"}
             </button>
 
-            {isLastStep ? (
+            {isLastStep && mode === "edit" ? (
+              <button
+                type="button"
+                className="font-cinzel text-bg-base cursor-pointer rounded-md border-0 px-5 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep))",
+                }}
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+              >
+                {isSaving ? "Saving…" : "Save Changes"}
+              </button>
+            ) : isLastStep ? (
               <button
                 type="button"
                 className="font-cinzel text-bg-base cursor-pointer rounded-md border-0 px-5 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"

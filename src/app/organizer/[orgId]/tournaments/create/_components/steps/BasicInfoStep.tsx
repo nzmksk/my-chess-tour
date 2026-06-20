@@ -32,11 +32,18 @@ type FieldErrors = {
   venueAddress?: string;
 };
 
-async function checkNameAvailability(name: string): Promise<NameStatus> {
+async function checkNameAvailability(
+  name: string,
+  excludeId?: string | null,
+): Promise<NameStatus> {
   try {
-    const res = await fetch(
-      `/api/v1/tournaments/name-check?name=${encodeURIComponent(name)}`,
+    const url = new URL(
+      "/api/v1/tournaments/name-check",
+      window.location.origin,
     );
+    url.searchParams.set("name", name);
+    if (excludeId) url.searchParams.set("excludeId", excludeId);
+    const res = await fetch(url.toString());
     if (!res.ok) return "error";
     const json = await res.json();
     return json.available ? "available" : "taken";
@@ -45,10 +52,7 @@ async function checkNameAvailability(name: string): Promise<NameStatus> {
   }
 }
 
-function validate(
-  data: BasicInfoData,
-  nameStatus: NameStatus,
-): FieldErrors {
+function validate(data: BasicInfoData, nameStatus: NameStatus): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!data.name.trim()) {
@@ -73,10 +77,22 @@ function validate(
 }
 
 export default function BasicInfoStep() {
-  const { setBasicInfoData, basicInfoData, goNext, registerStepHandler } =
-    useTournamentWizard();
+  const {
+    setBasicInfoData,
+    basicInfoData,
+    goNext,
+    registerStepHandler,
+    excludeId,
+    isHydrated,
+  } = useTournamentWizard();
 
   const [form, setForm] = useState<BasicInfoData>(basicInfoData);
+
+  useEffect(() => {
+    if (isHydrated) setForm(basicInfoData);
+    // intentionally runs once when context finishes hydrating
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated]);
   const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showErrors, setShowErrors] = useState(false);
@@ -92,7 +108,7 @@ export default function BasicInfoStep() {
 
     nameCheckTimer.current = setTimeout(async () => {
       setNameStatus("checking");
-      const status = await checkNameAvailability(value.trim());
+      const status = await checkNameAvailability(value.trim(), excludeId);
       setNameStatus(status);
     }, 600);
   };
@@ -102,9 +118,15 @@ export default function BasicInfoStep() {
 
     let currentNameStatus = nameStatus;
 
-    if (form.name.trim() && (nameStatus === "idle" || nameStatus === "checking")) {
+    if (
+      form.name.trim() &&
+      (nameStatus === "idle" || nameStatus === "checking")
+    ) {
       setNameStatus("checking");
-      currentNameStatus = await checkNameAvailability(form.name.trim());
+      currentNameStatus = await checkNameAvailability(
+        form.name.trim(),
+        excludeId,
+      );
       setNameStatus(currentNameStatus);
     }
 
@@ -133,10 +155,10 @@ export default function BasicInfoStep() {
 
   return (
     <div>
-      <h2 className="font-cinzel mb-1 text-lg font-bold text-text-primary tracking-wide">
+      <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
         Basic Information
       </h2>
-      <p className="font-lato mb-6 text-sm text-text-muted">
+      <p className="font-lato text-text-muted mb-6 text-sm">
         Tell players what your tournament is about and where it&apos;s held.
       </p>
 
@@ -146,7 +168,9 @@ export default function BasicInfoStep() {
           <label htmlFor="tournament-name" className="input-label">
             Tournament Name
           </label>
-          <span aria-hidden="true" className="text-danger text-sm ml-0.5">*</span>
+          <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+            *
+          </span>
         </div>
         <div className="relative">
           <input
@@ -160,12 +184,12 @@ export default function BasicInfoStep() {
             autoComplete="off"
           />
           {nameStatus === "checking" && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-xs">
+            <span className="text-text-muted absolute top-1/2 right-3 -translate-y-1/2 text-xs">
               …
             </span>
           )}
           {nameStatus === "available" && form.name.trim() && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-success text-sm">
+            <span className="text-success absolute top-1/2 right-3 -translate-y-1/2 text-sm">
               ✓
             </span>
           )}
@@ -205,7 +229,9 @@ export default function BasicInfoStep() {
             <label htmlFor="venue-name" className="input-label">
               Venue Name
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">*</span>
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+              *
+            </span>
           </div>
           <input
             id="venue-name"
@@ -226,7 +252,9 @@ export default function BasicInfoStep() {
             <label htmlFor="venue-state" className="input-label">
               State
             </label>
-            <span aria-hidden="true" className="text-danger text-sm ml-0.5">*</span>
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+              *
+            </span>
           </div>
           <select
             id="venue-state"
@@ -253,7 +281,9 @@ export default function BasicInfoStep() {
           <label htmlFor="venue-address" className="input-label">
             Venue Address
           </label>
-          <span aria-hidden="true" className="text-danger text-sm ml-0.5">*</span>
+          <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+            *
+          </span>
         </div>
         <input
           id="venue-address"
