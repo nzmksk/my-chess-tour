@@ -26,6 +26,11 @@ export async function getVerificationCode(email: string) {
   return redis.get<string>(verifyKey(email));
 }
 
+// Consume the code so it can't be replayed after a successful verification.
+export async function deleteVerificationCode(email: string): Promise<void> {
+  await redis.del(verifyKey(email));
+}
+
 // ── Rate limiting ───────────────────────────────────────────────────────────
 
 const RESEND_COOLDOWN_PREFIX = "resend-cooldown:";

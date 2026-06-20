@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import {
   getVerificationCode,
+  deleteVerificationCode,
   getVerifyAttempts,
   recordVerifyAttempt,
   resetVerifyAttempts,
@@ -152,6 +153,19 @@ export async function POST(request: NextRequest) {
         },
       },
       { status: 500 },
+    );
+  }
+
+  // Consume the code so it can't be replayed now that verification succeeded.
+  // Best-effort: the user is already verified and signed in, so a Redis hiccup
+  // here shouldn't fail the request (the code expires on its own TTL anyway).
+  try {
+    await deleteVerificationCode(normalized);
+  } catch (err) {
+    console.error(
+      "Failed to delete verification code after success for:",
+      normalized,
+      err,
     );
   }
 

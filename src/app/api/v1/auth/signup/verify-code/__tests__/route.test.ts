@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockGetVerificationCode,
+  mockDeleteVerificationCode,
   mockGetVerifyAttempts,
   mockRecordVerifyAttempt,
   mockResetVerifyAttempts,
@@ -16,6 +17,7 @@ const {
   mockSignInWithPassword,
 } = vi.hoisted(() => {
   const mockGetVerificationCode = vi.fn();
+  const mockDeleteVerificationCode = vi.fn();
   const mockGetVerifyAttempts = vi.fn();
   const mockRecordVerifyAttempt = vi.fn();
   const mockResetVerifyAttempts = vi.fn();
@@ -25,6 +27,7 @@ const {
   const mockSignInWithPassword = vi.fn();
   return {
     mockGetVerificationCode,
+    mockDeleteVerificationCode,
     mockGetVerifyAttempts,
     mockRecordVerifyAttempt,
     mockResetVerifyAttempts,
@@ -37,6 +40,7 @@ const {
 
 vi.mock("@/services/redis/redis", () => ({
   getVerificationCode: mockGetVerificationCode,
+  deleteVerificationCode: mockDeleteVerificationCode,
   getVerifyAttempts: mockGetVerifyAttempts,
   recordVerifyAttempt: mockRecordVerifyAttempt,
   resetVerifyAttempts: mockResetVerifyAttempts,
@@ -104,6 +108,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetVerificationCode.mockResolvedValue("ABC123");
+    mockDeleteVerificationCode.mockResolvedValue(undefined);
     mockGetVerifyAttempts.mockResolvedValue(0);
     mockRecordVerifyAttempt.mockResolvedValue(1);
     mockResetVerifyAttempts.mockResolvedValue(undefined);
@@ -223,6 +228,29 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
   it("resets the failed-attempt counter on successful verification", async () => {
     await POST(makeRequest(validBody));
     expect(mockResetVerifyAttempts).toHaveBeenCalledWith("player@example.com");
+  });
+
+  it("consumes (deletes) the code on successful verification", async () => {
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockDeleteVerificationCode).toHaveBeenCalledWith(
+      "player@example.com",
+    );
+  });
+
+  it("does not consume the code on a wrong code", async () => {
+    mockGetVerificationCode.mockResolvedValue("ZZZZZZ");
+    await POST(makeRequest(validBody));
+    expect(mockDeleteVerificationCode).not.toHaveBeenCalled();
+  });
+
+  it("still returns 200 if consuming the code fails", async () => {
+    mockDeleteVerificationCode.mockRejectedValue(new Error("Redis down"));
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
   });
 
   it("records a failed attempt and reports remaining tries on wrong code", async () => {
