@@ -323,9 +323,9 @@ describe("VerifyForm", () => {
       fireEvent.click(resendLink);
     });
 
-    // Advance 30 minutes + 1 second to exhaust the cooldown
+    // Advance 15 minutes + 1 second to exhaust the cooldown
     await act(async () => {
-      vi.advanceTimersByTime(30 * 60 * 1000 + 1000);
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
     });
 
     const resendLinks = screen

@@ -6,8 +6,11 @@ import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
 
 const CODE_LENGTH = 6;
-const CODE_EXPIRY_SECONDS = 15 * 60; // 10 minutes
-const RESEND_COOLDOWN_SECONDS = 30 * 60; // 30 minutes
+const CODE_EXPIRY_SECONDS = 15 * 60; // 15 minutes
+// Keep the resend cooldown in lockstep with the code lifetime: resend unlocks
+// exactly when the current code expires, so there's never a window where the
+// code is dead but a new one can't be requested.
+const RESEND_COOLDOWN_SECONDS = 15 * 60; // 15 minutes
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
