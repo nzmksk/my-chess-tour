@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
 import { createClient } from "@/services/supabase/client";
@@ -153,10 +154,12 @@ export default function ProfileForm() {
               }}
             >
               {avatarPreview ? (
-                <img
+                <Image
                   src={avatarPreview}
                   alt="Profile photo preview"
-                  className="absolute inset-0 h-full w-full rounded-full object-cover"
+                  fill
+                  unoptimized
+                  className="rounded-full object-cover"
                 />
               ) : (
                 avatarInitials
