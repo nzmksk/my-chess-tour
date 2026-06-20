@@ -93,10 +93,15 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function FormatStep() {
-  const { formatData, setFormatData, goNext, registerStepHandler } =
+  const { formatData, setFormatData, goNext, registerStepHandler, isHydrated } =
     useTournamentWizard();
 
   const [form, setForm] = useState<FormatData>(formatData);
+
+  useEffect(() => {
+    if (isHydrated) setForm(formatData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showErrors, setShowErrors] = useState(false);
   const uid = useId();

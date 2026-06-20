@@ -182,10 +182,15 @@ function PrizeCategoryBlock({
 }
 
 export default function PrizesStep() {
-  const { prizesData, setPrizesData, goNext, registerStepHandler } =
+  const { prizesData, setPrizesData, goNext, registerStepHandler, isHydrated } =
     useTournamentWizard();
 
   const [form, setForm] = useState<PrizesData>(prizesData);
+
+  useEffect(() => {
+    if (isHydrated) setForm(prizesData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated]);
   const [errors, setErrors] = useState<PrizesErrors>({
     categories: {},
     specialPrizes: {},

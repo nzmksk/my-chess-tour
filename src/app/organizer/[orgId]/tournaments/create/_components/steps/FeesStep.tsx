@@ -223,10 +223,15 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function FeesStep() {
-  const { feesData, setFeesData, goNext, registerStepHandler } =
+  const { feesData, setFeesData, goNext, registerStepHandler, isHydrated } =
     useTournamentWizard();
 
   const [form, setForm] = useState<FeesData>(feesData);
+
+  useEffect(() => {
+    if (isHydrated) setForm(feesData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated]);
   const [errors, setErrors] = useState<FeesErrors>({ tiers: {} });
   const [showErrors, setShowErrors] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);

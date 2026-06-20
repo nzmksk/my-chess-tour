@@ -74,10 +74,16 @@ function validate(
 }
 
 export default function BasicInfoStep() {
-  const { setBasicInfoData, basicInfoData, goNext, registerStepHandler, excludeId } =
+  const { setBasicInfoData, basicInfoData, goNext, registerStepHandler, excludeId, isHydrated } =
     useTournamentWizard();
 
   const [form, setForm] = useState<BasicInfoData>(basicInfoData);
+
+  useEffect(() => {
+    if (isHydrated) setForm(basicInfoData);
+    // intentionally runs once when context finishes hydrating
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHydrated]);
   const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showErrors, setShowErrors] = useState(false);

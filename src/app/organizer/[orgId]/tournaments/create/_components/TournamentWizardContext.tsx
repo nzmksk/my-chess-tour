@@ -186,6 +186,7 @@ interface TournamentWizardContextType {
   triggerStepHandler: (index: number) => Promise<void>;
   clearWizardStorage: () => void;
   excludeId: string | null;
+  isHydrated: boolean;
 }
 
 const TournamentWizardContext =
@@ -347,6 +348,7 @@ export function TournamentWizardProvider({
         triggerStepHandler,
         clearWizardStorage,
         excludeId,
+        isHydrated,
       }}
     >
       {children}
