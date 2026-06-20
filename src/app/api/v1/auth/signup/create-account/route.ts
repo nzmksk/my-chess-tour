@@ -13,6 +13,35 @@ function generateCode(): string {
   return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
 
+// Undo a freshly-created account when a post-creation step (storing/sending the
+// verification code) fails — otherwise the half-provisioned account would block
+// the user from ever retrying signup (the email already exists).
+// public.users has no FK to auth.users, so both must be removed explicitly; the
+// player_profiles row cascades from public.users via ON DELETE CASCADE.
+async function rollbackAccount(userId: string): Promise<void> {
+  const { error: dbDeleteError } = await supabaseAdmin
+    .from("users")
+    .delete()
+    .eq("id", userId);
+  if (dbDeleteError) {
+    console.error(
+      "Failed to roll back users row for ID:",
+      userId,
+      dbDeleteError,
+    );
+  }
+
+  const { error: authDeleteError } =
+    await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (authDeleteError) {
+    console.error(
+      "Failed to roll back auth user for ID:",
+      userId,
+      authDeleteError,
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   let body: unknown;
 
@@ -145,16 +174,17 @@ export async function POST(request: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const { error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: normalized,
-    password,
-    email_confirm: true,
-    user_metadata: {
-      first_name: firstName,
-      last_name: lastName,
-      password_hash: passwordHash,
-    },
-  });
+  const { data: created, error: authError } =
+    await supabaseAdmin.auth.admin.createUser({
+      email: normalized,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        first_name: firstName,
+        last_name: lastName,
+        password_hash: passwordHash,
+      },
+    });
 
   if (authError) {
     if (
@@ -178,6 +208,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const userId = created.user?.id;
   const code = generateCode();
 
   try {
@@ -186,6 +217,7 @@ export async function POST(request: NextRequest) {
     console.error(
       `Failed to store verification code for: ${normalized} with error: ${err}`,
     );
+    if (userId) await rollbackAccount(userId);
     return NextResponse.json(
       {
         error: {
@@ -203,6 +235,7 @@ export async function POST(request: NextRequest) {
     console.error(
       `Failed to send verification email for: ${normalized} with error: ${err}`,
     );
+    if (userId) await rollbackAccount(userId);
     return NextResponse.json(
       {
         error: {
