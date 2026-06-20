@@ -150,19 +150,79 @@ Query params: `?cursor=abc123&limit=20` (default limit: 20, max: 100).
 
 These are handled primarily by Supabase's client-side SDK. The API layer provides a few helpers.
 
-| Method | Path                        | Auth          | Description                                             |
-| ------ | --------------------------- | ------------- | ------------------------------------------------------- |
-| POST   | `/auth/signup/request-code` | Public        | Step 1: Send a 6-character email verification code      |
-| POST   | `/auth/signup/verify-code`  | Public        | Step 2: Verify code and create account + player profile |
-| POST   | `/auth/login`               | Public        | Supabase login. Returns `user_id`.                      |
-| POST   | `/auth/logout`              | Authenticated | Destroys session.                                       |
-| GET    | `/auth/me`                  | Authenticated | Returns current user with all roles.                    |
+| Method | Path                            | Auth          | Description                                            |
+| ------ | ------------------------------- | ------------- | ------------------------------------------------------ |
+| POST   | `/auth/signup/create-account`   | Public        | Step 1: Create the account and send a 6-character code |
+| POST   | `/auth/signup/verify-code`      | Public        | Step 2: Verify the code, mark verified, and sign in    |
+| POST   | `/auth/signup/resend-code`      | Public        | Resend a verification code                             |
+| POST   | `/auth/signup/complete-profile` | Authenticated | Step 3 (optional): Save the player profile             |
+| POST   | `/auth/login`                   | Public        | Supabase login. Returns `user_id`.                     |
+| POST   | `/auth/logout`                  | Authenticated | Destroys session.                                      |
+| GET    | `/auth/me`                      | Authenticated | Returns current user with all roles.                   |
 
-> **Note:** Signup is a two-step email verification flow. The client first requests a code, then submits the code along with all registration fields to complete account creation.
+> **Note:** Signup is a three-step flow: (1) create the account, which provisions the Supabase auth user (the `handle_new_user` DB trigger creates the `users` + `player_profiles` rows) and emails a verification code; (2) verify the code, which marks the account verified and signs the user in; (3) optionally complete the player profile. A per-IP rate limit and a per-email resend cooldown guard the code-sending endpoints.
 
-#### `POST /auth/signup/request-code`
+#### `POST /auth/signup/create-account`
 
-Validates the email is not already registered, generates a 6-character alphanumeric code, stores it in Redis with a TTL, and sends a verification email.
+Validates the inputs (email format, password complexity, names), checks the email is not already registered, creates the Supabase auth user (with `email_confirm: true`) — the `handle_new_user` DB trigger then creates the `users` + `player_profiles` rows — and emails a 6-character verification code (stored in Redis with a TTL). If storing or sending the code fails, the just-created account is rolled back. Sets the `signup_step=verify` cookie.
+
+**Request:**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword",
+  "firstName": "Wei Hao",
+  "lastName": "Lee"
+}
+```
+
+Password must be ≥8 chars and include uppercase, lowercase, a number, and a symbol.
+
+**Response `201`:**
+
+```json
+{ "message": "Account created. Verification code sent." }
+```
+
+**Error responses:**
+
+- `400` — `{ "error": { "code": "VALIDATION_ERROR", "message": "..." } }` (missing/invalid email, weak password, invalid name)
+- `409` — `{ "error": { "code": "EMAIL_EXISTS", "message": "An account with this email already exists" } }`
+- `429` — `{ "error": { "code": "RATE_LIMITED", "message": "Too many attempts. Please try again later." } }` (per-IP)
+- `500` — Failed to create the account / store / send the code
+
+#### `POST /auth/signup/verify-code`
+
+Verifies the submitted code against the Redis-stored value. On success it marks the account verified (`users.is_verified`), signs the user in (writing the session cookies), consumes the code, and sets the `signup_step=profile` cookie. After 5 incorrect attempts the address is locked out until the code window expires.
+
+**Request:**
+
+```json
+{
+  "email": "user@example.com",
+  "code": "A3K7XZ",
+  "password": "securepassword"
+}
+```
+
+**Response `200`:**
+
+```json
+{ "message": "Email verified successfully" }
+```
+
+**Error responses:**
+
+- `400` — Missing `email`, `code`, or `password`
+- `410` — `{ "error": { "code": "CODE_EXPIRED", "message": "Code has expired. Please request a new one." } }`
+- `422` — `{ "error": { "code": "CODE_INVALID", "message": "Incorrect code. N attempts remaining." } }`
+- `429` — `{ "error": { "code": "TOO_MANY_ATTEMPTS", "message": "Too many incorrect attempts. Please request a new code." } }`
+- `500` — Failed to verify the account or sign in
+
+#### `POST /auth/signup/resend-code`
+
+Resends a verification code. The response is intentionally generic for every account state (missing, already verified, or unverified) so it can't be used to discover whether an email is registered. A code is only actually sent for an existing, unverified account, subject to a per-email cooldown that throttles sends silently.
 
 **Request:**
 
@@ -175,53 +235,44 @@ Validates the email is not already registered, generates a 6-character alphanume
 **Response `200`:**
 
 ```json
-{ "message": "Verification code sent" }
+{ "message": "If your account needs verification, a new code has been sent." }
 ```
 
 **Error responses:**
 
 - `400` — Email missing or invalid format
-- `409` — `{ "error": "An account with this email already exists", "code": "EMAIL_EXISTS" }`
-- `500` — Failed to store code or send email
+- `429` — `{ "error": { "code": "RATE_LIMITED", "message": "Too many attempts. Please try again later." } }` (per-IP)
+- `500` — Failed to store or send the code
 
-#### `POST /auth/signup/verify-code`
+#### `POST /auth/signup/complete-profile`
 
-Verifies the code against the Redis-stored value, creates the Supabase auth user (with `email_confirm: true`), and updates the player profile row created by the `handle_new_user` DB trigger.
+Saves the optional player profile for the signed-in user. Upserts the `player_profiles` row (keyed on `user_id`) and, if an `avatarUrl` is given, updates `users.avatar_url`.
 
-**Request:**
+**Request:** (all fields optional)
 
 ```json
 {
-  "email": "user@example.com",
-  "code": "A3K7XZ",
-  "password": "securepassword",
-  "firstName": "Wei Hao",
-  "lastName": "Lee",
   "gender": "male",
   "nationality": "Malaysian",
   "dateOfBirth": "1995-06-15",
-  "state": "Penang",
   "fideId": "5834567",
   "mcfId": null,
-  "isOku": false
+  "isOku": false,
+  "avatarUrl": "https://.../avatar.png"
 }
 ```
 
-Required: `email`, `code`, `password`, `firstName`, `lastName`. All other fields are optional.
-
-**Response `201`:**
+**Response `200`:**
 
 ```json
-{ "message": "Account created successfully" }
+{ "message": "Profile updated" }
 ```
 
 **Error responses:**
 
-- `400` — Missing required fields
-- `409` — `{ "error": "An account with this email already exists", "code": "EMAIL_EXISTS" }`
-- `410` — `{ "error": "Code has expired. Please request a new one.", "code": "CODE_EXPIRED" }`
-- `422` — `{ "error": "Incorrect code. Please try again.", "code": "CODE_INVALID" }`
-- `500` — Account created but failed to save player profile
+- `400` — Invalid gender, FIDE/MCF ID (digits only), or date of birth (valid `YYYY-MM-DD`, not future, not implausibly old)
+- `401` — `{ "error": { "code": "UNAUTHORIZED", "message": "Not authenticated" } }`
+- `500` — Failed to save the profile or avatar
 
 #### `POST /auth/login`
 
