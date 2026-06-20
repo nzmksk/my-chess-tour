@@ -29,14 +29,17 @@ CREATE TABLE role_permissions (
 -- USERS
 -- Core user table linked to Supabase Auth.
 -- The id matches auth.users.id
+-- The password itself is managed by Supabase Auth (auth.users.encrypted_password);
+-- we never store our own copy. is_verified gates login until email is confirmed.
 -- =============================================
 CREATE TABLE users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email         varchar(255) NOT NULL,  -- uniqueness enforced via partial index in 002_indexes.sql
-  password      varchar(255) NOT NULL,
   first_name    varchar(255) NOT NULL,
   last_name     varchar(255) NOT NULL,
   avatar_url    varchar(255),
+  is_verified   boolean NOT NULL DEFAULT false,
+  verified_at   timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   deleted_at    timestamptz
@@ -261,6 +264,17 @@ CREATE TABLE audit_logs (
   old_data         jsonb,
   new_data         jsonb,
   created_at       timestamptz  NOT NULL DEFAULT now()
+);
+
+-- =============================================
+-- WAITLIST
+-- Pre-launch email capture. user_type segments players vs organizers.
+-- =============================================
+CREATE TABLE waitlist (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email      varchar(255) UNIQUE NOT NULL,
+  user_type  text NOT NULL DEFAULT 'player' CHECK (user_type IN ('player', 'organizer')),
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- =============================================

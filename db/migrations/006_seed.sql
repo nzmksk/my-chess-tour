@@ -6,7 +6,7 @@
 --          · 15 tournaments · 200 registrations + payments
 --
 -- Prerequisites: migrations 001–005 must be applied first.
--- Password for all seed accounts: Password123!
+-- Password for all seed accounts: Abcd!234
 -- =============================================================================
 
 -- Tag all audit log entries created during seeding
@@ -112,7 +112,7 @@ DECLARE
   new_reg_id   uuid;
 
   -- Pre-compute bcrypt hash once
-  pwd_hash     text := crypt('Password123!', gen_salt('bf'));
+  pwd_hash     text := crypt('Abcd!234', gen_salt('bf'));
 
   -- Player derivation vars
   p_first      text;
@@ -252,13 +252,17 @@ BEGIN
       org_emails[i], pwd_hash,
       now(),
       '{"provider":"email","providers":["email"]}',
-      json_build_object('first_name', org_first[i], 'last_name', org_last[i], 'password_hash', pwd_hash),
+      json_build_object('first_name', org_first[i], 'last_name', org_last[i]),
       now(), now()
     );
 
-    INSERT INTO public.users (id, email, password, first_name, last_name)
-    VALUES (new_user_id, org_emails[i], pwd_hash, org_first[i], org_last[i])
-    ON CONFLICT (id) DO NOTHING;
+    -- The trigger already created the row (is_verified=false); mark seed
+    -- accounts verified so they're immediately login-ready.
+    INSERT INTO public.users (id, email, first_name, last_name, is_verified, verified_at)
+    VALUES (new_user_id, org_emails[i], org_first[i], org_last[i], true, now())
+    ON CONFLICT (id) DO UPDATE SET
+      is_verified = true,
+      verified_at = now();
 
     org_user_ids := array_append(org_user_ids, new_user_id);
 
@@ -320,14 +324,17 @@ BEGIN
       p_email, pwd_hash,
       now(),
       '{"provider":"email","providers":["email"]}',
-      json_build_object('first_name', p_first, 'last_name', p_last, 'password_hash', pwd_hash),
+      json_build_object('first_name', p_first, 'last_name', p_last),
       now() - (i || ' days')::interval,
       now() - (i || ' days')::interval
     );
 
-    INSERT INTO public.users (id, email, password, first_name, last_name)
-    VALUES (new_user_id, p_email, pwd_hash, p_first, p_last)
-    ON CONFLICT (id) DO NOTHING;
+    -- Mark seed accounts verified so they're immediately login-ready.
+    INSERT INTO public.users (id, email, first_name, last_name, is_verified, verified_at)
+    VALUES (new_user_id, p_email, p_first, p_last, true, now())
+    ON CONFLICT (id) DO UPDATE SET
+      is_verified = true,
+      verified_at = now();
 
     player_user_ids := array_append(player_user_ids, new_user_id);
 
@@ -567,7 +574,7 @@ BEGIN
   RAISE NOTICE '  > 120 payment records created';
   RAISE NOTICE '';
   RAISE NOTICE '=== Seed complete ===';
-  RAISE NOTICE 'All accounts use password: Password123!';
+  RAISE NOTICE 'All accounts are verified and login-ready. Password: Abcd!234';
 
 END;
 $$;
