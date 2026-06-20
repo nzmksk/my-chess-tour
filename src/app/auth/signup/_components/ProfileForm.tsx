@@ -14,6 +14,10 @@ export default function ProfileForm() {
   const router = useRouter();
   const avatarInitials =
     `${form.firstName[0]}${form.lastName[0]}`.toUpperCase() || "CT";
+  // Date-of-birth bounds for the native picker (UTC date string, so it matches
+  // between server and client render). Server-side validation is authoritative.
+  const maxDob = new Date().toISOString().slice(0, 10);
+  const minDob = `${new Date().getUTCFullYear() - 120}-01-01`;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -231,6 +235,8 @@ export default function ProfileForm() {
                 type="date"
                 placeholder="DD / MM / YYYY"
                 value={form.dateOfBirth ?? ""}
+                min={minDob}
+                max={maxDob}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, dateOfBirth: e.target.value }))
                 }

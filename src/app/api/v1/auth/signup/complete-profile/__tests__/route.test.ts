@@ -159,6 +159,54 @@ describe("POST /api/v1/auth/signup/complete-profile", () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
+  it("rejects a malformed date of birth", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, dateOfBirth: "2020-13-40" }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a date of birth in the future", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, dateOfBirth: "2999-01-01" }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.message).toMatch(/future/i);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an implausibly old date of birth", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, dateOfBirth: "1800-01-01" }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("accepts a profile with no date of birth", async () => {
+    const res = await POST(
+      makeRequest({
+        gender: "Male",
+        nationality: "Malaysian",
+        fideId: "12345678",
+        mcfId: "7654321",
+        isOku: false,
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockUpsert).toHaveBeenCalled();
+  });
+
   // --- Persistence failure --------------------------------------------------
 
   it("returns 500 when the profile upsert fails", async () => {
