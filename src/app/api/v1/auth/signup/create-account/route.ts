@@ -3,7 +3,10 @@ import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { storeVerificationCode } from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
-import { validateEmail } from "@/services/auth/auth-validation";
+import {
+  validateEmail,
+  checkPasswordRequirements,
+} from "@/services/auth/auth-validation";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
 
 function generateCode(): string {
@@ -127,12 +130,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (password.length < 8) {
+  // Enforce the same complexity rules the client applies, so a direct API call
+  // can't create an account with a weak password.
+  const passwordReqs = checkPasswordRequirements(password);
+  if (!Object.values(passwordReqs).every(Boolean)) {
     return NextResponse.json(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message: "Password must be at least 8 characters",
+          message:
+            "Password must be at least 8 characters and include uppercase, lowercase, a number, and a symbol",
         },
       },
       { status: 400 },

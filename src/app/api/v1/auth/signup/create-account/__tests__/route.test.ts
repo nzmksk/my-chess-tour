@@ -127,6 +127,39 @@ describe("POST /api/v1/auth/signup/create-account", () => {
     expect(mockDelete).not.toHaveBeenCalled();
   });
 
+  // --- Password complexity (server-side) ------------------------------------
+
+  it("rejects a password that is too short", async () => {
+    const res = await POST(makeRequest({ ...validBody, password: "Ab1!" }));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a long password missing a symbol", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, password: "Password1" }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a password missing an uppercase letter", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, password: "password1!" }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe("VALIDATION_ERROR");
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
   // --- Rollback on post-creation failures -----------------------------------
 
   it("rolls back the account when storing the code fails", async () => {
