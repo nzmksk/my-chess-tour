@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import CountryDropdown from "./CountryDropdown";
+import NationalitySelect from "./NationalitySelect";
 import Image from "next/image";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
@@ -245,7 +245,7 @@ export default function ProfileForm() {
                   Nationality
                 </label>
               </div>
-              <CountryDropdown
+              <NationalitySelect
                 id="nationality"
                 value={form.nationality ?? ""}
                 onChange={(v) =>

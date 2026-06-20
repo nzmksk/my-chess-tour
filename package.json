@@ -19,6 +19,7 @@
     "bcryptjs": "^3.0.3",
     "next": "16.2.6",
     "react": "19.2.6",
+    "react-country-state-city": "^1.1.13",
     "react-dom": "19.2.6",
     "resend": "^6.9.3"
   },
