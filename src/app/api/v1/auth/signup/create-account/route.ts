@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { storeVerificationCode } from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
@@ -179,8 +178,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-
+  // Supabase Auth securely stores the password itself (auth.users.encrypted_password)
+  // and login uses signInWithPassword — so we don't store our own hash anywhere.
   const { data: created, error: authError } =
     await supabaseAdmin.auth.admin.createUser({
       email: normalized,
@@ -189,7 +188,6 @@ export async function POST(request: NextRequest) {
       user_metadata: {
         first_name: firstName,
         last_name: lastName,
-        password_hash: passwordHash,
       },
     });
 

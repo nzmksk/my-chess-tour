@@ -56,11 +56,6 @@ vi.mock("@/services/email/email", () => ({
   sendVerificationEmail: mockSendVerificationEmail,
 }));
 
-// Avoid the real (slow) bcrypt work and keep the hash deterministic.
-vi.mock("bcryptjs", () => ({
-  default: { hash: vi.fn().mockResolvedValue("hashed-pw") },
-}));
-
 import { POST } from "../route";
 
 // ---------------------------------------------------------------------------
@@ -125,6 +120,20 @@ describe("POST /api/v1/auth/signup/create-account", () => {
     expect(mockSendVerificationEmail).toHaveBeenCalledOnce();
     expect(mockDeleteUser).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("passes the plaintext password to Supabase Auth and never stores a hash in metadata", async () => {
+    await POST(makeRequest(validBody));
+
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "player@example.com",
+        password: "Password1!",
+        user_metadata: expect.not.objectContaining({
+          password_hash: expect.anything(),
+        }),
+      }),
+    );
   });
 
   // --- Password complexity (server-side) ------------------------------------
