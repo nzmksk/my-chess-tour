@@ -125,11 +125,14 @@ function makeRequest(
   id: string,
   body: unknown = { fee_tier: "standard" },
 ): NextRequest {
-  return new NextRequest(`http://localhost/api/v1/tournaments/${id}/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  return new NextRequest(
+    `http://localhost/api/v1/tournaments/${id}/registrations`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +181,7 @@ function setNoUser() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("POST /api/v1/tournaments/:id/register", () => {
+describe("POST /api/v1/tournaments/:id/registrations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetRegCallCount();
@@ -218,7 +221,7 @@ describe("POST /api/v1/tournaments/:id/register", () => {
 
     it("returns 400 when the request body is not valid JSON", async () => {
       const req = new NextRequest(
-        `http://localhost/api/v1/tournaments/${VALID_UUID}/register`,
+        `http://localhost/api/v1/tournaments/${VALID_UUID}/registrations`,
         { method: "POST", body: "not json" },
       );
       const res = await POST(req, {

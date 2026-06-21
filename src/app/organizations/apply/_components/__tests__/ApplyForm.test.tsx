@@ -174,12 +174,12 @@ describe("ApplyForm", () => {
       ).toBeDefined();
     });
 
-    it("redirects to /my/organizations when primary button is clicked", async () => {
+    it("redirects to /my/applications when primary button is clicked", async () => {
       await submitForm();
       fireEvent.click(
         screen.getByRole("button", { name: /View My Organizations/ }),
       );
-      expect(mockPush).toHaveBeenCalledWith("/my/organizations");
+      expect(mockPush).toHaveBeenCalledWith("/my/applications");
     });
 
     it("redirects to /tournaments when secondary button is clicked", async () => {
@@ -190,14 +190,14 @@ describe("ApplyForm", () => {
       expect(mockPush).toHaveBeenCalledWith("/tournaments");
     });
 
-    it("auto-redirects to /my/organizations after 5 seconds", async () => {
+    it("auto-redirects to /my/applications after 5 seconds", async () => {
       await submitForm();
       for (let i = 0; i < 5; i++) {
         await act(async () => {
           vi.advanceTimersByTime(1000);
         });
       }
-      expect(mockPush).toHaveBeenCalledWith("/my/organizations");
+      expect(mockPush).toHaveBeenCalledWith("/my/applications");
     });
 
     it("passes filtered links (non-empty URLs only) in the request body", async () => {

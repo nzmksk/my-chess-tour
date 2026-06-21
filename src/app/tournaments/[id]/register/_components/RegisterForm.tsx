@@ -163,7 +163,7 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/v1/tournaments/${tournament.id}/register`, {
+      const res = await fetch(`/api/v1/tournaments/${tournament.id}/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fee_tier: selectedTier }),
@@ -199,15 +199,15 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
   }
 
   return (
-    <div className="max-w-lg mx-auto">
-      <h1 className="font-cinzel text-xl font-semibold text-text-primary tracking-wider mb-4">
+    <div className="mx-auto max-w-lg">
+      <h1 className="font-cinzel text-text-primary mb-4 text-xl font-semibold tracking-wider">
         Register — {tournament.name}
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Fee tier selector */}
-        <div className="card card--featured p-6 flex flex-col gap-3">
-          <p className="font-cinzel text-xs font-semibold uppercase tracking-widest text-text-muted">
+        <div className="card card--featured flex flex-col gap-3 p-6">
+          <p className="font-cinzel text-text-muted text-xs font-semibold tracking-widest uppercase">
             Select Entry Fee
           </p>
 
@@ -215,7 +215,7 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
             <select
               value={selectedTier}
               onChange={(e) => setSelectedTier(e.target.value)}
-              className="w-full appearance-none border border-border bg-bg-raised rounded-md px-3 py-2.5 pr-8 font-lato text-sm text-text-primary focus:outline-none focus:border-gold-bright transition-colors cursor-pointer"
+              className="border-border bg-bg-raised font-lato text-text-primary focus:border-gold-bright w-full cursor-pointer appearance-none rounded-md border px-3 py-2.5 pr-8 text-sm transition-colors focus:outline-none"
             >
               {tiers.map((tier) => (
                 <option
@@ -235,13 +235,13 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
                 </option>
               ))}
             </select>
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-xs">
+            <span className="text-text-muted pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs">
               ▾
             </span>
           </div>
 
           {selected.subtitle && !eligibilityError && (
-            <p className="font-lato text-xs text-text-muted">
+            <p className="font-lato text-text-muted text-xs">
               {selected.subtitle}
             </p>
           )}
@@ -254,11 +254,11 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
         </div>
 
         {/* Cost breakdown */}
-        <div className="card p-6 flex flex-col gap-2">
-          <p className="font-cinzel text-xs font-semibold uppercase tracking-widest text-text-muted mb-1">
+        <div className="card flex flex-col gap-2 p-6">
+          <p className="font-cinzel text-text-muted mb-1 text-xs font-semibold tracking-widest uppercase">
             Summary
           </p>
-          <div className="flex justify-between font-lato text-sm text-text-secondary">
+          <div className="font-lato text-text-secondary flex justify-between text-sm">
             <span>Entry Fee ({toTitleCase(selected.label)})</span>
             <span>
               {selected.amount_cents === 0
@@ -266,26 +266,26 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
                 : formatRm(selected.amount_cents)}
             </span>
           </div>
-          <div className="flex justify-between font-lato text-sm text-text-secondary">
+          <div className="font-lato text-text-secondary flex justify-between text-sm">
             <span>Processing Fee</span>
             <span>{formatRm(PROCESSING_FEE_CENTS)}</span>
           </div>
-          <div className="flex justify-between font-cinzel text-sm font-bold text-text-primary border-t border-border pt-2 mt-1">
+          <div className="font-cinzel text-text-primary border-border mt-1 flex justify-between border-t pt-2 text-sm font-bold">
             <span>Total</span>
             <span>{formatRm(total)}</span>
           </div>
         </div>
 
         {/* Payment method */}
-        <div className="card p-6 flex flex-col gap-3">
-          <p className="font-cinzel text-xs font-semibold uppercase tracking-widest text-text-muted">
+        <div className="card flex flex-col gap-3 p-6">
+          <p className="font-cinzel text-text-muted text-xs font-semibold tracking-widest uppercase">
             Payment Method
           </p>
           <div className="grid grid-cols-2 gap-3">
             {PAYMENT_METHODS.map((method) => (
               <label
                 key={method.id}
-                className={`flex flex-col gap-0.5 border rounded-md p-3 cursor-pointer transition-colors ${
+                className={`flex cursor-pointer flex-col gap-0.5 rounded-md border p-3 transition-colors ${
                   paymentMethod === method.id
                     ? "border-gold-bright bg-bg-raised"
                     : "border-border hover:border-gold-bright/50"
@@ -299,10 +299,10 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
                   onChange={() => setPaymentMethod(method.id)}
                   className="sr-only"
                 />
-                <span className="font-lato text-sm font-medium text-text-primary">
+                <span className="font-lato text-text-primary text-sm font-medium">
                   {method.label}
                 </span>
-                <span className="font-lato text-xs text-text-muted">
+                <span className="font-lato text-text-muted text-xs">
                   {method.description}
                 </span>
               </label>
@@ -312,7 +312,7 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
 
         {/* Error */}
         {status === "error" && errorMessage && (
-          <p className="font-lato text-sm text-red-400 text-center">
+          <p className="font-lato text-center text-sm text-red-400">
             {errorMessage}
           </p>
         )}
@@ -320,7 +320,7 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
         {/* Submit */}
         <button
           type="submit"
-          className="btn-primary rounded-md w-full"
+          className="btn-primary w-full rounded-md"
           disabled={
             status === "submitting" ||
             status === "redirecting" ||
@@ -336,7 +336,7 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
 
         <Link
           href={`/tournaments/${tournament.id}`}
-          className="font-lato text-sm text-text-muted text-center hover:text-text-secondary transition-colors"
+          className="font-lato text-text-muted hover:text-text-secondary text-center text-sm transition-colors"
         >
           ← Back to tournament
         </Link>
