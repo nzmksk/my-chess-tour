@@ -59,7 +59,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Protect routes that require auth
-  const protectedPaths = ["/dashboard", "/player", "/organizer", "/admin"];
+  const protectedPaths = ["/admin", "/my", "/organizations", "/profile"];
   const isProtected = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path),
   );

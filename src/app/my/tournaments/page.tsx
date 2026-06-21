@@ -22,7 +22,7 @@ async function fetchRegistrations(
 
   try {
     const res = await fetch(
-      `${protocol}://${host}/api/v1/registrations?sort=registered_at&order=desc`,
+      `${protocol}://${host}/api/v1/me/registrations?sort=registered_at&order=desc`,
       {
         cache: "no-store",
         headers: { cookie: cookieHeader },
@@ -52,7 +52,7 @@ export default async function PlayerRegistrationsPage() {
   const registrations = await fetchRegistrations(host, cookieHeader);
 
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
       <RegistrationsClient registrations={registrations} />
     </div>
