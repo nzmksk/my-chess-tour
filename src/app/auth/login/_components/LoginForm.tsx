@@ -18,7 +18,9 @@ export default function LoginForm() {
   const [passwordValue, setPasswordValue] = useState("");
 
   // Correct password but unverified account: seed the verify step with the
-  // credentials (so it can submit the code + sign in) and send them there.
+  // email (so it can prefill and resend the code) and send them there. The
+  // password is deliberately not stored — the verify endpoint mints the
+  // session server-side without it.
   useEffect(() => {
     if (!state.needsVerification) return;
     try {
@@ -26,14 +28,13 @@ export default function LoginForm() {
         SIGNUP_FORM_STORAGE_KEY,
         JSON.stringify({
           email: emailValue.trim(),
-          password: passwordValue,
         }),
       );
     } catch {
       // Ignore unavailable storage; the verify page can still resend.
     }
     router.push("/auth/signup/verify");
-  }, [state, router, emailValue, passwordValue]);
+  }, [state, router, emailValue]);
 
   // Screen 2C — Account Locked
   if (state.locked) {

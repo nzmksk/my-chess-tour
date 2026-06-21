@@ -24,10 +24,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { email, code, password } = body as {
+  const { email, code } = body as {
     email?: string;
     code?: string;
-    password?: string;
   };
 
   if (!email || typeof email !== "string") {
@@ -40,13 +39,6 @@ export async function POST(request: NextRequest) {
   if (!code || typeof code !== "string") {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Code is required" } },
-      { status: 400 },
-    );
-  }
-
-  if (!password || typeof password !== "string") {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Password is required" } },
       { status: 400 },
     );
   }
@@ -132,11 +124,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Sign the user in so the SSR client writes session cookies to the response
+  // Mint a session for the already-existing, now-verified user without the
+  // password ever leaving the server. admin.generateLink only generates the
+  // token (it does not send an email), and verifyOtp on the SSR client writes
+  // the session cookies onto the response.
+  const { data: link, error: linkError } =
+    await supabaseAdmin.auth.admin.generateLink({
+      type: "magiclink",
+      email: normalized,
+    });
+
+  if (linkError || !link.properties?.hashed_token) {
+    console.error(
+      "Failed to generate session link for:",
+      normalized,
+      linkError,
+    );
+    return NextResponse.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Account verified but failed to sign in",
+        },
+      },
+      { status: 500 },
+    );
+  }
+
   const supabase = await createClient();
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: normalized,
-    password,
+  const { error: signInError } = await supabase.auth.verifyOtp({
+    type: "magiclink",
+    token_hash: link.properties.hashed_token,
   });
 
   if (signInError) {

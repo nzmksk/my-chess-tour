@@ -4,9 +4,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { type RegistrationFields } from "@/services/auth/auth-validation";
 import { SIGNUP_FORM_STORAGE_KEY as STORAGE_KEY } from "@/lib/signup-storage";
 
-// Persisted in sessionStorage (not localStorage) so the in-progress signup —
-// including the password needed by the verify step — is cleared when the tab
-// closes and never leaks across tabs.
+// Persisted in sessionStorage (not localStorage) so the in-progress signup is
+// cleared when the tab closes and never leaks across tabs. The password and
+// confirmPassword are deliberately NOT persisted — they live only in in-memory
+// React state and are sent straight to create-account, so the cleartext
+// password never touches browser storage.
 
 const defaultForm: RegistrationFields = {
   firstName: "",
@@ -50,10 +52,13 @@ export function SignUpProvider({ children }: { children: React.ReactNode }) {
   // following the email back — without a setState-in-effect.
   const [form, setForm] = useState<RegistrationFields>(readStoredForm);
 
-  // Persist on every change so a later refresh can pick up where we left off.
+  // Persist on every change so a later refresh can pick up where we left off —
+  // but never write the password fields to storage (cleartext credential leak).
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, confirmPassword, ...persisted } = form;
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     } catch {
       // Ignore quota/availability errors — persistence is best-effort.
     }

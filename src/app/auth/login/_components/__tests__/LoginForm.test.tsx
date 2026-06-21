@@ -144,7 +144,10 @@ describe("LoginForm", () => {
     expect(mockRouterPush).toHaveBeenCalledWith("/auth/signup/verify");
     const stored = sessionStorage.getItem("signup_form");
     expect(stored).not.toBeNull();
-    expect(JSON.parse(stored as string)).toHaveProperty("password");
+    const parsed = JSON.parse(stored as string);
+    expect(parsed).toHaveProperty("email");
+    // The cleartext password must never be persisted to browser storage.
+    expect(parsed).not.toHaveProperty("password");
   });
 
   // --- Error state (2B) -------------------------------------------------------

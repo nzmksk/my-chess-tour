@@ -14,7 +14,8 @@ const {
   mockEq,
   mockUpdate,
   mockFrom,
-  mockSignInWithPassword,
+  mockGenerateLink,
+  mockVerifyOtp,
 } = vi.hoisted(() => {
   const mockGetVerificationCode = vi.fn();
   const mockDeleteVerificationCode = vi.fn();
@@ -24,7 +25,8 @@ const {
   const mockEq = vi.fn();
   const mockUpdate = vi.fn(() => ({ eq: mockEq }));
   const mockFrom = vi.fn(() => ({ update: mockUpdate }));
-  const mockSignInWithPassword = vi.fn();
+  const mockGenerateLink = vi.fn();
+  const mockVerifyOtp = vi.fn();
   return {
     mockGetVerificationCode,
     mockDeleteVerificationCode,
@@ -34,7 +36,8 @@ const {
     mockEq,
     mockUpdate,
     mockFrom,
-    mockSignInWithPassword,
+    mockGenerateLink,
+    mockVerifyOtp,
   };
 });
 
@@ -50,13 +53,18 @@ vi.mock("@/services/redis/redis", () => ({
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
     from: mockFrom,
+    auth: {
+      admin: {
+        generateLink: mockGenerateLink,
+      },
+    },
   },
 }));
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: {
-      signInWithPassword: mockSignInWithPassword,
+      verifyOtp: mockVerifyOtp,
     },
   }),
 }));
@@ -77,7 +85,6 @@ import { POST } from "../route";
 const validBody = {
   email: "player@example.com",
   code: "ABC123",
-  password: "securepass",
 };
 
 // ---------------------------------------------------------------------------
@@ -115,7 +122,11 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     mockEq.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockFrom.mockReturnValue({ update: mockUpdate });
-    mockSignInWithPassword.mockResolvedValue({ data: {}, error: null });
+    mockGenerateLink.mockResolvedValue({
+      data: { properties: { hashed_token: "hashed-token-123" } },
+      error: null,
+    });
+    mockVerifyOtp.mockResolvedValue({ data: {}, error: null });
   });
 
   // --- Success --------------------------------------------------------------
@@ -141,12 +152,16 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     expect(mockEq).toHaveBeenCalledWith("email", "player@example.com");
   });
 
-  it("signs the user in after verification", async () => {
+  it("mints a session server-side after verification without a password", async () => {
     await POST(makeRequest(validBody));
 
-    expect(mockSignInWithPassword).toHaveBeenCalledWith({
+    expect(mockGenerateLink).toHaveBeenCalledWith({
+      type: "magiclink",
       email: "player@example.com",
-      password: "securepass",
+    });
+    expect(mockVerifyOtp).toHaveBeenCalledWith({
+      type: "magiclink",
+      token_hash: "hashed-token-123",
     });
   });
 
@@ -190,15 +205,6 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
 
     expect(res.status).toBe(400);
     expect(json.error.message).toMatch(/code is required/i);
-  });
-
-  it("returns 400 when password is missing", async () => {
-    const { password: _, ...body } = validBody;
-    const res = await POST(makeRequest(body));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.message).toMatch(/password is required/i);
   });
 
   // --- Code validation ------------------------------------------------------
@@ -288,7 +294,7 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
     // Should not even look at the stored code or sign the user in
     expect(mockGetVerificationCode).not.toHaveBeenCalled();
     expect(mockFrom).not.toHaveBeenCalled();
-    expect(mockSignInWithPassword).not.toHaveBeenCalled();
+    expect(mockGenerateLink).not.toHaveBeenCalled();
   });
 
   it("does not update users table when code is expired", async () => {
@@ -320,13 +326,27 @@ describe("POST /api/v1/auth/signup/verify-code", () => {
 
     await POST(makeRequest(validBody));
 
-    expect(mockSignInWithPassword).not.toHaveBeenCalled();
+    expect(mockGenerateLink).not.toHaveBeenCalled();
+    expect(mockVerifyOtp).not.toHaveBeenCalled();
   });
 
   // --- Sign-in errors -------------------------------------------------------
 
-  it("returns 500 when sign-in fails after verification", async () => {
-    mockSignInWithPassword.mockResolvedValue({
+  it("returns 500 when session link generation fails after verification", async () => {
+    mockGenerateLink.mockResolvedValue({
+      data: {},
+      error: { message: "Link generation failed" },
+    });
+
+    const res = await POST(makeRequest(validBody));
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.error.message).toMatch(/failed to sign in/i);
+  });
+
+  it("returns 500 when the OTP session exchange fails after verification", async () => {
+    mockVerifyOtp.mockResolvedValue({
       data: {},
       error: { message: "Sign-in failed" },
     });

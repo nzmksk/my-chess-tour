@@ -80,7 +80,6 @@ export default function VerifyForm() {
         body: JSON.stringify({
           email,
           code: value,
-          password: form.password,
         }),
       });
       const data = await res.json();
@@ -177,7 +176,7 @@ export default function VerifyForm() {
             </div>
             <input
               id="verificationCode"
-              className="input text-center tracking-wide text-xl font-cinzel"
+              className="input font-cinzel text-center text-xl tracking-wide"
               type="text"
               inputMode="text"
               autoCapitalize="characters"
