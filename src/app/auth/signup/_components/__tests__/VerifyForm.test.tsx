@@ -216,7 +216,7 @@ describe("VerifyForm", () => {
 
   // --- Resend ---------------------------------------------------------------
 
-  it("calls the resend-code API when Resend code is clicked", async () => {
+  it("calls the request-code API when Resend code is clicked", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -235,7 +235,7 @@ describe("VerifyForm", () => {
     });
 
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      "/api/v1/auth/signup/resend-code",
+      "/api/v1/auth/signup/request-code",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -323,9 +323,9 @@ describe("VerifyForm", () => {
       fireEvent.click(resendLink);
     });
 
-    // Advance 30 minutes + 1 second to exhaust the cooldown
+    // Advance 15 minutes + 1 second to exhaust the cooldown
     await act(async () => {
-      vi.advanceTimersByTime(30 * 60 * 1000 + 1000);
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
     });
 
     const resendLinks = screen

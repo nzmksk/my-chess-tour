@@ -1,17 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { storeVerificationCode } from "@/services/redis/redis";
+import {
+  storeVerificationCode,
+  startResendCooldown,
+  clearResendCooldown,
+  recordSignupAttempt,
+  MAX_SIGNUP_ATTEMPTS_PER_IP,
+} from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
 import { validateEmail } from "@/services/auth/auth-validation";
+import { getClientIp } from "@/lib/request-ip";
+import { generateCode } from "@/services/auth/verification-code";
 
-function generateCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+// A single response shared by every account-state outcome (missing account,
+// already verified, code sent, or silently throttled) so this endpoint can't
+// be used to discover whether an email is registered or its verification state.
+function genericOk() {
+  return NextResponse.json(
+    {
+      message: "If your account needs verification, a new code has been sent.",
+    },
+    { status: 200 },
+  );
 }
 
 export async function POST(request: NextRequest) {
+  // Per-IP rate limit (consistent with the other signup endpoints) to cap
+  // cross-email probing.
+  const ip = getClientIp(request);
+  if ((await recordSignupAttempt(ip)) > MAX_SIGNUP_ATTEMPTS_PER_IP) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many attempts. Please try again later.",
+        },
+      },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
 
   try {
@@ -42,50 +70,50 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Check if email already exists in public.users
-  const { data: existing, error: dbError } = await supabaseAdmin
+  const { data: user, error: dbError } = await supabaseAdmin
     .from("users")
-    .select("id")
+    .select("id, is_verified")
     .eq("email", normalized)
     .maybeSingle();
 
   if (dbError) {
     console.error(
-      "Database error while checking existing email: %s",
+      "Database error while looking up user for resend: %s",
       normalized,
       dbError,
     );
     return NextResponse.json(
       {
-        error: { code: "INTERNAL_ERROR", message: "Failed to validate email" },
+        error: { code: "INTERNAL_ERROR", message: "Failed to look up account" },
       },
       { status: 500 },
     );
   }
 
-  if (existing) {
-    console.error(
-      `Attempt to request verification code for already existing email: ${normalized}`,
-    );
-    return NextResponse.json(
-      {
-        error: {
-          code: "EMAIL_EXISTS",
-          message: "An account with this email already exists",
-        },
-      },
-      { status: 409 },
-    );
+  // Only actually send for an existing, unverified account. Missing and
+  // already-verified accounts fall through to the same generic response so
+  // neither case is distinguishable from a successful resend.
+  if (!user || user.is_verified) {
+    return genericOk();
+  }
+
+  // Throttle real sends (anti email-bombing), but never surface the cooldown —
+  // a 429 here would reveal the address is registered and unverified.
+  const cooldown = await startResendCooldown(normalized);
+  if (cooldown > 0) {
+    return genericOk();
   }
 
   const code = generateCode();
 
   try {
-    await storeVerificationCode(email, code);
+    await storeVerificationCode(normalized, code);
   } catch (err) {
     console.error(
-      `Failed to store verification code for: ${email} with error:, ${err}`,
+      `Failed to store verification code for: ${normalized} with error: ${err}`,
     );
+    // Release the cooldown so the user isn't locked out over a failed send.
+    await clearResendCooldown(normalized);
     return NextResponse.json(
       {
         error: {
@@ -98,11 +126,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await sendVerificationEmail(email, code);
+    await sendVerificationEmail(normalized, code);
   } catch (err) {
     console.error(
-      `Failed to send verification email for: ${email} with error: ${err}`,
+      `Failed to send verification email for: ${normalized} with error: ${err}`,
     );
+    await clearResendCooldown(normalized);
     return NextResponse.json(
       {
         error: {
@@ -114,8 +143,5 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json(
-    { message: "Verification code sent" },
-    { status: 200 },
-  );
+  return genericOk();
 }

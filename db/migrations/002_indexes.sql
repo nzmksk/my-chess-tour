@@ -6,6 +6,9 @@ CREATE INDEX idx_user_global_roles_role ON user_global_roles (role_id);
 -- Users (partial unique: allows email reuse after soft delete)
 CREATE UNIQUE INDEX idx_users_email_active ON users (email) WHERE deleted_at IS NULL;
 
+-- Organizations (case-insensitive unique name among active, non-deleted orgs)
+CREATE UNIQUE INDEX idx_organizations_name_active ON organizations (lower(name)) WHERE deleted_at IS NULL;
+
 -- Organization memberships
 CREATE INDEX idx_org_memberships_user ON organization_memberships (user_id);
 CREATE INDEX idx_org_memberships_role ON organization_memberships (role_id);

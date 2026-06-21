@@ -77,17 +77,69 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (dateOfBirth) {
+    const dob = new Date(dateOfBirth);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) ||
+      Number.isNaN(dob.getTime())
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Date of birth must be a valid date (YYYY-MM-DD)",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    const now = new Date();
+    if (dob > now) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Date of birth cannot be in the future",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    // Reject implausibly old dates (no living person is older than ~120).
+    const oldest = new Date();
+    oldest.setFullYear(oldest.getFullYear() - 120);
+    if (dob < oldest) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Please enter a valid date of birth",
+          },
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Upsert (not update) keyed on the user_id PK: the signup trigger normally
+  // pre-creates this row, but if it's ever missing a plain update would affect
+  // 0 rows and silently drop the profile data.
   const { error: profileError } = await supabaseAdmin
     .from("player_profiles")
-    .update({
-      gender: gender ? (gender.toLowerCase() as "male" | "female") : null,
-      nationality: nationality || null,
-      date_of_birth: dateOfBirth || null,
-      fide_id: fideId || null,
-      mcf_id: mcfId || null,
-      is_oku: isOku ?? false,
-    })
-    .eq("user_id", user.id);
+    .upsert(
+      {
+        user_id: user.id,
+        gender: gender ? (gender.toLowerCase() as "male" | "female") : null,
+        nationality: nationality || null,
+        date_of_birth: dateOfBirth || null,
+        fide_id: fideId || null,
+        mcf_id: mcfId || null,
+        is_oku: isOku ?? false,
+      },
+      { onConflict: "user_id" },
+    );
 
   if (profileError) {
     console.error(

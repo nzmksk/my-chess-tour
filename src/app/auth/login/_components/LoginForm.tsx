@@ -1,17 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { login } from "../_actions/login";
 import { INITIAL_LOGIN_STATE } from "../types";
+import { SIGNUP_FORM_STORAGE_KEY } from "@/lib/signup-storage";
 
 export default function LoginForm() {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(
     login,
     INITIAL_LOGIN_STATE,
   );
   const [showPassword, setShowPassword] = useState(false);
   const [emailValue, setEmailValue] = useState("");
+  const [passwordValue, setPasswordValue] = useState("");
+
+  // Correct password but unverified account: seed the verify step with the
+  // email (so it can prefill and resend the code) and send them there. The
+  // password is deliberately not stored — the verify endpoint mints the
+  // session server-side without it.
+  useEffect(() => {
+    if (!state.needsVerification) return;
+    try {
+      sessionStorage.setItem(
+        SIGNUP_FORM_STORAGE_KEY,
+        JSON.stringify({
+          email: emailValue.trim(),
+        }),
+      );
+    } catch {
+      // Ignore unavailable storage; the verify page can still resend.
+    }
+    router.push("/auth/signup/verify");
+  }, [state, router, emailValue]);
 
   // Screen 2C — Account Locked
   if (state.locked) {
@@ -21,7 +44,7 @@ export default function LoginForm() {
     return (
       <div className="auth-page">
         <div className="centered-col">
-          <div className="auth-card card text-center max-w-100 mx-0 my-auto">
+          <div className="auth-card card mx-0 my-auto max-w-100 text-center">
             <div
               className="confirm-icon confirm-icon--danger"
               role="img"
@@ -72,7 +95,7 @@ export default function LoginForm() {
 
           {state.error && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px" aria-hidden="true">
+              <span className="mt-px shrink-0 text-sm" aria-hidden="true">
                 ⚠
               </span>
               <p className="error-text">
@@ -129,6 +152,8 @@ export default function LoginForm() {
                   placeholder="Your password"
                   autoComplete="current-password"
                   required
+                  value={passwordValue}
+                  onChange={(e) => setPasswordValue(e.target.value)}
                 />
                 <button
                   type="button"
@@ -155,7 +180,7 @@ export default function LoginForm() {
                 />
                 <label
                   htmlFor="keepSignedIn"
-                  className="check-label text-xs m-auto"
+                  className="check-label m-auto text-xs"
                 >
                   Keep me signed in
                 </label>

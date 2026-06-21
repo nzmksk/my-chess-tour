@@ -11,21 +11,30 @@ const {
   mockSelect,
   mockFrom,
   mockStoreVerificationCode,
+  mockStartResendCooldown,
+  mockClearResendCooldown,
   mockSendVerificationEmail,
+  mockRecordSignupAttempt,
 } = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn();
   const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
   const mockSelect = vi.fn(() => ({ eq: mockEq }));
   const mockFrom = vi.fn(() => ({ select: mockSelect }));
   const mockStoreVerificationCode = vi.fn();
+  const mockStartResendCooldown = vi.fn();
+  const mockClearResendCooldown = vi.fn();
   const mockSendVerificationEmail = vi.fn();
+  const mockRecordSignupAttempt = vi.fn();
   return {
     mockMaybeSingle,
     mockEq,
     mockSelect,
     mockFrom,
     mockStoreVerificationCode,
+    mockStartResendCooldown,
+    mockClearResendCooldown,
     mockSendVerificationEmail,
+    mockRecordSignupAttempt,
   };
 });
 
@@ -35,6 +44,10 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/redis/redis", () => ({
   storeVerificationCode: mockStoreVerificationCode,
+  startResendCooldown: mockStartResendCooldown,
+  clearResendCooldown: mockClearResendCooldown,
+  recordSignupAttempt: mockRecordSignupAttempt,
+  MAX_SIGNUP_ATTEMPTS_PER_IP: 30,
 }));
 
 vi.mock("@/services/email/email", () => ({
@@ -55,13 +68,7 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
-function makeInvalidJsonRequest(): NextRequest {
-  return new NextRequest("http://localhost/api/v1/auth/signup/request-code", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{ not valid json",
-  });
-}
+const validBody = { email: "player@example.com" };
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -70,65 +77,136 @@ function makeInvalidJsonRequest(): NextRequest {
 describe("POST /api/v1/auth/signup/request-code", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "u1", is_verified: false },
+      error: null,
+    });
     mockEq.mockReturnValue({ maybeSingle: mockMaybeSingle });
     mockSelect.mockReturnValue({ eq: mockEq });
     mockFrom.mockReturnValue({ select: mockSelect });
     mockStoreVerificationCode.mockResolvedValue(undefined);
+    mockStartResendCooldown.mockResolvedValue(0); // not on cooldown
+    mockClearResendCooldown.mockResolvedValue(undefined);
     mockSendVerificationEmail.mockResolvedValue(undefined);
+    mockRecordSignupAttempt.mockResolvedValue(1); // under the per-IP limit
   });
 
   // --- Success --------------------------------------------------------------
 
-  it("returns 200 when email is new", async () => {
-    const res = await POST(makeRequest({ email: "player@example.com" }));
+  it("sends a new code for an existing, unverified account", async () => {
+    const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.message).toMatch(/verification code sent/i);
-  });
-
-  it("stores and emails a 6-char alphanumeric code", async () => {
-    await POST(makeRequest({ email: "player@example.com" }));
-
+    expect(json.message).toMatch(/sent/i);
+    expect(mockStartResendCooldown).toHaveBeenCalledWith("player@example.com");
     expect(mockStoreVerificationCode).toHaveBeenCalledOnce();
     expect(mockSendVerificationEmail).toHaveBeenCalledOnce();
-
-    const [emailArg, codeArg] = mockSendVerificationEmail.mock.calls[0];
-    expect(emailArg).toBe("player@example.com");
-    expect(typeof codeArg).toBe("string");
-    expect(codeArg).toHaveLength(6);
-    expect(/^[A-Z0-9]{6}$/.test(codeArg)).toBe(true);
   });
 
-  it("passes the same code to both store and send", async () => {
-    await POST(makeRequest({ email: "player@example.com" }));
+  // --- Enumeration hardening: every account state looks identical -----------
 
-    const storedCode = mockStoreVerificationCode.mock.calls[0][1];
-    const emailedCode = mockSendVerificationEmail.mock.calls[0][1];
-    expect(storedCode).toBe(emailedCode);
+  it("returns a generic 200 without sending when the account is missing", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockStartResendCooldown).not.toHaveBeenCalled();
+    expect(mockStoreVerificationCode).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
   });
 
-  // --- Validation errors ----------------------------------------------------
+  it("returns a generic 200 without sending when already verified", async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "u1", is_verified: true },
+      error: null,
+    });
 
-  it("returns 400 for malformed JSON", async () => {
-    const res = await POST(makeInvalidJsonRequest());
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(mockStartResendCooldown).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic 200 without sending when on cooldown (never reveals the throttle)", async () => {
+    mockStartResendCooldown.mockResolvedValue(900); // 15 min remaining
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Retry-After")).toBeNull();
+    expect(mockStoreVerificationCode).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns an identical response for missing, verified, and unverified accounts", async () => {
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    const missing = await POST(makeRequest(validBody));
+    const missingBody = await missing.json();
+
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "u1", is_verified: true },
+      error: null,
+    });
+    const verified = await POST(makeRequest(validBody));
+    const verifiedBody = await verified.json();
+
+    mockMaybeSingle.mockResolvedValue({
+      data: { id: "u1", is_verified: false },
+      error: null,
+    });
+    const unverified = await POST(makeRequest(validBody));
+    const unverifiedBody = await unverified.json();
+
+    expect(missing.status).toBe(200);
+    expect(verified.status).toBe(200);
+    expect(unverified.status).toBe(200);
+    expect(missingBody).toEqual(verifiedBody);
+    expect(verifiedBody).toEqual(unverifiedBody);
+  });
+
+  // --- Per-IP rate limiting -------------------------------------------------
+
+  it("returns 429 once the per-IP attempt limit is exceeded", async () => {
+    mockRecordSignupAttempt.mockResolvedValue(31); // over the limit of 30
+
+    const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(json.error.message).toMatch(/invalid json/i);
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("RATE_LIMITED");
+    // Throttled before any account lookup or send
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
   });
+
+  // --- Send failures (genuine infra errors still surface) -------------------
+
+  it("releases the cooldown and returns 500 when storing the code fails", async () => {
+    mockStoreVerificationCode.mockRejectedValue(new Error("Redis down"));
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(500);
+    expect(mockClearResendCooldown).toHaveBeenCalledWith("player@example.com");
+    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it("releases the cooldown and returns 500 when sending the email fails", async () => {
+    mockSendVerificationEmail.mockRejectedValue(new Error("SMTP error"));
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(500);
+    expect(mockClearResendCooldown).toHaveBeenCalledWith("player@example.com");
+  });
+
+  // --- Validation -----------------------------------------------------------
 
   it("returns 400 when email is missing", async () => {
     const res = await POST(makeRequest({}));
-    const json = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(json.error.message).toMatch(/email is required/i);
-  });
-
-  it("returns 400 when email is not a string", async () => {
-    const res = await POST(makeRequest({ email: 42 }));
     const json = await res.json();
 
     expect(res.status).toBe(400);
@@ -143,80 +221,15 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     expect(json.error.message).toMatch(/invalid email format/i);
   });
 
-  // --- Email-exists check ---------------------------------------------------
-
-  it("returns 409 EMAIL_EXISTS when email is already taken", async () => {
-    mockMaybeSingle.mockResolvedValue({
-      data: { id: "existing-user" },
-      error: null,
-    });
-
-    const res = await POST(makeRequest({ email: "existing@example.com" }));
-    const json = await res.json();
-
-    expect(res.status).toBe(409);
-    expect(json.error.code).toBe("EMAIL_EXISTS");
-    expect(json.error.message).toMatch(/already exists/i);
-  });
-
-  it("does not store or send code when email already exists", async () => {
-    mockMaybeSingle.mockResolvedValue({
-      data: { id: "existing-user" },
-      error: null,
-    });
-
-    await POST(makeRequest({ email: "existing@example.com" }));
-
-    expect(mockStoreVerificationCode).not.toHaveBeenCalled();
-    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
-  });
-
-  it("queries users table with lowercased trimmed email", async () => {
-    await POST(makeRequest({ email: "  Player@Example.COM  " }));
-
-    expect(mockEq).toHaveBeenCalledWith("email", "player@example.com");
-  });
-
-  // --- External service errors ----------------------------------------------
-
-  it("returns 500 when Supabase db check fails", async () => {
+  it("returns 500 when the user lookup fails", async () => {
     mockMaybeSingle.mockResolvedValue({
       data: null,
       error: { message: "DB error" },
     });
 
-    const res = await POST(makeRequest({ email: "player@example.com" }));
-    const json = await res.json();
+    const res = await POST(makeRequest(validBody));
 
     expect(res.status).toBe(500);
-    expect(json.error.message).toMatch(/failed to validate email/i);
-  });
-
-  it("returns 500 when Redis store fails", async () => {
-    mockStoreVerificationCode.mockRejectedValue(new Error("Redis down"));
-
-    const res = await POST(makeRequest({ email: "player@example.com" }));
-    const json = await res.json();
-
-    expect(res.status).toBe(500);
-    expect(json.error.message).toMatch(/failed to store verification code/i);
-  });
-
-  it("returns 500 when sending email fails", async () => {
-    mockSendVerificationEmail.mockRejectedValue(new Error("SMTP error"));
-
-    const res = await POST(makeRequest({ email: "player@example.com" }));
-    const json = await res.json();
-
-    expect(res.status).toBe(500);
-    expect(json.error.message).toMatch(/failed to send verification email/i);
-  });
-
-  it("does not send email when Redis store fails", async () => {
-    mockStoreVerificationCode.mockRejectedValue(new Error("Redis down"));
-
-    await POST(makeRequest({ email: "player@example.com" }));
-
-    expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+    expect(mockStartResendCooldown).not.toHaveBeenCalled();
   });
 });

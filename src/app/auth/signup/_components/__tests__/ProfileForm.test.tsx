@@ -13,13 +13,36 @@ import {
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockPush } = vi.hoisted(() => ({ mockPush: vi.fn() }));
+const { mockPush, mockGetUser, mockUpload, mockGetPublicUrl } = vi.hoisted(
+  () => ({
+    mockPush: vi.fn(),
+    mockGetUser: vi.fn(),
+    mockUpload: vi.fn(),
+    mockGetPublicUrl: vi.fn(),
+  }),
+);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock("../StepTracker", () => ({ default: () => null }));
+
+vi.mock("next/image", () => ({
+  default: ({ src, alt }: { src: string; alt: string }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- test stub for next/image
+    <img src={src} alt={alt} />
+  ),
+}));
+
+vi.mock("@/services/supabase/client", () => ({
+  createClient: () => ({
+    auth: { getUser: mockGetUser },
+    storage: {
+      from: () => ({ upload: mockUpload, getPublicUrl: mockGetPublicUrl }),
+    },
+  }),
+}));
 
 // Make setForm call the updater so inner arrow-function callbacks are covered.
 const mockFormData = {
@@ -43,6 +66,7 @@ vi.mock("../SignUpContext", () => ({
     setForm: vi.fn((updater: unknown) => {
       if (typeof updater === "function") updater(mockFormData);
     }),
+    clearForm: vi.fn(),
   }),
 }));
 
@@ -68,6 +92,16 @@ function getSkipButton(): HTMLElement {
     .find((b) => b.textContent?.trim() === "Skip")!;
 }
 
+function makeImageFile(name: string, type: string, sizeBytes = 1024): File {
+  const file = new File(["x"], name, { type });
+  Object.defineProperty(file, "size", { value: sizeBytes });
+  return file;
+}
+
+function getFileInput(): HTMLInputElement {
+  return screen.getByLabelText("Profile photo file input") as HTMLInputElement;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -91,6 +125,19 @@ describe("ProfileForm", () => {
     expect(screen.getByLabelText("Date of Birth")).toBeDefined();
   });
 
+  it("does not mark Gender or Nationality as required (profile is optional)", () => {
+    render(<ProfileForm />);
+    const gender = screen.getByLabelText("Gender") as HTMLSelectElement;
+    const nationality = screen.getByLabelText(
+      "Nationality",
+    ) as HTMLInputElement;
+
+    expect(gender.required).toBe(false);
+    expect(gender.getAttribute("aria-required")).toBeNull();
+    expect(nationality.required).toBe(false);
+    expect(nationality.getAttribute("aria-required")).toBeNull();
+  });
+
   it("renders FIDE ID, MCF ID, and OKU fields", () => {
     render(<ProfileForm />);
     expect(screen.getByLabelText("FIDE ID")).toBeDefined();
@@ -102,6 +149,24 @@ describe("ProfileForm", () => {
     render(<ProfileForm />);
     const avatar = screen.getByRole("button", { name: "Upload profile photo" });
     expect(avatar.textContent).toContain("AW");
+  });
+
+  it("falls back to 'CT' initials (not 'UNDEFINED') when names are empty", () => {
+    const origFirst = mockFormData.firstName;
+    const origLast = mockFormData.lastName;
+    mockFormData.firstName = "";
+    mockFormData.lastName = "";
+    try {
+      render(<ProfileForm />);
+      const avatar = screen.getByRole("button", {
+        name: "Upload profile photo",
+      });
+      expect(avatar.textContent).toContain("CT");
+      expect(avatar.textContent?.toUpperCase()).not.toContain("UNDEFINED");
+    } finally {
+      mockFormData.firstName = origFirst;
+      mockFormData.lastName = origLast;
+    }
   });
 
   it("renders Skip and Complete Profile buttons", () => {
@@ -269,5 +334,139 @@ describe("ProfileForm", () => {
     });
 
     expect(screen.getByRole("alert").textContent).toContain("Network error");
+  });
+
+  // --- Avatar upload --------------------------------------------------------
+
+  it("rejects a non-image file type", async () => {
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.change(getFileInput(), {
+        target: { files: [makeImageFile("a.gif", "image/gif")] },
+      });
+    });
+    expect(screen.getByRole("alert").textContent).toContain("JPG or PNG");
+  });
+
+  it("rejects an image larger than 2 MB", async () => {
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.change(getFileInput(), {
+        target: {
+          files: [makeImageFile("big.png", "image/png", 3 * 1024 * 1024)],
+        },
+      });
+    });
+    expect(screen.getByRole("alert").textContent).toContain("2 MB");
+  });
+
+  it("shows a preview after a valid image is selected", async () => {
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.change(getFileInput(), {
+        target: { files: [makeImageFile("ok.png", "image/png")] },
+      });
+    });
+    const img = await screen.findByAltText("Profile photo preview");
+    expect(img).toBeDefined();
+  });
+
+  it("uploads the avatar and includes its URL in the profile request", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockUpload.mockResolvedValue({ error: null });
+    mockGetPublicUrl.mockReturnValue({
+      data: { publicUrl: "https://cdn/u1.png" },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ message: "ok" }) }),
+    );
+
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.change(getFileInput(), {
+        target: { files: [makeImageFile("ok.png", "image/png")] },
+      });
+    });
+    await act(async () => {
+      fireEvent.submit(getSubmitButton().closest("form")!);
+    });
+
+    expect(mockUpload).toHaveBeenCalled();
+    const body = JSON.parse(
+      (vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body.avatarUrl).toBe("https://cdn/u1.png");
+    expect(mockPush).toHaveBeenCalledWith("/tournaments");
+  });
+
+  it("shows an error when the avatar upload fails", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockUpload.mockResolvedValue({ error: { message: "boom" } });
+    vi.stubGlobal("fetch", vi.fn());
+
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.change(getFileInput(), {
+        target: { files: [makeImageFile("ok.png", "image/png")] },
+      });
+    });
+    await act(async () => {
+      fireEvent.submit(getSubmitButton().closest("form")!);
+    });
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Failed to upload photo",
+    );
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("opens the file picker when the avatar is clicked", async () => {
+    render(<ProfileForm />);
+    const avatar = screen.getByRole("button", { name: "Upload profile photo" });
+    await act(async () => {
+      fireEvent.click(avatar);
+    });
+    expect(avatar).toBeDefined();
+  });
+
+  it("opens the file picker on Enter or Space, ignoring other keys", async () => {
+    render(<ProfileForm />);
+    const avatar = screen.getByRole("button", { name: "Upload profile photo" });
+    await act(async () => {
+      fireEvent.keyDown(avatar, { key: "Enter" });
+      fireEvent.keyDown(avatar, { key: " " });
+      fireEvent.keyDown(avatar, { key: "a" }); // non-trigger branch
+    });
+    expect(avatar).toBeDefined();
+  });
+
+  it("skips the upload when there is no authenticated user", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ message: "ok" }) }),
+    );
+
+    render(<ProfileForm />);
+    await act(async () => {
+      fireEvent.change(getFileInput(), {
+        target: { files: [makeImageFile("ok.png", "image/png")] },
+      });
+    });
+    await act(async () => {
+      fireEvent.submit(getSubmitButton().closest("form")!);
+    });
+
+    expect(mockUpload).not.toHaveBeenCalled();
+    const body = JSON.parse(
+      (vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body.avatarUrl).toBeUndefined();
+    expect(mockPush).toHaveBeenCalledWith("/tournaments");
   });
 });

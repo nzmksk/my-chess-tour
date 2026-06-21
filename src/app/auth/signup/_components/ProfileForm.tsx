@@ -10,10 +10,14 @@ import { createClient } from "@/services/supabase/client";
 const GENDERS = ["Male", "Female"] as const;
 
 export default function ProfileForm() {
-  const { form, setForm } = useSignUpForm();
+  const { form, setForm, clearForm } = useSignUpForm();
   const router = useRouter();
   const avatarInitials =
-    `${form.firstName[0]}${form.lastName[0]}`.toUpperCase() || "CT";
+    `${form.firstName[0] ?? ""}${form.lastName[0] ?? ""}`.toUpperCase() || "CT";
+  // Date-of-birth bounds for the native picker (UTC date string, so it matches
+  // between server and client render). Server-side validation is authoritative.
+  const maxDob = new Date().toISOString().slice(0, 10);
+  const minDob = `${new Date().getUTCFullYear() - 120}-01-01`;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -106,6 +110,7 @@ export default function ProfileForm() {
         return;
       }
 
+      clearForm();
       router.push("/tournaments");
     } catch {
       setSubmitError("Network error. Please try again.");
@@ -115,6 +120,7 @@ export default function ProfileForm() {
   }
 
   function handleSkip() {
+    clearForm();
     router.push("/tournaments");
   }
 
@@ -206,8 +212,6 @@ export default function ProfileForm() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, gender: e.target.value }))
                 }
-                required
-                aria-required="true"
               >
                 <option value="">Select…</option>
                 {GENDERS.map((g) => (
@@ -231,6 +235,8 @@ export default function ProfileForm() {
                 type="date"
                 placeholder="DD / MM / YYYY"
                 value={form.dateOfBirth ?? ""}
+                min={minDob}
+                max={maxDob}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, dateOfBirth: e.target.value }))
                 }
@@ -253,8 +259,6 @@ export default function ProfileForm() {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, nationality: e.target.value }))
                 }
-                required
-                aria-required="true"
               />
             </div>
 
