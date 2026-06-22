@@ -4,6 +4,14 @@ import { useState } from "react";
 import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: "male", label: "Male" },
@@ -80,6 +88,7 @@ export default function ProfileClient({ profile }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [current, setCurrent] = useState<PlayerProfile>(profile);
+  const [confirmFields, setConfirmFields] = useState<string[] | null>(null);
 
   const [form, setForm] = useState<EditForm>({
     date_of_birth: profile.date_of_birth ?? "",
@@ -118,8 +127,31 @@ export default function ProfileClient({ profile }: Props) {
     });
   }
 
-  async function handleSave(e: React.FormEvent) {
+  // Set-once fields that the user is about to fill in for the first time —
+  // once saved these become locked, so we ask for confirmation first.
+  function getLockingFields() {
+    const fields: string[] = [];
+    if (canEditDob && form.date_of_birth) fields.push("Date of Birth");
+    if (canEditGender && form.gender) fields.push("Gender");
+    if (canEditNationality && form.nationality.trim())
+      fields.push("Nationality");
+    if (canEditFideId && form.fide_id) fields.push("FIDE ID");
+    if (canEditMcfId && form.mcf_id) fields.push("MCF ID");
+    return fields;
+  }
+
+  function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    const locking = getLockingFields();
+    if (locking.length > 0) {
+      setConfirmFields(locking);
+      return;
+    }
+    void doSave();
+  }
+
+  async function doSave() {
+    setConfirmFields(null);
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -603,6 +635,45 @@ export default function ProfileClient({ profile }: Props) {
           </SectionCard>
         </div>
       )}
+
+      <Dialog
+        open={confirmFields !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmFields(null);
+        }}
+      >
+        <DialogContent className="bg-bg-raised border-border">
+          <DialogHeader>
+            <DialogTitle className="font-cinzel text-text-primary">
+              Confirm your details
+            </DialogTitle>
+            <DialogDescription className="font-lato text-text-secondary">
+              The following can only be set ONCE. After saving, you won&apos;t be able to change them again - you&apos;ll need to contact support.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="font-lato text-text-body list-disc space-y-1 pl-5 text-sm">
+            {confirmFields?.map((field) => (
+              <li key={field}>{field}</li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <button
+              type="button"
+              className="btn-secondary w-full sm:w-auto"
+              onClick={() => setConfirmFields(null)}
+            >
+              Go back
+            </button>
+            <button
+              type="button"
+              className="btn-primary w-full sm:w-auto"
+              onClick={() => void doSave()}
+            >
+              Confirm &amp; Save
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
