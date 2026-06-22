@@ -1,17 +1,15 @@
 import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import type { Gender, UpdateProfilePayload } from "@/app/profile/types";
 
 const VALID_GENDERS = new Set<string>(["male", "female"]);
 
 export async function GET(): Promise<NextResponse> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
@@ -23,14 +21,14 @@ export async function GET(): Promise<NextResponse> {
       supabaseAdmin
         .from("users")
         .select("id, first_name, last_name, email, avatar_url")
-        .eq("id", user.id)
+        .eq("id", claims.id)
         .single(),
       supabaseAdmin
         .from("player_profiles")
         .select(
           "date_of_birth, gender, nationality, is_oku, fide_id, fide_rating, title, mcf_id, national_rating, show_age, show_oku",
         )
-        .eq("user_id", user.id)
+        .eq("user_id", claims.id)
         .maybeSingle(),
     ]);
 

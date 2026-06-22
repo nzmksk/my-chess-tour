@@ -5,13 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef, useTransition } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
-import { createClient } from "@/services/supabase/client";
-import {
-  avatarFromMetadata,
-  readCachedAvatar,
-  subscribeAvatar,
-  writeCachedAvatar,
-} from "@/lib/avatar-cache";
+import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/auth/logout/_actions/logout";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
@@ -19,40 +13,6 @@ import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 const NAV_LINKS = [
   { href: "/organizations", label: "Become an Organizer", ghost: true },
 ];
-
-type AuthUser = {
-  id: string;
-  email: string;
-  fullName: string;
-  initials: string;
-  avatarUrl: string | null;
-};
-
-type SupabaseUser = {
-  id?: string;
-  email?: string | null;
-  user_metadata?: Record<string, unknown> | null;
-};
-
-function toAuthUser(user: SupabaseUser | null | undefined): AuthUser | null {
-  if (!user || !user.id) return null;
-  const meta = user.user_metadata ?? {};
-  const firstName: string =
-    (meta.first_name as string) ?? (meta.firstName as string) ?? "";
-  const lastName: string =
-    (meta.last_name as string) ?? (meta.lastName as string) ?? "";
-  const initials =
-    [firstName[0], lastName[0]].filter(Boolean).join("").toUpperCase() ||
-    (user.email?.[0]?.toUpperCase() ?? "?");
-  return {
-    id: user.id,
-    email: user.email ?? "",
-    fullName:
-      [firstName, lastName].filter(Boolean).join(" ") || (user.email ?? ""),
-    initials,
-    avatarUrl: null,
-  };
-}
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -62,7 +22,10 @@ export default function NavBar() {
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerOpen = getIsDrawerOpen(drawerState, pathname ?? "");
 
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  // User + avatar come from the shared auth store (seeded by AuthProvider and
+  // kept live there) — no per-navigation fetch here.
+  const authUser = useAuthStore((s) => s.user);
+  const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [, startSignOut] = useTransition();
@@ -74,76 +37,6 @@ export default function NavBar() {
       logout();
     });
   }
-
-  // Resolve auth state once on mount and keep it in sync with sign-in/out and
-  // token-refresh events (including those from other tabs). The avatar is read
-  // from a layered cache rather than re-queried on every navigation — see
-  // lib/avatar-cache.
-  useEffect(() => {
-    const supabase = createClient();
-    let active = true;
-
-    async function syncAuthUser(user: SupabaseUser | null | undefined) {
-      const base = toAuthUser(user);
-      if (!active || !base) {
-        if (active) setAuthUser(base);
-        return;
-      }
-
-      // Seed from this tab's cache so the avatar paints without waiting on the
-      // network, then resolve the authoritative value.
-      const cached = readCachedAvatar(base.id);
-      setAuthUser({ ...base, avatarUrl: cached });
-
-      // Prefer the avatar mirrored onto user_metadata; fall back to the cache,
-      // and only as a last resort (account not yet backfilled) hit the DB once.
-      const fromMeta = avatarFromMetadata(user);
-      let avatarUrl: string | null;
-      if (fromMeta !== undefined) {
-        avatarUrl = fromMeta;
-      } else if (cached !== null) {
-        avatarUrl = cached;
-      } else {
-        const { data } = await supabase
-          .from("users")
-          .select("avatar_url")
-          .eq("id", base.id)
-          .maybeSingle();
-        if (!active) return;
-        avatarUrl = (data?.avatar_url as string | null) ?? null;
-      }
-
-      writeCachedAvatar(base.id, avatarUrl);
-      if (!active) return;
-      setAuthUser((prev) =>
-        prev && prev.id === base.id ? { ...prev, avatarUrl } : prev,
-      );
-    }
-
-    supabase.auth
-      .getSession()
-      .then(({ data }) => syncAuthUser(data.session?.user));
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      syncAuthUser(session?.user);
-    });
-
-    // Apply avatar changes pushed from the settings page or another tab
-    // immediately, without a round-trip.
-    const unsubscribeAvatar = subscribeAvatar(({ userId, url }) => {
-      setAuthUser((prev) =>
-        prev && prev.id === userId ? { ...prev, avatarUrl: url } : prev,
-      );
-    });
-
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-      unsubscribeAvatar();
-    };
-  }, []);
 
   // Close dropdown on outside click or Escape
   useEffect(() => {
@@ -224,14 +117,14 @@ export default function NavBar() {
                 {/* Avatar + dropdown */}
                 <div className="relative ml-2" ref={dropdownRef}>
                   <button
-                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""} ${authUser.avatarUrl ? "overflow-hidden" : ""}`}
+                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""} ${avatarUrl ? "overflow-hidden" : ""}`}
                     onClick={() => setDropdownOpen((v) => !v)}
                     aria-label="Account menu"
                     aria-expanded={dropdownOpen}
                   >
-                    {authUser.avatarUrl ? (
+                    {avatarUrl ? (
                       <Image
-                        src={authUser.avatarUrl}
+                        src={avatarUrl}
                         alt={`${authUser.fullName} avatar`}
                         width={34}
                         height={34}

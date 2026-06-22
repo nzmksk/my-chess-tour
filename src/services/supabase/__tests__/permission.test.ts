@@ -22,13 +22,13 @@ const createClient = vi.mocked(supabaseServer.createClient);
 // ---------------------------------------------------------------------------
 
 function makeClient({
-  authUser = null as unknown,
+  claims = null as unknown,
   rpcResult = null as unknown,
 } = {}) {
   return {
     rpc: vi.fn().mockResolvedValue({ data: rpcResult }),
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: authUser } }),
+      getClaims: vi.fn().mockResolvedValue({ data: { claims } }),
     },
   };
 }
@@ -40,14 +40,24 @@ function makeClient({
 describe("getCurrentUser", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns the authenticated user", async () => {
-    const user = { id: "u1", email: "alice@example.com" };
-    createClient.mockResolvedValue(makeClient({ authUser: user }) as never);
-    expect(await getCurrentUser()).toEqual(user);
+  it("returns the authenticated user identity", async () => {
+    const claims = {
+      sub: "u1",
+      email: "alice@example.com",
+      user_metadata: { first_name: "Alice" },
+      role: "authenticated",
+    };
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+    expect(await getCurrentUser()).toEqual({
+      id: "u1",
+      email: "alice@example.com",
+      userMetadata: { first_name: "Alice" },
+      role: "authenticated",
+    });
   });
 
   it("returns null when no session exists", async () => {
-    createClient.mockResolvedValue(makeClient({ authUser: null }) as never);
+    createClient.mockResolvedValue(makeClient({ claims: null }) as never);
     expect(await getCurrentUser()).toBeNull();
   });
 });

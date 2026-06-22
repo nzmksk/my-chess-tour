@@ -7,6 +7,7 @@ import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
 import { createClient } from "@/services/supabase/client";
 import { broadcastAvatar } from "@/lib/avatar-cache";
+import { useAuthStore } from "@/stores/auth-store";
 import {
   Dialog,
   DialogContent,
@@ -305,10 +306,12 @@ export default function ProfileClient({ profile }: Props) {
         ...(nextAvatarUrl !== undefined && { avatar_url: nextAvatarUrl }),
       });
 
-      // The avatar changed: push the new URL to the navbar/other tabs now, and
-      // refresh the session so the mirrored user_metadata lands in the JWT
-      // (otherwise the navbar would read a stale value until the next refresh).
+      // The avatar changed: update the shared store (instant navbar update in
+      // this tab), broadcast to other tabs, and refresh the session so the
+      // mirrored user_metadata lands in the JWT (otherwise auth events would
+      // re-assert a stale value until the next token refresh).
       if (nextAvatarUrl !== undefined) {
+        useAuthStore.getState().setAvatar(nextAvatarUrl);
         const {
           data: { user },
         } = await supabase.auth.getUser();

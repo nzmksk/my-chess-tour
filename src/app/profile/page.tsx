@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import PublicProfile from "./_components/PublicProfile";
 import { getPublicProfile } from "./_data/getPublicProfile";
 
@@ -11,16 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     redirect("/auth/login");
   }
 
-  const profile = await getPublicProfile(user.id);
+  const profile = await getPublicProfile(claims.id);
 
   if (!profile) {
     redirect("/auth/login");

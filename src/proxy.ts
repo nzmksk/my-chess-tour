@@ -32,10 +32,13 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // Refresh session — IMPORTANT: do not remove this
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Validate + refresh the session. getClaims() verifies the JWT locally (a
+  // WebCrypto check against the project JWKS when asymmetric signing keys are
+  // used — no auth-server round trip), and still refreshes an expired token via
+  // getSession() under the hood, writing the new cookies through setAll above.
+  // IMPORTANT: do not remove this — it is what keeps the session fresh.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   // Prevent sign-up step-skipping
   const { pathname } = request.nextUrl;

@@ -1,11 +1,37 @@
+import { cache } from "react";
 import { createClient } from "@/services/supabase/server";
 
-export async function getCurrentUser() {
+export type AuthIdentity = {
+  id: string;
+  email: string;
+  userMetadata: Record<string, unknown>;
+  role?: string;
+};
+
+// Validates the session from the JWT itself via getClaims(). With asymmetric
+// signing keys this is a local WebCrypto check (no auth-server round trip);
+// getClaims() still refreshes through getSession() under the hood when needed.
+async function resolveAuthClaims(): Promise<AuthIdentity | null> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (!claims) return null;
+  return {
+    id: claims.sub,
+    email: claims.email ?? "",
+    userMetadata: (claims.user_metadata as Record<string, unknown>) ?? {},
+    role: claims.role,
+  };
+}
+
+// Per-request memoized: every render-phase caller in a single request shares
+// one validation instead of each hitting auth independently.
+export const getAuthClaims = cache(resolveAuthClaims);
+
+// Back-compat identity accessor. Intentionally uncached so it stays predictable
+// outside a request scope (e.g. unit tests).
+export async function getCurrentUser(): Promise<AuthIdentity | null> {
+  return resolveAuthClaims();
 }
 
 /**
