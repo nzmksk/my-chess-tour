@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 import { createClient } from "@/services/supabase/client";
+import { logout } from "@/app/auth/logout/_actions/logout";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 
@@ -56,6 +57,15 @@ export default function NavBar() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [, startSignOut] = useTransition();
+
+  // Sign out immediately — no confirmation. The action clears the session and
+  // redirects to the signed-out screen.
+  function handleSignOut() {
+    startSignOut(() => {
+      logout();
+    });
+  }
 
   // Fetch auth state on route change, and keep it in sync with sign-in/out
   // events (including those triggered in other tabs).
@@ -231,13 +241,16 @@ export default function NavBar() {
                         </Link>
                       </div>
                       <div className="nav-dropdown-divider" />
-                      <Link
-                        href="/auth/logout"
+                      <button
+                        type="button"
                         className="nav-dropdown-item nav-dropdown-item--danger"
-                        onClick={() => setDropdownOpen(false)}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          handleSignOut();
+                        }}
                       >
                         Sign Out
-                      </Link>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -354,15 +367,16 @@ export default function NavBar() {
               >
                 Settings
               </Link>
-              <Link
-                href="/auth/logout"
+              <button
+                type="button"
                 className="nav-drawer-btn-login mt-4"
-                onClick={() =>
-                  setDrawerState((current) => closeDrawer(current))
-                }
+                onClick={() => {
+                  setDrawerState((current) => closeDrawer(current));
+                  handleSignOut();
+                }}
               >
                 Sign Out
-              </Link>
+              </button>
             </>
           ) : (
             <>
