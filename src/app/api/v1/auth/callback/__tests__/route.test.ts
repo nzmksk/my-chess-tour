@@ -2,13 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
+  verifyOtp: vi.fn(),
   redirect: vi.fn(),
 }));
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
     Promise.resolve({
-      auth: { exchangeCodeForSession: mocks.exchangeCodeForSession },
+      auth: {
+        exchangeCodeForSession: mocks.exchangeCodeForSession,
+        verifyOtp: mocks.verifyOtp,
+      },
     }),
   ),
 }));
@@ -27,6 +31,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.redirect.mockReturnValue(new Response());
   mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
+  mocks.verifyOtp.mockResolvedValue({ error: null });
 });
 
 describe("GET /api/v1/auth/callback", () => {

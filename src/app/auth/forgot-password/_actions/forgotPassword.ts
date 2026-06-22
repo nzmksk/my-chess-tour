@@ -18,19 +18,27 @@ export async function forgotPassword(
     return { error: firstError, submitted: false };
   }
 
-  const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/api/v1/auth/callback?next=/auth/update-password`;
+  // Generate only the recovery token (no email is sent by Supabase). We build
+  // our own callback link from `hashed_token` and verify it server-side with
+  // `verifyOtp`, which — unlike the PKCE `code` flow — does not depend on a
+  // `code_verifier` cookie that an admin-generated link never sets.
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo },
   });
 
   // Always succeed to prevent email enumeration attacks. A failure to send
   // (e.g. Resend outage) must not surface a different response than success,
   // so swallow the error here and log it for observability.
-  if (!error && data.properties.action_link) {
+  if (!error && data.properties?.hashed_token) {
+    const params = new URLSearchParams({
+      token_hash: data.properties.hashed_token,
+      type: "recovery",
+      next: "/auth/update-password",
+    });
+    const resetLink = `${process.env.NEXT_PUBLIC_SITE_URL}/api/v1/auth/callback?${params.toString()}`;
     try {
-      await sendPasswordResetEmail(email, data.properties.action_link);
+      await sendPasswordResetEmail(email, resetLink);
     } catch (sendError) {
       console.error("Failed to send password reset email:", sendError);
     }

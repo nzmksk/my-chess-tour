@@ -46,10 +46,11 @@ describe("forgotPassword action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.generateLink.mockResolvedValue({
-      data: { properties: { action_link: "https://example.com/reset" } },
+      data: { properties: { hashed_token: "hash-abc" } },
       error: null,
     });
     mocks.sendPasswordResetEmail.mockResolvedValue(undefined);
+    process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
   });
 
   // --- Validation -----------------------------------------------------------
@@ -122,10 +123,14 @@ describe("forgotPassword action", () => {
 
     expect(result.submitted).toBe(true);
     expect(result.error).toBeNull();
-    expect(mocks.sendPasswordResetEmail).toHaveBeenCalledWith(
-      "user@example.com",
-      "https://example.com/reset",
-    );
+
+    const [sentEmail, sentLink] =
+      mocks.sendPasswordResetEmail.mock.calls[0] ?? [];
+    expect(sentEmail).toBe("user@example.com");
+    expect(sentLink).toContain("https://mychesstour.com/api/v1/auth/callback?");
+    expect(sentLink).toContain("token_hash=hash-abc");
+    expect(sentLink).toContain("type=recovery");
+    expect(sentLink).toContain("next=%2Fauth%2Fupdate-password");
   });
 
   // --- Error from Supabase (email enumeration guard) -----------------------
@@ -168,13 +173,13 @@ describe("forgotPassword action", () => {
     consoleSpy.mockRestore();
   });
 
-  it("does not send email when action_link is missing", async () => {
+  it("does not send email when hashed_token is missing", async () => {
     mocks.validateForgotPasswordForm.mockReturnValue({
       errors: {},
       isValid: true,
     });
     mocks.generateLink.mockResolvedValue({
-      data: { properties: { action_link: null } },
+      data: { properties: { hashed_token: null } },
       error: null,
     });
 
