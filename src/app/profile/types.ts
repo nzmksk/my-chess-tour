@@ -1,4 +1,4 @@
-export type ChessTitle =
+type ChessTitle =
   | "GM"
   | "WGM"
   | "IM"

@@ -157,5 +157,3 @@ export function CountryDropdown({
     </Popover>
   );
 }
-
-export default CountryDropdown;

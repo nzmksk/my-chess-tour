@@ -30,12 +30,3 @@ export function resolveCountry(value?: string | null): Country | undefined {
     (c) => c.name === target || c.alpha2 === target || c.alpha3 === target,
   );
 }
-
-/**
- * Resolve a stored country name (e.g. "Malaysia") to its ISO 3166-1 alpha-2
- * code (e.g. "MY"), used to render a flag. Returns undefined for empty/unknown
- * values (e.g. legacy free-text demonyms) so callers can fall back to text.
- */
-export function nameToAlpha2(name?: string | null): string | undefined {
-  return resolveCountry(name)?.alpha2;
-}
