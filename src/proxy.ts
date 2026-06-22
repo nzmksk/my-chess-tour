@@ -58,8 +58,10 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Protect routes that require auth
-  const protectedPaths = ["/admin", "/my", "/organizations", "/profile"];
+  // Protect routes that require auth. Note the trailing slash on
+  // "/organizations/" — the bare "/organizations" landing ("Become an
+  // Organizer") is public; only its sub-routes (apply, dashboards, etc.) gate.
+  const protectedPaths = ["/admin", "/my", "/organizations/", "/profile"];
   const isProtected = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path),
   );
