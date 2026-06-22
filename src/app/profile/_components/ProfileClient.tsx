@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  PlayerProfile,
-  ChessTitle,
-  Gender,
-} from "@/app/profile/types";
+import type { PlayerProfile, ChessTitle, Gender } from "@/app/profile/types";
+import { CountryDropdown } from "@/components/ui/country-dropdown";
+import { nameToAlpha3 } from "@/lib/countries";
 
 const CHESS_TITLES: ChessTitle[] = [
   "GM",
@@ -41,13 +39,11 @@ interface ProfileFieldProps {
 
 function ProfileField({ label, value }: ProfileFieldProps) {
   return (
-    <div className="flex flex-col gap-0.5 py-3 border-b border-border last:border-b-0">
-      <span className="font-cinzel text-xs font-semibold tracking-widest uppercase text-gold-muted">
+    <div className="border-border flex flex-col gap-0.5 border-b py-3 last:border-b-0">
+      <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
         {label}
       </span>
-      <span className="font-lato text-sm text-text-body">
-        {value || "—"}
-      </span>
+      <span className="font-lato text-text-body text-sm">{value || "—"}</span>
     </div>
   );
 }
@@ -60,7 +56,7 @@ interface SectionCardProps {
 function SectionCard({ title, children }: SectionCardProps) {
   return (
     <div className="card p-6">
-      <h2 className="font-cinzel text-base font-semibold tracking-wider text-text-primary mb-4 pb-3 border-b border-border">
+      <h2 className="font-cinzel text-text-primary border-border mb-4 border-b pb-3 text-base font-semibold tracking-wider">
         {title}
       </h2>
       {children}
@@ -142,18 +138,20 @@ export default function ProfileClient({ profile }: Props) {
       const data = await res.json();
 
       if (!res.ok) {
-        setSaveError(data.error?.message ?? "Something went wrong. Please try again.");
+        setSaveError(
+          data.error?.message ?? "Something went wrong. Please try again.",
+        );
         return;
       }
 
       setCurrent({
         ...current,
-        date_of_birth: (payload.date_of_birth as string | null),
-        gender: (payload.gender as Gender | null),
-        nationality: (payload.nationality as string | null),
+        date_of_birth: payload.date_of_birth as string | null,
+        gender: payload.gender as Gender | null,
+        nationality: payload.nationality as string | null,
         is_oku: payload.is_oku as boolean,
         fide_id: payload.fide_id as number | null,
-        title: (payload.title as ChessTitle | null),
+        title: payload.title as ChessTitle | null,
         mcf_id: payload.mcf_id as number | null,
         national_rating: payload.national_rating as number | null,
       });
@@ -177,21 +175,21 @@ export default function ProfileClient({ profile }: Props) {
     .join(" ");
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
+    <div className="mx-auto max-w-2xl px-6 py-8">
       {/* Header */}
-      <div className="flex items-center gap-5 mb-8">
-        <div className="bg-gold-ghost border-2 border-gold-muted font-cinzel text-gold-bright flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-semibold">
+      <div className="mb-8 flex items-center gap-5">
+        <div className="bg-gold-ghost border-gold-muted font-cinzel text-gold-bright flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 text-xl font-semibold">
           {initials}
         </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="font-cinzel text-2xl font-bold text-text-primary tracking-wide leading-tight">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-cinzel text-text-primary text-2xl leading-tight font-bold tracking-wide">
             {fullName}
           </h1>
-          <p className="font-lato text-sm text-text-muted mt-0.5">
+          <p className="font-lato text-text-muted mt-0.5 text-sm">
             {current.email}
           </p>
           {current.title && (
-            <span className="inline-block mt-1.5 font-cinzel text-xs font-bold tracking-widest uppercase px-2 py-0.5 rounded bg-info-bg text-info border border-info-border">
+            <span className="font-cinzel bg-info-bg text-info border-info-border mt-1.5 inline-block rounded border px-2 py-0.5 text-xs font-bold tracking-widest uppercase">
               {current.title}
             </span>
           )}
@@ -199,7 +197,7 @@ export default function ProfileClient({ profile }: Props) {
         {!editing && (
           <button
             onClick={handleEdit}
-            className="btn-secondary px-4 py-2 text-xs shrink-0"
+            className="btn-secondary shrink-0 px-4 py-2 text-xs"
           >
             Edit Profile
           </button>
@@ -207,9 +205,11 @@ export default function ProfileClient({ profile }: Props) {
       </div>
 
       {saveSuccess && (
-        <div className="mb-5 flex items-center gap-2 rounded-md border border-success-border bg-success-bg px-4 py-2.5">
+        <div className="border-success-border bg-success-bg mb-5 flex items-center gap-2 rounded-md border px-4 py-2.5">
           <span className="text-success text-sm">&#10003;</span>
-          <p className="font-lato text-sm text-success">Profile updated successfully.</p>
+          <p className="font-lato text-success text-sm">
+            Profile updated successfully.
+          </p>
         </div>
       )}
 
@@ -217,27 +217,27 @@ export default function ProfileClient({ profile }: Props) {
         <form onSubmit={handleSave} noValidate>
           {saveError && (
             <div className="error-banner mb-5" role="alert">
-              <span className="text-sm shrink-0 mt-px">&#9888;</span>
+              <span className="mt-px shrink-0 text-sm">&#9888;</span>
               <p className="error-text">{saveError}</p>
             </div>
           )}
 
           {/* Personal Info */}
-          <div className="card p-6 mb-4">
-            <h2 className="font-cinzel text-base font-semibold tracking-wider text-text-primary mb-4 pb-3 border-b border-border">
+          <div className="card mb-4 p-6">
+            <h2 className="font-cinzel text-text-primary border-border mb-4 border-b pb-3 text-base font-semibold tracking-wider">
               Personal Information
             </h2>
 
             {/* Read-only name + email */}
-            <div className="mb-4 rounded-md bg-bg-sunken border border-border px-4 py-3">
-              <p className="font-cinzel text-xs font-semibold tracking-widest uppercase text-gold-dim mb-1">
+            <div className="bg-bg-sunken border-border mb-4 rounded-md border px-4 py-3">
+              <p className="font-cinzel text-gold-dim mb-1 text-xs font-semibold tracking-widest uppercase">
                 Name &amp; Email
               </p>
-              <p className="font-lato text-sm text-text-secondary">
+              <p className="font-lato text-text-secondary text-sm">
                 {fullName} · {current.email}
               </p>
-              <p className="font-lato text-xs text-text-muted mt-1">
-                Contact support to change your name or email.
+              <p className="font-lato text-text-muted mt-1 text-xs">
+                Contact support@mychesstour.com to change your name or email.
               </p>
             </div>
 
@@ -296,14 +296,11 @@ export default function ProfileClient({ profile }: Props) {
                 </label>
                 <span className="label-optional">(Optional)</span>
               </div>
-              <input
-                id="nationality"
-                className="input"
-                type="text"
-                placeholder="Malaysian"
-                value={form.nationality}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, nationality: e.target.value }))
+              <CountryDropdown
+                placeholder="Select country"
+                defaultValue={nameToAlpha3(form.nationality)}
+                onChange={(c) =>
+                  setForm((f) => ({ ...f, nationality: c.name }))
                 }
               />
             </div>
@@ -326,8 +323,8 @@ export default function ProfileClient({ profile }: Props) {
           </div>
 
           {/* Chess Details */}
-          <div className="card p-6 mb-6">
-            <h2 className="font-cinzel text-base font-semibold tracking-wider text-text-primary mb-4 pb-3 border-b border-border">
+          <div className="card mb-6 p-6">
+            <h2 className="font-cinzel text-text-primary border-border mb-4 border-b pb-3 text-base font-semibold tracking-wider">
               Chess Details
             </h2>
 
@@ -455,7 +452,7 @@ export default function ProfileClient({ profile }: Props) {
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               className="btn-secondary w-full"
@@ -484,10 +481,13 @@ export default function ProfileClient({ profile }: Props) {
               label="Date of Birth"
               value={
                 current.date_of_birth
-                  ? new Date(current.date_of_birth + "T00:00:00").toLocaleDateString(
-                      "en-MY",
-                      { day: "numeric", month: "long", year: "numeric" },
-                    )
+                  ? new Date(
+                      current.date_of_birth + "T00:00:00",
+                    ).toLocaleDateString("en-MY", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })
                   : ""
               }
             />
@@ -512,46 +512,43 @@ export default function ProfileClient({ profile }: Props) {
 
           {/* Chess Details */}
           <SectionCard title="Chess Details">
-            <ProfileField
-              label="Chess Title"
-              value={current.title ?? ""}
-            />
+            <ProfileField label="Chess Title" value={current.title ?? ""} />
             <ProfileField
               label="FIDE ID"
               value={current.fide_id != null ? String(current.fide_id) : ""}
             />
-            <div className="flex flex-col gap-0.5 py-3 border-b border-border">
-              <span className="font-cinzel text-xs font-semibold tracking-widest uppercase text-gold-muted">
+            <div className="border-border flex flex-col gap-0.5 border-b py-3">
+              <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
                 FIDE Rating
               </span>
               {current.fide_rating ? (
-                <div className="flex flex-wrap gap-3 mt-1">
+                <div className="mt-1 flex flex-wrap gap-3">
                   {current.fide_rating.standard != null && (
-                    <div className="flex flex-col items-center bg-bg-raised border border-border rounded-md px-4 py-2 min-w-16">
-                      <span className="font-cinzel text-xs tracking-widest uppercase text-text-muted">
+                    <div className="bg-bg-raised border-border flex min-w-16 flex-col items-center rounded-md border px-4 py-2">
+                      <span className="font-cinzel text-text-muted text-xs tracking-widest uppercase">
                         Std
                       </span>
-                      <span className="font-lato text-lg font-semibold text-text-primary">
+                      <span className="font-lato text-text-primary text-lg font-semibold">
                         {current.fide_rating.standard}
                       </span>
                     </div>
                   )}
                   {current.fide_rating.rapid != null && (
-                    <div className="flex flex-col items-center bg-bg-raised border border-border rounded-md px-4 py-2 min-w-16">
-                      <span className="font-cinzel text-xs tracking-widest uppercase text-text-muted">
+                    <div className="bg-bg-raised border-border flex min-w-16 flex-col items-center rounded-md border px-4 py-2">
+                      <span className="font-cinzel text-text-muted text-xs tracking-widest uppercase">
                         Rpd
                       </span>
-                      <span className="font-lato text-lg font-semibold text-text-primary">
+                      <span className="font-lato text-text-primary text-lg font-semibold">
                         {current.fide_rating.rapid}
                       </span>
                     </div>
                   )}
                   {current.fide_rating.blitz != null && (
-                    <div className="flex flex-col items-center bg-bg-raised border border-border rounded-md px-4 py-2 min-w-16">
-                      <span className="font-cinzel text-xs tracking-widest uppercase text-text-muted">
+                    <div className="bg-bg-raised border-border flex min-w-16 flex-col items-center rounded-md border px-4 py-2">
+                      <span className="font-cinzel text-text-muted text-xs tracking-widest uppercase">
                         Blz
                       </span>
-                      <span className="font-lato text-lg font-semibold text-text-primary">
+                      <span className="font-lato text-text-primary text-lg font-semibold">
                         {current.fide_rating.blitz}
                       </span>
                     </div>
@@ -559,11 +556,13 @@ export default function ProfileClient({ profile }: Props) {
                   {current.fide_rating.standard == null &&
                     current.fide_rating.rapid == null &&
                     current.fide_rating.blitz == null && (
-                      <span className="font-lato text-sm text-text-body">—</span>
+                      <span className="font-lato text-text-body text-sm">
+                        —
+                      </span>
                     )}
                 </div>
               ) : (
-                <span className="font-lato text-sm text-text-body">—</span>
+                <span className="font-lato text-text-body text-sm">—</span>
               )}
             </div>
             <ProfileField
@@ -584,4 +583,3 @@ export default function ProfileClient({ profile }: Props) {
     </div>
   );
 }
-
