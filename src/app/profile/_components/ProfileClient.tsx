@@ -93,6 +93,7 @@ export default function ProfileClient({ profile }: Props) {
   const [confirmFields, setConfirmFields] = useState<string[] | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [removeAvatar, setRemoveAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<EditForm>({
@@ -139,6 +140,7 @@ export default function ProfileClient({ profile }: Props) {
     }
 
     setSaveError(null);
+    setRemoveAvatar(false);
     setAvatarFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -149,11 +151,20 @@ export default function ProfileClient({ profile }: Props) {
     e.target.value = "";
   }
 
+  function handleRemoveAvatar() {
+    setSaveError(null);
+    setAvatarFile(null);
+    setAvatarPreview(null);
+    setRemoveAvatar(true);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   function handleCancel() {
     setEditing(false);
     setSaveError(null);
     setAvatarFile(null);
     setAvatarPreview(null);
+    setRemoveAvatar(false);
     setForm({
       date_of_birth: current.date_of_birth ?? "",
       gender: current.gender ?? "",
@@ -206,7 +217,9 @@ export default function ProfileClient({ profile }: Props) {
     if (canEditMcfId)
       payload.mcf_id = form.mcf_id ? parseInt(form.mcf_id, 10) : null;
 
-    let uploadedAvatarUrl: string | null = null;
+    // Tracks the avatar value to apply locally on success: undefined = no
+    // change, null = removed, string = newly uploaded URL.
+    let nextAvatarUrl: string | null | undefined = undefined;
 
     try {
       // Upload the new avatar to storage first; its public URL is what the
@@ -236,8 +249,12 @@ export default function ProfileClient({ profile }: Props) {
         const {
           data: { publicUrl },
         } = supabase.storage.from("avatars").getPublicUrl(path);
-        uploadedAvatarUrl = publicUrl;
+        nextAvatarUrl = publicUrl;
         payload.avatar_url = publicUrl;
+      } else if (removeAvatar && current.avatar_url) {
+        // Clearing the avatar; the server deletes the old storage object.
+        nextAvatarUrl = null;
+        payload.avatar_url = null;
       }
 
       const res = await fetch("/api/v1/profile", {
@@ -267,11 +284,12 @@ export default function ProfileClient({ profile }: Props) {
         }),
         ...(canEditFideId && { fide_id: payload.fide_id as number | null }),
         ...(canEditMcfId && { mcf_id: payload.mcf_id as number | null }),
-        ...(uploadedAvatarUrl !== null && { avatar_url: uploadedAvatarUrl }),
+        ...(nextAvatarUrl !== undefined && { avatar_url: nextAvatarUrl }),
       });
 
       setAvatarFile(null);
       setAvatarPreview(null);
+      setRemoveAvatar(false);
       setSaveSuccess(true);
       setEditing(false);
     } catch {
@@ -289,6 +307,11 @@ export default function ProfileClient({ profile }: Props) {
   const fullName = [current.first_name, current.last_name]
     .filter(Boolean)
     .join(" ");
+
+  // Avatar shown in the edit form: a freshly picked file preview wins, then the
+  // saved avatar unless the user has chosen to remove it.
+  const shownAvatar =
+    avatarPreview ?? (removeAvatar ? null : current.avatar_url);
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
@@ -369,9 +392,9 @@ export default function ProfileClient({ profile }: Props) {
                   }
                 }}
               >
-                {avatarPreview || current.avatar_url ? (
+                {shownAvatar ? (
                   <Image
-                    src={avatarPreview ?? current.avatar_url ?? ""}
+                    src={shownAvatar}
                     alt="Profile photo preview"
                     fill
                     unoptimized
@@ -382,7 +405,7 @@ export default function ProfileClient({ profile }: Props) {
                 )}
                 <div className="avatar-overlay">
                   <span className="avatar-overlay-text">
-                    {avatarPreview || current.avatar_url ? "Change" : "Upload"}
+                    {shownAvatar ? "Change" : "Upload"}
                     <br />
                     Photo
                   </span>
@@ -397,6 +420,15 @@ export default function ProfileClient({ profile }: Props) {
                 aria-label="Profile photo file input"
               />
               <p className="avatar-hint">JPG or PNG, max 2 MB</p>
+              {shownAvatar && (
+                <button
+                  type="button"
+                  className="font-lato text-error cursor-pointer text-xs underline underline-offset-2 hover:opacity-80"
+                  onClick={handleRemoveAvatar}
+                >
+                  Remove photo
+                </button>
+              )}
             </div>
 
             {/* Read-only name + email */}
