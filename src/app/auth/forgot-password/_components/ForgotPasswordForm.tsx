@@ -5,11 +5,19 @@ import { useActionState } from "react";
 import { forgotPassword } from "../_actions/forgotPassword";
 import { INITIAL_FORGOT_PASSWORD_STATE } from "../types";
 
-export default function ForgotPasswordForm() {
+export default function ForgotPasswordForm({
+  initialError = null,
+}: {
+  initialError?: string | null;
+}) {
   const [state, formAction, pending] = useActionState(
     forgotPassword,
     INITIAL_FORGOT_PASSWORD_STATE,
   );
+
+  // Surface the action error if present, otherwise fall back to an error
+  // passed via the URL (e.g. an expired link redirected here by the callback).
+  const errorMessage = state.error ?? initialError;
 
   // Success screen
   if (state.submitted) {
@@ -18,7 +26,7 @@ export default function ForgotPasswordForm() {
         <div className="centered-col">
           <div className="auth-card card card--featured text-center">
             <div
-              className="text-3xl text-gold-bright mb-4"
+              className="text-gold-bright mb-4 text-3xl"
               role="img"
               aria-label="Email sent"
             >
@@ -52,12 +60,12 @@ export default function ForgotPasswordForm() {
             <hr className="divider-gold" />
           </div>
 
-          {state.error && (
+          {errorMessage && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px" aria-hidden="true">
+              <span className="mt-px shrink-0 text-sm" aria-hidden="true">
                 ⚠
               </span>
-              <p className="error-text">{state.error}</p>
+              <p className="error-text">{errorMessage}</p>
             </div>
           )}
 
