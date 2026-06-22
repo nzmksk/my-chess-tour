@@ -19,6 +19,29 @@ type AuthUser = {
   initials: string;
 };
 
+type SupabaseUser = {
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+};
+
+function toAuthUser(user: SupabaseUser | null | undefined): AuthUser | null {
+  if (!user) return null;
+  const meta = user.user_metadata ?? {};
+  const firstName: string =
+    (meta.first_name as string) ?? (meta.firstName as string) ?? "";
+  const lastName: string =
+    (meta.last_name as string) ?? (meta.lastName as string) ?? "";
+  const initials =
+    [firstName[0], lastName[0]].filter(Boolean).join("").toUpperCase() ||
+    (user.email?.[0]?.toUpperCase() ?? "?");
+  return {
+    email: user.email ?? "",
+    fullName:
+      [firstName, lastName].filter(Boolean).join(" ") || (user.email ?? ""),
+    initials,
+  };
+}
+
 export default function NavBar() {
   const pathname = usePathname();
   const [drawerState, setDrawerState] = useState(() =>
@@ -31,28 +54,26 @@ export default function NavBar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch auth state on every route change
+  // Fetch auth state on route change, and keep it in sync with sign-in/out
+  // events (including those triggered in other tabs).
   useEffect(() => {
     const supabase = createClient();
+    let active = true;
+
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        setAuthUser(null);
-        return;
-      }
-      const meta = data.user.user_metadata ?? {};
-      const firstName: string = meta.first_name ?? meta.firstName ?? "";
-      const lastName: string = meta.last_name ?? meta.lastName ?? "";
-      const initials =
-        [firstName[0], lastName[0]].filter(Boolean).join("").toUpperCase() ||
-        (data.user.email?.[0]?.toUpperCase() ?? "?");
-      setAuthUser({
-        email: data.user.email ?? "",
-        fullName:
-          [firstName, lastName].filter(Boolean).join(" ") ||
-          (data.user.email ?? ""),
-        initials,
-      });
+      if (active) setAuthUser(toAuthUser(data.user));
     });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setAuthUser(toAuthUser(session?.user));
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [pathname]);
 
   // Close dropdown on outside click or Escape

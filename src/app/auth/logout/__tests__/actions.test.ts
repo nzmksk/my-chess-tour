@@ -10,7 +10,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/headers", () => ({
-  cookies: vi.fn(() => ({ getAll: vi.fn(() => []), set: vi.fn() })),
+  cookies: vi.fn(() =>
+    Promise.resolve({
+      getAll: vi.fn(() => []),
+      set: vi.fn(),
+      delete: vi.fn(),
+    }),
+  ),
 }));
 
 vi.mock("@/services/supabase/server", () => ({
@@ -40,6 +46,14 @@ describe("logout action", () => {
     await logout();
 
     expect(mocks.signOut).toHaveBeenCalledOnce();
+  });
+
+  it("signs out with local scope (this device only)", async () => {
+    mocks.signOut.mockResolvedValue({ error: null });
+
+    await logout();
+
+    expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
   it("redirects to /signed-out on success", async () => {

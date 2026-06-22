@@ -1,9 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
+import { SESSION_ONLY_COOKIE, stripPersistence } from "@/lib/session-cookie";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+
+  // Honor the user's "Keep me signed in" choice on token refresh: when the
+  // marker is present, keep the refreshed auth cookies session-scoped.
+  const sessionOnly = request.cookies.get(SESSION_ONLY_COOKIE)?.value === "1";
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,11 +19,12 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            request.cookies.set(name, value),
-          );
+          const toSet = sessionOnly
+            ? stripPersistence(cookiesToSet)
+            : cookiesToSet;
+          toSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
+          toSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
         },
@@ -58,8 +64,10 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Protect routes that require auth
-  const protectedPaths = ["/admin", "/my", "/organizations", "/profile"];
+  // Protect routes that require auth. Note the trailing slash on
+  // "/organizations/" — the bare "/organizations" landing ("Become an
+  // Organizer") is public; only its sub-routes (apply, dashboards, etc.) gate.
+  const protectedPaths = ["/admin", "/my", "/organizations/", "/profile"];
   const isProtected = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path),
   );
