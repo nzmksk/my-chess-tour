@@ -28,5 +28,10 @@ export async function updatePassword(
     return { error: error.message, fieldErrors: {} };
   }
 
+  // The recovery link created an authenticated session. Clear it so the user
+  // re-authenticates with their new password instead of landing on the login
+  // page while silently still signed in.
+  await supabase.auth.signOut();
+
   redirect("/auth/login");
 }

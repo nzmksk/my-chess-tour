@@ -6,12 +6,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   updateUser: vi.fn(),
+  signOut: vi.fn(),
   redirect: vi.fn(),
 }));
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
-    Promise.resolve({ auth: { updateUser: mocks.updateUser } }),
+    Promise.resolve({
+      auth: { updateUser: mocks.updateUser, signOut: mocks.signOut },
+    }),
   ),
 }));
 
@@ -35,6 +38,7 @@ function makeFormData(data: Record<string, string>): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.updateUser.mockResolvedValue({ error: null });
+  mocks.signOut.mockResolvedValue({ error: null });
   // redirect in Next.js throws a special error internally; simulate that
   mocks.redirect.mockImplementation(() => {
     throw new Error("NEXT_REDIRECT");
