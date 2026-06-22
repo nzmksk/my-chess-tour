@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Image from "next/image";
 import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
+import { createClient } from "@/services/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -89,6 +91,9 @@ export default function ProfileClient({ profile }: Props) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [current, setCurrent] = useState<PlayerProfile>(profile);
   const [confirmFields, setConfirmFields] = useState<string[] | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<EditForm>({
     date_of_birth: profile.date_of_birth ?? "",
@@ -114,9 +119,41 @@ export default function ProfileClient({ profile }: Props) {
     setSaveSuccess(false);
   }
 
+  function handleAvatarClick() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setSaveError("Please upload a JPG or PNG image.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setSaveError("Image must be under 2 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setSaveError(null);
+    setAvatarFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result;
+      if (typeof result === "string") setAvatarPreview(result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
   function handleCancel() {
     setEditing(false);
     setSaveError(null);
+    setAvatarFile(null);
+    setAvatarPreview(null);
     setForm({
       date_of_birth: current.date_of_birth ?? "",
       gender: current.gender ?? "",
@@ -169,7 +206,40 @@ export default function ProfileClient({ profile }: Props) {
     if (canEditMcfId)
       payload.mcf_id = form.mcf_id ? parseInt(form.mcf_id, 10) : null;
 
+    let uploadedAvatarUrl: string | null = null;
+
     try {
+      // Upload the new avatar to storage first; its public URL is what the
+      // PATCH request persists on the user record.
+      if (avatarFile) {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setSaveError("Your session has expired. Please sign in again.");
+          return;
+        }
+
+        const ext = avatarFile.name.split(".").pop();
+        const path = `users/${user.id}/${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(path, avatarFile, { upsert: true });
+
+        if (uploadError) {
+          setSaveError("Failed to upload photo. Please try again.");
+          return;
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("avatars").getPublicUrl(path);
+        uploadedAvatarUrl = publicUrl;
+        payload.avatar_url = publicUrl;
+      }
+
       const res = await fetch("/api/v1/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -197,8 +267,11 @@ export default function ProfileClient({ profile }: Props) {
         }),
         ...(canEditFideId && { fide_id: payload.fide_id as number | null }),
         ...(canEditMcfId && { mcf_id: payload.mcf_id as number | null }),
+        ...(uploadedAvatarUrl !== null && { avatar_url: uploadedAvatarUrl }),
       });
 
+      setAvatarFile(null);
+      setAvatarPreview(null);
       setSaveSuccess(true);
       setEditing(false);
     } catch {
@@ -221,8 +294,18 @@ export default function ProfileClient({ profile }: Props) {
     <div className="mx-auto max-w-2xl px-6 py-8">
       {/* Header */}
       <div className="mb-8 flex items-center gap-5">
-        <div className="bg-gold-ghost border-gold-muted font-cinzel text-gold-bright flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 text-xl font-semibold">
-          {initials}
+        <div className="bg-gold-ghost border-gold-muted font-cinzel text-gold-bright relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 text-xl font-semibold">
+          {current.avatar_url ? (
+            <Image
+              src={current.avatar_url}
+              alt={`${fullName || "Profile"} avatar`}
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          ) : (
+            initials
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="font-cinzel text-text-primary text-2xl leading-tight font-bold tracking-wide">
@@ -270,6 +353,51 @@ export default function ProfileClient({ profile }: Props) {
             <h2 className="font-cinzel text-text-primary border-border mb-4 border-b pb-3 text-base font-semibold tracking-wider">
               Personal Information
             </h2>
+
+            {/* Avatar upload */}
+            <div className="avatar-upload-wrap">
+              <div
+                className="avatar-preview"
+                role="button"
+                tabIndex={0}
+                aria-label="Upload profile photo"
+                onClick={handleAvatarClick}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleAvatarClick();
+                  }
+                }}
+              >
+                {avatarPreview || current.avatar_url ? (
+                  <Image
+                    src={avatarPreview ?? current.avatar_url ?? ""}
+                    alt="Profile photo preview"
+                    fill
+                    unoptimized
+                    className="rounded-full object-cover"
+                  />
+                ) : (
+                  initials
+                )}
+                <div className="avatar-overlay">
+                  <span className="avatar-overlay-text">
+                    {avatarPreview || current.avatar_url ? "Change" : "Upload"}
+                    <br />
+                    Photo
+                  </span>
+                </div>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                className="sr-only"
+                onChange={handleFileChange}
+                aria-label="Profile photo file input"
+              />
+              <p className="avatar-hint">JPG or PNG, max 2 MB</p>
+            </div>
 
             {/* Read-only name + email */}
             <div className="bg-bg-sunken border-border mb-4 rounded-md border px-4 py-3">

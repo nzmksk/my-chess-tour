@@ -97,6 +97,24 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const errors: string[] = [];
   const update: UpdateProfilePayload = {};
 
+  // avatar_url lives on the users table, not player_profiles. Only accept a URL
+  // that points at this user's own folder in the public avatars bucket, so a
+  // crafted request can't store an arbitrary external URL on the profile.
+  let avatarUpdate: { value: string | null } | null = null;
+  if ("avatar_url" in body) {
+    const allowedPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/users/${user.id}/`;
+    if (body.avatar_url === null) {
+      avatarUpdate = { value: null };
+    } else if (
+      typeof body.avatar_url === "string" &&
+      body.avatar_url.startsWith(allowedPrefix)
+    ) {
+      avatarUpdate = { value: body.avatar_url };
+    } else {
+      errors.push("avatar_url must be a valid uploaded avatar URL or null");
+    }
+  }
+
   if ("gender" in body) {
     if (body.gender === null) {
       update.gender = null;
@@ -256,7 +274,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (Object.keys(update).length === 0) {
+  if (Object.keys(update).length === 0 && avatarUpdate === null) {
     return NextResponse.json(
       {
         error: {
@@ -268,15 +286,61 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const { error } = await supabaseAdmin
-    .from("player_profiles")
-    .upsert({ user_id: user.id, ...update }, { onConflict: "user_id" });
+  if (Object.keys(update).length > 0) {
+    const { error } = await supabaseAdmin
+      .from("player_profiles")
+      .upsert({ user_id: user.id, ...update }, { onConflict: "user_id" });
 
-  if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
-    );
+    if (error) {
+      return NextResponse.json(
+        { error: { code: "INTERNAL_ERROR", message: error.message } },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (avatarUpdate !== null) {
+    // Grab the current avatar so we can delete its storage object after the
+    // record is repointed; only files in this user's own avatars folder.
+    const { data: existingUser } = await supabaseAdmin
+      .from("users")
+      .select("avatar_url")
+      .eq("id", user.id)
+      .single();
+
+    const { error } = await supabaseAdmin
+      .from("users")
+      .update({ avatar_url: avatarUpdate.value })
+      .eq("id", user.id);
+
+    if (error) {
+      return NextResponse.json(
+        { error: { code: "INTERNAL_ERROR", message: error.message } },
+        { status: 500 },
+      );
+    }
+
+    const oldUrl = existingUser?.avatar_url as string | null | undefined;
+    const publicPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/`;
+    if (
+      oldUrl &&
+      oldUrl !== avatarUpdate.value &&
+      oldUrl.startsWith(publicPrefix)
+    ) {
+      const oldPath = oldUrl.slice(publicPrefix.length);
+      // Best-effort cleanup: a failed delete leaves an orphaned file but must
+      // not fail the request, since the profile was already updated.
+      const { error: removeError } = await supabaseAdmin.storage
+        .from("avatars")
+        .remove([oldPath]);
+      if (removeError) {
+        console.error(
+          "Failed to delete previous avatar for user ID:",
+          user.id,
+          removeError,
+        );
+      }
+    }
   }
 
   return NextResponse.json({ success: true }, { status: 200 });
