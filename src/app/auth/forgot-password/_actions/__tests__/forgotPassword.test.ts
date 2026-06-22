@@ -149,6 +149,25 @@ describe("forgotPassword action", () => {
     expect(result.submitted).toBe(true);
   });
 
+  it("still returns submitted:true when sending the email throws", async () => {
+    mocks.validateForgotPasswordForm.mockReturnValue({
+      errors: {},
+      isValid: true,
+    });
+    mocks.sendPasswordResetEmail.mockRejectedValue(new Error("Resend down"));
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await forgotPassword(
+      INITIAL,
+      makeFormData({ email: "user@example.com" }),
+    );
+
+    expect(result.submitted).toBe(true);
+    expect(result.error).toBeNull();
+
+    consoleSpy.mockRestore();
+  });
+
   it("does not send email when action_link is missing", async () => {
     mocks.validateForgotPasswordForm.mockReturnValue({
       errors: {},

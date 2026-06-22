@@ -25,9 +25,15 @@ export async function forgotPassword(
     options: { redirectTo },
   });
 
-  // Always succeed to prevent email enumeration attacks
+  // Always succeed to prevent email enumeration attacks. A failure to send
+  // (e.g. Resend outage) must not surface a different response than success,
+  // so swallow the error here and log it for observability.
   if (!error && data.properties.action_link) {
-    await sendPasswordResetEmail(email, data.properties.action_link);
+    try {
+      await sendPasswordResetEmail(email, data.properties.action_link);
+    } catch (sendError) {
+      console.error("Failed to send password reset email:", sendError);
+    }
   }
 
   return { error: null, submitted: true };
