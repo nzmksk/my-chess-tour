@@ -39,14 +39,11 @@ function makeFormData(data: Record<string, string>): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.generateLink.mockResolvedValue({
-    data: {
-      properties: {
-        action_link: "https://supabase.example.com/auth/v1/verify?token=abc",
-      },
-    },
+    data: { properties: { hashed_token: "hash-abc" } },
     error: null,
   });
   mocks.sendPasswordResetEmail.mockResolvedValue(undefined);
+  process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
 });
 
 // ---------------------------------------------------------------------------
@@ -93,32 +90,25 @@ describe("forgotPassword action", () => {
       expect.objectContaining({
         type: "recovery",
         email: "user@example.com",
-        options: expect.objectContaining({
-          redirectTo: expect.stringContaining("/v1/auth/callback"),
-        }),
       }),
     );
   });
 
-  it("redirectTo contains /v1/auth/callback and /auth/update-password", async () => {
-    const fd = makeFormData({ email: "user@example.com" });
-    await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
-
-    const callArg = mocks.generateLink.mock.calls[0][0];
-    expect(callArg.options.redirectTo).toContain("/v1/auth/callback");
-    expect(callArg.options.redirectTo).toContain("/auth/update-password");
-  });
-
   // --- Success cases --------------------------------------------------------
 
-  it("sends email on success", async () => {
+  it("sends a callback link built from the token hash on success", async () => {
     const fd = makeFormData({ email: "user@example.com" });
     await forgotPassword(INITIAL_FORGOT_PASSWORD_STATE, fd);
 
-    expect(mocks.sendPasswordResetEmail).toHaveBeenCalledWith(
-      "user@example.com",
-      "https://supabase.example.com/auth/v1/verify?token=abc",
+    const [sentEmail, sentLink] =
+      mocks.sendPasswordResetEmail.mock.calls[0] ?? [];
+    expect(sentEmail).toBe("user@example.com");
+    expect(sentLink).toContain(
+      "https://mychesstour.com/api/v1/auth/callback?",
     );
+    expect(sentLink).toContain("token_hash=hash-abc");
+    expect(sentLink).toContain("type=recovery");
+    expect(sentLink).toContain("next=%2Fauth%2Fupdate-password");
   });
 
   it("returns submitted=true for a valid email", async () => {
@@ -156,9 +146,9 @@ describe("forgotPassword action", () => {
     expect(mocks.sendPasswordResetEmail).not.toHaveBeenCalled();
   });
 
-  it("does not send email when action_link is missing", async () => {
+  it("does not send email when hashed_token is missing", async () => {
     mocks.generateLink.mockResolvedValue({
-      data: { properties: { action_link: undefined } },
+      data: { properties: { hashed_token: undefined } },
       error: null,
     });
 

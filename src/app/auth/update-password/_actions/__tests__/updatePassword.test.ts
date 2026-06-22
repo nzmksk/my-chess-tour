@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   validateUpdatePasswordForm: vi.fn(),
   updateUser: vi.fn(),
+  signOut: vi.fn(),
   redirect: vi.fn(),
 }));
 
@@ -16,7 +17,9 @@ vi.mock("@/services/auth/auth-validation", () => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn(() =>
-    Promise.resolve({ auth: { updateUser: mocks.updateUser } }),
+    Promise.resolve({
+      auth: { updateUser: mocks.updateUser, signOut: mocks.signOut },
+    }),
   ),
 }));
 
@@ -46,6 +49,7 @@ describe("updatePassword action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.updateUser.mockResolvedValue({ error: null });
+    mocks.signOut.mockResolvedValue({ error: null });
   });
 
   // --- Validation -----------------------------------------------------------
@@ -91,6 +95,7 @@ describe("updatePassword action", () => {
     await updatePassword(INITIAL, fd);
 
     expect(mocks.updateUser).toHaveBeenCalledWith({ password: "Password1!" });
+    expect(mocks.signOut).toHaveBeenCalled();
     expect(mocks.redirect).toHaveBeenCalledWith("/auth/login");
   });
 
@@ -113,6 +118,7 @@ describe("updatePassword action", () => {
 
     expect(result.error).toBe("Auth session missing");
     expect(result.fieldErrors).toEqual({});
+    expect(mocks.signOut).not.toHaveBeenCalled();
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 });

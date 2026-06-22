@@ -31,7 +31,7 @@ vi.mock("../_actions/forgotPassword", () => ({
   forgotPassword: vi.fn(),
 }));
 
-let mockState = {
+const mockState = {
   error: null as string | null,
   submitted: false,
 };
@@ -123,6 +123,19 @@ describe("ForgotPasswordForm", () => {
   it("does not show error banner in clean state", () => {
     render(<ForgotPasswordForm />);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the initialError banner when passed via props", () => {
+    render(<ForgotPasswordForm initialError="That link has expired." />);
+    expect(screen.getByRole("alert")).toBeDefined();
+    expect(screen.getByText("That link has expired.")).toBeDefined();
+  });
+
+  it("prefers the action error over initialError", () => {
+    mockState.error = "Action error wins";
+    render(<ForgotPasswordForm initialError="URL error" />);
+    expect(screen.getByText("Action error wins")).toBeDefined();
+    expect(screen.queryByText("URL error")).toBeNull();
   });
 
   // --- Success state --------------------------------------------------------

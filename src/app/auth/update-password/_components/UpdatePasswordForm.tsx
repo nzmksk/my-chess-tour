@@ -1,6 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import {
+  checkPasswordRequirements,
+  getPasswordStrength,
+} from "@/services/auth/auth-validation";
 import { updatePassword } from "../_actions/updatePassword";
 import { INITIAL_UPDATE_PASSWORD_STATE } from "../types";
 
@@ -11,6 +15,11 @@ export default function UpdatePasswordForm() {
   );
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [password, setPassword] = useState("");
+
+  const passwordReqs = checkPasswordRequirements(password);
+  const passwordStrength = getPasswordStrength(password);
+  const strengthPercent = (passwordStrength / 5) * 100;
 
   return (
     <div className="auth-page">
@@ -27,7 +36,7 @@ export default function UpdatePasswordForm() {
 
           {state.error && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px" aria-hidden="true">
+              <span className="mt-px shrink-0 text-sm" aria-hidden="true">
                 ⚠
               </span>
               <p className="error-text">{state.error}</p>
@@ -49,7 +58,11 @@ export default function UpdatePasswordForm() {
                   className={`input input--icon${state.fieldErrors.password ? " input-error" : ""}`}
                   type={showPassword ? "text" : "password"}
                   placeholder="At least 8 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
+                  aria-invalid={!!state.fieldErrors.password}
+                  aria-describedby="password-requirements"
                   required
                 />
                 <button
@@ -64,6 +77,58 @@ export default function UpdatePasswordForm() {
                   />
                 </button>
               </div>
+
+              {/* Strength bar */}
+              <div
+                className="strength-bar"
+                role="meter"
+                aria-label="Password strength"
+                aria-valuenow={passwordStrength}
+                aria-valuemin={0}
+                aria-valuemax={5}
+              >
+                <div
+                  className="strength-fill"
+                  style={{ width: `${strengthPercent}%` }}
+                />
+              </div>
+
+              {/* Requirements */}
+              <div
+                id="password-requirements"
+                className={`pw-requirements${state.fieldErrors.password ? "pw-requirements--error" : ""}`}
+              >
+                <p className="pw-req-title">Password must contain</p>
+                <div className="pw-req-grid">
+                  <div
+                    className={`pw-req${passwordReqs.minLength ? "pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />
+                    8+ characters
+                  </div>
+                  <div
+                    className={`pw-req${passwordReqs.hasUppercase ? "pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 uppercase letter
+                  </div>
+                  <div
+                    className={`pw-req${passwordReqs.hasNumber ? "pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 number
+                  </div>
+                  <div
+                    className={`pw-req${passwordReqs.hasLowercase ? "pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 lowercase letter
+                  </div>
+                  <div
+                    className={`pw-req${passwordReqs.hasSymbol ? "pw-req--met" : ""}`}
+                  >
+                    <div className="pw-req-dot" />1 symbol (!@#$…)
+                  </div>
+                </div>
+              </div>
+
               {state.fieldErrors.password && (
                 <p className="input-hint error">{state.fieldErrors.password}</p>
               )}
