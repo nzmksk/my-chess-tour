@@ -17,7 +17,7 @@ vi.mock("../actions", () => ({
   updatePassword: vi.fn(),
 }));
 
-let mockState = {
+const mockState = {
   error: null as string | null,
   fieldErrors: {} as { password?: string; confirmPassword?: string },
 };
@@ -154,6 +154,39 @@ describe("UpdatePasswordForm", () => {
     });
 
     expect(input.type).toBe("text");
+  });
+
+  // --- Password requirements feedback ---------------------------------------
+
+  it("renders the password requirements checklist", () => {
+    render(<UpdatePasswordForm />);
+    expect(screen.getByText("Password must contain")).toBeDefined();
+    expect(screen.getByText("8+ characters")).toBeDefined();
+    expect(screen.getByText("1 uppercase letter")).toBeDefined();
+    expect(screen.getByText("1 number")).toBeDefined();
+    expect(screen.getByText("1 lowercase letter")).toBeDefined();
+    expect(screen.getByText(/1 symbol/)).toBeDefined();
+  });
+
+  it("renders a password strength meter", () => {
+    render(<UpdatePasswordForm />);
+    const meter = screen.getByRole("meter", { name: "Password strength" });
+    expect(meter.getAttribute("aria-valuenow")).toBe("0");
+  });
+
+  it("marks requirements as met and raises strength as the user types", async () => {
+    render(<UpdatePasswordForm />);
+    const input = screen.getByLabelText("New Password") as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Password1!" } });
+    });
+
+    const meter = screen.getByRole("meter", { name: "Password strength" });
+    expect(meter.getAttribute("aria-valuenow")).toBe("5");
+    expect(screen.getByText("8+ characters").className).toContain(
+      "pw-req--met",
+    );
   });
 
   // --- Pending state --------------------------------------------------------

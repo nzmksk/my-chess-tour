@@ -154,7 +154,7 @@ export function isLoginFormSubmittable(fields: LoginFields): boolean {
   return validateEmail(fields.email) && fields.password.length > 0;
 }
 
-// ── Forgot Password ────────────────────────────────────────────────────────
+// ── Update Password ────────────────────────────────────────────────────────
 
 export type UpdatePasswordErrors = {
   password?: string;
