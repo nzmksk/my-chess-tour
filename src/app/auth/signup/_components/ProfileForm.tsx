@@ -6,6 +6,8 @@ import Image from "next/image";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
 import { createClient } from "@/services/supabase/client";
+import { CountryDropdown } from "@/components/ui/country-dropdown";
+import { nameToAlpha3 } from "@/lib/countries";
 
 const GENDERS = ["Male", "Female"] as const;
 
@@ -250,14 +252,11 @@ export default function ProfileForm() {
                   Nationality
                 </label>
               </div>
-              <input
-                id="nationality"
-                className="input"
-                type="text"
-                placeholder="Malaysian"
-                value={form.nationality ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, nationality: e.target.value }))
+              <CountryDropdown
+                placeholder="Select country"
+                defaultValue={nameToAlpha3(form.nationality)}
+                onChange={(c) =>
+                  setForm((f) => ({ ...f, nationality: c.name }))
                 }
               />
             </div>

@@ -13,6 +13,11 @@ vi.mock("next/font/google", () => ({
   Lato: () => ({ variable: "--font-lato" }),
 }));
 
+// Avoid pulling the server-only auth/admin chain into this metadata-only test.
+vi.mock("@/services/supabase/permission", () => ({
+  getNavUser: vi.fn().mockResolvedValue(null),
+}));
+
 import { generateMetadata } from "../layout";
 
 describe("generateMetadata", () => {

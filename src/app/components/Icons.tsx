@@ -197,3 +197,43 @@ export function MoonIcon() {
     </svg>
   );
 }
+
+export function MaleIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#3b82f6"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      width="1em"
+      height="1em"
+    >
+      <circle cx="10" cy="14" r="6" />
+      <line x1="14.5" y1="9.5" x2="21" y2="3" />
+      <polyline points="15 3 21 3 21 9" />
+    </svg>
+  );
+}
+
+export function FemaleIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#ec4899"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      width="1em"
+      height="1em"
+    >
+      <circle cx="12" cy="8" r="6" />
+      <line x1="12" y1="14" x2="12" y2="22" />
+      <line x1="9" y1="19" x2="15" y2="19" />
+    </svg>
+  );
+}

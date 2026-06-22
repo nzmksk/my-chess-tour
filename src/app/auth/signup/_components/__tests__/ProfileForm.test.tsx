@@ -28,6 +28,29 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("../StepTracker", () => ({ default: () => null }));
 
+// Stub the country dropdown (Radix Popover + cmdk) with a lightweight control so
+// these tests stay focused on ProfileForm. Clicking it fires onChange like a
+// real country selection would. aria-label keeps the "Nationality" query working.
+vi.mock("@/components/ui/country-dropdown", () => ({
+  CountryDropdown: ({
+    placeholder,
+    onChange,
+  }: {
+    placeholder?: string;
+    onChange?: (c: { name: string; alpha2: string; alpha3: string }) => void;
+  }) => (
+    <button
+      type="button"
+      aria-label="Nationality"
+      onClick={() =>
+        onChange?.({ name: "Singapore", alpha2: "SG", alpha3: "SGP" })
+      }
+    >
+      {placeholder}
+    </button>
+  ),
+}));
+
 vi.mock("next/image", () => ({
   default: ({ src, alt }: { src: string; alt: string }) => (
     // eslint-disable-next-line @next/next/no-img-element -- test stub for next/image
@@ -128,13 +151,10 @@ describe("ProfileForm", () => {
   it("does not mark Gender or Nationality as required (profile is optional)", () => {
     render(<ProfileForm />);
     const gender = screen.getByLabelText("Gender") as HTMLSelectElement;
-    const nationality = screen.getByLabelText(
-      "Nationality",
-    ) as HTMLInputElement;
+    const nationality = screen.getByLabelText("Nationality");
 
     expect(gender.required).toBe(false);
     expect(gender.getAttribute("aria-required")).toBeNull();
-    expect(nationality.required).toBe(false);
     expect(nationality.getAttribute("aria-required")).toBeNull();
   });
 
@@ -187,12 +207,10 @@ describe("ProfileForm", () => {
     expect(true).toBe(true);
   });
 
-  it("fires onChange on the Nationality input", async () => {
+  it("fires onChange when a nationality is selected", async () => {
     render(<ProfileForm />);
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Nationality"), {
-        target: { value: "Singaporean" },
-      });
+      fireEvent.click(screen.getByLabelText("Nationality"));
     });
     expect(true).toBe(true);
   });

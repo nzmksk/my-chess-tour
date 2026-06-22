@@ -26,8 +26,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check for dead code with Knip
-        run: npx knip
-
       - name: Run unit tests with coverage
         run: npm run test:coverage

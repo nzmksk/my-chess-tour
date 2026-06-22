@@ -16,19 +16,10 @@ vi.mock("@/app/organizations/apply/_components/ApplyForm", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-const mockGetUser = vi.hoisted(() => vi.fn());
+const mockGetAuthClaims = vi.hoisted(() => vi.fn());
 
-vi.mock("@/services/supabase/server", () => ({
-  createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
-  }),
-}));
-
-vi.mock("next/headers", () => ({
-  cookies: vi.fn().mockResolvedValue({
-    getAll: vi.fn().mockReturnValue([]),
-    set: vi.fn(),
-  }),
+vi.mock("@/services/supabase/permission", () => ({
+  getAuthClaims: mockGetAuthClaims,
 }));
 
 // ── Tests ─────────────────────────────────────────────────────
@@ -39,7 +30,7 @@ describe("OrganizerApplyPage", () => {
   });
 
   it("redirects to login when user is not authenticated", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockGetAuthClaims.mockResolvedValue(null);
 
     const { default: OrganizerApplyPage } = await import("../page");
     await OrganizerApplyPage();
@@ -50,8 +41,10 @@ describe("OrganizerApplyPage", () => {
   });
 
   it("renders page content when user is authenticated", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-id-123" } },
+    mockGetAuthClaims.mockResolvedValue({
+      id: "user-id-123",
+      email: "player@example.com",
+      userMetadata: {},
     });
 
     const { default: OrganizerApplyPage } = await import("../page");

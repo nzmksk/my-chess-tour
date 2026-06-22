@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import { Cinzel, Lato } from "next/font/google";
 import "@/styles/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/components/AuthProvider";
+import { getNavUser } from "@/services/supabase/permission";
+import { toAuthUser } from "@/lib/auth-user";
 
 const themeScript = `(function(){try{var t=localStorage.getItem("theme");if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}})();`;
 
@@ -54,11 +57,24 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Resolve the signed-in user once per full page load (local getClaims for
+  // identity + one PK read for the avatar, both cached per request) so the
+  // client store seeds without a round-trip.
+  const nav = await getNavUser();
+  const initialUser = nav
+    ? toAuthUser({
+        sub: nav.claims.id,
+        email: nav.claims.email,
+        user_metadata: nav.claims.userMetadata,
+      })
+    : null;
+  const initialAvatar = nav?.avatarUrl ?? null;
+
   return (
     <html
       lang="en"
@@ -70,7 +86,11 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AuthProvider initialUser={initialUser} initialAvatar={initialAvatar}>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -3,44 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
-import { createClient } from "@/services/supabase/client";
+import { useAuthStore } from "@/stores/auth-store";
+import { logout } from "@/app/auth/logout/_actions/logout";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 
 const NAV_LINKS = [
   { href: "/organizations", label: "Become an Organizer", ghost: true },
 ];
-
-type AuthUser = {
-  email: string;
-  fullName: string;
-  initials: string;
-};
-
-type SupabaseUser = {
-  email?: string | null;
-  user_metadata?: Record<string, unknown> | null;
-};
-
-function toAuthUser(user: SupabaseUser | null | undefined): AuthUser | null {
-  if (!user) return null;
-  const meta = user.user_metadata ?? {};
-  const firstName: string =
-    (meta.first_name as string) ?? (meta.firstName as string) ?? "";
-  const lastName: string =
-    (meta.last_name as string) ?? (meta.lastName as string) ?? "";
-  const initials =
-    [firstName[0], lastName[0]].filter(Boolean).join("").toUpperCase() ||
-    (user.email?.[0]?.toUpperCase() ?? "?");
-  return {
-    email: user.email ?? "",
-    fullName:
-      [firstName, lastName].filter(Boolean).join(" ") || (user.email ?? ""),
-    initials,
-  };
-}
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -50,31 +22,21 @@ export default function NavBar() {
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerOpen = getIsDrawerOpen(drawerState, pathname ?? "");
 
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  // User + avatar come from the shared auth store (seeded by AuthProvider and
+  // kept live there) — no per-navigation fetch here.
+  const authUser = useAuthStore((s) => s.user);
+  const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [, startSignOut] = useTransition();
 
-  // Fetch auth state on route change, and keep it in sync with sign-in/out
-  // events (including those triggered in other tabs).
-  useEffect(() => {
-    const supabase = createClient();
-    let active = true;
-
-    supabase.auth.getUser().then(({ data }) => {
-      if (active) setAuthUser(toAuthUser(data.user));
+  // Sign out immediately — no confirmation. The action clears the session and
+  // redirects to the signed-out screen.
+  function handleSignOut() {
+    startSignOut(() => {
+      logout();
     });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) setAuthUser(toAuthUser(session?.user));
-    });
-
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-    };
-  }, [pathname]);
+  }
 
   // Close dropdown on outside click or Escape
   useEffect(() => {
@@ -152,22 +114,26 @@ export default function NavBar() {
 
             {authUser ? (
               <>
-                <Link
-                  href="/my/tournaments"
-                  className={`nav-link ${pathname === "/my/tournaments" ? "nav-link--active" : ""}`}
-                >
-                  My Tournaments
-                </Link>
-
                 {/* Avatar + dropdown */}
                 <div className="relative ml-2" ref={dropdownRef}>
                   <button
-                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""}`}
+                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""} ${avatarUrl ? "overflow-hidden" : ""}`}
                     onClick={() => setDropdownOpen((v) => !v)}
                     aria-label="Account menu"
                     aria-expanded={dropdownOpen}
                   >
-                    {authUser.initials}
+                    {avatarUrl ? (
+                      <Image
+                        src={avatarUrl}
+                        alt={`${authUser.fullName} avatar`}
+                        width={34}
+                        height={34}
+                        unoptimized
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      authUser.initials
+                    )}
                   </button>
 
                   {dropdownOpen && (
@@ -192,6 +158,13 @@ export default function NavBar() {
                           My Tournaments
                         </Link>
                         <Link
+                          href="/my/applications"
+                          className="nav-dropdown-item"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          My Organizations
+                        </Link>
+                        <Link
                           href="/settings"
                           className="nav-dropdown-item"
                           onClick={() => setDropdownOpen(false)}
@@ -200,13 +173,16 @@ export default function NavBar() {
                         </Link>
                       </div>
                       <div className="nav-dropdown-divider" />
-                      <Link
-                        href="/auth/logout"
+                      <button
+                        type="button"
                         className="nav-dropdown-item nav-dropdown-item--danger"
-                        onClick={() => setDropdownOpen(false)}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          handleSignOut();
+                        }}
                       >
                         Sign Out
-                      </Link>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -288,6 +264,15 @@ export default function NavBar() {
           {authUser ? (
             <>
               <Link
+                href="/profile"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+                className={`nav-drawer-link ${pathname === "/profile" ? "nav-drawer-link--active" : ""}`}
+              >
+                My Profile
+              </Link>
+              <Link
                 href="/my/tournaments"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
@@ -297,14 +282,33 @@ export default function NavBar() {
                 My Tournaments
               </Link>
               <Link
-                href="/auth/logout"
-                className="nav-drawer-btn-login mt-4"
+                href="/my/applications"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
                 }
+                className={`nav-drawer-link ${pathname === "/my/applications" ? "nav-drawer-link--active" : ""}`}
+              >
+                My Organizations
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+                className={`nav-drawer-link ${pathname === "/settings" ? "nav-drawer-link--active" : ""}`}
+              >
+                Settings
+              </Link>
+              <button
+                type="button"
+                className="nav-drawer-btn-login mt-4"
+                onClick={() => {
+                  setDrawerState((current) => closeDrawer(current));
+                  handleSignOut();
+                }}
               >
                 Sign Out
-              </Link>
+              </button>
             </>
           ) : (
             <>

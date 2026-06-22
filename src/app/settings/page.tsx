@@ -3,40 +3,37 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { getAuthClaims } from "@/services/supabase/permission";
-import RegistrationsClient from "./_components/RegistrationsClient";
-import type { PlayerRegistration } from "./types";
+import ProfileClient from "./_components/ProfileClient";
+import type { PlayerProfile } from "@/app/profile/types";
 
 export const metadata: Metadata = {
-  title: "My Tournaments",
-  description: "View and manage your chess tournament registrations.",
+  title: "Settings",
+  description: "View and edit your chess player profile.",
 };
 
-async function fetchRegistrations(
+async function fetchProfile(
   host: string,
   cookieHeader: string,
-): Promise<PlayerRegistration[]> {
+): Promise<PlayerProfile | null> {
   const protocol =
     host.startsWith("localhost") || host.startsWith("127.0.0.1")
       ? "http"
       : "https";
 
   try {
-    const res = await fetch(
-      `${protocol}://${host}/api/v1/me/registrations?sort=registered_at&order=desc`,
-      {
-        cache: "no-store",
-        headers: { cookie: cookieHeader },
-      },
-    );
-    if (!res.ok) return [];
+    const res = await fetch(`${protocol}://${host}/api/v1/profile`, {
+      cache: "no-store",
+      headers: { cookie: cookieHeader },
+    });
+    if (!res.ok) return null;
     const json = await res.json();
-    return json.data ?? [];
+    return json.data ?? null;
   } catch {
-    return [];
+    return null;
   }
 }
 
-export default async function PlayerRegistrationsPage() {
+export default async function SettingsPage() {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -46,12 +43,16 @@ export default async function PlayerRegistrationsPage() {
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";
   const cookieHeader = headersList.get("cookie") ?? "";
-  const registrations = await fetchRegistrations(host, cookieHeader);
+  const profile = await fetchProfile(host, cookieHeader);
+
+  if (!profile) {
+    redirect("/auth/login");
+  }
 
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <RegistrationsClient registrations={registrations} />
+      <ProfileClient profile={profile} />
     </div>
   );
 }

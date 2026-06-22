@@ -7,6 +7,16 @@ vi.mock("next/font/google", () => ({
   Lato: () => ({ variable: "--font-lato" }),
 }));
 
+vi.mock("@/services/supabase/permission", () => ({
+  getNavUser: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@/components/AuthProvider", () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     href,
@@ -26,28 +36,28 @@ vi.mock("next/link", () => ({
 import RootLayout from "../layout";
 
 describe("RootLayout", () => {
-  it('sets lang="en" on the html element', () => {
-    const html = renderToStaticMarkup(<RootLayout>test</RootLayout>);
+  // RootLayout is an async server component, so resolve it to an element first.
+  async function renderLayout(children: React.ReactNode) {
+    return renderToStaticMarkup(await RootLayout({ children }));
+  }
+
+  it('sets lang="en" on the html element', async () => {
+    const html = await renderLayout("test");
     expect(html).toContain('lang="en"');
   });
 
-  it("includes Cinzel font variable in html className", () => {
-    const html = renderToStaticMarkup(<RootLayout>test</RootLayout>);
+  it("includes Cinzel font variable in html className", async () => {
+    const html = await renderLayout("test");
     expect(html).toContain("--font-cinzel");
   });
 
-  it("includes Lato font variable in html className", () => {
-    const html = renderToStaticMarkup(<RootLayout>test</RootLayout>);
+  it("includes Lato font variable in html className", async () => {
+    const html = await renderLayout("test");
     expect(html).toContain("--font-lato");
   });
 
-  it("renders children inside body", () => {
-    const html = renderToStaticMarkup(
-      <RootLayout>
-        <span id="child">hello</span>
-      </RootLayout>,
-    );
+  it("renders children inside body", async () => {
+    const html = await renderLayout(<span id="child">hello</span>);
     expect(html).toContain('<span id="child">hello</span>');
   });
-
 });

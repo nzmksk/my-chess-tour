@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import ApplicationsClient from "./_components/ApplicationsClient";
 import type { OrgApplication } from "./types";
@@ -12,12 +12,9 @@ export const metadata: Metadata = {
 };
 
 export default async function MyOrganizationsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     redirect("/auth/login");
   }
 
@@ -26,7 +23,7 @@ export default async function MyOrganizationsPage() {
     .select(
       "id, name, approval_status, rejection_reason, created_at, reviewed_at",
     )
-    .eq("created_by", user.id)
+    .eq("created_by", claims.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
