@@ -17,9 +17,11 @@ type AuthUser = {
   email: string;
   fullName: string;
   initials: string;
+  avatarUrl: string | null;
 };
 
 type SupabaseUser = {
+  id?: string;
   email?: string | null;
   user_metadata?: Record<string, unknown> | null;
 };
@@ -39,6 +41,7 @@ function toAuthUser(user: SupabaseUser | null | undefined): AuthUser | null {
     fullName:
       [firstName, lastName].filter(Boolean).join(" ") || (user.email ?? ""),
     initials,
+    avatarUrl: null,
   };
 }
 
@@ -60,14 +63,31 @@ export default function NavBar() {
     const supabase = createClient();
     let active = true;
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (active) setAuthUser(toAuthUser(data.user));
-    });
+    // Resolves the base auth user from metadata, then enriches it with the
+    // avatar stored on the users table (avatar_url lives there, not in
+    // user_metadata).
+    async function syncAuthUser(user: SupabaseUser | null | undefined) {
+      const base = toAuthUser(user);
+      if (!active) return;
+      setAuthUser(base);
+      if (!base || !user?.id) return;
+
+      const { data } = await supabase
+        .from("users")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!active) return;
+      const avatarUrl = (data?.avatar_url as string | null) ?? null;
+      setAuthUser((prev) => (prev ? { ...prev, avatarUrl } : prev));
+    }
+
+    supabase.auth.getUser().then(({ data }) => syncAuthUser(data.user));
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) setAuthUser(toAuthUser(session?.user));
+      syncAuthUser(session?.user);
     });
 
     return () => {
@@ -155,12 +175,23 @@ export default function NavBar() {
                 {/* Avatar + dropdown */}
                 <div className="relative ml-2" ref={dropdownRef}>
                   <button
-                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""}`}
+                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""} ${authUser.avatarUrl ? "overflow-hidden" : ""}`}
                     onClick={() => setDropdownOpen((v) => !v)}
                     aria-label="Account menu"
                     aria-expanded={dropdownOpen}
                   >
-                    {authUser.initials}
+                    {authUser.avatarUrl ? (
+                      <Image
+                        src={authUser.avatarUrl}
+                        alt={`${authUser.fullName} avatar`}
+                        width={34}
+                        height={34}
+                        unoptimized
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      authUser.initials
+                    )}
                   </button>
 
                   {dropdownOpen && (
@@ -183,6 +214,13 @@ export default function NavBar() {
                           onClick={() => setDropdownOpen(false)}
                         >
                           My Tournaments
+                        </Link>
+                        <Link
+                          href="/my/applications"
+                          className="nav-dropdown-item"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          My Organizations
                         </Link>
                         <Link
                           href="/settings"
@@ -281,6 +319,15 @@ export default function NavBar() {
           {authUser ? (
             <>
               <Link
+                href="/profile"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+                className={`nav-drawer-link ${pathname === "/profile" ? "nav-drawer-link--active" : ""}`}
+              >
+                My Profile
+              </Link>
+              <Link
                 href="/my/tournaments"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
@@ -288,6 +335,24 @@ export default function NavBar() {
                 className={`nav-drawer-link ${pathname === "/my/tournaments" ? "nav-drawer-link--active" : ""}`}
               >
                 My Tournaments
+              </Link>
+              <Link
+                href="/my/applications"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+                className={`nav-drawer-link ${pathname === "/my/applications" ? "nav-drawer-link--active" : ""}`}
+              >
+                My Organizations
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+                className={`nav-drawer-link ${pathname === "/settings" ? "nav-drawer-link--active" : ""}`}
+              >
+                Settings
               </Link>
               <Link
                 href="/auth/logout"
