@@ -6,6 +6,12 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef, useTransition } from "react";
 import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 import { createClient } from "@/services/supabase/client";
+import {
+  avatarFromMetadata,
+  readCachedAvatar,
+  subscribeAvatar,
+  writeCachedAvatar,
+} from "@/lib/avatar-cache";
 import { logout } from "@/app/auth/logout/_actions/logout";
 import { ThemeToggle } from "./ThemeToggle";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
@@ -15,6 +21,7 @@ const NAV_LINKS = [
 ];
 
 type AuthUser = {
+  id: string;
   email: string;
   fullName: string;
   initials: string;
@@ -28,7 +35,7 @@ type SupabaseUser = {
 };
 
 function toAuthUser(user: SupabaseUser | null | undefined): AuthUser | null {
-  if (!user) return null;
+  if (!user || !user.id) return null;
   const meta = user.user_metadata ?? {};
   const firstName: string =
     (meta.first_name as string) ?? (meta.firstName as string) ?? "";
@@ -38,6 +45,7 @@ function toAuthUser(user: SupabaseUser | null | undefined): AuthUser | null {
     [firstName[0], lastName[0]].filter(Boolean).join("").toUpperCase() ||
     (user.email?.[0]?.toUpperCase() ?? "?");
   return {
+    id: user.id,
     email: user.email ?? "",
     fullName:
       [firstName, lastName].filter(Boolean).join(" ") || (user.email ?? ""),
@@ -67,32 +75,54 @@ export default function NavBar() {
     });
   }
 
-  // Fetch auth state on route change, and keep it in sync with sign-in/out
-  // events (including those triggered in other tabs).
+  // Resolve auth state once on mount and keep it in sync with sign-in/out and
+  // token-refresh events (including those from other tabs). The avatar is read
+  // from a layered cache rather than re-queried on every navigation — see
+  // lib/avatar-cache.
   useEffect(() => {
     const supabase = createClient();
     let active = true;
 
-    // Resolves the base auth user from metadata, then enriches it with the
-    // avatar stored on the users table (avatar_url lives there, not in
-    // user_metadata).
     async function syncAuthUser(user: SupabaseUser | null | undefined) {
       const base = toAuthUser(user);
-      if (!active) return;
-      setAuthUser(base);
-      if (!base || !user?.id) return;
+      if (!active || !base) {
+        if (active) setAuthUser(base);
+        return;
+      }
 
-      const { data } = await supabase
-        .from("users")
-        .select("avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
+      // Seed from this tab's cache so the avatar paints without waiting on the
+      // network, then resolve the authoritative value.
+      const cached = readCachedAvatar(base.id);
+      setAuthUser({ ...base, avatarUrl: cached });
+
+      // Prefer the avatar mirrored onto user_metadata; fall back to the cache,
+      // and only as a last resort (account not yet backfilled) hit the DB once.
+      const fromMeta = avatarFromMetadata(user);
+      let avatarUrl: string | null;
+      if (fromMeta !== undefined) {
+        avatarUrl = fromMeta;
+      } else if (cached !== null) {
+        avatarUrl = cached;
+      } else {
+        const { data } = await supabase
+          .from("users")
+          .select("avatar_url")
+          .eq("id", base.id)
+          .maybeSingle();
+        if (!active) return;
+        avatarUrl = (data?.avatar_url as string | null) ?? null;
+      }
+
+      writeCachedAvatar(base.id, avatarUrl);
       if (!active) return;
-      const avatarUrl = (data?.avatar_url as string | null) ?? null;
-      setAuthUser((prev) => (prev ? { ...prev, avatarUrl } : prev));
+      setAuthUser((prev) =>
+        prev && prev.id === base.id ? { ...prev, avatarUrl } : prev,
+      );
     }
 
-    supabase.auth.getUser().then(({ data }) => syncAuthUser(data.user));
+    supabase.auth
+      .getSession()
+      .then(({ data }) => syncAuthUser(data.session?.user));
 
     const {
       data: { subscription },
@@ -100,11 +130,20 @@ export default function NavBar() {
       syncAuthUser(session?.user);
     });
 
+    // Apply avatar changes pushed from the settings page or another tab
+    // immediately, without a round-trip.
+    const unsubscribeAvatar = subscribeAvatar(({ userId, url }) => {
+      setAuthUser((prev) =>
+        prev && prev.id === userId ? { ...prev, avatarUrl: url } : prev,
+      );
+    });
+
     return () => {
       active = false;
       subscription.unsubscribe();
+      unsubscribeAvatar();
     };
-  }, [pathname]);
+  }, []);
 
   // Close dropdown on outside click or Escape
   useEffect(() => {

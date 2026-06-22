@@ -6,6 +6,7 @@ import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
 import { createClient } from "@/services/supabase/client";
+import { broadcastAvatar } from "@/lib/avatar-cache";
 import {
   Dialog,
   DialogContent,
@@ -230,12 +231,12 @@ export default function ProfileClient({ profile }: Props) {
     // Tracks the avatar value to apply locally on success: undefined = no
     // change, null = removed, string = newly uploaded URL.
     let nextAvatarUrl: string | null | undefined = undefined;
+    const supabase = createClient();
 
     try {
       // Upload the new avatar to storage first; its public URL is what the
       // PATCH request persists on the user record.
       if (avatarFile) {
-        const supabase = createClient();
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -247,9 +248,14 @@ export default function ProfileClient({ profile }: Props) {
 
         const ext = avatarFile.name.split(".").pop();
         const path = `users/${user.id}/${Date.now()}.${ext}`;
+        // The path is unique per upload, so the bytes are safely immutable and
+        // never need revalidating until the URL itself changes.
         const { error: uploadError } = await supabase.storage
           .from("avatars")
-          .upload(path, avatarFile, { upsert: true });
+          .upload(path, avatarFile, {
+            upsert: true,
+            cacheControl: "31536000",
+          });
 
         if (uploadError) {
           setSaveError("Failed to upload photo. Please try again.");
@@ -298,6 +304,19 @@ export default function ProfileClient({ profile }: Props) {
         ...(canEditMcfId && { mcf_id: payload.mcf_id as number | null }),
         ...(nextAvatarUrl !== undefined && { avatar_url: nextAvatarUrl }),
       });
+
+      // The avatar changed: push the new URL to the navbar/other tabs now, and
+      // refresh the session so the mirrored user_metadata lands in the JWT
+      // (otherwise the navbar would read a stale value until the next refresh).
+      if (nextAvatarUrl !== undefined) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          broadcastAvatar(user.id, nextAvatarUrl);
+          await supabase.auth.refreshSession();
+        }
+      }
 
       setAvatarFile(null);
       setAvatarPreview(null);
