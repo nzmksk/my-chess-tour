@@ -1,37 +1,14 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
-import ProfileClient from "./_components/ProfileClient";
-import type { PlayerProfile } from "./types";
+import PublicProfile from "./_components/PublicProfile";
+import { getPublicProfile } from "./_data/getPublicProfile";
 
 export const metadata: Metadata = {
   title: "My Profile",
-  description: "View and edit your chess player profile.",
+  description: "Your public chess player profile.",
 };
-
-async function fetchProfile(
-  host: string,
-  cookieHeader: string,
-): Promise<PlayerProfile | null> {
-  const protocol =
-    host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https";
-
-  try {
-    const res = await fetch(`${protocol}://${host}/api/v1/profile`, {
-      cache: "no-store",
-      headers: { cookie: cookieHeader },
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -43,19 +20,16 @@ export default async function ProfilePage() {
     redirect("/auth/login");
   }
 
-  const headersList = await headers();
-  const host = headersList.get("host") ?? "localhost:3000";
-  const cookieHeader = headersList.get("cookie") ?? "";
-  const profile = await fetchProfile(host, cookieHeader);
+  const profile = await getPublicProfile(user.id);
 
   if (!profile) {
     redirect("/auth/login");
   }
 
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <ProfileClient profile={profile} />
+      <PublicProfile profile={profile} isOwner={true} />
     </div>
   );
 }
