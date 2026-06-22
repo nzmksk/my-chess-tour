@@ -58,9 +58,25 @@ export default function PublicProfile({ profile, isOwner }: Props) {
           <h1 className="font-cinzel text-text-primary text-2xl leading-tight font-bold tracking-wide">
             {fullName}
           </h1>
-          {profile.nationality && (
-            <p className="font-lato text-text-muted mt-0.5 text-sm">
-              {profile.nationality}
+          {(profile.nationality ||
+            profile.fide_id != null ||
+            profile.mcf_id != null) && (
+            <p className="font-lato text-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+              {profile.nationality && <span>{profile.nationality}</span>}
+              {profile.fide_id != null && (
+                <span>
+                  FIDE ID:{" "}
+                  <Link
+                    href={`https://ratings.fide.com/profile/${profile.fide_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gold-muted hover:text-gold-bright underline-offset-2 hover:underline"
+                  >
+                    {profile.fide_id}
+                  </Link>
+                </span>
+              )}
+              {profile.mcf_id != null && <span>MCF ID: {profile.mcf_id}</span>}
             </p>
           )}
           {profile.title && (
@@ -92,29 +108,6 @@ export default function PublicProfile({ profile, isOwner }: Props) {
           label="National Rating"
           value={fmt(profile.national_rating)}
         />
-      </div>
-
-      {/* IDs */}
-      <div className="card p-6">
-        <h2 className="font-cinzel text-text-primary border-border mb-4 border-b pb-3 text-base font-semibold tracking-wider">
-          Identifiers
-        </h2>
-        <div className="border-border flex flex-col gap-0.5 border-b py-3">
-          <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
-            FIDE ID
-          </span>
-          <span className="font-lato text-text-body text-sm">
-            {profile.fide_id ?? "—"}
-          </span>
-        </div>
-        <div className="flex flex-col gap-0.5 py-3">
-          <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
-            MCF ID
-          </span>
-          <span className="font-lato text-text-body text-sm">
-            {profile.mcf_id ?? "—"}
-          </span>
-        </div>
       </div>
     </div>
   );
