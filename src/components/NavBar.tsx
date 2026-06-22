@@ -152,13 +152,6 @@ export default function NavBar() {
 
             {authUser ? (
               <>
-                <Link
-                  href="/my/tournaments"
-                  className={`nav-link ${pathname === "/my/tournaments" ? "nav-link--active" : ""}`}
-                >
-                  My Tournaments
-                </Link>
-
                 {/* Avatar + dropdown */}
                 <div className="relative ml-2" ref={dropdownRef}>
                   <button
