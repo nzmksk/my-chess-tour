@@ -407,9 +407,6 @@ export default function ProfileClient({ profile }: Props) {
               Chess Details
             </h2>
 
-            {/* Chess Title — not user-editable */}
-            <LockedField label="Chess Title" value={current.title ?? ""} />
-
             {/* FIDE ID */}
             {canEditFideId ? (
               <div className="form-group">
@@ -494,16 +491,6 @@ export default function ProfileClient({ profile }: Props) {
                 value={current.mcf_id != null ? String(current.mcf_id) : ""}
               />
             )}
-
-            {/* National Rating — not user-editable */}
-            <LockedField
-              label="National Rating"
-              value={
-                current.national_rating != null
-                  ? String(current.national_rating)
-                  : ""
-              }
-            />
           </div>
 
           {/* Actions */}
@@ -648,7 +635,9 @@ export default function ProfileClient({ profile }: Props) {
               Confirm your details
             </DialogTitle>
             <DialogDescription className="font-lato text-text-secondary">
-              The following can only be set ONCE. After saving, you won&apos;t be able to change them again - you&apos;ll need to contact support.
+              The following can only be set ONCE. After saving, you won&apos;t
+              be able to change them again - you&apos;ll need to contact
+              support.
             </DialogDescription>
           </DialogHeader>
           <ul className="font-lato text-text-body list-disc space-y-1 pl-5 text-sm">
