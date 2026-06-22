@@ -8,7 +8,7 @@ vi.mock("next/font/google", () => ({
 }));
 
 vi.mock("@/services/supabase/permission", () => ({
-  getAuthClaims: vi.fn().mockResolvedValue(null),
+  getNavUser: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/components/AuthProvider", () => ({

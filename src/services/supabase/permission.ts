@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { createClient } from "@/services/supabase/server";
+import { supabaseAdmin } from "@/services/supabase/admin";
 
 export type AuthIdentity = {
   id: string;
@@ -33,6 +34,26 @@ export const getAuthClaims = cache(resolveAuthClaims);
 export async function getCurrentUser(): Promise<AuthIdentity | null> {
   return resolveAuthClaims();
 }
+
+export type NavUser = {
+  claims: AuthIdentity;
+  avatarUrl: string | null;
+};
+
+// Resolves the signed-in user for the navbar: identity from the JWT plus the
+// avatar from the users table (the source of truth — avatar_url is never written
+// to the JWT). Cached per request, and since the root layout renders once per
+// full page load (not on client-side navigation), this is a single PK read.
+export const getNavUser = cache(async (): Promise<NavUser | null> => {
+  const claims = await getAuthClaims();
+  if (!claims) return null;
+  const { data } = await supabaseAdmin
+    .from("users")
+    .select("avatar_url")
+    .eq("id", claims.id)
+    .maybeSingle();
+  return { claims, avatarUrl: (data?.avatar_url as string | null) ?? null };
+});
 
 /**
  * Check if a user has a specific permission within an organization.

@@ -307,18 +307,12 @@ export default function ProfileClient({ profile }: Props) {
       });
 
       // The avatar changed: update the shared store (instant navbar update in
-      // this tab), broadcast to other tabs, and refresh the session so the
-      // mirrored user_metadata lands in the JWT (otherwise auth events would
-      // re-assert a stale value until the next token refresh).
+      // this tab) and broadcast to other tabs. The DB (users.avatar_url) is the
+      // source of truth, so there's no JWT to refresh.
       if (nextAvatarUrl !== undefined) {
         useAuthStore.getState().setAvatar(nextAvatarUrl);
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          broadcastAvatar(user.id, nextAvatarUrl);
-          await supabase.auth.refreshSession();
-        }
+        const userId = useAuthStore.getState().user?.id;
+        if (userId) broadcastAvatar(userId, nextAvatarUrl);
       }
 
       setAvatarFile(null);

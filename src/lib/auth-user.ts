@@ -34,10 +34,3 @@ export function toAuthUser(
     initials,
   };
 }
-
-export function avatarFromMetadata(
-  source: { user_metadata?: Record<string, unknown> | null } | null | undefined,
-): string | null {
-  const url = source?.user_metadata?.avatar_url;
-  return typeof url === "string" ? url : null;
-}

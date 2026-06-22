@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { createClient } from "@/services/supabase/client";
 import { useAuthStore, type AuthUser } from "@/stores/auth-store";
-import { toAuthUser, avatarFromMetadata } from "@/lib/auth-user";
+import { toAuthUser } from "@/lib/auth-user";
 import { subscribeAvatar } from "@/lib/avatar-cache";
 
 type Props = {
@@ -19,14 +19,17 @@ type Props = {
 export function AuthProvider({ initialUser, initialAvatar, children }: Props) {
   useEffect(() => {
     // Rehydrate the persisted avatar (store uses skipHydration), then assert the
-    // server-provided identity/avatar as authoritative for this load.
-    void useAuthStore.persist.rehydrate();
-    useAuthStore.setState({ user: initialUser, avatarUrl: initialAvatar });
+    // server-provided identity/avatar as authoritative for this load. The seed
+    // runs after rehydrate resolves so a stale persisted value can't win.
+    const seedFromServer = () =>
+      useAuthStore.setState({ user: initialUser, avatarUrl: initialAvatar });
+    Promise.resolve(useAuthStore.persist.rehydrate()).finally(seedFromServer);
 
     const supabase = createClient();
 
-    // Keeps the store in sync with sign-in/out and token refresh (incl. changes
-    // made in other tabs). The avatar rides along on user_metadata.
+    // Keeps identity in sync with sign-in/out and token refresh (incl. other
+    // tabs). The avatar is NOT in the JWT — it's owned by the server seed,
+    // setAvatar on change, and cross-tab broadcast — so don't touch it here.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -35,10 +38,7 @@ export function AuthProvider({ initialUser, initialAvatar, children }: Props) {
         useAuthStore.getState().reset();
         return;
       }
-      useAuthStore.setState({
-        user,
-        avatarUrl: avatarFromMetadata(session?.user),
-      });
+      useAuthStore.setState({ user });
     });
 
     // Apply an avatar change pushed from another tab immediately.

@@ -13,6 +13,10 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/services/supabase/server");
 
+vi.mock("@/services/supabase/admin", () => ({
+  supabaseAdmin: { from: vi.fn() },
+}));
+
 import * as supabaseServer from "@/services/supabase/server";
 
 const createClient = vi.mocked(supabaseServer.createClient);

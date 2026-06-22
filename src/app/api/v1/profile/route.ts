@@ -336,23 +336,6 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Mirror the avatar onto the auth user's metadata so clients (e.g. the
-    // navbar) get it straight from the session without a separate users-table
-    // read. Best-effort: the users table is the source of truth, so a failed
-    // mirror must not fail the request — the client refreshes its session after
-    // this returns, and the next read falls back to the table.
-    const { error: metaError } = await supabaseAdmin.auth.admin.updateUserById(
-      user.id,
-      { user_metadata: { avatar_url: avatarUpdate.value } },
-    );
-    if (metaError) {
-      console.error(
-        "Failed to mirror avatar_url to user_metadata for user ID:",
-        user.id,
-        metaError,
-      );
-    }
-
     const oldUrl = existingUser?.avatar_url as string | null | undefined;
     const publicPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/`;
     if (
