@@ -1,20 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { PlayerProfile, ChessTitle, Gender } from "@/app/profile/types";
+import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
-
-const CHESS_TITLES: ChessTitle[] = [
-  "GM",
-  "WGM",
-  "IM",
-  "WIM",
-  "FM",
-  "WFM",
-  "CM",
-  "WCM",
-];
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: "male", label: "Male" },
@@ -27,9 +16,7 @@ type EditForm = {
   nationality: string;
   is_oku: boolean;
   fide_id: string;
-  title: ChessTitle | "";
   mcf_id: string;
-  national_rating: string;
 };
 
 interface ProfileFieldProps {
@@ -44,6 +31,25 @@ function ProfileField({ label, value }: ProfileFieldProps) {
         {label}
       </span>
       <span className="font-lato text-text-body text-sm">{value || "—"}</span>
+    </div>
+  );
+}
+
+interface LockedFieldProps {
+  label: string;
+  value: string;
+}
+
+function LockedField({ label, value }: LockedFieldProps) {
+  return (
+    <div className="bg-bg-sunken border-border mb-4 rounded-md border px-4 py-3">
+      <p className="font-cinzel text-gold-dim mb-1 text-xs font-semibold tracking-widest uppercase">
+        {label}
+      </p>
+      <p className="font-lato text-text-secondary text-sm">{value || "—"}</p>
+      <p className="font-lato text-text-muted mt-1 text-xs">
+        Contact support@mychesstour.com to change.
+      </p>
     </div>
   );
 }
@@ -81,11 +87,17 @@ export default function ProfileClient({ profile }: Props) {
     nationality: profile.nationality ?? "",
     is_oku: profile.is_oku,
     fide_id: profile.fide_id != null ? String(profile.fide_id) : "",
-    title: profile.title ?? "",
     mcf_id: profile.mcf_id != null ? String(profile.mcf_id) : "",
-    national_rating:
-      profile.national_rating != null ? String(profile.national_rating) : "",
   });
+
+  // Set-once fields are editable only while still null at load time; once a
+  // value exists they are locked (changing requires support). Derived from the
+  // original prop so a value set during this session stays consistent.
+  const canEditDob = profile.date_of_birth == null;
+  const canEditGender = profile.gender == null;
+  const canEditNationality = profile.nationality == null;
+  const canEditFideId = profile.fide_id == null;
+  const canEditMcfId = profile.mcf_id == null;
 
   function handleEdit() {
     setEditing(true);
@@ -102,10 +114,7 @@ export default function ProfileClient({ profile }: Props) {
       nationality: current.nationality ?? "",
       is_oku: current.is_oku,
       fide_id: current.fide_id != null ? String(current.fide_id) : "",
-      title: current.title ?? "",
       mcf_id: current.mcf_id != null ? String(current.mcf_id) : "",
-      national_rating:
-        current.national_rating != null ? String(current.national_rating) : "",
     });
   }
 
@@ -115,18 +124,18 @@ export default function ProfileClient({ profile }: Props) {
     setSaveError(null);
     setSaveSuccess(false);
 
-    const payload: Record<string, unknown> = {
-      date_of_birth: form.date_of_birth || null,
-      gender: form.gender || null,
-      nationality: form.nationality.trim() || null,
-      is_oku: form.is_oku,
-      fide_id: form.fide_id ? parseInt(form.fide_id, 10) : null,
-      title: form.title || null,
-      mcf_id: form.mcf_id ? parseInt(form.mcf_id, 10) : null,
-      national_rating: form.national_rating
-        ? parseInt(form.national_rating, 10)
-        : null,
-    };
+    // Only send fields the user is actually allowed to edit: is_oku always,
+    // plus each set-once field that was still null at load. title and
+    // national_rating are never editable and are never sent.
+    const payload: Record<string, unknown> = { is_oku: form.is_oku };
+    if (canEditDob) payload.date_of_birth = form.date_of_birth || null;
+    if (canEditGender) payload.gender = form.gender || null;
+    if (canEditNationality)
+      payload.nationality = form.nationality.trim() || null;
+    if (canEditFideId)
+      payload.fide_id = form.fide_id ? parseInt(form.fide_id, 10) : null;
+    if (canEditMcfId)
+      payload.mcf_id = form.mcf_id ? parseInt(form.mcf_id, 10) : null;
 
     try {
       const res = await fetch("/api/v1/profile", {
@@ -146,14 +155,16 @@ export default function ProfileClient({ profile }: Props) {
 
       setCurrent({
         ...current,
-        date_of_birth: payload.date_of_birth as string | null,
-        gender: payload.gender as Gender | null,
-        nationality: payload.nationality as string | null,
         is_oku: payload.is_oku as boolean,
-        fide_id: payload.fide_id as number | null,
-        title: payload.title as ChessTitle | null,
-        mcf_id: payload.mcf_id as number | null,
-        national_rating: payload.national_rating as number | null,
+        ...(canEditDob && {
+          date_of_birth: payload.date_of_birth as string | null,
+        }),
+        ...(canEditGender && { gender: payload.gender as Gender | null }),
+        ...(canEditNationality && {
+          nationality: payload.nationality as string | null,
+        }),
+        ...(canEditFideId && { fide_id: payload.fide_id as number | null }),
+        ...(canEditMcfId && { mcf_id: payload.mcf_id as number | null }),
       });
 
       setSaveSuccess(true);
@@ -242,68 +253,104 @@ export default function ProfileClient({ profile }: Props) {
             </div>
 
             {/* Date of Birth */}
-            <div className="form-group">
-              <div className="label-row">
-                <label className="input-label" htmlFor="dob">
-                  Date of Birth
-                </label>
-                <span className="label-optional">(Optional)</span>
+            {canEditDob ? (
+              <div className="form-group">
+                <div className="label-row">
+                  <label className="input-label" htmlFor="dob">
+                    Date of Birth
+                  </label>
+                  <span className="label-optional">(Optional)</span>
+                </div>
+                <input
+                  id="dob"
+                  className="input"
+                  type="date"
+                  value={form.date_of_birth}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, date_of_birth: e.target.value }))
+                  }
+                />
               </div>
-              <input
-                id="dob"
-                className="input"
-                type="date"
-                value={form.date_of_birth}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, date_of_birth: e.target.value }))
+            ) : (
+              <LockedField
+                label="Date of Birth"
+                value={
+                  current.date_of_birth
+                    ? new Date(
+                        current.date_of_birth + "T00:00:00",
+                      ).toLocaleDateString("en-MY", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : ""
                 }
               />
-            </div>
+            )}
 
             {/* Gender */}
-            <div className="form-group">
-              <div className="label-row">
-                <label className="input-label" htmlFor="gender">
-                  Gender
-                </label>
-                <span className="label-optional">(Optional)</span>
+            {canEditGender ? (
+              <div className="form-group">
+                <div className="label-row">
+                  <label className="input-label" htmlFor="gender">
+                    Gender
+                  </label>
+                  <span className="label-optional">(Optional)</span>
+                </div>
+                <select
+                  id="gender"
+                  className="input"
+                  value={form.gender}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      gender: e.target.value as Gender | "",
+                    }))
+                  }
+                >
+                  <option value="">Select…</option>
+                  {GENDERS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                id="gender"
-                className="input"
-                value={form.gender}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    gender: e.target.value as Gender | "",
-                  }))
-                }
-              >
-                <option value="">Select…</option>
-                {GENDERS.map(({ value, label }) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Nationality */}
-            <div className="form-group">
-              <div className="label-row">
-                <label className="input-label" htmlFor="nationality">
-                  Nationality
-                </label>
-                <span className="label-optional">(Optional)</span>
-              </div>
-              <CountryDropdown
-                placeholder="Select country"
-                defaultValue={nameToAlpha3(form.nationality)}
-                onChange={(c) =>
-                  setForm((f) => ({ ...f, nationality: c.name }))
+            ) : (
+              <LockedField
+                label="Gender"
+                value={
+                  current.gender
+                    ? current.gender.charAt(0).toUpperCase() +
+                      current.gender.slice(1)
+                    : ""
                 }
               />
-            </div>
+            )}
+
+            {/* Nationality */}
+            {canEditNationality ? (
+              <div className="form-group">
+                <div className="label-row">
+                  <label className="input-label" htmlFor="nationality">
+                    Nationality
+                  </label>
+                  <span className="label-optional">(Optional)</span>
+                </div>
+                <CountryDropdown
+                  placeholder="Select country"
+                  defaultValue={nameToAlpha3(form.nationality)}
+                  onChange={(c) =>
+                    setForm((f) => ({ ...f, nationality: c.name }))
+                  }
+                />
+              </div>
+            ) : (
+              <LockedField
+                label="Nationality"
+                value={current.nationality ?? ""}
+              />
+            )}
 
             {/* OKU */}
             <div className="check-row mt-2">
@@ -328,127 +375,103 @@ export default function ProfileClient({ profile }: Props) {
               Chess Details
             </h2>
 
-            {/* Chess Title */}
-            <div className="form-group">
-              <div className="label-row">
-                <label className="input-label" htmlFor="title">
-                  Chess Title
-                </label>
-                <span className="label-optional">(Optional)</span>
-              </div>
-              <select
-                id="title"
-                className="input"
-                value={form.title}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    title: e.target.value as ChessTitle | "",
-                  }))
-                }
-              >
-                <option value="">No title</option>
-                {CHESS_TITLES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Chess Title — not user-editable */}
+            <LockedField label="Chess Title" value={current.title ?? ""} />
 
             {/* FIDE ID */}
-            <div className="form-group">
-              <div className="label-row">
-                <label className="input-label" htmlFor="fide_id">
-                  FIDE ID
-                </label>
-                <span className="label-optional">(Optional)</span>
-                <span
-                  className="help-icon"
-                  tabIndex={0}
-                  aria-label="FIDE ID help"
-                >
-                  ?
-                  <div className="tooltip" role="tooltip">
-                    Your FIDE player ID number. Your standard, rapid, and blitz
-                    ratings are stored from when your profile was created.
-                  </div>
-                </span>
+            {canEditFideId ? (
+              <div className="form-group">
+                <div className="label-row">
+                  <label className="input-label" htmlFor="fide_id">
+                    FIDE ID
+                  </label>
+                  <span className="label-optional">(Optional)</span>
+                  <span
+                    className="help-icon"
+                    tabIndex={0}
+                    aria-label="FIDE ID help"
+                  >
+                    ?
+                    <div className="tooltip" role="tooltip">
+                      Your FIDE player ID number. Your standard, rapid, and
+                      blitz ratings are stored from when your profile was
+                      created.
+                    </div>
+                  </span>
+                </div>
+                <input
+                  id="fide_id"
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 36095765"
+                  value={form.fide_id}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      fide_id: e.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                />
               </div>
-              <input
-                id="fide_id"
-                className="input"
-                type="text"
-                inputMode="numeric"
-                placeholder="e.g. 36095765"
-                value={form.fide_id}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    fide_id: e.target.value.replace(/\D/g, ""),
-                  }))
-                }
+            ) : (
+              <LockedField
+                label="FIDE ID"
+                value={current.fide_id != null ? String(current.fide_id) : ""}
               />
-            </div>
+            )}
 
             {/* MCF ID */}
-            <div className="form-group">
-              <div className="label-row">
-                <label className="input-label" htmlFor="mcf_id">
-                  MCF ID
-                </label>
-                <span className="label-optional">(Optional)</span>
-                <span
-                  className="help-icon"
-                  tabIndex={0}
-                  aria-label="MCF ID help"
-                >
-                  ?
-                  <div className="tooltip" role="tooltip">
-                    Your Malaysian Chess Federation membership ID. Used for
-                    MCF-rated tournaments.
-                  </div>
-                </span>
+            {canEditMcfId ? (
+              <div className="form-group">
+                <div className="label-row">
+                  <label className="input-label" htmlFor="mcf_id">
+                    MCF ID
+                  </label>
+                  <span className="label-optional">(Optional)</span>
+                  <span
+                    className="help-icon"
+                    tabIndex={0}
+                    aria-label="MCF ID help"
+                  >
+                    ?
+                    <div className="tooltip" role="tooltip">
+                      Your Malaysian Chess Federation membership ID. Used for
+                      MCF-rated tournaments.
+                    </div>
+                  </span>
+                </div>
+                <input
+                  id="mcf_id"
+                  className="input"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="e.g. 1234567"
+                  value={form.mcf_id}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      mcf_id: e.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                />
               </div>
-              <input
-                id="mcf_id"
-                className="input"
-                type="text"
-                inputMode="numeric"
-                placeholder="e.g. 1234567"
-                value={form.mcf_id}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    mcf_id: e.target.value.replace(/\D/g, ""),
-                  }))
-                }
+            ) : (
+              <LockedField
+                label="MCF ID"
+                value={current.mcf_id != null ? String(current.mcf_id) : ""}
               />
-            </div>
+            )}
 
-            {/* National Rating */}
-            <div className="form-group">
-              <div className="label-row">
-                <label className="input-label" htmlFor="national_rating">
-                  National Rating
-                </label>
-                <span className="label-optional">(Optional)</span>
-              </div>
-              <input
-                id="national_rating"
-                className="input"
-                type="text"
-                inputMode="numeric"
-                placeholder="e.g. 1850"
-                value={form.national_rating}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    national_rating: e.target.value.replace(/\D/g, ""),
-                  }))
-                }
-              />
-            </div>
+            {/* National Rating — not user-editable */}
+            <LockedField
+              label="National Rating"
+              value={
+                current.national_rating != null
+                  ? String(current.national_rating)
+                  : ""
+              }
+            />
           </div>
 
           {/* Actions */}
