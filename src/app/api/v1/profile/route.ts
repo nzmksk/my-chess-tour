@@ -28,7 +28,7 @@ export async function GET(): Promise<NextResponse> {
       supabaseAdmin
         .from("player_profiles")
         .select(
-          "date_of_birth, gender, nationality, is_oku, fide_id, fide_rating, title, mcf_id, national_rating",
+          "date_of_birth, gender, nationality, is_oku, fide_id, fide_rating, title, mcf_id, national_rating, show_age, show_oku",
         )
         .eq("user_id", user.id)
         .maybeSingle(),
@@ -57,6 +57,8 @@ export async function GET(): Promise<NextResponse> {
       title: profileData?.title ?? null,
       mcf_id: profileData?.mcf_id ?? null,
       national_rating: profileData?.national_rating ?? null,
+      show_age: profileData?.show_age ?? false,
+      show_oku: profileData?.show_oku ?? false,
     },
   });
 }
@@ -259,6 +261,22 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       update.is_oku = body.is_oku;
     } else {
       errors.push("is_oku must be a boolean");
+    }
+  }
+
+  if ("show_age" in body) {
+    if (typeof body.show_age === "boolean") {
+      update.show_age = body.show_age;
+    } else {
+      errors.push("show_age must be a boolean");
+    }
+  }
+
+  if ("show_oku" in body) {
+    if (typeof body.show_oku === "boolean") {
+      update.show_oku = body.show_oku;
+    } else {
+      errors.push("show_oku must be a boolean");
     }
   }
 

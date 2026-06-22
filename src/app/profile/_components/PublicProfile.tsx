@@ -1,5 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
+import { CircleFlag } from "react-circle-flags";
+import { FemaleIcon, MaleIcon } from "@/app/components/Icons";
+import { resolveCountry } from "@/lib/countries";
 import type { PublicPlayerProfile } from "@/app/profile/types";
 
 interface StatCardProps {
@@ -37,6 +40,9 @@ export default function PublicProfile({ profile, isOwner }: Props) {
   const fide = profile.fide_rating;
   const fmt = (n: number | null | undefined) => (n != null ? n : "—");
 
+  const country = resolveCountry(profile.nationality);
+  const countryCode = country?.alpha2.toLowerCase();
+
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
       {/* Header */}
@@ -56,13 +62,38 @@ export default function PublicProfile({ profile, isOwner }: Props) {
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="font-cinzel text-text-primary text-2xl leading-tight font-bold tracking-wide">
-            {fullName}
+            {fullName}{" "}
+            {profile.gender && (
+              <span
+                className="inline-flex items-center align-middle"
+                title={profile.gender === "male" ? "Male" : "Female"}
+              >
+                {profile.gender === "male" ? <MaleIcon /> : <FemaleIcon />}
+                <span className="sr-only">
+                  {profile.gender === "male" ? "Male" : "Female"}
+                </span>
+              </span>
+            )}
+            {country && countryCode && (
+              <span
+                className="ml-2 inline-flex items-center align-middle"
+                title={country.name}
+              >
+                <CircleFlag
+                  countryCode={countryCode}
+                  height={18}
+                  className="size-6"
+                  title={country.name}
+                />
+                <span className="sr-only">{country.name}</span>
+              </span>
+            )}
           </h1>
-          {(profile.nationality ||
+          {(profile.age != null ||
             profile.fide_id != null ||
             profile.mcf_id != null) && (
             <p className="font-lato text-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-              {profile.nationality && <span>{profile.nationality}</span>}
+              {profile.age != null && <span>{profile.age} years old</span>}
               {profile.fide_id != null && (
                 <span>
                   FIDE ID:{" "}
@@ -79,10 +110,19 @@ export default function PublicProfile({ profile, isOwner }: Props) {
               {profile.mcf_id != null && <span>MCF ID: {profile.mcf_id}</span>}
             </p>
           )}
-          {profile.title && (
-            <span className="font-cinzel bg-info-bg text-info border-info-border mt-1.5 inline-block rounded border px-2 py-0.5 text-xs font-bold tracking-widest uppercase">
-              {profile.title}
-            </span>
+          {(profile.title || profile.is_oku) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {profile.title && (
+                <span className="font-cinzel bg-info-bg text-info border-info-border inline-block rounded border px-2 py-0.5 text-xs font-bold tracking-widest uppercase">
+                  {profile.title}
+                </span>
+              )}
+              {profile.is_oku && (
+                <span className="font-cinzel bg-gold-ghost text-gold-bright border-gold-muted inline-block rounded border px-2 py-0.5 text-xs font-bold tracking-widest uppercase">
+                  OKU
+                </span>
+              )}
+            </div>
           )}
         </div>
         {isOwner && (
