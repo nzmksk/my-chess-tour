@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
   maybeSingle: vi.fn(),
   cookieSet: vi.fn(),
+  cookieDelete: vi.fn(),
+  createClient: vi.fn(),
   sendSignupVerificationCode: vi.fn(),
 }));
 
@@ -35,18 +37,14 @@ vi.mock("@/services/auth/verification-code", () => ({
 }));
 
 vi.mock("next/headers", () => ({
-  cookies: vi.fn().mockResolvedValue({ set: mocks.cookieSet }),
+  cookies: vi.fn().mockResolvedValue({
+    set: mocks.cookieSet,
+    delete: mocks.cookieDelete,
+  }),
 }));
 
 vi.mock("@/services/supabase/server", () => ({
-  createClient: vi.fn(() =>
-    Promise.resolve({
-      auth: {
-        signInWithPassword: mocks.signInWithPassword,
-        signOut: mocks.signOut,
-      },
-    }),
-  ),
+  createClient: mocks.createClient,
 }));
 
 vi.mock("@/services/supabase/admin", () => ({
@@ -89,6 +87,12 @@ beforeEach(() => {
   // Default: account not locked, user is verified
   mocks.exists.mockResolvedValue(0);
   mocks.maybeSingle.mockResolvedValue({ data: { is_verified: true } });
+  mocks.createClient.mockResolvedValue({
+    auth: {
+      signInWithPassword: mocks.signInWithPassword,
+      signOut: mocks.signOut,
+    },
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -234,6 +238,20 @@ describe("login action", () => {
     expect(mocks.redirect).not.toHaveBeenCalled();
   });
 
+  it("signs out with local scope and clears attempt keys on the unverified path", async () => {
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "abc-123" }, session: {} },
+      error: null,
+    });
+    mocks.maybeSingle.mockResolvedValue({ data: { is_verified: false } });
+
+    await login(INITIAL_LOGIN_STATE, makeFormData(VALID));
+
+    expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
+    // attempts + lock keys cleared even though we don't redirect
+    expect(mocks.del).toHaveBeenCalledTimes(2);
+  });
+
   it("still proceeds to needsVerification if sending the code throws", async () => {
     mocks.signInWithPassword.mockResolvedValue({
       data: { user: { id: "abc-123" }, session: {} },
@@ -261,6 +279,45 @@ describe("login action", () => {
 
     expect(mocks.del).toHaveBeenCalledTimes(2);
     expect(mocks.redirect).toHaveBeenCalledWith("/tournaments");
+  });
+
+  // --- "Keep me signed in" -------------------------------------------------
+
+  it("uses a persistent session and clears the marker when keepSignedIn is on", async () => {
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "abc-123" }, session: {} },
+      error: null,
+    });
+
+    await login(INITIAL_LOGIN_STATE, makeFormData({ ...VALID, keepSignedIn: "on" }));
+
+    expect(mocks.createClient).toHaveBeenCalledWith({ sessionOnly: false });
+    expect(mocks.cookieDelete).toHaveBeenCalledWith("mct_session_only");
+    expect(mocks.cookieSet).not.toHaveBeenCalledWith(
+      "mct_session_only",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("uses a session-only client and sets the marker when keepSignedIn is off", async () => {
+    mocks.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "abc-123" }, session: {} },
+      error: null,
+    });
+
+    const fd = new FormData();
+    fd.append("email", VALID.email);
+    fd.append("password", VALID.password);
+    // keepSignedIn omitted → unchecked
+    await login(INITIAL_LOGIN_STATE, fd);
+
+    expect(mocks.createClient).toHaveBeenCalledWith({ sessionOnly: true });
+    expect(mocks.cookieSet).toHaveBeenCalledWith(
+      "mct_session_only",
+      "1",
+      expect.objectContaining({ httpOnly: true }),
+    );
   });
 
   it("calls supabase signInWithPassword with correct credentials", async () => {

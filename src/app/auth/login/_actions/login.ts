@@ -94,9 +94,14 @@ export async function login(
     .maybeSingle();
 
   if (!userRecord?.is_verified) {
-    // Don't dead-end on an error message. Sign them out, send a fresh code, and
-    // signal the client to carry them into the verification step.
-    await supabase.auth.signOut();
+    // Correct password — drop any failed-attempt tracking before routing on.
+    await redis.del(attemptsKey);
+    await redis.del(lockKey);
+
+    // Don't dead-end on an error message. Sign them out (this device only),
+    // send a fresh code, and signal the client to carry them into the
+    // verification step.
+    await supabase.auth.signOut({ scope: "local" });
 
     try {
       await sendSignupVerificationCode(email.toLowerCase().trim());
