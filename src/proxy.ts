@@ -84,7 +84,12 @@ export async function proxy(request: NextRequest) {
   }
 
   // Redirect authenticated users away from guest-only auth pages.
-  const guestOnlyPaths = ["/auth/forgot-password", "/auth/logout"];
+  const guestOnlyPaths = [
+    "/auth/forgot-password",
+    "/auth/login",
+    "/auth/logout",
+    "/auth/signup",
+  ];
   if (user && guestOnlyPaths.some((p) => pathname.startsWith(p))) {
     return NextResponse.redirect(new URL("/tournaments", request.url));
   }

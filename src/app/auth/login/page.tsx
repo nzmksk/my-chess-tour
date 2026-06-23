@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import LoginForm from "./_components/LoginForm";
-import { createClient } from "@/services/supabase/server";
 
 export const metadata = {
   title: "Sign In",
@@ -13,13 +11,6 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ message?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) redirect("/tournaments");
-
   const { message } = await searchParams;
   const successMessage =
     message === "password-updated"
