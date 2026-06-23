@@ -33,5 +33,5 @@ export async function updatePassword(
   // page while silently still signed in.
   await supabase.auth.signOut();
 
-  redirect("/auth/login");
+  redirect("/auth/login?message=password-updated");
 }

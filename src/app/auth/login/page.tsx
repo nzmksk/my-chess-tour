@@ -8,7 +8,11 @@ export const metadata = {
   description: "Sign in to your MY Chess Tour account.",
 };
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -16,10 +20,16 @@ export default async function LoginPage() {
 
   if (user) redirect("/tournaments");
 
+  const { message } = await searchParams;
+  const successMessage =
+    message === "password-updated"
+      ? "Password updated successfully. Please log in again with your new password."
+      : undefined;
+
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <LoginForm />
+      <LoginForm successMessage={successMessage} />
     </div>
   );
 }

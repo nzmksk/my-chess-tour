@@ -545,7 +545,7 @@
     @apply font-cinzel text-text-muted mb-1 text-sm font-semibold tracking-widest uppercase;
   }
   .pw-req-grid {
-    @apply grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1;
+    @apply grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2;
   }
   .pw-req {
     @apply font-lato text-text-muted flex items-center gap-1.25 text-sm;
@@ -653,6 +653,12 @@
   }
   .error-text {
     @apply font-lato text-danger text-sm leading-relaxed;
+  }
+  .success-banner {
+    @apply bg-success-bg border-success-border mb-4 flex items-start gap-2 rounded-md border p-2;
+  }
+  .success-text {
+    @apply font-lato text-success text-sm leading-relaxed;
   }
 
   /* ── Step tracker ── */
