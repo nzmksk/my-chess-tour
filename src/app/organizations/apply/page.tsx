@@ -14,7 +14,9 @@ export default async function OrganizerApplyPage() {
   const claims = await getAuthClaims();
 
   if (!claims) {
-    redirect("/auth/login?next=/organizations/apply");
+    redirect(
+      "/auth/login?redirectTo=/organizations/apply&message=login-required",
+    );
   }
 
   return (

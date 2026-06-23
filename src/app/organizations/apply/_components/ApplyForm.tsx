@@ -41,7 +41,7 @@ export default function ApplyForm() {
   useEffect(() => {
     if (status !== "success") return;
     if (countdown <= 0) {
-      router.push("/my/applications");
+      router.push("/my/organizations/applications");
       return;
     }
     const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
@@ -127,7 +127,7 @@ export default function ApplyForm() {
         </p>
         <div className="flex flex-col gap-3">
           <button
-            onClick={() => router.push("/my/applications")}
+            onClick={() => router.push("/my/organizations/applications")}
             className="btn-primary w-full rounded-md"
           >
             View My Organizations

@@ -21,6 +21,11 @@ export async function login(
   const email = formData.get("email")?.toString().trim() ?? "";
   const password = formData.get("password")?.toString() ?? "";
   const keepSignedIn = formData.get("keepSignedIn") === "on";
+  const rawRedirectTo = formData.get("redirectTo")?.toString() ?? "";
+  const safeRedirectTo =
+    rawRedirectTo.startsWith("/") && !rawRedirectTo.startsWith("//")
+      ? rawRedirectTo
+      : "/tournaments";
 
   const { errors, isValid } = validateLoginForm({
     email,
@@ -144,5 +149,5 @@ export async function login(
     });
   }
 
-  redirect("/tournaments");
+  redirect(safeRedirectTo);
 }

@@ -67,6 +67,33 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Guard the password-reset form: only a recovery-link session may access it.
+  if (pathname.startsWith("/auth/update-password")) {
+    if (!user) {
+      return NextResponse.redirect(
+        new URL("/auth/forgot-password", request.url),
+      );
+    }
+    const amr = (user.amr ?? []) as Array<{ method: string } | string>;
+    const isRecovery = amr.some(
+      (e) => (typeof e === "string" ? e : e.method) === "otp",
+    );
+    if (!isRecovery) {
+      return NextResponse.redirect(new URL("/tournaments", request.url));
+    }
+  }
+
+  // Redirect authenticated users away from guest-only auth pages.
+  const guestOnlyPaths = [
+    "/auth/forgot-password",
+    "/auth/login",
+    "/auth/logout",
+    "/auth/signup",
+  ];
+  if (user && guestOnlyPaths.some((p) => pathname.startsWith(p))) {
+    return NextResponse.redirect(new URL("/tournaments", request.url));
+  }
+
   // Protect routes that require auth. Note the trailing slash on
   // "/organizations/" — the bare "/organizations" landing ("Become an
   // Organizer") is public; only its sub-routes (apply, dashboards, etc.) gate.

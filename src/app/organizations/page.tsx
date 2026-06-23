@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import { TrophyIcon, PayIcon, BrowseIcon } from "@/app/components/Icons";
+import { getAuthClaims } from "@/services/supabase/permission";
 
 export const metadata: Metadata = {
   title: "Organizer Hub | MY Chess Tour",
@@ -95,7 +96,12 @@ const FEATURES = [
   },
 ];
 
-export default function OrganizerLandingPage() {
+export default async function OrganizerLandingPage() {
+  const claims = await getAuthClaims();
+  const applyHref = claims
+    ? "/organizations/apply"
+    : "/auth/login?redirectTo=/organizations/apply&message=login-required";
+
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
@@ -111,7 +117,7 @@ export default function OrganizerLandingPage() {
             No spreadsheets. No bank transfers. No chaos.
           </p>
           <Link
-            href="/organizations/apply"
+            href={applyHref}
             className="btn-primary inline-block w-auto px-10 py-3"
           >
             Apply Now
@@ -154,7 +160,7 @@ export default function OrganizerLandingPage() {
             a few business days.
           </p>
           <Link
-            href="/organizations/apply"
+            href={applyHref}
             className="btn-primary inline-block w-auto px-10 py-3"
           >
             Apply Now

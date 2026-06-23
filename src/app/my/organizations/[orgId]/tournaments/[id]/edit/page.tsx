@@ -3,9 +3,9 @@ import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
-import { TournamentWizardProvider } from "@/app/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
-import type { PersistedState } from "@/app/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
-import WizardShell from "@/app/organizations/[orgId]/tournaments/create/_components/WizardShell";
+import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
+import type { PersistedState } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
+import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",

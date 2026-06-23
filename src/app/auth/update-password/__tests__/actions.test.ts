@@ -138,6 +138,8 @@ describe("updatePassword action", () => {
       updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd),
     ).rejects.toThrow("NEXT_REDIRECT");
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/auth/login");
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      "/auth/login?message=password-updated",
+    );
   });
 });

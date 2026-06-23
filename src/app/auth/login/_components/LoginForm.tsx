@@ -7,7 +7,15 @@ import { login } from "../_actions/login";
 import { INITIAL_LOGIN_STATE } from "../types";
 import { SIGNUP_FORM_STORAGE_KEY } from "@/lib/signup-storage";
 
-export default function LoginForm() {
+export default function LoginForm({
+  successMessage,
+  infoMessage,
+  redirectTo,
+}: {
+  successMessage?: string;
+  infoMessage?: string;
+  redirectTo?: string;
+}) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
     login,
@@ -93,6 +101,24 @@ export default function LoginForm() {
             <hr className="divider-gold" />
           </div>
 
+          {successMessage && (
+            <div className="success-banner" role="status">
+              <span className="mt-px shrink-0 text-sm" aria-hidden="true">
+                ✓
+              </span>
+              <p className="success-text">{successMessage}</p>
+            </div>
+          )}
+
+          {infoMessage && (
+            <div className="info-banner" role="status">
+              <span className="mt-px shrink-0 text-sm" aria-hidden="true">
+                ℹ
+              </span>
+              <p className="info-text">{infoMessage}</p>
+            </div>
+          )}
+
           {state.error && (
             <div className="error-banner" role="alert">
               <span className="mt-px shrink-0 text-sm" aria-hidden="true">
@@ -116,6 +142,9 @@ export default function LoginForm() {
           )}
 
           <form action={formAction}>
+            {redirectTo && (
+              <input type="hidden" name="redirectTo" value={redirectTo} />
+            )}
             {/* Email */}
             <div className="form-group">
               <div className="label-row">

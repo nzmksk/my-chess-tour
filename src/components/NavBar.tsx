@@ -158,7 +158,7 @@ export default function NavBar() {
                           My Tournaments
                         </Link>
                         <Link
-                          href="/my/applications"
+                          href="/my/organizations/applications"
                           className="nav-dropdown-item"
                           onClick={() => setDropdownOpen(false)}
                         >
@@ -282,11 +282,11 @@ export default function NavBar() {
                 My Tournaments
               </Link>
               <Link
-                href="/my/applications"
+                href="/my/organizations/applications"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
                 }
-                className={`nav-drawer-link ${pathname === "/my/applications" ? "nav-drawer-link--active" : ""}`}
+                className={`nav-drawer-link ${pathname === "/my/organizations/applications" ? "nav-drawer-link--active" : ""}`}
               >
                 My Organizations
               </Link>

@@ -96,7 +96,9 @@ describe("updatePassword action", () => {
 
     expect(mocks.updateUser).toHaveBeenCalledWith({ password: "Password1!" });
     expect(mocks.signOut).toHaveBeenCalled();
-    expect(mocks.redirect).toHaveBeenCalledWith("/auth/login");
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      "/auth/login?message=password-updated",
+    );
   });
 
   // --- Supabase error -------------------------------------------------------

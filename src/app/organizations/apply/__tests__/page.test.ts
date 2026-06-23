@@ -36,7 +36,7 @@ describe("OrganizerApplyPage", () => {
     await OrganizerApplyPage();
 
     expect(mockRedirect).toHaveBeenCalledWith(
-      "/auth/login?next=/organizations/apply",
+      "/auth/login?redirectTo=/organizations/apply&message=login-required",
     );
   });
 

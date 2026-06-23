@@ -84,6 +84,51 @@ describe("createClient", () => {
     expect(mockSet).toHaveBeenCalledWith("b", "2", { httpOnly: true });
   });
 
+  it("setAll strips maxAge/expires from sb- cookies when sessionOnly is true", async () => {
+    await createClient({ sessionOnly: true });
+
+    const { _options } = mockCreateServerClient.mock.results[0].value as {
+      _options: {
+        cookies: {
+          setAll: (
+            c: Array<{ name: string; value: string; options: unknown }>,
+          ) => void;
+        };
+      };
+    };
+    _options.cookies.setAll([
+      { name: "sb-token", value: "abc", options: { maxAge: 3600, path: "/" } },
+    ]);
+
+    expect(mockSet).toHaveBeenCalledWith(
+      "sb-token",
+      "abc",
+      expect.not.objectContaining({ maxAge: 3600 }),
+    );
+  });
+
+  it("setAll does not strip cookies when sessionOnly is false", async () => {
+    await createClient({ sessionOnly: false });
+
+    const { _options } = mockCreateServerClient.mock.results[0].value as {
+      _options: {
+        cookies: {
+          setAll: (
+            c: Array<{ name: string; value: string; options: unknown }>,
+          ) => void;
+        };
+      };
+    };
+    _options.cookies.setAll([
+      { name: "sb-token", value: "abc", options: { maxAge: 3600, path: "/" } },
+    ]);
+
+    expect(mockSet).toHaveBeenCalledWith("sb-token", "abc", {
+      maxAge: 3600,
+      path: "/",
+    });
+  });
+
   it("setAll silently catches errors thrown by cookieStore.set", async () => {
     mockSet.mockImplementation(() => {
       throw new Error("Cannot set cookies in Server Component");

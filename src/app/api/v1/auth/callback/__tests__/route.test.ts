@@ -78,4 +78,39 @@ describe("GET /api/v1/auth/callback", () => {
       expect.stringContaining("/auth/forgot-password?error=invalid_link"),
     );
   });
+
+  it("calls verifyOtp when token_hash and type are present", async () => {
+    await GET(
+      makeRequest("/api/v1/auth/callback?token_hash=hash123&type=email"),
+    );
+
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({
+      token_hash: "hash123",
+      type: "email",
+    });
+  });
+
+  it("redirects to next param after successful verifyOtp", async () => {
+    await GET(
+      makeRequest(
+        "/api/v1/auth/callback?token_hash=hash123&type=email&next=/auth/update-password",
+      ),
+    );
+
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/update-password"),
+    );
+  });
+
+  it("redirects to error page when verifyOtp fails", async () => {
+    mocks.verifyOtp.mockResolvedValue({ error: { message: "Invalid token" } });
+
+    await GET(
+      makeRequest("/api/v1/auth/callback?token_hash=badhash&type=email"),
+    );
+
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/forgot-password?error=invalid_link"),
+    );
+  });
 });

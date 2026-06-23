@@ -1,14 +1,25 @@
+"use client";
+
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
-
-export const metadata = {
-  title: "Signed Out — MY Chess Tour",
-  description: "You've been signed out of MY Chess Tour.",
-};
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function SignedOutPage() {
+  const router = useRouter();
+  const [seconds, setSeconds] = useState(10);
+
+  useEffect(() => {
+    if (seconds === 0) {
+      router.push("/tournaments");
+      return;
+    }
+    const timer = setTimeout(() => setSeconds((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [seconds, router]);
+
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
       <div className="auth-page">
         <div className="centered-col">
@@ -47,6 +58,9 @@ export default function SignedOutPage() {
                 Browse Tournaments
               </Link>
             </div>
+            <p className="confirm-body mt-4 mb-0 text-sm opacity-60">
+              Redirecting to tournaments in {seconds}s…
+            </p>
           </div>
         </div>
       </div>
