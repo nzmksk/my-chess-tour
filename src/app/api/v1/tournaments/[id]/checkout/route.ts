@@ -304,6 +304,7 @@ async function initiateChipPayment(
       referenceId: payment.id,
       successRedirect: `${siteUrl}/tournaments/${tournamentId}/register/success`,
       failureRedirect: `${siteUrl}/tournaments/${tournamentId}/register/failure`,
+      successCallback: `${siteUrl}/api/v1/webhooks/chip`,
     });
   } catch (err) {
     console.error("CHIP purchase creation failed:", err);
