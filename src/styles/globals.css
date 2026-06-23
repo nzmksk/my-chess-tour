@@ -660,6 +660,12 @@
   .success-text {
     @apply font-lato text-success text-sm leading-relaxed;
   }
+  .info-banner {
+    @apply bg-info-bg border-info-border mb-4 flex items-start gap-2 rounded-md border p-2;
+  }
+  .info-text {
+    @apply font-lato text-info text-sm leading-relaxed;
+  }
 
   /* ── Step tracker ── */
   .step-tracker {

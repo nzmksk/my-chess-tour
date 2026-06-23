@@ -9,8 +9,12 @@ import { SIGNUP_FORM_STORAGE_KEY } from "@/lib/signup-storage";
 
 export default function LoginForm({
   successMessage,
+  infoMessage,
+  redirectTo,
 }: {
   successMessage?: string;
+  infoMessage?: string;
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
@@ -106,6 +110,15 @@ export default function LoginForm({
             </div>
           )}
 
+          {infoMessage && (
+            <div className="info-banner" role="status">
+              <span className="mt-px shrink-0 text-sm" aria-hidden="true">
+                ℹ
+              </span>
+              <p className="info-text">{infoMessage}</p>
+            </div>
+          )}
+
           {state.error && (
             <div className="error-banner" role="alert">
               <span className="mt-px shrink-0 text-sm" aria-hidden="true">
@@ -129,6 +142,9 @@ export default function LoginForm({
           )}
 
           <form action={formAction}>
+            {redirectTo && (
+              <input type="hidden" name="redirectTo" value={redirectTo} />
+            )}
             {/* Email */}
             <div className="form-group">
               <div className="label-row">
