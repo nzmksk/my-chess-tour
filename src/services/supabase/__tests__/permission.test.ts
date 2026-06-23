@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getCurrentUser,
+  getNavUser,
   hasOrgPermission,
   hasGlobalPermission,
   requireOrgPermission,
@@ -18,8 +19,17 @@ vi.mock("@/services/supabase/admin", () => ({
 }));
 
 import * as supabaseServer from "@/services/supabase/server";
+import { supabaseAdmin } from "@/services/supabase/admin";
 
 const createClient = vi.mocked(supabaseServer.createClient);
+const mockAdmin = vi.mocked(supabaseAdmin);
+
+function mockAdminAvatarQuery(avatarData: { avatar_url?: string } | null) {
+  const maybeSingle = vi.fn().mockResolvedValue({ data: avatarData });
+  const eq = vi.fn().mockReturnValue({ maybeSingle });
+  const select = vi.fn().mockReturnValue({ eq });
+  mockAdmin.from.mockReturnValue({ select } as never);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +50,53 @@ function makeClient({
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+describe("getNavUser", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns null when there are no auth claims", async () => {
+    createClient.mockResolvedValue(makeClient({ claims: null }) as never);
+    expect(await getNavUser()).toBeNull();
+  });
+
+  it("returns claims and avatarUrl when the user has an avatar", async () => {
+    const claims = {
+      sub: "u1",
+      email: "alice@example.com",
+      user_metadata: { first_name: "Alice" },
+      role: "authenticated",
+    };
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+    mockAdminAvatarQuery({ avatar_url: "https://example.com/avatar.png" });
+
+    const result = await getNavUser();
+
+    expect(result).toEqual({
+      claims: {
+        id: "u1",
+        email: "alice@example.com",
+        userMetadata: { first_name: "Alice" },
+        role: "authenticated",
+      },
+      avatarUrl: "https://example.com/avatar.png",
+    });
+  });
+
+  it("returns null avatarUrl when the user has no avatar", async () => {
+    const claims = {
+      sub: "u1",
+      email: "alice@example.com",
+      user_metadata: {},
+      role: "authenticated",
+    };
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+    mockAdminAvatarQuery(null);
+
+    const result = await getNavUser();
+
+    expect(result?.avatarUrl).toBeNull();
+  });
+});
 
 describe("getCurrentUser", () => {
   beforeEach(() => vi.clearAllMocks());

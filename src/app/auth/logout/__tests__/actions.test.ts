@@ -56,21 +56,21 @@ describe("logout action", () => {
     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
-  it("redirects to /signed-out on success", async () => {
+  it("redirects to /auth/logout on success", async () => {
     mocks.signOut.mockResolvedValue({ error: null });
 
     await logout();
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/auth/signed-out");
+    expect(mocks.redirect).toHaveBeenCalledWith("/auth/logout");
   });
 
-  it("still redirects to /signed-out when signOut returns an error", async () => {
+  it("still redirects to /auth/logout when signOut returns an error", async () => {
     mocks.signOut.mockResolvedValue({
       error: { message: "Something went wrong" },
     });
 
     await logout();
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/auth/signed-out");
+    expect(mocks.redirect).toHaveBeenCalledWith("/auth/logout");
   });
 });
