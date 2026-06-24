@@ -92,18 +92,10 @@ export async function POST(
     );
   }
 
-  const { count: currentCount } = await supabaseAdmin
-    .from("registrations")
-    .select("*", { count: "exact", head: true })
-    .eq("tournament_id", id)
-    .in("status", ["pending_payment", "confirmed"]);
-
-  if (currentCount !== null && currentCount >= tournament.max_participants) {
-    return NextResponse.json(
-      { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
-      { status: 422 },
-    );
-  }
+  // Capacity is enforced authoritatively in Postgres: the create path via the
+  // check_tournament_capacity trigger, the resume path via
+  // reset_registration_for_payment. Both apply the reservation hold window, so
+  // there is no JS pre-check here (it would double-count lapsed holds).
 
   const fees = tournament.entry_fees as EntryFees;
 
@@ -246,6 +238,12 @@ export async function POST(
     );
 
     if (resetErr) {
+      if (resetErr.message?.toLowerCase().includes("full")) {
+        return NextResponse.json(
+          { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
+          { status: 422 },
+        );
+      }
       if (resetErr.code === "P0001") {
         return NextResponse.json(
           {

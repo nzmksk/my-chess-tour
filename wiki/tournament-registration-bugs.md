@@ -36,6 +36,18 @@ FIXED: reset_registration_for_payment (migration 009) resets the payment to stat
 
 H3 — Pending registrations consume capacity forever. Capacity counts pending_payment + confirmed (checkout/route.ts:95-106 + the check_tournament_capacity trigger), and there's no expiry/cleanup. With no webhook (C1), every abandoned checkout permanently eats a slot; tournaments fill with ghosts and become un-registerable.
 
+FIXED: 10-minute lazy hold window enforced entirely in Postgres (migration 010). assert_tournament_capacity(tournament_id, exclude?) counts confirmed + pending_payment within the last 10 minutes (locking the tournament row); check_tournament_capacity delegates to it, so abandoned pendings drop out of the count and slots free automatically — no scheduler. reset_registration_for_payment now also re-checks capacity (excluding its own row) and resets registered_at, closing an overbook hole where the resume UPDATE bypassed the INSERT-only trigger. The redundant JS capacity pre-check in checkout was removed (counted all pending with no window; blocked users paying for their own held slot) — also resolves M3 for checkout. Capacity stays Postgres-only (Upstash REST Redis can't share the transaction); pg_cron cleanup sweep + Redis display-count cache deferred. Caveat: a payment confirmed after its hold lapsed has no confirm-time recheck (rare overbook).
+
+Verification
+
+- Apply migration 010 to Supabase (manual, as with 001–009; all CREATE OR REPLACE / additive).
+- Manual (10-min window):
+  - fill a 1-seat tournament with one pending_payment;
+  - before 10 min another user gets CAPACITY_FULL;
+  - after 10 min the slot frees and they can register.
+- The original holder can still resume their own pending within and after the window (if a slot is free).
+- Resuming into a now-full tournament → CAPACITY_FULL (422).
+
 H4 — Detail page blocks retry: pending_payment shows as "Registered". tournaments/[id]/page.tsx:214 sets isRegistered from .in("status", ["pending_payment","confirmed"]), and TournamentDetail.tsx:359 renders a disabled "Registered" button when true. A user mid-payment or after a failed payment is shown "Registered" and cannot reach the register/retry flow — even though checkout/route.ts explicitly allows resuming pending_payment/failed_payment. Only confirmed should show "Registered"; pending_payment → "Complete payment"; failed_payment / none / cancelled_payment → "Register". (Found during webhook testing.)
 
 FIXED: page.tsx now fetches the registration status (maybeSingle) instead of a pending/confirmed count and passes registrationStatus to TournamentDetail, whose CTA branches: confirmed → disabled "Registered"; pending_payment → "Complete Payment" link; failed_payment/cancelled/none → "Register Now". Starting-rank visibility was also tightened to confirmed-only (isConfirmed). Tests: TournamentDetail.test.tsx, page.test.ts.

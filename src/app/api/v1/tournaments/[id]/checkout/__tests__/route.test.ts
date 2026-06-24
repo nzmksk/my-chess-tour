@@ -7,7 +7,6 @@ import { NextRequest } from "next/server";
 
 const {
   mockTournamentBuilder,
-  mockCapacityBuilder,
   mockExistingBuilder,
   mockPaymentSelectBuilder,
   mockPaymentUpdateBuilder,
@@ -34,24 +33,20 @@ const {
   }
 
   const mockTournamentBuilder = makeBuilder({ data: null, error: null });
-  const mockCapacityBuilder = makeBuilder({ count: 0, error: null });
   const mockExistingBuilder = makeBuilder({ data: null, error: null });
   const mockPaymentSelectBuilder = makeBuilder({ data: null, error: null });
   const mockPaymentUpdateBuilder = makeBuilder({ data: null, error: null });
 
-  let regCallCount = 0;
   let payCallCount = 0;
   const resetCallCounts = () => {
-    regCallCount = 0;
     payCallCount = 0;
   };
 
   const mockFrom = vi.fn((table: string) => {
     if (table === "tournaments") return mockTournamentBuilder;
-    if (table === "registrations") {
-      const builders = [mockCapacityBuilder, mockExistingBuilder];
-      return builders[regCallCount++] ?? mockExistingBuilder;
-    }
+    // Only one registrations read remains (the existing-registration lookup);
+    // capacity is enforced in Postgres, not via a JS pre-check.
+    if (table === "registrations") return mockExistingBuilder;
     if (table === "payments") {
       const builders = [mockPaymentSelectBuilder, mockPaymentUpdateBuilder];
       return builders[payCallCount++] ?? mockPaymentUpdateBuilder;
@@ -59,12 +54,13 @@ const {
     return makeBuilder({ data: null, error: null });
   });
 
-  const mockRpc = vi.fn(() => Promise.resolve({ data: null, error: null }));
+  const mockRpc = vi.fn<() => Promise<{ data: unknown; error: unknown }>>(() =>
+    Promise.resolve({ data: null, error: null }),
+  );
   const mockGetUser = vi.fn();
   const mockCreateChipPurchase = vi.fn();
   return {
     mockTournamentBuilder,
-    mockCapacityBuilder,
     mockExistingBuilder,
     mockPaymentSelectBuilder,
     mockPaymentUpdateBuilder,
@@ -147,7 +143,6 @@ beforeEach(() => {
     error: null,
   });
   setThen(mockTournamentBuilder, { data: makeTournament(), error: null });
-  setThen(mockCapacityBuilder, { count: 0, error: null });
   setThen(mockExistingBuilder, { data: null, error: null });
   setThen(mockPaymentSelectBuilder, {
     data: { id: "pay-1", gross_amount_cents: 3300 },
@@ -227,6 +222,29 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     const json = await res.json();
     expect(json.error.code).toBe("ALREADY_REGISTERED");
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("maps a capacity-full reset error to 422 (slot taken while lapsed)", async () => {
+    setThen(mockExistingBuilder, {
+      data: { id: "reg-1", status: "failed_payment" },
+      error: null,
+    });
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "Tournament is full (100 / 100 participants)",
+      },
+    });
+
+    const res = await POST(makeRequest(VALID_UUID), {
+      params: Promise.resolve({ id: VALID_UUID }),
+    });
+
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error.code).toBe("CAPACITY_FULL");
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
   });
 
   it("maps a non-resumable (P0001) reset error to 409", async () => {
