@@ -94,6 +94,9 @@ Low / hardening
 FIXED: confirmed unused (only its own test referenced it; client uses /checkout) and deleted the POST route + its test. Kept validators.ts (shared with checkout). This also removes the last copy of the M3 TOCTOU pre-check.
 
 - L2 tournaments INSERT RLS doesn't re-check org approval_status (API does; defense-in-depth only).
+
+FIXED: migration 011 adds a SECURITY DEFINER helper is_org_approved(org_id) (approval_status='approved' AND deleted_at IS NULL) and ALTERs the "Org members can create tournaments" INSERT policy to require has_org_permission(...) AND is_org_approved(organization_id). The database now rejects tournament inserts for unapproved/deleted orgs even if the API check is bypassed. Apply migration 011 to Supabase (manual, as with 001–010).
+
 - L3 Past-tournament cutoff is by calendar month — abrupt at month rollover.
 
 FIXED: now a rolling 30-day window (TournamentsClient.tsx); older tournaments will be reachable via a future archive search.
