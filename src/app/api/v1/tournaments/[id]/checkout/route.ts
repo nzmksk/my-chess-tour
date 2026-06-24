@@ -331,7 +331,10 @@ async function initiateChipPayment(
       referenceId: payment.id,
       successRedirect: `${siteUrl}/tournaments/${tournamentId}/register/success`,
       failureRedirect: `${siteUrl}/tournaments/${tournamentId}/register/failure`,
-      successCallback: `${siteUrl}/api/v1/webhooks/chip`,
+      // Payment status is delivered server-side by the CHIP account webhook
+      // (subscribed to purchase.paid / payment_failure / cancelled) → /api/v1/webhooks/chip.
+      // No success_callback: it's signed with a different key than the webhook
+      // and would be redundant with the subscribed purchase.paid event.
     });
   } catch (err) {
     console.error("CHIP purchase creation failed:", err);

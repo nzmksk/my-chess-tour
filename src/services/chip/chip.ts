@@ -7,8 +7,6 @@ interface CreatePurchaseParams {
   referenceId: string;
   successRedirect: string;
   failureRedirect: string;
-  /** Server-to-server callback URL; CHIP POSTs a signed Purchase here on success. */
-  successCallback?: string;
 }
 
 export interface ChipPurchase {
@@ -76,9 +74,6 @@ export async function createChipPurchase(
       reference: params.referenceId,
       success_redirect: params.successRedirect,
       failure_redirect: params.failureRedirect,
-      ...(params.successCallback
-        ? { success_callback: params.successCallback }
-        : {}),
       send_receipt: true,
     }),
   });
