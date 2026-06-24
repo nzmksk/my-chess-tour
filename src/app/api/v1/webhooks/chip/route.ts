@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { chipOutcome } from "@/services/chip/chip";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 
@@ -14,18 +15,6 @@ interface ChipCallbackPayload {
   status?: string;
   event_type?: string;
 }
-
-// CHIP events/statuses that mean the money cleared (purchase.captured carries
-// status "paid" too, but we list it explicitly for clarity).
-const SUCCESS_STATUSES = new Set(["paid"]);
-const SUCCESS_EVENTS = new Set(["purchase.paid", "purchase.captured"]);
-// Terminal failure signals. Everything else (created, pending_*, hold, viewed,
-// settled, refunds, payouts, chargebacks, …) is acknowledged without a change.
-const FAILURE_STATUSES = new Set(["error", "cancelled"]);
-const FAILURE_EVENTS = new Set([
-  "purchase.payment_failure",
-  "purchase.cancelled",
-]);
 
 function verifySignature(rawBody: string, signature: string | null): boolean {
   const publicKey = process.env.CHIP_WEBHOOK_PUBLIC_KEY;
@@ -78,18 +67,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ data: { received: true } }, { status: 200 });
   }
 
-  const status = (payload.status ?? "").toLowerCase();
-  const event = (payload.event_type ?? "").toLowerCase();
-
-  let paid: boolean;
-  if (SUCCESS_STATUSES.has(status) || SUCCESS_EVENTS.has(event)) {
-    paid = true;
-  } else if (FAILURE_STATUSES.has(status) || FAILURE_EVENTS.has(event)) {
-    paid = false;
-  } else {
+  const outcome = chipOutcome(payload.status, payload.event_type);
+  if (outcome === "pending") {
     // Intermediate / unrelated event — acknowledge without changing state.
     return NextResponse.json({ data: { received: true } }, { status: 200 });
   }
+  const paid = outcome === "paid";
 
   // Correlate on the CHIP purchase id (stored as chip_transaction_id), which is
   // always set after checkout; fall back to our reference (payments.id).

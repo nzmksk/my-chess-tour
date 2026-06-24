@@ -1,14 +1,17 @@
 Critical
 
-C1 — No CHIP payment webhook exists. There's no *webhook*/*chip* route under src/app/api. Payments are created pending and registrations pending_payment, and nothing ever flips them to paid/confirmed. The RLS comment in 004_rls.sql even assumes webhooks that don't exist. No registration can ever reach confirmed — the paid flow is non-functional.
+C1 — No CHIP payment webhook exists. There's no _webhook_/_chip_ route under src/app/api. Payments are created pending and registrations pending_payment, and nothing ever flips them to paid/confirmed. The RLS comment in 004_rls.sql even assumes webhooks that don't exist. No registration can ever reach confirmed — the paid flow is non-functional.
 
 Update (testing): The webhook (src/app/api/v1/webhooks/chip/route.ts) and migration 008 (settle_registration_payment) are now in place. Two blockers were found during testing and fixed:
+
 1. Localhost callback — NEXT_PUBLIC_SITE_URL was http://localhost:3000 (in .env.local and .env.staging), which CHIP cannot reach, so the callback never arrived. Test on a publicly reachable URL (Netlify/tunnel). Also fix .env.staging NEXT_PUBLIC_SITE_URL (still localhost).
 2. Wrong reference field — chip.ts created purchases with reference_id, but CHIP's Purchase object uses reference (reference_id is ignored), so the purchase.paid payload carried no reference and the handler logged "missing reference_id" and skipped the update. Fixed: chip.ts now sends reference, and the webhook correlates on the CHIP purchase id (payload.id == payments.chip_transaction_id, always set after checkout) with reference as fallback. NOTE: purchases created before this fix have no stored reference but are still correlatable by chip_transaction_id.
 
 Separately, failure events require a CHIP dashboard webhook subscribed to purchase.payment_failure pointed at /api/v1/webhooks/chip; success_callback fires on success only.
 
 C2 — Success page lies about payment. register/success/page.tsx is static, keyed only on tournament id. It unconditionally says "Payment Successful. Your registration is now active" without reading any record or checking CHIP. Anyone can hit the URL directly; users whose payment failed still see success.
+
+FIXED: Both success/page.tsx and failure/page.tsx now authenticate the user and call resolvePaymentState (src/app/tournaments/[id]/register/\_lib/resolvePaymentState.ts), which reads the user's registration (unique per user+tournament) and, if still pending_payment, reconciles against CHIP via getChipPurchase + the idempotent settle_registration_payment RPC (handles the case where the browser redirect beats the webhook). Rendering branches on the real state via PaymentStatusView: confirmed → success; pending → "confirming payment"; failed → retry; none/unauthenticated → neutral card (never a false "successful"). The CHIP status→outcome mapping is centralized in chipOutcome (src/services/chip/chip.ts) and shared with the webhook so they can't drift. Unit tests: resolvePaymentState.test.ts.
 
 High
 
@@ -20,7 +23,7 @@ H3 — Pending registrations consume capacity forever. Capacity counts pending_p
 
 H4 — Detail page blocks retry: pending_payment shows as "Registered". tournaments/[id]/page.tsx:214 sets isRegistered from .in("status", ["pending_payment","confirmed"]), and TournamentDetail.tsx:359 renders a disabled "Registered" button when true. A user mid-payment or after a failed payment is shown "Registered" and cannot reach the register/retry flow — even though checkout/route.ts explicitly allows resuming pending_payment/failed_payment. Only confirmed should show "Registered"; pending_payment → "Complete payment"; failed_payment / none / cancelled_payment → "Register". (Found during webhook testing.)
 
-H5 — Player-facing fee total doesn't match the amount charged. RegisterForm.tsx:15 hardcodes PROCESSING_FEE_CENTS = 150, so the UI shows e.g. RM36 + RM1.50 = RM37.50, while create_registration_with_payment (003_functions_triggers.sql:284-287) computes gross = entry + FLOOR(entry*commission_rate/100) - organizer_absorbed = RM39.60 (what CHIP actually charges). The hardcoded fee ignores commission_rate / organizer_commission_pct. Distinct from M1 (getMinFeeCents). Planned fix: expose the server-computed gross_amount_cents to the client so the displayed total equals the charge. (Found during webhook testing.)
+H5 — Player-facing fee total doesn't match the amount charged. RegisterForm.tsx:15 hardcodes PROCESSING_FEE_CENTS = 150, so the UI shows e.g. RM36 + RM1.50 = RM37.50, while create_registration_with_payment (003_functions_triggers.sql:284-287) computes gross = entry + FLOOR(entry\*commission_rate/100) - organizer_absorbed = RM39.60 (what CHIP actually charges). The hardcoded fee ignores commission_rate / organizer_commission_pct. Distinct from M1 (getMinFeeCents). Planned fix: expose the server-computed gross_amount_cents to the client so the displayed total equals the charge. (Found during webhook testing.)
 
 Medium
 
