@@ -46,7 +46,7 @@ export async function createChipPurchase(
       },
       client: { email: params.clientEmail },
       brand_id: brandId,
-      reference_id: params.referenceId,
+      reference: params.referenceId,
       success_redirect: params.successRedirect,
       failure_redirect: params.failureRedirect,
       ...(params.successCallback

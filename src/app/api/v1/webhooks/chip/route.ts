@@ -5,24 +5,25 @@ import crypto from "node:crypto";
 // Needs the Node.js runtime for `crypto` and access to the raw request body.
 export const runtime = "nodejs";
 
-// CHIP delivers a Purchase object. `reference_id` is our payments.id (set when
-// the purchase was created) and `id` is the CHIP purchase id we stored as
-// payments.chip_transaction_id. Account-level webhooks also include `event_type`.
+// CHIP delivers the Purchase object. `id` is the CHIP purchase id we stored as
+// payments.chip_transaction_id; `reference` is our payments.id (set as the
+// purchase `reference`). Webhook deliveries also include `event_type`.
 interface ChipCallbackPayload {
   id?: string;
-  reference_id?: string;
+  reference?: string;
   status?: string;
   event_type?: string;
 }
 
-// CHIP purchase statuses / webhook events that mean the money cleared.
+// CHIP events/statuses that mean the money cleared (purchase.captured carries
+// status "paid" too, but we list it explicitly for clarity).
 const SUCCESS_STATUSES = new Set(["paid"]);
-const SUCCESS_EVENTS = new Set(["purchase.paid"]);
-// Terminal failure signals. (Other statuses like "created"/"pending" are ignored.)
-const FAILURE_STATUSES = new Set(["error", "expired", "cancelled", "overdue"]);
+const SUCCESS_EVENTS = new Set(["purchase.paid", "purchase.captured"]);
+// Terminal failure signals. Everything else (created, pending_*, hold, viewed,
+// settled, refunds, payouts, chargebacks, …) is acknowledged without a change.
+const FAILURE_STATUSES = new Set(["error", "cancelled"]);
 const FAILURE_EVENTS = new Set([
   "purchase.payment_failure",
-  "purchase.expired",
   "purchase.cancelled",
 ]);
 
@@ -67,10 +68,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const referenceId = payload.reference_id;
-  if (!referenceId) {
+  const purchaseId = payload.id;
+  const reference = payload.reference;
+  if (!purchaseId && !reference) {
     // Nothing to correlate; ack so CHIP stops retrying.
-    console.warn("CHIP webhook: missing reference_id", {
+    console.warn("CHIP webhook: no id/reference to correlate", {
       event: payload.event_type,
     });
     return NextResponse.json({ data: { received: true } }, { status: 200 });
@@ -89,35 +91,44 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ data: { received: true } }, { status: 200 });
   }
 
-  // Defense-in-depth: confirm the payment exists and the CHIP purchase id matches.
-  const { data: payment, error: payErr } = await supabaseAdmin
-    .from("payments")
-    .select("id, chip_transaction_id")
-    .eq("id", referenceId)
-    .maybeSingle();
+  // Correlate on the CHIP purchase id (stored as chip_transaction_id), which is
+  // always set after checkout; fall back to our reference (payments.id).
+  let payment: { id: string } | null = null;
+  if (purchaseId) {
+    const { data, error } = await supabaseAdmin
+      .from("payments")
+      .select("id")
+      .eq("chip_transaction_id", purchaseId)
+      .maybeSingle();
+    if (error) {
+      // Transient DB error — return 5xx so CHIP retries delivery.
+      return NextResponse.json(
+        { error: { code: "INTERNAL_ERROR", message: error.message } },
+        { status: 500 },
+      );
+    }
+    payment = data;
+  }
 
-  if (payErr) {
-    // Transient DB error — return 5xx so CHIP retries delivery.
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: payErr.message } },
-      { status: 500 },
-    );
+  if (!payment && reference) {
+    const { data, error } = await supabaseAdmin
+      .from("payments")
+      .select("id")
+      .eq("id", reference)
+      .maybeSingle();
+    if (error) {
+      return NextResponse.json(
+        { error: { code: "INTERNAL_ERROR", message: error.message } },
+        { status: 500 },
+      );
+    }
+    payment = data;
   }
 
   if (!payment) {
-    console.warn("CHIP webhook: no payment for reference_id", { referenceId });
-    return NextResponse.json({ data: { received: true } }, { status: 200 });
-  }
-
-  if (
-    payload.id &&
-    payment.chip_transaction_id &&
-    payment.chip_transaction_id !== payload.id
-  ) {
-    console.warn("CHIP webhook: purchase id mismatch", {
-      referenceId,
-      expected: payment.chip_transaction_id,
-      received: payload.id,
+    console.warn("CHIP webhook: no matching payment", {
+      purchaseId,
+      reference,
     });
     return NextResponse.json({ data: { received: true } }, { status: 200 });
   }
