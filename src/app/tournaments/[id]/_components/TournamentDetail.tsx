@@ -4,7 +4,12 @@ import type {
   Restrictions,
   StartingRankPlayer,
 } from "../types";
-import { formatDeadline, formatRm, toTitleCase } from "../../utils";
+import {
+  formatDeadline,
+  formatRm,
+  getMinFeeCents,
+  toTitleCase,
+} from "../../utils";
 import TournamentTabs from "./TournamentTabs";
 import StartingRankTab from "./StartingRankTab";
 
@@ -32,13 +37,6 @@ function formatDateRange(start: string, end: string): string {
 function capitalise(s: string): string {
   if (!s) return "";
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-function getMinFeeCents(fees: TournamentDetailType["entry_fees"]): number {
-  if (!fees) return 0;
-  const standard = fees.standard?.amount_cents ?? 0;
-  const additional = fees.additional?.map((f) => f.amount_cents) ?? [];
-  return Math.min(standard, ...additional);
 }
 
 function hasRestrictions(r: Restrictions): boolean {

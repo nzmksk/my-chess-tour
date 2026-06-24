@@ -73,6 +73,8 @@ Medium
 
 M1 — getMinFeeCents mishandles fees (TournamentCard.tsx:24-29). Math.min(standard, ...additional): a free base (0) with paid extra tiers shows "Free" wrongly; an undefined additional amount yields NaN price.
 
+FIXED: getMinFeeCents is now a single shared helper in utils.ts that collects only finite numeric amounts (standard + additional) and returns their min (0 → "Free" when none). Fixes the NaN case (non-finite additional amounts are ignored) and the phantom-"Free" case (a missing standard no longer injects 0 — the cheapest real tier wins); a genuine 0 still shows "Free". Duplicate copies in TournamentCard.tsx and TournamentDetail.tsx removed. Tests: utils.test.ts.
+
 M2 — Discovery date timezone mismatch. page.tsx builds today in UTC (toISOString()), but TournamentsClient.tsx parses dates in local time. In UTC+8, between midnight and 08:00 an event starting "today" is mis-bucketed as upcoming.
 
 FIXED: page.tsx now computes today via getTodayInTimeZone() (utils.ts), the venue/platform timezone (Asia/Kuala_Lumpur), so buckets use the correct calendar date regardless of server timezone. The client parses today and event dates with the same convention, so bucketing is viewer-independent and SSR-safe. The helper takes a timezone arg for the planned ASEAN per-tournament-tz model (see memory project_asean_timezone). Tests: utils.test.ts.
