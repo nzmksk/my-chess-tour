@@ -82,8 +82,8 @@ export {
   Popover,
   PopoverTrigger,
   PopoverContent,
-  // PopoverAnchor,
-  // PopoverHeader,
-  // PopoverTitle,
-  // PopoverDescription,
+  PopoverAnchor,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverDescription,
 };

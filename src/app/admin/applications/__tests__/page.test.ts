@@ -194,14 +194,6 @@ describe("AdminApplicationsPage", () => {
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: makeApplicationRows(), error: null });
 
-    const { default: ApplicationsClientMock } = await import(
-      "@/app/admin/applications/_components/ApplicationsClient"
-    );
-    const clientSpy = vi.spyOn(
-      { default: ApplicationsClientMock },
-      "default",
-    );
-
     const AdminApplicationsPage = await importPage();
     await AdminApplicationsPage();
 

@@ -60,8 +60,6 @@ const {
   let tourCallIndex = 0;
   // Track registrations calls — first for count, second for recent regs list
   let regCallIndex = 0;
-  // Track org names lookup (phase 2)
-  let orgNamesCallIndex = 0;
 
   const mockFrom = vi.fn((table: string) => {
     if (table === "users") return mockUsersBuilder;
@@ -89,7 +87,6 @@ const {
     orgCallIndex = 0;
     tourCallIndex = 0;
     regCallIndex = 0;
-    orgNamesCallIndex = 0;
   };
 
   const mockGetUser = vi.fn();
@@ -136,7 +133,6 @@ import { GET } from "../route";
 // ---------------------------------------------------------------------------
 
 const ADMIN_USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
-const NON_ADMIN_USER_ID = "aaaaaaaa-0000-0000-0000-000000000002";
 
 const ORG_ID_1 = "bbbbbbbb-0000-0000-0000-000000000001";
 const ORG_ID_2 = "bbbbbbbb-0000-0000-0000-000000000002";

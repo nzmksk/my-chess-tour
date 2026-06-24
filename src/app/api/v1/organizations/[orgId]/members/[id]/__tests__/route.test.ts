@@ -11,7 +11,6 @@ const {
   mockTargetMembershipBuilder,
   mockRoleBuilder,
   mockMembershipUpdateBuilder,
-  mockMembershipDeleteBuilder,
   mockFrom,
   mockGetUser,
   mockHasOrgPermission,
