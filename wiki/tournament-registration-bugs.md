@@ -90,6 +90,9 @@ FIXED (checkout): the redundant JS pre-check was removed during the H3 work; cap
 Low / hardening
 
 - L1 Two divergent registration endpoints (/registrations vs /checkout); /registrations looks dead.
+
+FIXED: confirmed unused (only its own test referenced it; client uses /checkout) and deleted the POST route + its test. Kept validators.ts (shared with checkout). This also removes the last copy of the M3 TOCTOU pre-check.
+
 - L2 tournaments INSERT RLS doesn't re-check org approval_status (API does; defense-in-depth only).
 - L3 Past-tournament cutoff is by calendar month — abrupt at month rollover.
 
