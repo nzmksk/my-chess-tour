@@ -25,6 +25,8 @@ H4 — Detail page blocks retry: pending_payment shows as "Registered". tourname
 
 H5 — Player-facing fee total doesn't match the amount charged. RegisterForm.tsx:15 hardcodes PROCESSING_FEE_CENTS = 150, so the UI shows e.g. RM36 + RM1.50 = RM37.50, while create_registration_with_payment (003_functions_triggers.sql:284-287) computes gross = entry + FLOOR(entry\*commission_rate/100) - organizer_absorbed = RM39.60 (what CHIP actually charges). The hardcoded fee ignores commission_rate / organizer_commission_pct. Distinct from M1 (getMinFeeCents). Planned fix: expose the server-computed gross_amount_cents to the client so the displayed total equals the charge. (Found during webhook testing.)
 
+FIXED: The fee math is no longer in the client. computeEntryFeeBreakdown (src/services/payments/fees.ts) mirrors the SQL formula; register/page.tsx reads the tournament's commission_rate/organizer_commission_pct (server-only) and passes a per-tier feeBreakdown to RegisterForm, which renders the real processing fee + total via formatRmExact (sen precision — formatRm rounds to whole RM). PROCESSING_FEE_CENTS removed. Parity tests: fees.test.ts; display test in RegisterForm.test.tsx. NOTE: the formula now lives in both SQL (charge) and TS (display) — kept in sync by the parity tests + a cross-reference comment; a single-source SQL function is deferred.
+
 Medium
 
 M1 — getMinFeeCents mishandles fees (TournamentCard.tsx:24-29). Math.min(standard, ...additional): a free base (0) with paid extra tiers shows "Free" wrongly; an undefined additional amount yields NaN price.

@@ -21,6 +21,13 @@ export function formatRm(cents: number): string {
   return `RM${(cents / 100).toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+// Exact (sen-precision) RM formatting for checkout/payment summaries where the
+// displayed amount must match what the player is actually charged. Always
+// numeric (e.g. "RM0.00") — callers decide whether to show "Free" for a zero total.
+export function formatRmExact(cents: number): string {
+  return `RM${(cents / 100).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function toTitleCase(s: string): string {
   return s.replace(/[_\s]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
