@@ -9,23 +9,53 @@ Update (testing): The webhook (src/app/api/v1/webhooks/chip/route.ts) and migrat
 
 Separately, failure events require a CHIP dashboard webhook subscribed to purchase.payment_failure pointed at /api/v1/webhooks/chip; success_callback fires on success only.
 
+Verification
+
+- No warning logs related to payment flow
+
 C2 — Success page lies about payment. register/success/page.tsx is static, keyed only on tournament id. It unconditionally says "Payment Successful. Your registration is now active" without reading any record or checking CHIP. Anyone can hit the URL directly; users whose payment failed still see success.
 
 FIXED: Both success/page.tsx and failure/page.tsx now authenticate the user and call resolvePaymentState (src/app/tournaments/[id]/register/\_lib/resolvePaymentState.ts), which reads the user's registration (unique per user+tournament) and, if still pending_payment, reconciles against CHIP via getChipPurchase + the idempotent settle_registration_payment RPC (handles the case where the browser redirect beats the webhook). Rendering branches on the real state via PaymentStatusView: confirmed → success; pending → "confirming payment"; failed → retry; none/unauthenticated → neutral card (never a false "successful"). The CHIP status→outcome mapping is centralized in chipOutcome (src/services/chip/chip.ts) and shared with the webhook so they can't drift. Unit tests: resolvePaymentState.test.ts.
+
+Verification
+
+- after payment, redirect page is rendered based on CHIP payment state
+  - success
+  - pending
+  - failed
 
 High
 
 H1 — Resume-payment ignores the newly chosen fee tier (checkout/route.ts:236-237). For an existing pending_payment/failed_payment registration it resumes with existing.id and discards the new fee_tier from the request — the user is re-charged the original amount even if they picked a cheaper tier.
 
+FIXED (with H2): the resume branch now calls reset_registration_for_payment (migration 009) with the chosen fee_tier + amount, which re-prices the registration + payment before initiating a fresh CHIP purchase.
+
 H2 — failed_payment resume is broken (checkout/route.ts:280-285). initiateChipPayment fetches the payment with .eq("status","pending").single(). A failed payment isn't pending, so .single() errors → 500 "Payment record not found." (Latent today only because nothing sets failed_payment yet — see C1.)
+
+FIXED: reset_registration_for_payment (migration 009) resets the payment to status='pending' (clearing chip_transaction_id/paid_at) before initiateChipPayment runs, so the pending lookup succeeds. (Note: failed_payment is now live — set by the webhook and the C2 reconcile — so this is no longer latent.) Single source for the charge math: compute_registration_amounts, shared by create_registration_with_payment and reset_registration_for_payment. Tests: checkout/**tests**/route.test.ts.
 
 H3 — Pending registrations consume capacity forever. Capacity counts pending_payment + confirmed (checkout/route.ts:95-106 + the check_tournament_capacity trigger), and there's no expiry/cleanup. With no webhook (C1), every abandoned checkout permanently eats a slot; tournaments fill with ghosts and become un-registerable.
 
 H4 — Detail page blocks retry: pending_payment shows as "Registered". tournaments/[id]/page.tsx:214 sets isRegistered from .in("status", ["pending_payment","confirmed"]), and TournamentDetail.tsx:359 renders a disabled "Registered" button when true. A user mid-payment or after a failed payment is shown "Registered" and cannot reach the register/retry flow — even though checkout/route.ts explicitly allows resuming pending_payment/failed_payment. Only confirmed should show "Registered"; pending_payment → "Complete payment"; failed_payment / none / cancelled_payment → "Register". (Found during webhook testing.)
 
+FIXED: page.tsx now fetches the registration status (maybeSingle) instead of a pending/confirmed count and passes registrationStatus to TournamentDetail, whose CTA branches: confirmed → disabled "Registered"; pending_payment → "Complete Payment" link; failed_payment/cancelled/none → "Register Now". Starting-rank visibility was also tightened to confirmed-only (isConfirmed). Tests: TournamentDetail.test.tsx, page.test.ts.
+
+Verification
+
+- Apply migration 009 to Supabase (manual, as with 001–008; functions are
+  CREATE OR REPLACE).
+- Manual:
+  - (a) confirmed user → detail shows disabled "Registered";
+  - (b) pending_payment user → "Complete Payment" → pays → confirmed;
+  - (c) fail a payment, return, pick a different tier, pay → CHIP and the payment row show the new tier's amount (H1), no 500 (H2).
+
 H5 — Player-facing fee total doesn't match the amount charged. RegisterForm.tsx:15 hardcodes PROCESSING_FEE_CENTS = 150, so the UI shows e.g. RM36 + RM1.50 = RM37.50, while create_registration_with_payment (003_functions_triggers.sql:284-287) computes gross = entry + FLOOR(entry\*commission_rate/100) - organizer_absorbed = RM39.60 (what CHIP actually charges). The hardcoded fee ignores commission_rate / organizer_commission_pct. Distinct from M1 (getMinFeeCents). Planned fix: expose the server-computed gross_amount_cents to the client so the displayed total equals the charge. (Found during webhook testing.)
 
 FIXED: The fee math is no longer in the client. computeEntryFeeBreakdown (src/services/payments/fees.ts) mirrors the SQL formula; register/page.tsx reads the tournament's commission_rate/organizer_commission_pct (server-only) and passes a per-tier feeBreakdown to RegisterForm, which renders the real processing fee + total via formatRmExact (sen precision — formatRm rounds to whole RM). PROCESSING_FEE_CENTS removed. Parity tests: fees.test.ts; display test in RegisterForm.test.tsx. NOTE: the formula now lives in both SQL (charge) and TS (display) — kept in sync by the parity tests + a cross-reference comment; a single-source SQL function is deferred.
+
+Verification
+
+- Client shows correct total fee
 
 Medium
 

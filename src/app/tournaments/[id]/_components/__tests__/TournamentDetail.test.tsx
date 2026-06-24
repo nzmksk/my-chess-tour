@@ -95,7 +95,7 @@ const samplePlayers: StartingRankPlayer[] = [
 function render(
   overrides: Partial<TournamentDetailType> = {},
   isAuthenticated = false,
-  isRegistered = false,
+  registrationStatus: string | null = null,
   canViewStartingRank = false,
   startingRank: StartingRankPlayer[] | null = null,
 ): string {
@@ -103,7 +103,7 @@ function render(
     <TournamentDetail
       tournament={{ ...base, ...overrides }}
       isAuthenticated={isAuthenticated}
-      isRegistered={isRegistered}
+      registrationStatus={registrationStatus}
       canViewStartingRank={canViewStartingRank}
       startingRank={startingRank}
     />,
@@ -469,10 +469,21 @@ describe("CTA button auth states", () => {
     expect(html).toContain("disabled");
   });
 
-  it("shows 'Registered' when authenticated user has already registered", () => {
-    const html = render({}, true, true);
+  it("shows 'Registered' when authenticated user is confirmed", () => {
+    const html = render({}, true, "confirmed");
     expect(html).toContain("Registered");
     expect(html).toContain("disabled");
+  });
+
+  it("shows 'Complete Payment' when the user has a pending_payment registration", () => {
+    const html = render({}, true, "pending_payment");
+    expect(html).toContain("Complete Payment");
+    expect(html).not.toContain("Registered");
+  });
+
+  it("shows 'Register Now' when the user's previous payment failed", () => {
+    const html = render({}, true, "failed_payment");
+    expect(html).toContain("Register Now");
   });
 
   it("shows 'Registration Closed' over 'Full Capacity' when deadline passed and tournament is full", () => {
@@ -489,18 +500,22 @@ describe("CTA button auth states", () => {
     expect(html).not.toContain("Full Capacity");
   });
 
-  it("shows 'Registered' over 'Registration Closed' when user is registered and deadline passed", () => {
+  it("shows 'Registered' over 'Registration Closed' when user is confirmed and deadline passed", () => {
     const pastDeadline = new Date(Date.now() - 1000).toISOString();
-    const html = render({ registration_deadline: pastDeadline }, true, true);
+    const html = render(
+      { registration_deadline: pastDeadline },
+      true,
+      "confirmed",
+    );
     expect(html).toContain("Registered");
     expect(html).not.toContain("Registration Closed");
   });
 
-  it("shows 'Registered' over 'Full Capacity' when user is registered and tournament is full", () => {
+  it("shows 'Registered' over 'Full Capacity' when user is confirmed and tournament is full", () => {
     const html = render(
       { max_participants: 100, current_participants: 100 },
       true,
-      true,
+      "confirmed",
     );
     expect(html).toContain("Registered");
     expect(html).not.toContain("Full Capacity");
@@ -513,17 +528,17 @@ describe("CTA button auth states", () => {
 
 describe("starting rank tab integration", () => {
   it("renders without error when startingRank is null", () => {
-    const html = render({}, false, false, false, null);
+    const html = render({}, false, null, false, null);
     expect(html).toContain("Starting Rank");
   });
 
   it("renders without error when startingRank is an empty array", () => {
-    const html = render({}, true, true, true, []);
+    const html = render({}, true, "confirmed", true, []);
     expect(html).toContain("Starting Rank");
   });
 
   it("renders without error when startingRank has players", () => {
-    const html = render({}, true, true, true, samplePlayers);
+    const html = render({}, true, "confirmed", true, samplePlayers);
     expect(html).toContain("Starting Rank");
   });
 });

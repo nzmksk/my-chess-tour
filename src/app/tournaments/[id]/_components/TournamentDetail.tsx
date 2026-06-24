@@ -60,8 +60,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="pt-4 border-t border-border">
-      <h2 className="font-cinzel text-lg font-semibold text-text-primary tracking-wider mb-2">
+    <section className="border-border border-t pt-4">
+      <h2 className="font-cinzel text-text-primary mb-2 text-lg font-semibold tracking-wider">
         {title}
       </h2>
       {children}
@@ -72,10 +72,10 @@ function Section({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="font-cinzel text-xs font-semibold uppercase tracking-widest text-text-muted">
+      <dt className="font-cinzel text-text-muted text-xs font-semibold tracking-widest uppercase">
         {label}
       </dt>
-      <dd className="font-lato text-sm text-text-body">{value}</dd>
+      <dd className="font-lato text-text-body text-sm">{value}</dd>
     </div>
   );
 }
@@ -85,7 +85,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 interface Props {
   tournament: TournamentDetailType;
   isAuthenticated: boolean;
-  isRegistered?: boolean;
+  registrationStatus?: string | null;
   isOrgMember?: boolean;
   canViewStartingRank: boolean;
   startingRank: StartingRankPlayer[] | null;
@@ -94,7 +94,7 @@ interface Props {
 export default function TournamentDetail({
   tournament: t,
   isAuthenticated,
-  isRegistered = false,
+  registrationStatus = null,
   canViewStartingRank,
   startingRank,
 }: Props) {
@@ -117,12 +117,12 @@ export default function TournamentDetail({
       : [];
 
   const detailsContent = (
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-8 items-start">
+    <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[1fr_340px]">
       {/* ── Left: scrollable detail ── */}
       <div className="flex flex-col gap-4">
         {/* Tournament Details */}
         <Section title="Tournament Details">
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <InfoRow
               label="Date"
               value={formatDateRange(t.start_date, t.end_date)}
@@ -133,7 +133,7 @@ export default function TournamentDetail({
                 <>
                   {t.venue.name}, {t.venue.state}
                   {t.venue.address && (
-                    <span className="block text-sm text-text-muted mt-0.5">
+                    <span className="text-text-muted mt-0.5 block text-sm">
                       {t.venue.address}
                     </span>
                   )}
@@ -185,12 +185,12 @@ export default function TournamentDetail({
                   <td>
                     {toTitleCase(fee.type)}
                     {fee.valid_until && (
-                      <span className="block text-xs text-text-muted">
+                      <span className="text-text-muted block text-xs">
                         before {formatDeadline(fee.valid_until)}
                       </span>
                     )}
                     {(fee.age_min != null || fee.age_max != null) && (
-                      <span className="block text-xs text-text-muted">
+                      <span className="text-text-muted block text-xs">
                         {fee.age_min != null && fee.age_max != null
                           ? `Age ${fee.age_min}–${fee.age_max}`
                           : fee.age_min != null
@@ -199,14 +199,14 @@ export default function TournamentDetail({
                       </span>
                     )}
                   </td>
-                  <td className="text-right font-cinzel font-semibold text-text-primary">
+                  <td className="font-cinzel text-text-primary text-right font-semibold">
                     {formatRm(fee.amount_cents)}
                   </td>
                 </tr>
               ))}
               <tr>
                 <td>Standard</td>
-                <td className="text-right font-cinzel font-semibold text-text-primary">
+                <td className="font-cinzel text-text-primary text-right font-semibold">
                   {formatRm(t.entry_fees.standard.amount_cents)}
                 </td>
               </tr>
@@ -220,17 +220,17 @@ export default function TournamentDetail({
             <ul className="flex flex-col gap-3">
               {t.prizes.categories.map((cat, ci) => (
                 <li key={ci}>
-                  <p className="font-cinzel text-xs font-semibold uppercase tracking-widest text-gold-muted mb-2">
+                  <p className="font-cinzel text-gold-muted mb-2 text-xs font-semibold tracking-widest uppercase">
                     {cat.name}
                   </p>
                   <ul className="flex flex-col gap-1">
                     {cat.entries.map((entry, ei) => (
                       <li
                         key={ei}
-                        className="flex justify-between font-lato text-sm text-text-body"
+                        className="font-lato text-text-body flex justify-between text-sm"
                       >
                         <span>{entry.place}</span>
-                        <span className="font-cinzel font-semibold text-text-primary">
+                        <span className="font-cinzel text-text-primary font-semibold">
                           {formatRm(entry.amount_cents)}
                         </span>
                       </li>
@@ -246,7 +246,7 @@ export default function TournamentDetail({
         {t.restrictions && (
           <Section title="Restrictions">
             {hasRestrictions(t.restrictions) ? (
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {(t.restrictions.min_rating != null ||
                   t.restrictions.max_rating != null) && (
                   <InfoRow
@@ -277,7 +277,7 @@ export default function TournamentDetail({
                 )}
               </dl>
             ) : (
-              <p className="font-lato text-sm text-text-body">
+              <p className="font-lato text-text-body text-sm">
                 Open to all players — no rating or age restrictions apply.
               </p>
             )}
@@ -287,7 +287,7 @@ export default function TournamentDetail({
         {/* Description */}
         {t.description && (
           <Section title="Description">
-            <p className="font-lato text-sm text-text-body leading-relaxed">
+            <p className="font-lato text-text-body text-sm leading-relaxed">
               {t.description}
             </p>
           </Section>
@@ -298,11 +298,11 @@ export default function TournamentDetail({
           <Section title={t.organization.name}>
             <div className="flex flex-col gap-1">
               {t.organization.description && (
-                <p className="font-lato text-sm text-text-body leading-relaxed">
+                <p className="font-lato text-text-body text-sm leading-relaxed">
                   {t.organization.description}
                 </p>
               )}
-              <div className="flex flex-col gap-1 font-lato text-sm text-text-secondary">
+              <div className="font-lato text-text-secondary flex flex-col gap-1 text-sm">
                 <a
                   href={`mailto:${t.organization.email}`}
                   className="hover:text-gold-bright transition-colors"
@@ -336,18 +336,18 @@ export default function TournamentDetail({
 
       {/* ── Right: sticky register card ── */}
       <aside className="md:sticky md:top-24">
-        <div className="card card--featured p-6 flex flex-col gap-4">
-          <h3 className="font-cinzel text-lg font-semibold text-text-primary tracking-wider">
+        <div className="card card--featured flex flex-col gap-4 p-6">
+          <h3 className="font-cinzel text-text-primary text-lg font-semibold tracking-wider">
             Register for this tournament
           </h3>
 
           {/* Price */}
           <div>
-            <div className="font-cinzel text-3xl font-bold text-text-primary">
+            <div className="font-cinzel text-text-primary text-3xl font-bold">
               {minFee > 0 ? formatRm(minFee) : "Free"}
             </div>
             {lowestFeeEntry && (
-              <p className="font-lato text-sm text-text-muted">
+              <p className="font-lato text-text-muted text-sm">
                 {toTitleCase(lowestFeeEntry.type)} price
                 {lowestFeeEntry.valid_until &&
                   ` (ends ${formatDeadline(lowestFeeEntry.valid_until)})`}
@@ -356,30 +356,37 @@ export default function TournamentDetail({
           </div>
 
           {/* CTA */}
-          {isRegistered ? (
+          {registrationStatus === "confirmed" ? (
             <button
-              className="btn-primary rounded-md w-full opacity-50"
+              className="btn-primary w-full rounded-md opacity-50"
               disabled
             >
               Registered
             </button>
           ) : isDeadlinePassed ? (
             <button
-              className="btn-primary rounded-md w-full opacity-50"
+              className="btn-primary w-full rounded-md opacity-50"
               disabled
             >
               Registration Closed
             </button>
           ) : !isAuthenticated ? (
             <button
-              className="btn-primary rounded-md w-full opacity-50"
+              className="btn-primary w-full rounded-md opacity-50"
               disabled
             >
               Sign In to Register
             </button>
+          ) : registrationStatus === "pending_payment" ? (
+            <Link
+              href={`/tournaments/${t.id}/register`}
+              className="btn-primary block w-full rounded-md text-center"
+            >
+              Complete Payment
+            </Link>
           ) : spotsLeft === 0 ? (
             <button
-              className="btn-primary rounded-md w-full opacity-50"
+              className="btn-primary w-full rounded-md opacity-50"
               disabled
             >
               Full Capacity
@@ -387,18 +394,18 @@ export default function TournamentDetail({
           ) : (
             <Link
               href={`/tournaments/${t.id}/register`}
-              className="btn-primary rounded-md w-full text-center block"
+              className="btn-primary block w-full rounded-md text-center"
             >
               Register Now
             </Link>
           )}
 
           {/* Spots */}
-          <div className="font-lato text-sm text-text-secondary">
+          <div className="font-lato text-text-secondary text-sm">
             <span className={`font-semibold ${spotsClass}`}>{spotsLeft}</span>{" "}
             of {t.max_participants} spots remaining
             {/* Deadline */}
-            <p className="font-lato text-sm text-text-muted">
+            <p className="font-lato text-text-muted text-sm">
               ⏰ Registration closes {formatDeadline(t.registration_deadline)}
             </p>
           </div>
@@ -417,22 +424,22 @@ export default function TournamentDetail({
   );
 
   return (
-    <div className="min-h-screen bg-bg-base">
-      <main className="max-w-300 mx-auto px-6 md:px-10 py-8">
+    <div className="bg-bg-base min-h-screen">
+      <main className="mx-auto max-w-300 px-6 py-8 md:px-10">
         {/* Header — always visible above tabs */}
         <div className="mb-6">
-          <h1 className="font-cinzel text-2xl font-semibold text-text-primary tracking-wider leading-tight">
+          <h1 className="font-cinzel text-text-primary text-2xl leading-tight font-semibold tracking-wider">
             {t.name}
           </h1>
           {t.organization && (
-            <p className="font-lato text-sm text-text-secondary">
+            <p className="font-lato text-text-secondary text-sm">
               Organized by{" "}
               <span className="text-gold-bright">{t.organization.name}</span>
             </p>
           )}
 
           {/* Badges */}
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <span className="badge-format">
               {capitalise(t.format?.type ?? "") || "—"}
             </span>

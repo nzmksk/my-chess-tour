@@ -204,16 +204,17 @@ export async function TournamentDetailData({ id }: { id: string }) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let isRegistered = false;
+  let registrationStatus: string | null = null;
   if (user) {
-    const { count } = await supabaseAdmin
+    const { data: registration } = await supabaseAdmin
       .from("registrations")
-      .select("*", { count: "exact", head: true })
+      .select("status")
       .eq("user_id", user.id)
       .eq("tournament_id", id)
-      .in("status", ["pending_payment", "confirmed"]);
-    isRegistered = (count ?? 0) > 0;
+      .maybeSingle();
+    registrationStatus = registration?.status ?? null;
   }
+  const isConfirmed = registrationStatus === "confirmed";
 
   let isOrgMember = false;
   if (user && tournament.organization?.id) {
@@ -227,7 +228,7 @@ export async function TournamentDetailData({ id }: { id: string }) {
 
   const tournamentStarted =
     new Date(tournament.start_date + "T00:00:00") <= new Date();
-  const canViewStartingRank = tournamentStarted || isRegistered || isOrgMember;
+  const canViewStartingRank = tournamentStarted || isConfirmed || isOrgMember;
 
   const startingRank = canViewStartingRank
     ? await fetchStartingRank(id, tournament.format.type)
@@ -237,7 +238,7 @@ export async function TournamentDetailData({ id }: { id: string }) {
     <TournamentDetail
       tournament={tournament}
       isAuthenticated={!!user}
-      isRegistered={isRegistered}
+      registrationStatus={registrationStatus}
       isOrgMember={isOrgMember}
       canViewStartingRank={canViewStartingRank}
       startingRank={startingRank}
@@ -253,7 +254,7 @@ export default async function TournamentDetailPage({
   const { id } = await params;
 
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
       <Suspense fallback={<DetailSkeleton />}>
         <TournamentDetailData id={id} />
