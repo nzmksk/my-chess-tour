@@ -1,5 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { formatRm, toTitleCase, formatDeadline, calculateAge } from "../utils";
+import {
+  formatRm,
+  toTitleCase,
+  formatDeadline,
+  calculateAge,
+  getTodayInTimeZone,
+} from "../utils";
+
+describe("getTodayInTimeZone", () => {
+  it("rolls to the next day for an instant past midnight in Malaysia (UTC+8)", () => {
+    // 2026-03-09 17:00 UTC = 2026-03-10 01:00 in Kuala Lumpur
+    expect(
+      getTodayInTimeZone("Asia/Kuala_Lumpur", new Date("2026-03-09T17:00:00Z")),
+    ).toBe("2026-03-10");
+  });
+
+  it("stays on the same day for an instant still before midnight in Malaysia", () => {
+    // 2026-03-09 15:00 UTC = 2026-03-09 23:00 in Kuala Lumpur
+    expect(
+      getTodayInTimeZone("Asia/Kuala_Lumpur", new Date("2026-03-09T15:00:00Z")),
+    ).toBe("2026-03-09");
+  });
+
+  it("honours the timezone argument (UTC vs KL differ at the boundary)", () => {
+    expect(getTodayInTimeZone("UTC", new Date("2026-03-09T17:00:00Z"))).toBe(
+      "2026-03-09",
+    );
+  });
+
+  it("returns an ISO YYYY-MM-DD string", () => {
+    expect(getTodayInTimeZone()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
 
 describe("formatRm", () => {
   it("returns 'Free' for 0 cents", () => {

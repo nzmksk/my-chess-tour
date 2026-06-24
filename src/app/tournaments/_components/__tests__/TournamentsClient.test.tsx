@@ -993,32 +993,48 @@ describe("tournament categorisation — component level", () => {
     expect(html).not.toContain("Upcoming");
   });
 
-  it("places a tournament that ended last calendar month in the Past section", () => {
-    // ended April 15 — within last calendar month (April 2026), so visible but dimmed
+  it("places a tournament that ended ~20 days ago in the Past section", () => {
+    // ended May 3 — 20 days before today, within the 30-day window → visible, dimmed
     const t = makeTournament({
-      name: "Last Month",
-      start_date: "2026-04-14",
-      end_date: "2026-04-15",
+      name: "Recently Ended",
+      start_date: "2026-05-02",
+      end_date: "2026-05-03",
     });
     const html = renderToStaticMarkup(
       <TournamentsClient tournaments={[t]} today="2026-05-23" />,
     );
     expect(html).toContain("Past Tournaments");
-    expect(html).toContain("Last Month");
+    expect(html).toContain("Recently Ended");
     expect(html).toContain("opacity-50");
   });
 
-  it("hides a tournament that ended before last calendar month", () => {
-    // ended March 31 — before April 1 (start of last month), so hidden
+  it("hides a tournament that ended more than 30 days ago", () => {
+    // ended April 13 — 40 days before today, past the 30-day window → hidden
     const t = makeTournament({
       name: "Old Tournament",
-      start_date: "2026-03-29",
-      end_date: "2026-03-31",
+      start_date: "2026-04-12",
+      end_date: "2026-04-13",
     });
     const html = renderToStaticMarkup(
       <TournamentsClient tournaments={[t]} today="2026-05-23" />,
     );
     expect(html).not.toContain("Old Tournament");
+  });
+
+  it("excludes a tournament with an invalid date and warns", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const t = makeTournament({
+      id: "bad",
+      name: "Broken Date",
+      start_date: "not-a-date",
+      end_date: "also-bad",
+    });
+    const html = renderToStaticMarkup(
+      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+    );
+    expect(html).not.toContain("Broken Date");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("renders multiple sections when ongoing, upcoming, and past all exist", () => {
@@ -1041,7 +1057,10 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-05-05",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[live, future, recent]} today="2026-05-23" />,
+      <TournamentsClient
+        tournaments={[live, future, recent]}
+        today="2026-05-23"
+      />,
     );
     expect(html).toContain("Ongoing");
     expect(html).toContain("Live Open");

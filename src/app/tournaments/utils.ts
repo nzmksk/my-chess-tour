@@ -31,3 +31,23 @@ export function formatRmExact(cents: number): string {
 export function toTitleCase(s: string): string {
   return s.replace(/[_\s]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+// Tournament dates/times are anchored to the venue's timezone. The platform is
+// Malaysia-only today, so this defaults to KL; the `timeZone` param lets a
+// per-tournament timezone drop in for the planned ASEAN expansion.
+const PLATFORM_TIME_ZONE = "Asia/Kuala_Lumpur";
+
+// Returns the calendar date ("YYYY-MM-DD") for `now` in the given timezone.
+// Used so the discovery ongoing/upcoming/past buckets are judged against the
+// tournament's local "today" regardless of the server's runtime timezone.
+export function getTodayInTimeZone(
+  timeZone: string = PLATFORM_TIME_ZONE,
+  now: Date = new Date(),
+): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}

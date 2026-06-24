@@ -75,13 +75,26 @@ M1 — getMinFeeCents mishandles fees (TournamentCard.tsx:24-29). Math.min(stand
 
 M2 — Discovery date timezone mismatch. page.tsx builds today in UTC (toISOString()), but TournamentsClient.tsx parses dates in local time. In UTC+8, between midnight and 08:00 an event starting "today" is mis-bucketed as upcoming.
 
+FIXED: page.tsx now computes today via getTodayInTimeZone() (utils.ts), the venue/platform timezone (Asia/Kuala_Lumpur), so buckets use the correct calendar date regardless of server timezone. The client parses today and event dates with the same convention, so bucketing is viewer-independent and SSR-safe. The helper takes a timezone arg for the planned ASEAN per-tournament-tz model (see memory project_asean_timezone). Tests: utils.test.ts.
+
+Verification:
+
+- Manual: with server clock set so UTC date ≠ MYT date (e.g. 01:00 MYT), a tournament whose start_date is today (MYT) appears under Ongoing/Upcoming correctly, not shifted a day. Past section shows events ended within ~45 days and no longer jumps at month rollover.
+
 M3 — Capacity pre-check is TOCTOU (checkout/route.ts:95-106) — mitigated by the row-locking trigger, so no overbooking, but the JS pre-check is redundant/misleading.
+
+FIXED (checkout): the redundant JS pre-check was removed during the H3 work; capacity is enforced only by the Postgres row-lock (trigger + reset assert). The one remaining copy lives in the dead /registrations endpoint (see L1).
 
 Low / hardening
 
 - L1 Two divergent registration endpoints (/registrations vs /checkout); /registrations looks dead.
 - L2 tournaments INSERT RLS doesn't re-check org approval_status (API does; defense-in-depth only).
 - L3 Past-tournament cutoff is by calendar month — abrupt at month rollover.
+
+FIXED: now a rolling 30-day window (TournamentsClient.tsx); older tournaments will be reachable via a future archive search.
+
 - L4 Malformed dates silently drop tournaments from all buckets.
+
+FIXED: bucketing guards invalid dates with a console.warn + skip (non-silent); defensive since publish validates dates.
 
 Full report written to the plan file. The single highest-leverage fix is C1 (the webhook) — C2/H2/H3 all stem from its absence.
