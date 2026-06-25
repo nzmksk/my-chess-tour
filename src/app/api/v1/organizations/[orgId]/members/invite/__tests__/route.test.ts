@@ -403,13 +403,18 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       expect(json.error.message).toMatch(/insufficient permissions/i);
     });
 
-    it("allows creator without checking hasOrgPermission", async () => {
-      setCallerMembershipResult(0);
+    it("allows an owner member with org.invite permission", async () => {
+      setCallerMembershipResult(1);
+      mockHasOrgPermission.mockResolvedValue(true);
       setInsertResult(null);
       const res = await POST(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
-      expect(mockHasOrgPermission).not.toHaveBeenCalled();
+      expect(mockHasOrgPermission).toHaveBeenCalledWith(
+        USER_ID,
+        ORG_ID,
+        "org.invite",
+      );
       expect(res.status).toBe(201);
     });
   });

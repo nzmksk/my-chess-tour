@@ -55,7 +55,7 @@ export async function GET(
   ] = await Promise.all([
     supabaseAdmin
       .from("organizations")
-      .select("id, name, approval_status, created_by")
+      .select("id, approval_status")
       .eq("id", orgId)
       .is("deleted_at", null)
       .single(),
@@ -98,8 +98,7 @@ export async function GET(
     );
   }
 
-  const isOrgCreator = org.created_by === user.id;
-  if (!isOrgCreator && !memberCount) {
+  if (!memberCount) {
     return NextResponse.json(
       { error: { code: "FORBIDDEN", message: "Access denied" } },
       { status: 403 },
@@ -134,7 +133,6 @@ export async function GET(
         role: m.roles.name,
         joined_at: m.joined_at,
       })),
-      isOrgCreator: isOrgCreator,
     },
     { status: 200 },
   );

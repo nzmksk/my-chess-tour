@@ -296,12 +296,14 @@ describe("GET /api/v1/organizations/:orgId/members", () => {
       expect(res.status).toBe(403);
     });
 
-    it("returns 200 when user is the creator but not an explicit member", async () => {
+    it("returns 403 when user is the creator but has no membership row", async () => {
       setMembershipCheckResult(0);
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
+      const json = await res.json();
+      expect(json.error.code).toBe("FORBIDDEN");
     });
   });
 
@@ -310,7 +312,7 @@ describe("GET /api/v1/organizations/:orgId/members", () => {
   // -------------------------------------------------------------------------
 
   describe("response shape", () => {
-    it("returns 200 with data array and isOrgCreator flag", async () => {
+    it("returns 200 with data array", async () => {
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
@@ -318,7 +320,6 @@ describe("GET /api/v1/organizations/:orgId/members", () => {
       const json = await res.json();
       expect(json).toHaveProperty("data");
       expect(Array.isArray(json.data)).toBe(true);
-      expect(json).toHaveProperty("isOrgCreator");
     });
 
     it("shapes each member entry correctly", async () => {

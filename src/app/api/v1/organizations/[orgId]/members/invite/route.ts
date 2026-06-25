@@ -59,7 +59,7 @@ export async function POST(
   ] = await Promise.all([
     supabaseAdmin
       .from("organizations")
-      .select("id, approval_status, created_by")
+      .select("id, approval_status")
       .eq("id", orgId)
       .is("deleted_at", null)
       .single(),
@@ -102,22 +102,19 @@ export async function POST(
     );
   }
 
-  const isCreator = org.created_by === user.id;
-  if (!isCreator && !memberCount) {
+  if (!memberCount) {
     return NextResponse.json(
       { error: { code: "FORBIDDEN", message: "Access denied" } },
       { status: 403 },
     );
   }
 
-  if (!isCreator) {
-    const allowed = await hasOrgPermission(user.id, orgId, "org.invite");
-    if (!allowed) {
-      return NextResponse.json(
-        { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
-        { status: 403 },
-      );
-    }
+  const allowed = await hasOrgPermission(user.id, orgId, "org.invite");
+  if (!allowed) {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
+      { status: 403 },
+    );
   }
 
   const { data: roleData, error: roleError } = await supabaseAdmin

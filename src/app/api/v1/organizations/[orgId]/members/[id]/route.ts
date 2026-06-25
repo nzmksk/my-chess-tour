@@ -12,14 +12,14 @@ type MemberRole = (typeof VALID_ROLES)[number];
 async function resolveOrgAccess(
   orgId: string,
   userId: string,
-): Promise<NextResponse | { isCreator: boolean }> {
+): Promise<NextResponse | null> {
   const [
     { data: org, error: orgError },
     { count: memberCount, error: memberError },
   ] = await Promise.all([
     supabaseAdmin
       .from("organizations")
-      .select("id, approval_status, created_by")
+      .select("id, approval_status")
       .eq("id", orgId)
       .is("deleted_at", null)
       .single(),
@@ -62,15 +62,14 @@ async function resolveOrgAccess(
     );
   }
 
-  const isCreator = org.created_by === userId;
-  if (!isCreator && !memberCount) {
+  if (!memberCount) {
     return NextResponse.json(
       { error: { code: "FORBIDDEN", message: "Access denied" } },
       { status: 403 },
     );
   }
 
-  return { isCreator };
+  return null;
 }
 
 export async function PATCH(
@@ -129,16 +128,13 @@ export async function PATCH(
 
   const accessResult = await resolveOrgAccess(orgId, user.id);
   if (accessResult instanceof NextResponse) return accessResult;
-  const { isCreator } = accessResult;
 
-  if (!isCreator) {
-    const allowed = await hasOrgPermission(user.id, orgId, "org.manage");
-    if (!allowed) {
-      return NextResponse.json(
-        { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
-        { status: 403 },
-      );
-    }
+  const allowed = await hasOrgPermission(user.id, orgId, "org.manage");
+  if (!allowed) {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
+      { status: 403 },
+    );
   }
 
   let body: unknown;
@@ -285,16 +281,13 @@ export async function DELETE(
 
   const accessResult = await resolveOrgAccess(orgId, user.id);
   if (accessResult instanceof NextResponse) return accessResult;
-  const { isCreator } = accessResult;
 
-  if (!isCreator) {
-    const allowed = await hasOrgPermission(user.id, orgId, "org.manage");
-    if (!allowed) {
-      return NextResponse.json(
-        { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
-        { status: 403 },
-      );
-    }
+  const allowed = await hasOrgPermission(user.id, orgId, "org.manage");
+  if (!allowed) {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
+      { status: 403 },
+    );
   }
 
   const { data: membership, error: membershipError } = await supabaseAdmin

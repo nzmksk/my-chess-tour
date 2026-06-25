@@ -18,7 +18,6 @@ interface Props {
   orgName: string;
   members: Member[];
   currentUserId: string;
-  isOrgCreator: boolean;
 }
 
 type Role = "owner" | "admin" | "member";
@@ -258,13 +257,12 @@ export default function MembersClient({
   orgName,
   members,
   currentUserId,
-  isOrgCreator,
 }: Props) {
   const [memberList, setMemberList] = useState<Member[]>(members);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const currentMember = memberList.find((m) => m.user_id === currentUserId);
-  const isOwner = isOrgCreator || currentMember?.role === "owner";
+  const isOwner = currentMember?.role === "owner";
 
   async function handleRoleChange(userId: string, newRole: "admin" | "member") {
     const res = await fetch(

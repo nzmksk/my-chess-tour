@@ -373,12 +373,16 @@ describe("PATCH /api/v1/organizations/:orgId/members/:id", () => {
       expect(json.error.message).toMatch(/insufficient permissions/i);
     });
 
-    it("skips permission check when caller is org creator", async () => {
+    it("checks org.manage permission for the org creator", async () => {
       const res = await PATCH(makePatchRequest(), {
         params: Promise.resolve({ orgId: ORG_ID, id: TARGET_ID }),
       });
       expect(res.status).toBe(200);
-      expect(mockHasOrgPermission).not.toHaveBeenCalled();
+      expect(mockHasOrgPermission).toHaveBeenCalledWith(
+        CALLER_ID,
+        ORG_ID,
+        "org.manage",
+      );
     });
 
     it("returns 404 when target member does not exist", async () => {
@@ -573,12 +577,16 @@ describe("DELETE /api/v1/organizations/:orgId/members/:id", () => {
       expect(json.error.message).toMatch(/insufficient permissions/i);
     });
 
-    it("skips permission check when caller is org creator", async () => {
+    it("checks org.manage permission for the org creator", async () => {
       const res = await DELETE(makeDeleteRequest(), {
         params: Promise.resolve({ orgId: ORG_ID, id: TARGET_ID }),
       });
       expect(res.status).toBe(204);
-      expect(mockHasOrgPermission).not.toHaveBeenCalled();
+      expect(mockHasOrgPermission).toHaveBeenCalledWith(
+        CALLER_ID,
+        ORG_ID,
+        "org.manage",
+      );
     });
 
     it("returns 404 when target member does not exist", async () => {
