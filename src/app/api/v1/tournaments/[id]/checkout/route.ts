@@ -92,18 +92,10 @@ export async function POST(
     );
   }
 
-  const { count: currentCount } = await supabaseAdmin
-    .from("registrations")
-    .select("*", { count: "exact", head: true })
-    .eq("tournament_id", id)
-    .in("status", ["pending_payment", "confirmed"]);
-
-  if (currentCount !== null && currentCount >= tournament.max_participants) {
-    return NextResponse.json(
-      { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
-      { status: 422 },
-    );
-  }
+  // Capacity is enforced authoritatively in Postgres: the create path via the
+  // check_tournament_capacity trigger, the resume path via
+  // reset_registration_for_payment. Both apply the reservation hold window, so
+  // there is no JS pre-check here (it would double-count lapsed holds).
 
   const fees = tournament.entry_fees as EntryFees;
 
@@ -233,7 +225,42 @@ export async function POST(
       );
     }
 
-    // Resume payment for an existing pending/failed registration
+    // Resume an existing pending/failed registration. Re-price it for the
+    // (possibly different) chosen tier and reset its payment to pending so a
+    // fresh CHIP purchase can be created.
+    const { error: resetErr } = await supabaseAdmin.rpc(
+      "reset_registration_for_payment",
+      {
+        p_registration_id: existing.id,
+        p_fee_tier: fee_tier,
+        p_amount_cents: matchedTier.amount_cents,
+      },
+    );
+
+    if (resetErr) {
+      if (resetErr.message?.toLowerCase().includes("full")) {
+        return NextResponse.json(
+          { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
+          { status: 422 },
+        );
+      }
+      if (resetErr.code === "P0001") {
+        return NextResponse.json(
+          {
+            error: {
+              code: "ALREADY_REGISTERED",
+              message: "This registration can no longer be paid for",
+            },
+          },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json(
+        { error: { code: "INTERNAL_ERROR", message: resetErr.message } },
+        { status: 500 },
+      );
+    }
+
     return initiateChipPayment(existing.id, id, tournament.name, user.email!);
   }
 
@@ -304,7 +331,10 @@ async function initiateChipPayment(
       referenceId: payment.id,
       successRedirect: `${siteUrl}/tournaments/${tournamentId}/register/success`,
       failureRedirect: `${siteUrl}/tournaments/${tournamentId}/register/failure`,
-      successCallback: `${siteUrl}/api/v1/webhooks/chip`,
+      // Payment status is delivered server-side by the CHIP account webhook
+      // (subscribed to purchase.paid / payment_failure / cancelled) → /api/v1/webhooks/chip.
+      // No success_callback: it's signed with a different key than the webhook
+      // and would be redundant with the subscribed purchase.paid event.
     });
   } catch (err) {
     console.error("CHIP purchase creation failed:", err);

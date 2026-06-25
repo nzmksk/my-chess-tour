@@ -7,11 +7,11 @@ import TournamentCard from "./TournamentCard";
 
 function SectionBanner({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-4 mb-4">
-      <span className="font-cinzel text-text-muted text-xs tracking-widest uppercase shrink-0">
+    <div className="mb-4 flex items-center gap-4">
+      <span className="font-cinzel text-text-muted shrink-0 text-xs tracking-widest uppercase">
         {label}
       </span>
-      <div className="h-px bg-border flex-1" />
+      <div className="bg-border h-px flex-1" />
     </div>
   );
 }
@@ -113,7 +113,11 @@ export default function TournamentsClient({ tournaments, today }: Props) {
 
   const { ongoing, upcoming, past } = useMemo(() => {
     const todayStart = new Date(today + "T00:00:00");
-    const lastMonthStart = new Date(todayStart.getFullYear(), todayStart.getMonth() - 1, 1);
+    // Past section shows tournaments that ended within the last 30 days; older
+    // ones will be reachable via a future archive search.
+    const PAST_WINDOW_DAYS = 30;
+    const cutoff = new Date(todayStart);
+    cutoff.setDate(cutoff.getDate() - PAST_WINDOW_DAYS);
 
     const ongoing: Tournament[] = [];
     const upcoming: Tournament[] = [];
@@ -123,14 +127,22 @@ export default function TournamentsClient({ tournaments, today }: Props) {
       const start = new Date(t.start_date + "T00:00:00");
       const end = new Date(t.end_date + "T00:00:00");
 
+      // Defensive: malformed dates would otherwise be silently dropped.
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        console.warn(
+          `Tournament ${t.id} has an invalid start/end date; excluded from listing`,
+        );
+        continue;
+      }
+
       if (start <= todayStart && end >= todayStart) {
         ongoing.push(t);
       } else if (start > todayStart) {
         upcoming.push(t);
-      } else if (end >= lastMonthStart) {
+      } else if (end >= cutoff) {
         past.push(t);
       }
-      // else: ended before last calendar month — hidden
+      // else: ended more than 30 days ago — hidden (use archive search)
     }
 
     return { ongoing, upcoming, past };
@@ -156,10 +168,10 @@ export default function TournamentsClient({ tournaments, today }: Props) {
       />
 
       {/* Tournament sections */}
-      <div className="max-w-300 mx-auto px-10 py-6">
+      <div className="mx-auto max-w-300 px-10 py-6">
         {totalVisible === 0 ? (
-          <div className="text-center py-20 px-5 text-text-muted">
-            <div className="text-4xl mb-4 opacity-30">♟</div>
+          <div className="text-text-muted px-5 py-20 text-center">
+            <div className="mb-4 text-4xl opacity-30">♟</div>
             <p className="text-sm leading-relaxed">
               {tournaments.length === 0
                 ? "No tournaments are currently published. Check back soon."

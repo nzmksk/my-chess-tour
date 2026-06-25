@@ -105,7 +105,7 @@ function mapApiTierType(
   }
 }
 
-function buildInitialData(t: TournamentForEdit, orgId: string): PersistedState {
+function buildInitialData(t: TournamentForEdit): PersistedState {
   const basicInfoData = {
     name: t.name,
     description: t.description ?? "",
@@ -242,7 +242,7 @@ export default async function EditTournamentPage({
     notFound();
   }
 
-  const initialData = buildInitialData(tournament, orgId);
+  const initialData = buildInitialData(tournament);
 
   return (
     <div className="bg-bg-base min-h-screen">

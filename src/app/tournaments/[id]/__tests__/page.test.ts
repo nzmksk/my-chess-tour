@@ -40,6 +40,7 @@ const mockSelect = vi.hoisted(() =>
   vi.fn().mockReturnValue({
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockResolvedValue({ count: 0 }),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
   }),
 );
 
@@ -359,6 +360,7 @@ function makeChain(resolveWith: unknown) {
     in: vi.fn<() => Promise<{ count?: number; data: unknown; error: unknown }>>(
       () => Promise.resolve({ count: 0, data: null, error: null }),
     ),
+    maybeSingle: vi.fn(() => Promise.resolve(resolveWith)),
   };
   return chain;
 }
@@ -759,7 +761,7 @@ describe("fetchStartingRank coverage", () => {
     });
 
     // With a logged-in user, from("registrations") is called twice:
-    //   1st: isRegistered check (.select().eq().eq().in() → {count:0})
+    //   1st: registration status check (.select().eq().eq().maybeSingle() → {data:null})
     //   2nd: fetchStartingRank data (.select().eq().eq() → await chain)
     // organization_memberships is called once for isOrgMember.
     let regCallIdx = 0;
@@ -767,11 +769,9 @@ describe("fetchStartingRank coverage", () => {
       if (t === "registrations") {
         regCallIdx++;
         if (regCallIdx === 1) {
-          const c = makeChain({ count: 0 });
-          c.in = vi.fn(() =>
-            Promise.resolve({ count: 0, data: null, error: null }),
-          );
-          return { select: vi.fn(() => c) };
+          return {
+            select: vi.fn(() => makeChain({ data: null, error: null })),
+          };
         }
         return { select: vi.fn(() => makeChain({ data: [], error: null })) };
       }

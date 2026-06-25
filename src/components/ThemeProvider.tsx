@@ -23,6 +23,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem("theme");
     if (stored === "light" || stored === "dark") {
+      // One-time client hydration from localStorage, which is unavailable
+      // during SSR — reading it in an effect and syncing state is intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(stored);
     }
   }, []);

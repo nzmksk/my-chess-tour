@@ -12,10 +12,9 @@ import type { EligibilityProfile, FeeTier } from "../validators";
 
 const NOW = new Date("2026-05-12T00:00:00Z");
 
-// At NOW, DOB_18 yields age 18, DOB_17 yields age 17, DOB_19 yields age 19
+// At NOW, DOB_18 yields age 18, DOB_17 yields age 17
 const DOB_18 = "2008-05-12";
 const DOB_17 = "2008-05-13";
-const DOB_19 = "2007-05-12";
 
 function makeProfile(
   overrides: Partial<EligibilityProfile> = {},

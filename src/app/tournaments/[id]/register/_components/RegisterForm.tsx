@@ -5,14 +5,17 @@ import Link from "next/link";
 import type { TournamentDetail } from "../../types";
 import {
   formatRm,
+  formatRmExact,
   toTitleCase,
   formatDeadline,
   calculateAge,
 } from "@/app/tournaments/utils";
+import type { EntryFeeBreakdown } from "@/services/payments/fees";
 import type { RegistrationRow, PlayerProfile } from "../types";
 import RegistrationPending from "./RegistrationPending";
 
-const PROCESSING_FEE_CENTS = 150;
+/** Server-computed fee totals keyed by tier type (e.g. "standard", "junior"). */
+export type FeeBreakdownByTier = Record<string, EntryFeeBreakdown>;
 
 const PAYMENT_METHODS = [
   { id: "fpx", label: "FPX", description: "Online Banking" },
@@ -73,11 +76,16 @@ interface Props {
   tournament: TournamentDetail;
   userId: string;
   playerProfile: PlayerProfile | null;
+  feeBreakdown?: FeeBreakdownByTier;
 }
 
 type FormStatus = "idle" | "submitting" | "redirecting" | "success" | "error";
 
-export default function RegisterForm({ tournament, playerProfile }: Props) {
+export default function RegisterForm({
+  tournament,
+  playerProfile,
+  feeBreakdown = {},
+}: Props) {
   const now = new Date();
 
   const additional = tournament.entry_fees.additional ?? [];
@@ -147,7 +155,11 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
   );
 
   const selected = tiers.find((t) => t.type === selectedTier) ?? tiers[0];
-  const total = selected.amount_cents + PROCESSING_FEE_CENTS;
+  const breakdown = feeBreakdown[selected.type] ?? {
+    entry_cents: selected.amount_cents,
+    processing_fee_cents: 0,
+    gross_cents: selected.amount_cents,
+  };
 
   const eligibilityError = useMemo<string | null>(() => {
     if (selected.expired) return "This fee tier has expired.";
@@ -268,11 +280,15 @@ export default function RegisterForm({ tournament, playerProfile }: Props) {
           </div>
           <div className="font-lato text-text-secondary flex justify-between text-sm">
             <span>Processing Fee</span>
-            <span>{formatRm(PROCESSING_FEE_CENTS)}</span>
+            <span>{formatRmExact(breakdown.processing_fee_cents)}</span>
           </div>
           <div className="font-cinzel text-text-primary border-border mt-1 flex justify-between border-t pt-2 text-sm font-bold">
             <span>Total</span>
-            <span>{formatRm(total)}</span>
+            <span>
+              {breakdown.gross_cents === 0
+                ? "Free"
+                : formatRmExact(breakdown.gross_cents)}
+            </span>
           </div>
         </div>
 

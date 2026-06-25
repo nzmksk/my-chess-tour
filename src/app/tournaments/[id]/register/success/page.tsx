@@ -1,10 +1,24 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
+import { createClient } from "@/services/supabase/server";
+import { resolvePaymentState } from "../_lib/resolvePaymentState";
+import PaymentStatusView from "../_components/PaymentStatusView";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Payment Successful | MY Chess Tour",
+  title: "Payment | MY Chess Tour",
 };
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-bg-base min-h-screen">
+      <NavBar />
+      <main className="mx-auto max-w-2xl px-6 py-10 md:px-10">{children}</main>
+    </div>
+  );
+}
 
 export default async function PaymentSuccessPage({
   params,
@@ -13,27 +27,41 @@ export default async function PaymentSuccessPage({
 }) {
   const { id } = await params;
 
-  return (
-    <div className="min-h-screen bg-bg-base">
-      <NavBar />
-      <main className="max-w-2xl mx-auto px-6 md:px-10 py-10">
-        <div className="max-w-lg mx-auto">
-          <div className="card card--featured p-8 flex flex-col text-center">
-            <div className="confirm-icon">✓</div>
-            <h2 className="confirm-title">Payment Successful</h2>
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <Shell>
+        <div className="mx-auto max-w-lg">
+          <div className="card card--featured flex flex-col p-8 text-center">
+            <h2 className="confirm-title">Sign in to view your registration</h2>
             <p className="confirm-body">
-              Your payment has been confirmed. Your registration is now active.
-              We look forward to seeing you at the tournament.
+              Sign in to check the status of your payment and registration.
             </p>
             <Link
-              href={`/tournaments/${id}`}
-              className="btn-secondary rounded-md text-center mt-2"
+              href={`/auth/login?next=/tournaments/${id}`}
+              className="btn-primary mt-2 rounded-md text-center"
             >
-              Back to Tournament
+              Sign In
             </Link>
           </div>
         </div>
-      </main>
-    </div>
+      </Shell>
+    );
+  }
+
+  const { state, registration } = await resolvePaymentState(id, user.id);
+
+  return (
+    <Shell>
+      <PaymentStatusView
+        state={state}
+        registration={registration}
+        tournamentId={id}
+      />
+    </Shell>
   );
 }

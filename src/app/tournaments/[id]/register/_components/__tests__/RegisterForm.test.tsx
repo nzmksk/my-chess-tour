@@ -848,6 +848,26 @@ describe("RegisterForm", () => {
       expect(screen.getByText("Total")).toBeDefined();
     });
 
+    it("displays the server-computed processing fee and total", () => {
+      // RM30 entry, 10% commission, organizer absorbs 0 → fee RM3.00, total RM33.00
+      render(
+        <RegisterForm
+          tournament={makeTournament()}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+          feeBreakdown={{
+            standard: {
+              entry_cents: 3000,
+              processing_fee_cents: 300,
+              gross_cents: 3300,
+            },
+          }}
+        />,
+      );
+      expect(screen.getByText("RM3.00")).toBeDefined();
+      expect(screen.getByText("RM33.00")).toBeDefined();
+    });
+
     it("updates the summary entry fee when the selection changes", async () => {
       const { container } = render(
         <RegisterForm

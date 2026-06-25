@@ -4,7 +4,10 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
+import { supabaseAdmin } from "@/services/supabase/admin";
+import { computeEntryFeeBreakdown } from "@/services/payments/fees";
 import type { TournamentDetail } from "../types";
+import type { FeeBreakdownByTier } from "./_components/RegisterForm";
 import RegisterForm from "./_components/RegisterForm";
 import RegisterFormSkeleton from "./_components/RegisterFormSkeleton";
 
@@ -64,12 +67,39 @@ async function RegisterPageContent({ id }: { id: string }) {
     .eq("user_id", user.id)
     .single();
 
+  // Commission rates are server-only; compute the player-facing totals here so
+  // the form displays exactly what CHIP will charge (matches the SQL in
+  // create_registration_with_payment).
+  const { data: commission } = await supabaseAdmin
+    .from("tournaments")
+    .select("commission_rate, organizer_commission_pct")
+    .eq("id", id)
+    .single();
+
+  const commissionRate = commission?.commission_rate ?? 10;
+  const organizerCommissionPct = commission?.organizer_commission_pct ?? 0;
+
+  const feeBreakdown: FeeBreakdownByTier = {};
+  const breakdownFor = (entryCents: number) =>
+    computeEntryFeeBreakdown(
+      entryCents,
+      commissionRate,
+      organizerCommissionPct,
+    );
+  feeBreakdown.standard = breakdownFor(
+    tournament.entry_fees.standard.amount_cents,
+  );
+  for (const tier of tournament.entry_fees.additional ?? []) {
+    feeBreakdown[tier.type] = breakdownFor(tier.amount_cents);
+  }
+
   return (
     <Suspense fallback={<RegisterFormSkeleton />}>
       <RegisterForm
         tournament={tournament}
         userId={user.id}
         playerProfile={playerProfile ?? null}
+        feeBreakdown={feeBreakdown}
       />
     </Suspense>
   );
@@ -83,9 +113,9 @@ export default async function RegisterPage({
   const { id } = await params;
 
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <main className="max-w-2xl mx-auto px-6 md:px-10 py-10">
+      <main className="mx-auto max-w-2xl px-6 py-10 md:px-10">
         <RegisterPageContent id={id} />
       </main>
     </div>

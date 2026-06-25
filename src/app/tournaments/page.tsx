@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import TournamentsClient from "./_components/TournamentsClient";
 import TournamentsGridSkeleton from "./_components/TournamentsGridSkeleton";
+import { getTodayInTimeZone } from "./utils";
 import type { Tournament } from "./types";
 
 export const revalidate = 60;
@@ -50,7 +51,9 @@ async function TournamentsData() {
     // Network error — render page with empty list rather than crashing
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  // Compute "today" in the venue timezone (Malaysia for now) so the
+  // ongoing/upcoming/past buckets don't shift a day on a UTC server.
+  const today = getTodayInTimeZone();
   return <TournamentsClient tournaments={tournaments} today={today} />;
 }
 
