@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks — must be hoisted so vi.mock factories can reference them
 // ---------------------------------------------------------------------------
 
-const { mockGetUser, mockUpsert, mockUpdateEq, mockUpdate, mockFrom } =
+const { mockGetClaims, mockUpsert, mockUpdateEq, mockUpdate, mockFrom } =
   vi.hoisted(() => {
-    const mockGetUser = vi.fn();
+    const mockGetClaims = vi.fn();
     const mockUpsert = vi.fn();
     const mockUpdateEq = vi.fn();
     const mockUpdate = vi.fn(() => ({ eq: mockUpdateEq }));
@@ -16,12 +16,12 @@ const { mockGetUser, mockUpsert, mockUpdateEq, mockUpdate, mockFrom } =
       if (table === "player_profiles") return { upsert: mockUpsert };
       return { update: mockUpdate }; // "users"
     });
-    return { mockGetUser, mockUpsert, mockUpdateEq, mockUpdate, mockFrom };
+    return { mockGetClaims, mockUpsert, mockUpdateEq, mockUpdate, mockFrom };
   });
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
   }),
 }));
 
@@ -64,7 +64,7 @@ function makeRequest(body: unknown): NextRequest {
 describe("POST /api/v1/auth/signup/complete-profile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: USER_ID } } });
     mockUpsert.mockResolvedValue({ error: null });
     mockUpdateEq.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({ eq: mockUpdateEq });
@@ -77,7 +77,7 @@ describe("POST /api/v1/auth/signup/complete-profile", () => {
   // --- Auth -----------------------------------------------------------------
 
   it("returns 401 when not authenticated", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockGetClaims.mockResolvedValue({ data: { claims: null } });
 
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
@@ -113,7 +113,7 @@ describe("POST /api/v1/auth/signup/complete-profile", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: USER_ID } } });
     mockUpsert.mockResolvedValue({ error: null });
     mockUpdateEq.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({ eq: mockUpdateEq });

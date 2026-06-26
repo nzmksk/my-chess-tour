@@ -11,7 +11,7 @@ const {
   mockTournamentFetchBuilder,
   mockTournamentUpdateBuilder,
   mockFrom,
-  mockGetUser,
+  mockGetClaims,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: {
     data?: unknown;
@@ -69,7 +69,7 @@ const {
     tournamentCallIndex = 0;
   };
 
-  const mockGetUser = vi.fn();
+  const mockGetClaims = vi.fn();
 
   return {
     mockOrgBuilder,
@@ -77,7 +77,7 @@ const {
     mockTournamentFetchBuilder,
     mockTournamentUpdateBuilder,
     mockFrom,
-    mockGetUser,
+    mockGetClaims,
   };
 });
 
@@ -87,7 +87,7 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
   }),
 }));
 
@@ -159,14 +159,14 @@ function resetTournamentCalls() {
 }
 
 function setUser(userId = USER_ID) {
-  mockGetUser.mockResolvedValue({
-    data: { user: { id: userId } },
+  mockGetClaims.mockResolvedValue({
+    data: { claims: { sub: userId } },
     error: null,
   });
 }
 
 function setNoUser() {
-  mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+  mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
 }
 
 function setOrgResult(data: unknown, error: unknown = null) {

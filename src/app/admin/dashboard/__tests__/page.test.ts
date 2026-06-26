@@ -24,12 +24,16 @@ vi.mock("@/components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-const mockGetUser = vi.hoisted(() => vi.fn());
+const mockGetClaims = vi.hoisted(() => vi.fn());
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
   }),
+}));
+
+vi.mock("@/services/supabase/admin", () => ({
+  supabaseAdmin: { from: vi.fn(), rpc: vi.fn() },
 }));
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -79,7 +83,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("redirects to login when user is not authenticated", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockGetClaims.mockResolvedValue({ data: { claims: null } });
 
     const { default: AdminDashboardPage } = await import("../page");
     await AdminDashboardPage();
@@ -88,7 +92,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("redirects to home when API returns no data", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockFetch.mockResolvedValue({ ok: false, status: 403 });
 
     const { default: AdminDashboardPage } = await import("../page");
@@ -98,7 +102,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("renders page content when admin user is authenticated and data is available", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => makeDashboardPayload(),
@@ -113,7 +117,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("uses http protocol for localhost", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockHeadersGet.mockReturnValue("localhost:3000");
     mockFetch.mockResolvedValue({
       ok: true,
@@ -130,7 +134,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("uses https protocol for non-localhost hosts", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockHeadersGet.mockReturnValue("mychessour.com");
     mockFetch.mockResolvedValue({
       ok: true,
@@ -147,7 +151,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("falls back to localhost:3000 when host header is absent", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockHeadersGet.mockReturnValue(null);
     mockFetch.mockResolvedValue({
       ok: true,
@@ -164,7 +168,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("redirects to home when fetch throws a network error", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockFetch.mockRejectedValue(new Error("Network failure"));
 
     const { default: AdminDashboardPage } = await import("../page");
@@ -174,7 +178,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("redirects to home when API returns null data", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ data: null }),

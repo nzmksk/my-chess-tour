@@ -1,4 +1,3 @@
-import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
@@ -62,12 +61,9 @@ export async function GET(): Promise<NextResponse> {
 }
 
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
@@ -91,7 +87,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     .select(
       "date_of_birth, gender, nationality, fide_id, mcf_id, title, national_rating",
     )
-    .eq("user_id", user.id)
+    .eq("user_id", claims.id)
     .maybeSingle();
 
   const errors: string[] = [];
@@ -102,7 +98,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   // crafted request can't store an arbitrary external URL on the profile.
   let avatarUpdate: { value: string | null } | null = null;
   if ("avatar_url" in body) {
-    const allowedPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/users/${user.id}/`;
+    const allowedPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/users/${claims.id}/`;
     if (body.avatar_url === null) {
       avatarUpdate = { value: null };
     } else if (
@@ -305,7 +301,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (Object.keys(update).length > 0) {
     const { error } = await supabaseAdmin
       .from("player_profiles")
-      .upsert({ user_id: user.id, ...update }, { onConflict: "user_id" });
+      .upsert({ user_id: claims.id, ...update }, { onConflict: "user_id" });
 
     if (error) {
       return NextResponse.json(
@@ -321,13 +317,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     const { data: existingUser } = await supabaseAdmin
       .from("users")
       .select("avatar_url")
-      .eq("id", user.id)
+      .eq("id", claims.id)
       .single();
 
     const { error } = await supabaseAdmin
       .from("users")
       .update({ avatar_url: avatarUpdate.value })
-      .eq("id", user.id);
+      .eq("id", claims.id);
 
     if (error) {
       return NextResponse.json(
@@ -352,7 +348,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       if (removeError) {
         console.error(
           "Failed to delete previous avatar for user ID:",
-          user.id,
+          claims.id,
           removeError,
         );
       }

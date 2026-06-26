@@ -13,7 +13,7 @@ const {
   mockUsersBuilder,
   mockProfilesBuilder,
   mockFrom,
-  mockGetUser,
+  mockGetClaims,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: {
     data?: unknown;
@@ -68,7 +68,7 @@ const {
     }
   });
 
-  const mockGetUser = vi.fn();
+  const mockGetClaims = vi.fn();
 
   return {
     mockOrgBuilder,
@@ -78,7 +78,7 @@ const {
     mockUsersBuilder,
     mockProfilesBuilder,
     mockFrom,
-    mockGetUser,
+    mockGetClaims,
   };
 });
 
@@ -88,7 +88,7 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
   }),
 }));
 
@@ -153,11 +153,14 @@ function setResult(
 }
 
 function setUser(id = USER_ID) {
-  mockGetUser.mockResolvedValue({ data: { user: { id } }, error: null });
+  mockGetClaims.mockResolvedValue({
+    data: { claims: { sub: id } },
+    error: null,
+  });
 }
 
 function setNoUser() {
-  mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+  mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
 }
 
 function makeRequest(orgId = ORG_ID, id = TOUR_ID): NextRequest {

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import PublicProfile from "../_components/PublicProfile";
 import { getPublicProfile } from "../_data/getPublicProfile";
 
@@ -39,11 +39,8 @@ export default async function PlayerProfilePage({
     notFound();
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const isOwner = user?.id === userId;
+  const claims = await getAuthClaims();
+  const isOwner = claims?.id === userId;
 
   return (
     <div className="bg-bg-base min-h-screen">

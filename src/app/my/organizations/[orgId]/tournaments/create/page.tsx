@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "./_components/TournamentWizardContext";
 import WizardShell from "./_components/WizardShell";
 
@@ -44,12 +44,9 @@ export default async function CreateTournamentPage({
 }) {
   const { orgId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     redirect("/auth/login");
   }
 

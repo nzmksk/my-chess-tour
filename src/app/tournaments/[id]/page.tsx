@@ -9,7 +9,7 @@ import type {
   TournamentDetail as TournamentDetailType,
   StartingRankPlayer,
 } from "./types";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 
 export const revalidate = 60;
@@ -199,17 +199,14 @@ export async function TournamentDetailData({ id }: { id: string }) {
     return notFound();
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
   let registrationStatus: string | null = null;
-  if (user) {
+  if (claims) {
     const { data: registration } = await supabaseAdmin
       .from("registrations")
       .select("status")
-      .eq("user_id", user.id)
+      .eq("user_id", claims.id)
       .eq("tournament_id", id)
       .maybeSingle();
     registrationStatus = registration?.status ?? null;
@@ -217,11 +214,11 @@ export async function TournamentDetailData({ id }: { id: string }) {
   const isConfirmed = registrationStatus === "confirmed";
 
   let isOrgMember = false;
-  if (user && tournament.organization?.id) {
+  if (claims && tournament.organization?.id) {
     const { count } = await supabaseAdmin
       .from("organization_memberships")
       .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("user_id", claims.id)
       .eq("organization_id", tournament.organization.id);
     isOrgMember = (count ?? 0) > 0;
   }
@@ -237,7 +234,7 @@ export async function TournamentDetailData({ id }: { id: string }) {
   return (
     <TournamentDetail
       tournament={tournament}
-      isAuthenticated={!!user}
+      isAuthenticated={!!claims}
       registrationStatus={registrationStatus}
       isOrgMember={isOrgMember}
       canViewStartingRank={canViewStartingRank}

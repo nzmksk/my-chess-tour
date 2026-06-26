@@ -31,7 +31,7 @@ vi.mock("@/components/NavBar", () => ({
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      getClaims: vi.fn().mockResolvedValue({ data: { claims: null } }),
     },
   }),
 }));
@@ -744,9 +744,9 @@ describe("fetchStartingRank coverage", () => {
     const serverModule = await import("@/services/supabase/server");
     vi.mocked(serverModule.createClient).mockResolvedValueOnce({
       auth: {
-        getUser: vi
+        getClaims: vi
           .fn()
-          .mockResolvedValue({ data: { user: { id: "user-1" } } }),
+          .mockResolvedValue({ data: { claims: { sub: "user-1" } } }),
       },
     } as unknown as Awaited<ReturnType<typeof serverModule.createClient>>);
 

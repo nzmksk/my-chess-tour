@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import AdminDashboardClient from "./_components/AdminDashboardClient";
 
 export const metadata: Metadata = {
@@ -68,12 +68,9 @@ async function fetchAdminDashboard(
 }
 
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     redirect("/auth/login");
   }
 

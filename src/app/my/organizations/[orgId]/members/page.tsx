@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import MembersClient from "./_components/MembersClient";
 
 export const metadata: Metadata = {
@@ -78,12 +78,9 @@ export default async function OrganizerMembersPage({
 }) {
   const { orgId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     redirect("/auth/login");
   }
 
@@ -104,7 +101,7 @@ export default async function OrganizerMembersPage({
         orgId={orgId}
         orgName={data.orgName}
         members={data.members}
-        currentUserId={user.id}
+        currentUserId={claims.id}
       />
     </div>
   );

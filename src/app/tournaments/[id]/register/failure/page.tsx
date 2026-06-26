@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { resolvePaymentState } from "../_lib/resolvePaymentState";
 import PaymentStatusView from "../_components/PaymentStatusView";
 
@@ -27,12 +27,9 @@ export default async function PaymentFailurePage({
 }) {
   const { id } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return (
       <Shell>
         <div className="mx-auto max-w-lg">
@@ -53,7 +50,7 @@ export default async function PaymentFailurePage({
     );
   }
 
-  const { state, registration } = await resolvePaymentState(id, user.id);
+  const { state, registration } = await resolvePaymentState(id, claims.id);
 
   return (
     <Shell>

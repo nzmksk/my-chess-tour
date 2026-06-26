@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -40,12 +40,9 @@ export async function GET(
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
@@ -66,7 +63,7 @@ export async function GET(
       .from("organization_memberships")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
-      .eq("user_id", user.id),
+      .eq("user_id", claims.id),
   ]);
 
   if (orgError) {

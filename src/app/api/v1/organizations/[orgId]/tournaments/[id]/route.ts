@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
+import { getTournamentManageData } from "@/app/my/organizations/[orgId]/tournaments/[id]/_data/getTournamentManageData";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -11,179 +12,15 @@ export async function GET(
 ): Promise<NextResponse> {
   const { orgId, id } = await params;
 
-  if (!UUID_RE.test(orgId)) {
+  const result = await getTournamentManageData(orgId, id);
+  if (!result.ok) {
     return NextResponse.json(
-      {
-        error: { code: "VALIDATION_ERROR", message: "Invalid organization ID" },
-      },
-      { status: 400 },
-    );
-  }
-  if (!UUID_RE.test(id)) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid tournament ID" } },
-      { status: 400 },
+      { error: { code: result.code, message: result.message } },
+      { status: result.status },
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
-      { status: 401 },
-    );
-  }
-
-  const permissionError = await resolvePermission(orgId, user.id);
-  if (permissionError) return permissionError;
-
-  const { data: tournament, error: tErr } = await supabaseAdmin
-    .from("tournaments")
-    .select(
-      "id, name, description, status, start_date, end_date, registration_deadline, venue_name, venue_state, venue_address, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
-    )
-    .eq("id", id)
-    .eq("organization_id", orgId)
-    .single();
-
-  if (tErr) {
-    if (tErr.code === "PGRST116") {
-      return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "Tournament not found" } },
-        { status: 404 },
-      );
-    }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tErr.message } },
-      { status: 500 },
-    );
-  }
-
-  const { data: regs, error: regErr } = await supabaseAdmin
-    .from("registrations")
-    .select("id, user_id, fee_tier, status, registered_at")
-    .eq("tournament_id", id)
-    .in("status", ["confirmed", "pending_payment"])
-    .order("registered_at", { ascending: true });
-
-  if (regErr) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: regErr.message } },
-      { status: 500 },
-    );
-  }
-
-  const registrations = (regs ?? []) as Array<{
-    id: string;
-    user_id: string;
-    fee_tier: string;
-    status: string;
-    registered_at: string;
-  }>;
-
-  const userIds = registrations.map((r) => r.user_id).filter(Boolean);
-
-  type UserRow = { id: string; first_name: string; last_name: string };
-  type ProfileRow = {
-    user_id: string;
-    fide_id: number | null;
-    fide_rating: Record<string, number> | null;
-    national_rating: number | null;
-  };
-
-  let userMap = new Map<string, UserRow>();
-  let profileMap = new Map<string, ProfileRow>();
-
-  if (userIds.length > 0) {
-    const [{ data: users }, { data: profiles }] = await Promise.all([
-      supabaseAdmin
-        .from("users")
-        .select("id, first_name, last_name")
-        .in("id", userIds),
-      supabaseAdmin
-        .from("player_profiles")
-        .select("user_id, fide_id, fide_rating, national_rating")
-        .in("user_id", userIds),
-    ]);
-
-    userMap = new Map(((users as UserRow[]) ?? []).map((u) => [u.id, u]));
-    profileMap = new Map(
-      ((profiles as ProfileRow[]) ?? []).map((p) => [p.user_id, p]),
-    );
-  }
-
-  const formatType =
-    (tournament.format as { type?: string } | null)?.type ?? "";
-
-  const participants = registrations.map((reg, idx) => {
-    const u = userMap.get(reg.user_id);
-    const p = profileMap.get(reg.user_id);
-
-    let rating: number | null = null;
-    if (p?.fide_rating) {
-      const r = p.fide_rating;
-      if (formatType === "blitz") {
-        rating = r.blitz ?? r.rapid ?? r.standard ?? null;
-      } else if (formatType === "rapid") {
-        rating = r.rapid ?? r.standard ?? null;
-      } else {
-        rating = r.standard ?? null;
-      }
-    }
-
-    return {
-      index: idx + 1,
-      id: reg.id,
-      user_id: reg.user_id,
-      name: u ? `${u.first_name} ${u.last_name}` : "Unknown",
-      fide_id: p?.fide_id ?? null,
-      rating,
-      fee_tier: reg.fee_tier,
-      status: reg.status,
-      registered_at: reg.registered_at,
-    };
-  });
-
-  const total = registrations.length;
-  const confirmed = registrations.filter(
-    (r) => r.status === "confirmed",
-  ).length;
-  const pending = registrations.filter(
-    (r) => r.status === "pending_payment",
-  ).length;
-
-  return NextResponse.json({
-    data: {
-      tournament: {
-        id: tournament.id,
-        name: tournament.name,
-        description: tournament.description ?? null,
-        status: tournament.status,
-        start_date: tournament.start_date,
-        end_date: tournament.end_date,
-        registration_deadline: tournament.registration_deadline,
-        venue: {
-          name: tournament.venue_name,
-          state: tournament.venue_state,
-          address: tournament.venue_address,
-        },
-        format: tournament.format,
-        time_control: tournament.time_control,
-        is_fide_rated: tournament.is_fide_rated,
-        is_mcf_rated: tournament.is_mcf_rated,
-        max_participants: tournament.max_participants,
-        entry_fees: tournament.entry_fees,
-        prizes: tournament.prizes ?? null,
-        restrictions: tournament.restrictions ?? null,
-      },
-      stats: { total, confirmed, pending },
-      participants,
-    },
-  });
+  return NextResponse.json({ data: result.data });
 }
 
 interface FormatInput {
@@ -329,19 +166,16 @@ export async function PATCH(
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
     );
   }
 
-  const permissionError = await resolvePermission(orgId, user.id);
+  const permissionError = await resolvePermission(orgId, claims.id);
   if (permissionError) return permissionError;
 
   const { error: tournamentError } = await supabaseAdmin
