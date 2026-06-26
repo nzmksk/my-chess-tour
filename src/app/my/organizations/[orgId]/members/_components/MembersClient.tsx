@@ -315,7 +315,7 @@ export default function MembersClient({
     <div className="mx-auto max-w-3xl px-6 py-8">
       <div className="mb-6">
         <Link
-          href={`/organizations/${orgId}/dashboard`}
+          href={`/my/organizations/${orgId}`}
           className="font-lato text-text-muted hover:text-text-secondary mb-3 inline-flex items-center gap-1 text-xs transition-colors duration-150"
         >
           ← Back to Dashboard

@@ -197,7 +197,7 @@ export default function WizardShell({
     return json.data.id;
   }
 
-  const afterSaveRedirect = redirectPath ?? `/organizations/${orgId}/dashboard`;
+  const afterSaveRedirect = redirectPath ?? `/my/organizations/${orgId}`;
 
   async function handleSaveDraft() {
     if (!basicInfoData.name.trim()) {

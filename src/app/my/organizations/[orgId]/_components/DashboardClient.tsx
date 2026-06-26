@@ -115,7 +115,7 @@ interface TournamentRowProps {
 function TournamentRow({ tournament: t, orgId }: TournamentRowProps) {
   const statusConfig = STATUS_CONFIG[t.status] ?? STATUS_CONFIG.draft;
   const actionConfig = getActionConfig(t.status);
-  const basePath = `/organizations/${orgId}/tournaments/${t.id}`;
+  const basePath = `/my/organizations/${orgId}/tournaments/${t.id}`;
   const isDimmed = t.status === "completed" || t.status === "cancelled";
 
   return (
@@ -172,7 +172,7 @@ export default function DashboardClient({ data }: Props) {
           </p>
         </div>
         <Link
-          href={`/organizations/${organization.id}/tournaments/create`}
+          href={`/my/organizations/${organization.id}/tournaments/create`}
           className="font-cinzel text-bg-base shrink-0 cursor-pointer rounded-md border-0 px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90"
           style={{
             background:
@@ -206,7 +206,7 @@ export default function DashboardClient({ data }: Props) {
           Manage
         </h2>
         <Link
-          href={`/organizations/${organization.id}/members`}
+          href={`/my/organizations/${organization.id}/members`}
           className="card flex items-center justify-between px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
         >
           <div className="flex items-center gap-3">

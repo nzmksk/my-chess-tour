@@ -257,7 +257,7 @@ export default async function EditTournamentPage({
           orgId={orgId}
           orgName={orgName}
           title="Edit Tournament"
-          redirectPath={`/organizations/${orgId}/tournaments/${id}`}
+          redirectPath={`/my/organizations/${orgId}/tournaments/${id}`}
           mode="edit"
         />
       </TournamentWizardProvider>
