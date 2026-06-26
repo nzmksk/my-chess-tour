@@ -19,17 +19,45 @@ interface ChipCallbackPayload {
   purchase?: { total?: number };
 }
 
-function verifySignature(rawBody: string, signature: string | null): boolean {
-  const publicKey = process.env.CHIP_WEBHOOK_PUBLIC_KEY;
-  if (!signature || !publicKey) return false;
+// Normalizes a PEM read from an env var. Env managers store keys inconsistently:
+// dotenv strips surrounding quotes and expands "\n", but platforms like Netlify
+// store the value verbatim — so a key copied from a .env file can arrive wrapped
+// in quotes and/or with literal "\n" sequences. Both break PEM parsing.
+function normalizePublicKey(raw: string): string {
+  let key = raw.trim();
+  // Strip a single layer of matched surrounding quotes.
+  if (
+    key.length >= 2 &&
+    ((key.startsWith('"') && key.endsWith('"')) ||
+      (key.startsWith("'") && key.endsWith("'")))
+  ) {
+    key = key.slice(1, -1);
+  }
   // Tolerate env values that carry literal "\n" instead of real newlines.
-  const pem = publicKey.replace(/\\n/g, "\n");
+  return key.replace(/\\n/g, "\n");
+}
+
+function verifySignature(rawBody: string, signature: string | null): boolean {
+  if (!signature) {
+    console.warn("CHIP webhook: missing X-Signature header");
+    return false;
+  }
+  const publicKey = process.env.CHIP_WEBHOOK_PUBLIC_KEY;
+  if (!publicKey) {
+    console.error("CHIP webhook: CHIP_WEBHOOK_PUBLIC_KEY is not configured");
+    return false;
+  }
+  const pem = normalizePublicKey(publicKey);
   try {
     const verifier = crypto.createVerify("RSA-SHA256");
     verifier.update(rawBody);
     verifier.end();
-    return verifier.verify(pem, signature, "base64");
-  } catch {
+    const ok = verifier.verify(pem, signature, "base64");
+    if (!ok) console.warn("CHIP webhook: signature did not match public key");
+    return ok;
+  } catch (err) {
+    // Almost always a malformed PEM (e.g. surrounding quotes, missing newlines).
+    console.error("CHIP webhook: public key parse/verify error", err);
     return false;
   }
 }

@@ -80,11 +80,15 @@ function makeRequest(payload: unknown, signature?: string) {
 beforeEach(() => {
   vi.stubEnv("CHIP_WEBHOOK_PUBLIC_KEY", publicKey);
   setPaymentResult({ data: null, error: null });
+  // The handler logs expected failure reasons; keep test output clean.
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -123,6 +127,43 @@ describe("POST /api/v1/webhooks/chip", () => {
       p_paid: true,
       p_amount_cents: 5500,
     });
+  });
+
+  it("verifies when the key is wrapped in quotes and uses literal \\n", async () => {
+    // Mimic a key copied verbatim from a .env file into a platform that stores
+    // env values literally (e.g. Netlify): surrounding quotes + escaped newlines.
+    const mangled = `"${publicKey.trim().replace(/\n/g, "\\n")}"`;
+    vi.stubEnv("CHIP_WEBHOOK_PUBLIC_KEY", mangled);
+    setPaymentResult({
+      data: { id: "chip-1", chip_transaction_id: "chip-1" },
+      error: null,
+    });
+
+    const res = await POST(
+      makeRequest({
+        id: "chip-1",
+        status: "paid",
+        event_type: "purchase.paid",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalled();
+  });
+
+  it("401s when no public key is configured", async () => {
+    vi.stubEnv("CHIP_WEBHOOK_PUBLIC_KEY", "");
+
+    const res = await POST(
+      makeRequest({
+        id: "chip-1",
+        status: "paid",
+        event_type: "purchase.paid",
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
   it("acks without settling for a stale, superseded purchase", async () => {
@@ -179,7 +220,11 @@ describe("POST /api/v1/webhooks/chip", () => {
     setPaymentResult({ data: null, error: { message: "db down" } });
 
     const res = await POST(
-      makeRequest({ id: "chip-1", status: "paid", event_type: "purchase.paid" }),
+      makeRequest({
+        id: "chip-1",
+        status: "paid",
+        event_type: "purchase.paid",
+      }),
     );
 
     expect(res.status).toBe(500);
