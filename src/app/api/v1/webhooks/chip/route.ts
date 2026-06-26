@@ -14,6 +14,9 @@ interface ChipCallbackPayload {
   reference?: string;
   status?: string;
   event_type?: string;
+  // The nested Purchase carries the total CHIP charged (smallest currency unit),
+  // used to guard against settling a stale/re-priced purchase.
+  purchase?: { total?: number };
 }
 
 function verifySignature(rawBody: string, signature: string | null): boolean {
@@ -76,11 +79,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // Correlate on the CHIP purchase id (stored as chip_transaction_id), which is
   // always set after checkout; fall back to our reference (payments.id).
-  let payment: { id: string } | null = null;
+  let payment: { id: string; chip_transaction_id: string | null } | null = null;
   if (purchaseId) {
     const { data, error } = await supabaseAdmin
       .from("payments")
-      .select("id")
+      .select("id, chip_transaction_id")
       .eq("chip_transaction_id", purchaseId)
       .maybeSingle();
     if (error) {
@@ -96,7 +99,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!payment && reference) {
     const { data, error } = await supabaseAdmin
       .from("payments")
-      .select("id")
+      .select("id, chip_transaction_id")
       .eq("id", reference)
       .maybeSingle();
     if (error) {
@@ -104,6 +107,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { error: { code: "INTERNAL_ERROR", message: error.message } },
         { status: 500 },
       );
+    }
+    // Stale-attempt guard: we matched by `reference` only, but the payment has
+    // since moved to a newer CHIP purchase (resume re-issues the purchase). This
+    // delivery is for a superseded/abandoned purchase — ack without settling so
+    // it can't flip the current attempt's state.
+    if (
+      data?.chip_transaction_id &&
+      purchaseId &&
+      data.chip_transaction_id !== purchaseId
+    ) {
+      console.warn("CHIP webhook: stale purchase for superseded payment", {
+        purchaseId,
+        current: data.chip_transaction_id,
+        reference,
+      });
+      return NextResponse.json({ data: { received: true } }, { status: 200 });
     }
     payment = data;
   }
@@ -116,11 +135,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ data: { received: true } }, { status: 200 });
   }
 
-  const { error: rpcErr } = await supabaseAdmin.rpc(
+  const { data: settled, error: rpcErr } = await supabaseAdmin.rpc(
     "settle_registration_payment",
     {
       p_payment_id: payment.id,
       p_paid: paid,
+      p_amount_cents: payload.purchase?.total ?? null,
     },
   );
 
@@ -129,6 +149,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { error: { code: "INTERNAL_ERROR", message: rpcErr.message } },
       { status: 500 },
     );
+  }
+
+  if ((settled as { amount_mismatch?: boolean } | null)?.amount_mismatch) {
+    // Paid amount didn't match the recorded total — left pending for manual
+    // reconciliation. Ack so CHIP stops retrying; surface loudly for ops.
+    console.error("CHIP webhook: amount mismatch, payment left pending", {
+      paymentId: payment.id,
+      purchaseId,
+      paidAmount: payload.purchase?.total,
+    });
   }
 
   return NextResponse.json({ data: { received: true } }, { status: 200 });

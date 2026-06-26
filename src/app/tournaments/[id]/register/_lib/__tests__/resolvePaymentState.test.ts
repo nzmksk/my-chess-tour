@@ -39,7 +39,10 @@ const { mockFrom, mockRpc, mockGetChipPurchase, setResults } = vi.hoisted(
       return makeBuilder(() => ({ data: null, error: null }));
     });
 
-    const mockRpc = vi.fn(() => Promise.resolve({ data: null, error: null }));
+    const mockRpc = vi.fn(
+      (): Promise<{ data: unknown; error: unknown }> =>
+        Promise.resolve({ data: null, error: null }),
+    );
     const mockGetChipPurchase = vi.fn();
     return { mockFrom, mockRpc, mockGetChipPurchase, setResults };
   },
@@ -128,7 +131,11 @@ describe("resolvePaymentState", () => {
         error: null,
       },
     );
-    mockGetChipPurchase.mockResolvedValue({ id: "chip-1", status: "paid" });
+    mockGetChipPurchase.mockResolvedValue({
+      id: "chip-1",
+      status: "paid",
+      amountCents: 5500,
+    });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
 
@@ -136,8 +143,36 @@ describe("resolvePaymentState", () => {
     expect(mockRpc).toHaveBeenCalledWith("settle_registration_payment", {
       p_payment_id: "pay-uuid",
       p_paid: true,
+      p_amount_cents: 5500,
     });
     expect(result.state).toBe("confirmed");
+  });
+
+  it("stays 'pending' when settlement reports an amount mismatch", async () => {
+    setResults(
+      { data: makeRegistration("pending_payment"), error: null },
+      {
+        data: {
+          id: "pay-uuid",
+          status: "pending",
+          chip_transaction_id: "chip-1",
+        },
+        error: null,
+      },
+    );
+    mockGetChipPurchase.mockResolvedValue({
+      id: "chip-1",
+      status: "paid",
+      amountCents: 9999,
+    });
+    mockRpc.mockResolvedValueOnce({
+      data: { amount_mismatch: true },
+      error: null,
+    });
+
+    const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
+
+    expect(result.state).toBe("pending");
   });
 
   it("reconciles a pending registration that CHIP reports as error -> failed", async () => {
@@ -152,13 +187,18 @@ describe("resolvePaymentState", () => {
         error: null,
       },
     );
-    mockGetChipPurchase.mockResolvedValue({ id: "chip-1", status: "error" });
+    mockGetChipPurchase.mockResolvedValue({
+      id: "chip-1",
+      status: "error",
+      amountCents: null,
+    });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
 
     expect(mockRpc).toHaveBeenCalledWith("settle_registration_payment", {
       p_payment_id: "pay-uuid",
       p_paid: false,
+      p_amount_cents: null,
     });
     expect(result.state).toBe("failed");
   });

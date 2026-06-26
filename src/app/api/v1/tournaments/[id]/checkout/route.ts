@@ -8,7 +8,7 @@ import {
   normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[id]/registrations/validators";
 import type { RegistrationRequest } from "@/app/tournaments/[id]/register/types";
-import { createChipPurchase } from "@/services/chip/chip";
+import { cancelChipPurchase, createChipPurchase } from "@/services/chip/chip";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -225,43 +225,14 @@ export async function POST(
       );
     }
 
-    // Resume an existing pending/failed registration. Re-price it for the
-    // (possibly different) chosen tier and reset its payment to pending so a
-    // fresh CHIP purchase can be created.
-    const { error: resetErr } = await supabaseAdmin.rpc(
-      "reset_registration_for_payment",
-      {
-        p_registration_id: existing.id,
-        p_fee_tier: fee_tier,
-        p_amount_cents: matchedTier.amount_cents,
-      },
+    return resumeRegistration(
+      existing.id,
+      fee_tier,
+      matchedTier.amount_cents,
+      id,
+      tournament.name,
+      user.email!,
     );
-
-    if (resetErr) {
-      if (resetErr.message?.toLowerCase().includes("full")) {
-        return NextResponse.json(
-          { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
-          { status: 422 },
-        );
-      }
-      if (resetErr.code === "P0001") {
-        return NextResponse.json(
-          {
-            error: {
-              code: "ALREADY_REGISTERED",
-              message: "This registration can no longer be paid for",
-            },
-          },
-          { status: 409 },
-        );
-      }
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: resetErr.message } },
-        { status: 500 },
-      );
-    }
-
-    return initiateChipPayment(existing.id, id, tournament.name, user.email!);
   }
 
   const { data: registration, error: insertErr } = await supabaseAdmin.rpc(
@@ -284,6 +255,40 @@ export async function POST(
         { status: 422 },
       );
     }
+    // Lost a concurrent create race (e.g. a double-submit): the UNIQUE
+    // (user_id, tournament_id) constraint rejected our insert. Re-read the row
+    // the winner created and resume it rather than surfacing a 500.
+    if (insertErr.code === "23505") {
+      const { data: raced } = await supabaseAdmin
+        .from("registrations")
+        .select("id, status")
+        .eq("user_id", user.id)
+        .eq("tournament_id", id)
+        .maybeSingle();
+      if (
+        raced &&
+        (raced.status === "pending_payment" ||
+          raced.status === "failed_payment")
+      ) {
+        return resumeRegistration(
+          raced.id,
+          fee_tier,
+          matchedTier.amount_cents,
+          id,
+          tournament.name,
+          user.email!,
+        );
+      }
+      return NextResponse.json(
+        {
+          error: {
+            code: "ALREADY_REGISTERED",
+            message: "You are already registered for this tournament",
+          },
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: insertErr.message } },
       { status: 500 },
@@ -295,6 +300,78 @@ export async function POST(
     id,
     tournament.name,
     user.email!,
+  );
+}
+
+/**
+ * Resumes an existing pending/failed registration: cancels any still-payable
+ * CHIP purchase from a prior attempt (so only one checkout link is ever live),
+ * re-prices for the chosen tier, and starts a fresh purchase.
+ */
+async function resumeRegistration(
+  registrationId: string,
+  feeTier: string,
+  amountCents: number,
+  tournamentId: string,
+  tournamentName: string,
+  userEmail: string,
+): Promise<NextResponse> {
+  // Cancel the previous purchase before reset() nulls its id, so an abandoned
+  // checkout link can't be paid after we issue a new one (double-charge guard).
+  const { data: prior } = await supabaseAdmin
+    .from("payments")
+    .select("chip_transaction_id")
+    .eq("registration_id", registrationId)
+    .eq("type", "registration")
+    .maybeSingle();
+
+  if (prior?.chip_transaction_id) {
+    try {
+      await cancelChipPurchase(prior.chip_transaction_id);
+    } catch (err) {
+      // Best-effort: CHIP may already have cancelled/expired it. Log and go on.
+      console.warn("CHIP purchase cancel failed (continuing):", err);
+    }
+  }
+
+  const { error: resetErr } = await supabaseAdmin.rpc(
+    "reset_registration_for_payment",
+    {
+      p_registration_id: registrationId,
+      p_fee_tier: feeTier,
+      p_amount_cents: amountCents,
+    },
+  );
+
+  if (resetErr) {
+    if (resetErr.message?.toLowerCase().includes("full")) {
+      return NextResponse.json(
+        { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
+        { status: 422 },
+      );
+    }
+    if (resetErr.code === "P0001") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "ALREADY_REGISTERED",
+            message: "This registration can no longer be paid for",
+          },
+        },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: resetErr.message } },
+      { status: 500 },
+    );
+  }
+
+  return initiateChipPayment(
+    registrationId,
+    tournamentId,
+    tournamentName,
+    userEmail,
   );
 }
 
@@ -349,10 +426,21 @@ async function initiateChipPayment(
     );
   }
 
-  await supabaseAdmin
+  const { error: updErr } = await supabaseAdmin
     .from("payments")
     .update({ chip_transaction_id: chipPurchase.id })
     .eq("id", payment.id);
+
+  if (updErr) {
+    // The purchase exists at CHIP but we failed to record its id. The webhook
+    // can still settle via `reference` (= payment.id), so don't fail the user;
+    // log loudly for investigation.
+    console.error(
+      "Failed to persist chip_transaction_id for payment",
+      payment.id,
+      updErr,
+    );
+  }
 
   return NextResponse.json(
     {

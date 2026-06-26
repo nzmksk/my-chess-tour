@@ -8,12 +8,15 @@ import { NextRequest } from "next/server";
 const {
   mockTournamentBuilder,
   mockExistingBuilder,
+  mockPaymentPriorBuilder,
   mockPaymentSelectBuilder,
   mockPaymentUpdateBuilder,
   mockFrom,
   mockRpc,
   mockGetUser,
   mockCreateChipPurchase,
+  mockCancelChipPurchase,
+  setPaymentBuilders,
   resetCallCounts,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: {
@@ -34,12 +37,28 @@ const {
 
   const mockTournamentBuilder = makeBuilder({ data: null, error: null });
   const mockExistingBuilder = makeBuilder({ data: null, error: null });
+  // Resume reads the prior payment's chip_transaction_id before re-pricing.
+  const mockPaymentPriorBuilder = makeBuilder({ data: null, error: null });
   const mockPaymentSelectBuilder = makeBuilder({ data: null, error: null });
   const mockPaymentUpdateBuilder = makeBuilder({ data: null, error: null });
+
+  // Queue of builders returned for successive `from("payments")` calls. The
+  // create path is [select, update]; the resume path prepends a prior read.
+  const defaultPaymentBuilders = [
+    mockPaymentSelectBuilder,
+    mockPaymentUpdateBuilder,
+  ];
+  let paymentBuilders = defaultPaymentBuilders;
+  const setPaymentBuilders = (
+    builders: Array<Record<string, unknown>>,
+  ): void => {
+    paymentBuilders = builders;
+  };
 
   let payCallCount = 0;
   const resetCallCounts = () => {
     payCallCount = 0;
+    paymentBuilders = defaultPaymentBuilders;
   };
 
   const mockFrom = vi.fn((table: string) => {
@@ -48,8 +67,7 @@ const {
     // capacity is enforced in Postgres, not via a JS pre-check.
     if (table === "registrations") return mockExistingBuilder;
     if (table === "payments") {
-      const builders = [mockPaymentSelectBuilder, mockPaymentUpdateBuilder];
-      return builders[payCallCount++] ?? mockPaymentUpdateBuilder;
+      return paymentBuilders[payCallCount++] ?? mockPaymentUpdateBuilder;
     }
     return makeBuilder({ data: null, error: null });
   });
@@ -59,15 +77,19 @@ const {
   );
   const mockGetUser = vi.fn();
   const mockCreateChipPurchase = vi.fn();
+  const mockCancelChipPurchase = vi.fn();
   return {
     mockTournamentBuilder,
     mockExistingBuilder,
+    mockPaymentPriorBuilder,
     mockPaymentSelectBuilder,
     mockPaymentUpdateBuilder,
     mockFrom,
     mockRpc,
     mockGetUser,
     mockCreateChipPurchase,
+    mockCancelChipPurchase,
+    setPaymentBuilders,
     resetCallCounts,
   };
 });
@@ -91,6 +113,7 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/services/chip/chip", () => ({
   createChipPurchase: mockCreateChipPurchase,
+  cancelChipPurchase: mockCancelChipPurchase,
 }));
 
 import { POST } from "../route";
@@ -144,6 +167,10 @@ beforeEach(() => {
   });
   setThen(mockTournamentBuilder, { data: makeTournament(), error: null });
   setThen(mockExistingBuilder, { data: null, error: null });
+  setThen(mockPaymentPriorBuilder, {
+    data: { chip_transaction_id: null },
+    error: null,
+  });
   setThen(mockPaymentSelectBuilder, {
     data: { id: "pay-1", gross_amount_cents: 3300 },
     error: null,
@@ -154,6 +181,7 @@ beforeEach(() => {
     id: "chip-purchase-1",
     checkout_url: "https://pay.example/checkout",
   });
+  mockCancelChipPurchase.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -170,6 +198,11 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       data: { id: "reg-1", status: "failed_payment" },
       error: null,
     });
+    setPaymentBuilders([
+      mockPaymentPriorBuilder,
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
 
     const res = await POST(
       makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
@@ -195,6 +228,11 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       data: { id: "reg-1", status: "pending_payment" },
       error: null,
     });
+    setPaymentBuilders([
+      mockPaymentPriorBuilder,
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
 
     const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
       params: Promise.resolve({ id: VALID_UUID }),
@@ -206,6 +244,54 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       p_fee_tier: "standard",
       p_amount_cents: 5000,
     });
+  });
+
+  it("cancels the prior CHIP purchase before re-issuing on resume (F1)", async () => {
+    setThen(mockExistingBuilder, {
+      data: { id: "reg-1", status: "pending_payment" },
+      error: null,
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: { chip_transaction_id: "old-chip-purchase" },
+      error: null,
+    });
+    setPaymentBuilders([
+      mockPaymentPriorBuilder,
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
+
+    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
+      params: Promise.resolve({ id: VALID_UUID }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(mockCancelChipPurchase).toHaveBeenCalledWith("old-chip-purchase");
+  });
+
+  it("still resumes when cancelling the prior purchase fails (best-effort)", async () => {
+    setThen(mockExistingBuilder, {
+      data: { id: "reg-1", status: "pending_payment" },
+      error: null,
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: { chip_transaction_id: "old-chip-purchase" },
+      error: null,
+    });
+    setPaymentBuilders([
+      mockPaymentPriorBuilder,
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
+    mockCancelChipPurchase.mockRejectedValueOnce(new Error("CHIP 409"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
+      params: Promise.resolve({ id: VALID_UUID }),
+    });
+
+    expect(res.status).toBe(201);
+    warn.mockRestore();
   });
 
   it("returns 409 when the registration is already confirmed", async () => {
