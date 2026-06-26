@@ -1,12 +1,21 @@
 -- =============================================
--- SETTLE PAYMENT: AMOUNT GUARD PURCHASE
--- Hardens the CHIP payment flow against stale-purchase settlement:
+-- SETTLE PAYMENT: AMOUNT GUARD + SINGLE LIVE PURCHASE
+-- Hardens the CHIP payment flow against duplicate/stale-purchase settlement:
 --   1. settle_registration_payment gains p_amount_cents. When provided, a
 --      'paid' outcome is only honored if the amount CHIP actually charged
 --      matches the recorded gross_amount_cents. A mismatch (e.g. an abandoned,
 --      re-priced purchase being paid) is left pending and reported back so the
 --      webhook can log it for manual review instead of silently confirming.
+--   2. A partial UNIQUE index on chip_transaction_id guarantees one purchase id
+--      maps to at most one payment row, so webhook correlation can't fan out.
 -- =============================================
+
+-- Replace the lookup index with a unique one (NULLs allowed: a payment has no
+-- chip_transaction_id until checkout creates the purchase).
+DROP INDEX IF EXISTS idx_payments_chip_transaction;
+CREATE UNIQUE INDEX idx_payments_chip_transaction
+  ON payments (chip_transaction_id)
+  WHERE chip_transaction_id IS NOT NULL;
 
 -- The arity changes (added p_amount_cents), so drop the old 2-arg version to
 -- avoid an ambiguous overload for PostgREST.
