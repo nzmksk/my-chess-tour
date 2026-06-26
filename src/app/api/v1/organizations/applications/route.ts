@@ -90,7 +90,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // TODO: Create an owner membership for the applicant's organization
   const { data: org, error: insertErr } = await supabaseAdmin
     .from("organizations")
     .insert({

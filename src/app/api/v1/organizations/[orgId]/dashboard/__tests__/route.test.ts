@@ -340,12 +340,14 @@ describe("GET /api/v1/organizations/:orgId/dashboard", () => {
       expect(res.status).toBe(403);
     });
 
-    it("returns 200 when user is the creator but not an explicit member", async () => {
+    it("returns 403 when user is the creator but has no membership row", async () => {
       setMemberResult(0);
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
+      const json = await res.json();
+      expect(json.error.code).toBe("FORBIDDEN");
     });
   });
 

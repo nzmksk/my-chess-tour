@@ -238,7 +238,7 @@ async function resolvePermission(
 ): Promise<NextResponse | null> {
   const { data: org, error: orgError } = await supabaseAdmin
     .from("organizations")
-    .select("id, approval_status, created_by")
+    .select("id, approval_status")
     .eq("id", orgId)
     .is("deleted_at", null)
     .single();
@@ -267,8 +267,6 @@ async function resolvePermission(
       { status: 403 },
     );
   }
-
-  if (org.created_by === userId) return null;
 
   const { data: membership, error: memberError } = await supabaseAdmin
     .from("organization_memberships")

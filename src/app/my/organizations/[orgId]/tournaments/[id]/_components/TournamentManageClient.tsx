@@ -164,7 +164,7 @@ export default function TournamentManageClient({
       {/* Back link */}
       <div className="mb-4">
         <Link
-          href={`/organizations/${orgId}/dashboard`}
+          href={`/my/organizations/${orgId}`}
           className="font-lato text-text-muted hover:text-text-primary text-sm transition-colors"
         >
           ← Back to Dashboard
@@ -193,7 +193,7 @@ export default function TournamentManageClient({
         </div>
         {isEditable && (
           <Link
-            href={`/organizations/${orgId}/tournaments/${tournament.id}/edit`}
+            href={`/my/organizations/${orgId}/tournaments/${tournament.id}/edit`}
             className="font-cinzel text-gold-bright border-gold-bright/40 hover:border-gold-bright hover:bg-int-gold-bg inline-flex shrink-0 cursor-pointer items-center rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-150"
           >
             Edit Tournament

@@ -5,7 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function checkAdminAccess(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function checkAdminAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -30,13 +32,19 @@ export async function GET(
 
   if (!UUID_RE.test(id)) {
     return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid application ID" } },
+      {
+        error: { code: "VALIDATION_ERROR", message: "Invalid application ID" },
+      },
       { status: 400 },
     );
   }
 
   const supabase = await createClient();
-  const { user, isAdmin, error: permissionError } = await checkAdminAccess(supabase);
+  const {
+    user,
+    isAdmin,
+    error: permissionError,
+  } = await checkAdminAccess(supabase);
 
   if (!user) {
     return NextResponse.json(
@@ -97,13 +105,19 @@ export async function PATCH(
 
   if (!UUID_RE.test(id)) {
     return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid application ID" } },
+      {
+        error: { code: "VALIDATION_ERROR", message: "Invalid application ID" },
+      },
       { status: 400 },
     );
   }
 
   const supabase = await createClient();
-  const { user, isAdmin, error: permissionError } = await checkAdminAccess(supabase);
+  const {
+    user,
+    isAdmin,
+    error: permissionError,
+  } = await checkAdminAccess(supabase);
 
   if (!user) {
     return NextResponse.json(
@@ -150,7 +164,10 @@ export async function PATCH(
     );
   }
 
-  if (action === "reject" && (typeof rejection_reason !== "string" || !rejection_reason.trim())) {
+  if (
+    action === "reject" &&
+    (typeof rejection_reason !== "string" || !rejection_reason.trim())
+  ) {
     return NextResponse.json(
       {
         error: {
@@ -162,23 +179,18 @@ export async function PATCH(
     );
   }
 
-  const updates: Record<string, unknown> = {
-    approval_status: action === "approve" ? "approved" : "rejected",
-    reviewed_by: user.id,
-    reviewed_at: new Date().toISOString(),
-    rejection_reason: action === "reject" ? rejection_reason!.trim() : null,
-  };
-
-  const { data, error } = await supabaseAdmin
-    .from("organizations")
-    .update(updates)
-    .eq("id", id)
-    .is("deleted_at", null)
-    .select("id, name, approval_status, reviewed_at")
-    .single();
+  const { data, error } = await supabaseAdmin.rpc(
+    "review_organization_application",
+    {
+      p_org_id: id,
+      p_reviewer_id: user.id,
+      p_action: action,
+      p_rejection_reason: action === "reject" ? rejection_reason!.trim() : null,
+    },
+  );
 
   if (error) {
-    if (error.code === "PGRST116") {
+    if (error.code === "P0002") {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Application not found" } },
         { status: 404 },

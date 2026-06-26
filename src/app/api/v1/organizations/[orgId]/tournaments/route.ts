@@ -86,7 +86,7 @@ export async function POST(
 
   const { data: org, error: orgError } = await supabaseAdmin
     .from("organizations")
-    .select("id, approval_status, created_by")
+    .select("id, approval_status")
     .eq("id", orgId)
     .is("deleted_at", null)
     .single();
@@ -116,35 +116,32 @@ export async function POST(
     );
   }
 
-  const isCreator = org.created_by === user.id;
-  if (!isCreator) {
-    const { data: membership, error: memberError } = await supabaseAdmin
-      .from("organization_memberships")
-      .select("roles!inner(name)")
-      .eq("organization_id", orgId)
-      .eq("user_id", user.id)
-      .single();
+  const { data: membership, error: memberError } = await supabaseAdmin
+    .from("organization_memberships")
+    .select("roles!inner(name)")
+    .eq("organization_id", orgId)
+    .eq("user_id", user.id)
+    .single();
 
-    if (memberError || !membership) {
-      return NextResponse.json(
-        { error: { code: "FORBIDDEN", message: "Access denied" } },
-        { status: 403 },
-      );
-    }
+  if (memberError || !membership) {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: "Access denied" } },
+      { status: 403 },
+    );
+  }
 
-    const roleName = (membership as unknown as { roles: { name: string } })
-      .roles?.name;
-    if (roleName !== "owner" && roleName !== "admin") {
-      return NextResponse.json(
-        {
-          error: {
-            code: "FORBIDDEN",
-            message: "Admin or owner role required to create tournaments",
-          },
+  const roleName = (membership as unknown as { roles: { name: string } }).roles
+    ?.name;
+  if (roleName !== "owner" && roleName !== "admin") {
+    return NextResponse.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: "Admin or owner role required to create tournaments",
         },
-        { status: 403 },
-      );
-    }
+      },
+      { status: 403 },
+    );
   }
 
   let body: CreateTournamentBody;

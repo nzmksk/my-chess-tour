@@ -87,7 +87,7 @@ function ApplicationCard({ application }: { application: OrgApplication }) {
   if (application.approval_status === "approved") {
     return (
       <Link
-        href={`/organizations/${application.id}/dashboard`}
+        href={`/my/organizations/${application.id}`}
         className="card flex items-center gap-4 px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
       >
         <ApplicationCardContent application={application} />

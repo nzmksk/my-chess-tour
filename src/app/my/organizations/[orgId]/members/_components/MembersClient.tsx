@@ -18,7 +18,6 @@ interface Props {
   orgName: string;
   members: Member[];
   currentUserId: string;
-  isOrgCreator: boolean;
 }
 
 type Role = "owner" | "admin" | "member";
@@ -258,13 +257,12 @@ export default function MembersClient({
   orgName,
   members,
   currentUserId,
-  isOrgCreator,
 }: Props) {
   const [memberList, setMemberList] = useState<Member[]>(members);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const currentMember = memberList.find((m) => m.user_id === currentUserId);
-  const isOwner = isOrgCreator || currentMember?.role === "owner";
+  const isOwner = currentMember?.role === "owner";
 
   async function handleRoleChange(userId: string, newRole: "admin" | "member") {
     const res = await fetch(
@@ -317,7 +315,7 @@ export default function MembersClient({
     <div className="mx-auto max-w-3xl px-6 py-8">
       <div className="mb-6">
         <Link
-          href={`/organizations/${orgId}/dashboard`}
+          href={`/my/organizations/${orgId}`}
           className="font-lato text-text-muted hover:text-text-secondary mb-3 inline-flex items-center gap-1 text-xs transition-colors duration-150"
         >
           ← Back to Dashboard

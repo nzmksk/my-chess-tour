@@ -5,53 +5,45 @@ import { NextRequest } from "next/server";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockDetailBuilder,
-  mockUpdateBuilder,
-  mockFrom,
-  mockGetUser,
-  mockRpc,
-} = vi.hoisted(() => {
-  function makeBuilder(finalResult: {
-    data?: unknown;
-    error?: unknown;
-  }) {
-    const b: Record<string, unknown> = {};
-    for (const m of [
-      "select",
-      "eq",
-      "is",
-      "update",
-      "single",
-      "maybeSingle",
-    ]) {
-      b[m] = vi.fn(() => b);
+const { mockDetailBuilder, mockFrom, mockGetUser, mockRpc, mockAdminRpc } =
+  vi.hoisted(() => {
+    function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
+      const b: Record<string, unknown> = {};
+      for (const m of [
+        "select",
+        "eq",
+        "is",
+        "update",
+        "single",
+        "maybeSingle",
+      ]) {
+        b[m] = vi.fn(() => b);
+      }
+      b.then = (
+        onfulfilled: (v: unknown) => unknown,
+        onrejected?: (r: unknown) => unknown,
+      ) => Promise.resolve(finalResult).then(onfulfilled, onrejected);
+      return b;
     }
-    b.then = (
-      onfulfilled: (v: unknown) => unknown,
-      onrejected?: (r: unknown) => unknown,
-    ) => Promise.resolve(finalResult).then(onfulfilled, onrejected);
-    return b;
-  }
 
-  const mockDetailBuilder = makeBuilder({ data: null, error: null });
-  const mockUpdateBuilder = makeBuilder({ data: null, error: null });
+    const mockDetailBuilder = makeBuilder({ data: null, error: null });
 
-  const mockFrom = vi.fn((_table: string) => mockDetailBuilder);
-  const mockGetUser = vi.fn();
-  const mockRpc = vi.fn();
+    const mockFrom = vi.fn((_table: string) => mockDetailBuilder);
+    const mockGetUser = vi.fn();
+    const mockRpc = vi.fn();
+    const mockAdminRpc = vi.fn();
 
-  return {
-    mockDetailBuilder,
-    mockUpdateBuilder,
-    mockFrom,
-    mockGetUser,
-    mockRpc,
-  };
-});
+    return {
+      mockDetailBuilder,
+      mockFrom,
+      mockGetUser,
+      mockRpc,
+      mockAdminRpc,
+    };
+  });
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: { from: mockFrom, rpc: mockAdminRpc },
 }));
 
 vi.mock("@/services/supabase/server", () => ({
@@ -116,14 +108,11 @@ function makePatchRequest(
   id = APP_ID,
   body: object = { action: "approve" },
 ): NextRequest {
-  return new NextRequest(
-    `http://localhost/api/v1/admin/applications/${id}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  );
+  return new NextRequest(`http://localhost/api/v1/admin/applications/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 function setUser(id = ADMIN_USER_ID) {
@@ -157,7 +146,10 @@ describe("GET /api/v1/admin/applications/:id", () => {
     vi.clearAllMocks();
     setUser();
     setAdminPermission(true);
-    setBuilderResult(mockDetailBuilder, { data: FULL_APPLICATION, error: null });
+    setBuilderResult(mockDetailBuilder, {
+      data: FULL_APPLICATION,
+      error: null,
+    });
     mockFrom.mockReturnValue(mockDetailBuilder);
   });
 
@@ -206,7 +198,10 @@ describe("GET /api/v1/admin/applications/:id", () => {
     });
 
     it("returns 500 when permission check fails", async () => {
-      mockRpc.mockResolvedValue({ data: null, error: { message: "RPC error" } });
+      mockRpc.mockResolvedValue({
+        data: null,
+        error: { message: "RPC error" },
+      });
       const res = await GET(makeGetRequest(), {
         params: Promise.resolve({ id: APP_ID }),
       });
@@ -269,11 +264,15 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
     vi.clearAllMocks();
     setUser();
     setAdminPermission(true);
-    setBuilderResult(mockUpdateBuilder, {
-      data: { id: APP_ID, name: "Penang Chess Club", approval_status: "approved", reviewed_at: "2026-05-01T00:00:00Z" },
+    mockAdminRpc.mockResolvedValue({
+      data: {
+        id: APP_ID,
+        name: "Penang Chess Club",
+        approval_status: "approved",
+        reviewed_at: "2026-05-01T00:00:00Z",
+      },
       error: null,
     });
-    mockFrom.mockReturnValue(mockUpdateBuilder);
   });
 
   afterEach(() => {
@@ -291,20 +290,18 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
     });
 
     it("returns 400 for invalid action", async () => {
-      const res = await PATCH(
-        makePatchRequest(APP_ID, { action: "suspend" }),
-        { params: Promise.resolve({ id: APP_ID }) },
-      );
+      const res = await PATCH(makePatchRequest(APP_ID, { action: "suspend" }), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
       expect(res.status).toBe(400);
       const json = await res.json();
       expect(json.error.code).toBe("VALIDATION_ERROR");
     });
 
     it("returns 400 when rejecting without a reason", async () => {
-      const res = await PATCH(
-        makePatchRequest(APP_ID, { action: "reject" }),
-        { params: Promise.resolve({ id: APP_ID }) },
-      );
+      const res = await PATCH(makePatchRequest(APP_ID, { action: "reject" }), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
       expect(res.status).toBe(400);
       const json = await res.json();
       expect(json.error.code).toBe("VALIDATION_ERROR");
@@ -320,7 +317,10 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
 
     it("returns 400 when rejection_reason is a non-string type", async () => {
       const res = await PATCH(
-        makePatchRequest(APP_ID, { action: "reject", rejection_reason: {} as unknown as string }),
+        makePatchRequest(APP_ID, {
+          action: "reject",
+          rejection_reason: {} as unknown as string,
+        }),
         { params: Promise.resolve({ id: APP_ID }) },
       );
       expect(res.status).toBe(400);
@@ -370,7 +370,7 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
 
   describe("reject", () => {
     it("returns 200 with updated application on reject", async () => {
-      setBuilderResult(mockUpdateBuilder, {
+      mockAdminRpc.mockResolvedValue({
         data: {
           id: APP_ID,
           name: "Penang Chess Club",
@@ -396,9 +396,9 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
 
   describe("error handling", () => {
     it("returns 404 when application does not exist", async () => {
-      setBuilderResult(mockUpdateBuilder, {
+      mockAdminRpc.mockResolvedValue({
         data: null,
-        error: { code: "PGRST116", message: "No rows found" },
+        error: { code: "P0002", message: "organization not found" },
       });
       const res = await PATCH(makePatchRequest(), {
         params: Promise.resolve({ id: APP_ID }),
@@ -407,7 +407,7 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
     });
 
     it("returns 500 on database error", async () => {
-      setBuilderResult(mockUpdateBuilder, {
+      mockAdminRpc.mockResolvedValue({
         data: null,
         error: { code: "500", message: "DB error" },
       });
