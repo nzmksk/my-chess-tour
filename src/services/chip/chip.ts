@@ -111,6 +111,30 @@ export async function getChipPurchase(
     const body = await res.text();
     throw new Error(`CHIP API error ${res.status}: ${body}`);
   }
+}
 
-  return res.json() as Promise<{ id: string; status: string }>;
+/**
+ * Cancels a CHIP purchase so a previously-issued checkout link can no longer be
+ * paid. Called when a registration's payment is re-priced/resumed and a fresh
+ * purchase is about to be created — leaving the old one payable would risk a
+ * double charge. Best-effort: callers log and continue on failure.
+ */
+export async function cancelChipPurchase(id: string): Promise<void> {
+  const apiKey = process.env.CHIP_API_KEY;
+  if (!apiKey) {
+    throw new Error("CHIP_API_KEY must be configured");
+  }
+
+  const res = await fetch(`${CHIP_API_URL}/purchases/${id}/cancel/`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`CHIP API error ${res.status}: ${body}`);
+  }
 }
