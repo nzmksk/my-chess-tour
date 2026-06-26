@@ -69,10 +69,20 @@ export async function resolvePaymentState(
       return { state: "pending", registration: reg };
     }
 
-    await supabaseAdmin.rpc("settle_registration_payment", {
-      p_payment_id: payment.id,
-      p_paid: outcome === "paid",
-    });
+    const { data: settled } = await supabaseAdmin.rpc(
+      "settle_registration_payment",
+      {
+        p_payment_id: payment.id,
+        p_paid: outcome === "paid",
+        p_amount_cents: purchase.amountCents,
+      },
+    );
+
+    // The amount CHIP charged didn't match what we recorded — settlement left
+    // the payment pending for manual reconciliation, so don't claim success.
+    if ((settled as { amount_mismatch?: boolean } | null)?.amount_mismatch) {
+      return { state: "pending", registration: reg };
+    }
 
     return {
       state: outcome === "paid" ? "confirmed" : "failed",
