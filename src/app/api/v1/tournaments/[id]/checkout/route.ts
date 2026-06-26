@@ -255,6 +255,40 @@ export async function POST(
         { status: 422 },
       );
     }
+    // Lost a concurrent create race (e.g. a double-submit): the UNIQUE
+    // (user_id, tournament_id) constraint rejected our insert. Re-read the row
+    // the winner created and resume it rather than surfacing a 500.
+    if (insertErr.code === "23505") {
+      const { data: raced } = await supabaseAdmin
+        .from("registrations")
+        .select("id, status")
+        .eq("user_id", user.id)
+        .eq("tournament_id", id)
+        .maybeSingle();
+      if (
+        raced &&
+        (raced.status === "pending_payment" ||
+          raced.status === "failed_payment")
+      ) {
+        return resumeRegistration(
+          raced.id,
+          fee_tier,
+          matchedTier.amount_cents,
+          id,
+          tournament.name,
+          user.email!,
+        );
+      }
+      return NextResponse.json(
+        {
+          error: {
+            code: "ALREADY_REGISTERED",
+            message: "You are already registered for this tournament",
+          },
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: insertErr.message } },
       { status: 500 },
