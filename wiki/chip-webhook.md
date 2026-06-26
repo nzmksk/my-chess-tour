@@ -1,3 +1,15 @@
+## Signature verification & key formatting
+
+Webhook deliveries are signed with the **webhook's own Public Key** (CHIP Merchant Portal → Developers → Webhooks), set as `CHIP_WEBHOOK_PUBLIC_KEY`.
+This is **not** the company key from `GET /public_key/`, which signs `success_callback` payloads only.
+The signature is a base64 RSA PKCS#1 v1.5 signature over the SHA256 digest of the raw request body, in the `X-Signature` header.
+
+Key formatting gotcha: in a `.env` file the PEM may be a double-quoted single line using `\n` — dotenv strips the quotes and expands `\n`.
+But host env UIs (e.g. **Netlify**) store the value **verbatim**: copy that quoted/escaped form in and the surrounding quotes break PEM parsing, so every delivery fails signature verification (HTTP 401).
+On those platforms paste the **raw multi-line PEM with no surrounding quotes**. `verifySignature` in `src/app/api/v1/webhooks/chip/route.ts` also defensively trims quotes and expands literal `\n`, and logs the failure reason (missing header / no key / parse error / mismatch) so misconfiguration is visible in logs.
+
+## Event types
+
 Available event types and when they are emitted:
 
 `purchase.created`: Emitted when a Purchase is created. This happens as a result of POST `/purchases/` request executed successfully. Purchase.status will be == `created` in the received payload.
