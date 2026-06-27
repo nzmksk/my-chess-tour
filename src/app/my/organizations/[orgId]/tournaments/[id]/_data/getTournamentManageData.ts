@@ -17,7 +17,7 @@ export interface ManageParticipant {
   registered_at: string;
 }
 
-export interface TournamentManageData {
+interface TournamentManageData {
   tournament: {
     id: string;
     name: string;
