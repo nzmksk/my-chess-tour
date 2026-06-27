@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import ApplicationDetailClient from "./_components/ApplicationDetailClient";
 
@@ -63,18 +64,16 @@ export default async function AdminApplicationDetailPage({
     redirect("/admin/applications");
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     redirect("/auth/login");
   }
 
+  const supabase = await createClient();
   const { data: isAdmin, error: permissionError } = await supabase.rpc(
     "has_global_permission",
-    { p_user_id: user.id, p_permission: "platform.manage" },
+    { p_user_id: claims.id, p_permission: "platform.manage" },
   );
 
   if (permissionError || !isAdmin) {

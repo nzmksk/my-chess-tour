@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { createClient } from "@/services/supabase/server";
-import { hasOrgPermission } from "@/services/supabase/permission";
+import {
+  hasOrgPermission,
+  getAuthClaims,
+} from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import { validateInviteRequest } from "./validators";
 
@@ -41,12 +43,9 @@ export async function POST(
   }
   const { email, role } = validation.data;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
@@ -67,7 +66,7 @@ export async function POST(
       .from("organization_memberships")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
-      .eq("user_id", user.id),
+      .eq("user_id", claims.id),
   ]);
 
   if (orgError) {
@@ -109,7 +108,7 @@ export async function POST(
     );
   }
 
-  const allowed = await hasOrgPermission(user.id, orgId, "org.invite");
+  const allowed = await hasOrgPermission(claims.id, orgId, "org.invite");
   if (!allowed) {
     return NextResponse.json(
       { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },

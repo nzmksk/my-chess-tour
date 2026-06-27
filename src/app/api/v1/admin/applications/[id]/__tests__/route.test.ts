@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockDetailBuilder, mockFrom, mockGetUser, mockRpc, mockAdminRpc } =
+const { mockDetailBuilder, mockFrom, mockGetClaims, mockRpc, mockAdminRpc } =
   vi.hoisted(() => {
     function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
       const b: Record<string, unknown> = {};
@@ -29,14 +29,14 @@ const { mockDetailBuilder, mockFrom, mockGetUser, mockRpc, mockAdminRpc } =
     const mockDetailBuilder = makeBuilder({ data: null, error: null });
 
     const mockFrom = vi.fn((_table: string) => mockDetailBuilder);
-    const mockGetUser = vi.fn();
+    const mockGetClaims = vi.fn();
     const mockRpc = vi.fn();
     const mockAdminRpc = vi.fn();
 
     return {
       mockDetailBuilder,
       mockFrom,
-      mockGetUser,
+      mockGetClaims,
       mockRpc,
       mockAdminRpc,
     };
@@ -48,7 +48,7 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
     rpc: mockRpc,
   }),
 }));
@@ -116,11 +116,11 @@ function makePatchRequest(
 }
 
 function setUser(id = ADMIN_USER_ID) {
-  mockGetUser.mockResolvedValue({ data: { user: { id } }, error: null });
+  mockGetClaims.mockResolvedValue({ data: { claims: { sub: id } }, error: null });
 }
 
 function setNoUser() {
-  mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+  mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
 }
 
 function setAdminPermission(isAdmin: boolean) {

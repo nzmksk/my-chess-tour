@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
       { status: 401 },
@@ -130,7 +127,7 @@ export async function POST(request: NextRequest) {
     .from("player_profiles")
     .upsert(
       {
-        user_id: user.id,
+        user_id: claims.id,
         gender: gender ? (gender.toLowerCase() as "male" | "female") : null,
         nationality: nationality || null,
         date_of_birth: dateOfBirth || null,
@@ -144,7 +141,7 @@ export async function POST(request: NextRequest) {
   if (profileError) {
     console.error(
       "Failed to update player profile for user ID:",
-      user.id,
+      claims.id,
       profileError,
     );
     return NextResponse.json(
@@ -162,12 +159,12 @@ export async function POST(request: NextRequest) {
     const { error: avatarError } = await supabaseAdmin
       .from("users")
       .update({ avatar_url: avatarUrl || null })
-      .eq("id", user.id);
+      .eq("id", claims.id);
 
     if (avatarError) {
       console.error(
         "Failed to update avatar URL for user ID:",
-        user.id,
+        claims.id,
         avatarError,
       );
       return NextResponse.json(

@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockBuilder, mockFrom, mockGetUser } = vi.hoisted(() => {
+const { mockBuilder, mockFrom, mockGetClaims } = vi.hoisted(() => {
   function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
     const b: Record<string, unknown> = {};
     for (const m of [
@@ -31,9 +31,9 @@ const { mockBuilder, mockFrom, mockGetUser } = vi.hoisted(() => {
   // A single configurable builder used by all queries in a given test
   const mockBuilder = makeBuilder({ data: null, error: null });
   const mockFrom = vi.fn(() => mockBuilder);
-  const mockGetUser = vi.fn();
+  const mockGetClaims = vi.fn();
 
-  return { mockBuilder, mockFrom, mockGetUser };
+  return { mockBuilder, mockFrom, mockGetClaims };
 });
 
 vi.mock("@/services/supabase/admin", () => ({
@@ -42,7 +42,7 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
   }),
 }));
 
@@ -106,11 +106,14 @@ function makePostRequest(body: unknown = VALID_BODY): NextRequest {
 // ---------------------------------------------------------------------------
 
 function setUser(id = USER_ID) {
-  mockGetUser.mockResolvedValue({ data: { user: { id } }, error: null });
+  mockGetClaims.mockResolvedValue({
+    data: { claims: { sub: id } },
+    error: null,
+  });
 }
 
 function setNoUser() {
-  mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+  mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
 }
 
 function setQueryResult(data: unknown, error: unknown = null) {

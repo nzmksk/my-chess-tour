@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { createClient } from "@/services/supabase/server";
-import { hasOrgPermission } from "@/services/supabase/permission";
+import {
+  hasOrgPermission,
+  getAuthClaims,
+} from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -102,19 +104,16 @@ export async function PATCH(
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
     );
   }
 
-  if (user.id === id) {
+  if (claims.id === id) {
     return NextResponse.json(
       {
         error: {
@@ -126,10 +125,10 @@ export async function PATCH(
     );
   }
 
-  const accessResult = await resolveOrgAccess(orgId, user.id);
+  const accessResult = await resolveOrgAccess(orgId, claims.id);
   if (accessResult instanceof NextResponse) return accessResult;
 
-  const allowed = await hasOrgPermission(user.id, orgId, "org.manage");
+  const allowed = await hasOrgPermission(claims.id, orgId, "org.manage");
   if (!allowed) {
     return NextResponse.json(
       { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
@@ -255,19 +254,16 @@ export async function DELETE(
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
     );
   }
 
-  if (user.id === id) {
+  if (claims.id === id) {
     return NextResponse.json(
       {
         error: {
@@ -279,10 +275,10 @@ export async function DELETE(
     );
   }
 
-  const accessResult = await resolveOrgAccess(orgId, user.id);
+  const accessResult = await resolveOrgAccess(orgId, claims.id);
   if (accessResult instanceof NextResponse) return accessResult;
 
-  const allowed = await hasOrgPermission(user.id, orgId, "org.manage");
+  const allowed = await hasOrgPermission(claims.id, orgId, "org.manage");
   if (!allowed) {
     return NextResponse.json(
       { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },

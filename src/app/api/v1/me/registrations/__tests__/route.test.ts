@@ -6,14 +6,14 @@ import { GET } from "../route";
 // Mock Supabase server client (user auth)
 // ---------------------------------------------------------------------------
 
-const { mockGetUser } = vi.hoisted(() => {
-  const mockGetUser = vi.fn();
-  return { mockGetUser };
+const { mockGetClaims } = vi.hoisted(() => {
+  const mockGetClaims = vi.fn();
+  return { mockGetClaims };
 });
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
   }),
 }));
 
@@ -99,7 +99,9 @@ function setQueryResult(data: unknown, error: unknown = null) {
 describe("GET /api/v1/me/registrations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({ data: { user: AUTHENTICATED_USER } });
+    mockGetClaims.mockResolvedValue({
+      data: { claims: { sub: AUTHENTICATED_USER.id } },
+    });
     setQueryResult([]);
   });
 
@@ -109,7 +111,7 @@ describe("GET /api/v1/me/registrations", () => {
 
   describe("authentication", () => {
     it("returns 401 when user is not authenticated", async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null } });
+      mockGetClaims.mockResolvedValue({ data: { claims: null } });
 
       const res = await GET(makeRequest());
       const json = await res.json();

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -54,12 +54,9 @@ export async function POST(
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
@@ -102,7 +99,7 @@ export async function POST(
     .from("organization_memberships")
     .select("roles!inner(name)")
     .eq("organization_id", orgId)
-    .eq("user_id", user.id)
+    .eq("user_id", claims.id)
     .single();
 
   if (memberError || !membership) {
@@ -236,7 +233,7 @@ export async function POST(
     .from("tournaments")
     .update({
       status: "published",
-      published_by: user.id,
+      published_by: claims.id,
       published_at: publishedAt,
     })
     .eq("id", id)

@@ -26,12 +26,12 @@ vi.mock("@/components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-const mockGetUser = vi.hoisted(() => vi.fn());
+const mockGetClaims = vi.hoisted(() => vi.fn());
 const mockRpc = vi.hoisted(() => vi.fn());
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
     rpc: mockRpc,
   }),
 }));
@@ -117,7 +117,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("redirects to login when user is not authenticated", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockGetClaims.mockResolvedValue({ data: { claims: null } });
 
     const AdminApplicationsPage = await importPage();
     await expect(AdminApplicationsPage()).rejects.toThrow("NEXT_REDIRECT:/auth/login");
@@ -125,7 +125,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("redirects to home when user lacks admin permission", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
     mockRpc.mockResolvedValue({ data: false, error: null });
 
     const AdminApplicationsPage = await importPage();
@@ -134,7 +134,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("redirects to home when permission check errors", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
     mockRpc.mockResolvedValue({ data: null, error: new Error("DB error") });
 
     const AdminApplicationsPage = await importPage();
@@ -143,7 +143,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("redirects to home when supabaseAdmin query errors", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: null, error: new Error("Query failed") });
 
@@ -153,7 +153,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("renders page when admin is authenticated and data is available", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: makeApplicationRows(), error: null });
 
@@ -166,7 +166,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("renders page with empty applications list when no rows returned", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: [], error: null });
 
@@ -178,7 +178,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("renders page with null rows treated as empty list", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: null, error: null });
 
@@ -190,7 +190,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("calculates correct status counts from application rows", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: makeApplicationRows(), error: null });
 
@@ -203,7 +203,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("queries organizations without deleted records ordered by created_at desc", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: [], error: null });
 
@@ -216,7 +216,7 @@ describe("AdminApplicationsPage", () => {
   });
 
   it("checks admin permission with correct parameters", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
     mockOrder.mockResolvedValue({ data: [], error: null });
 

@@ -1,4 +1,4 @@
-import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees } from "@/app/tournaments/types";
@@ -35,12 +35,9 @@ type RegistrationRow = {
 };
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
@@ -102,7 +99,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         id, name, start_date, venue_name, venue_state, format, time_control, entry_fees, status
       )`,
     )
-    .eq("user_id", user.id)
+    .eq("user_id", claims.id)
     .order(sort, { ascending: order === "asc" });
 
   if (statuses) {

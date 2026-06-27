@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 
 type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -17,21 +18,19 @@ type ApplicationRow = {
 };
 
 export async function GET(_request: NextRequest): Promise<NextResponse> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
     );
   }
 
+  const supabase = await createClient();
   const { data: isAdmin, error: permissionError } = await supabase.rpc(
     "has_global_permission",
-    { p_user_id: user.id, p_permission: "platform.manage" },
+    { p_user_id: claims.id, p_permission: "platform.manage" },
   );
 
   if (permissionError) {

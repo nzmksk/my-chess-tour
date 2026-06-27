@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { createClient } from "@/services/supabase/server";
+import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { computeEntryFeeBreakdown } from "@/services/payments/fees";
 import type { TournamentDetail } from "../types";
@@ -50,21 +51,19 @@ async function RegisterPageContent({ id }: { id: string }) {
   const tournament = await fetchTournament(id);
   if (!tournament) notFound();
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getAuthClaims();
 
-  if (!user) {
+  if (!claims) {
     redirect(`/auth/login?next=/tournaments/${id}/register`);
   }
 
+  const supabase = await createClient();
   const { data: playerProfile } = await supabase
     .from("player_profiles")
     .select(
       "gender, is_oku, date_of_birth, title, fide_rating, national_rating",
     )
-    .eq("user_id", user.id)
+    .eq("user_id", claims.id)
     .single();
 
   // Commission rates are server-only; compute the player-facing totals here so
@@ -97,7 +96,7 @@ async function RegisterPageContent({ id }: { id: string }) {
     <Suspense fallback={<RegisterFormSkeleton />}>
       <RegisterForm
         tournament={tournament}
-        userId={user.id}
+        userId={claims.id}
         playerProfile={playerProfile ?? null}
         feeBreakdown={feeBreakdown}
       />

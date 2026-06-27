@@ -13,7 +13,8 @@ const {
   mockTargetMembershipBuilder,
   mockInsertBuilder,
   mockFrom,
-  mockGetUser,
+  mockGetClaims,
+  mockGetAuthClaims,
   mockHasOrgPermission,
   mockInviteUserByEmail,
 } = vi.hoisted(() => {
@@ -78,7 +79,20 @@ const {
     callIndex = 0;
   };
 
-  const mockGetUser = vi.fn();
+  const mockGetClaims = vi.fn();
+  // Mirrors the real getAuthClaims(): reads claims via getClaims() and maps
+  // claims.sub -> id so setUser()/setNoUser() drive auth through mockGetClaims.
+  const mockGetAuthClaims = vi.fn(async () => {
+    const { data } = await mockGetClaims();
+    const claims = data?.claims;
+    if (!claims) return null;
+    return {
+      id: claims.sub,
+      email: claims.email ?? "",
+      userMetadata: claims.user_metadata ?? {},
+      role: claims.role,
+    };
+  });
   const mockHasOrgPermission = vi.fn().mockResolvedValue(true);
   const mockInviteUserByEmail = vi.fn();
 
@@ -90,7 +104,8 @@ const {
     mockTargetMembershipBuilder,
     mockInsertBuilder,
     mockFrom,
-    mockGetUser,
+    mockGetClaims,
+    mockGetAuthClaims,
     mockHasOrgPermission,
     mockInviteUserByEmail,
   };
@@ -109,12 +124,13 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
-    auth: { getUser: mockGetUser },
+    auth: { getClaims: mockGetClaims },
   }),
 }));
 
 vi.mock("@/services/supabase/permission", () => ({
   hasOrgPermission: mockHasOrgPermission,
+  getAuthClaims: mockGetAuthClaims,
 }));
 
 vi.mock("next/headers", () => ({
@@ -161,11 +177,11 @@ function makeRequest(
 // ---------------------------------------------------------------------------
 
 function setUser(id = USER_ID) {
-  mockGetUser.mockResolvedValue({ data: { user: { id } }, error: null });
+  mockGetClaims.mockResolvedValue({ data: { claims: { sub: id } }, error: null });
 }
 
 function setNoUser() {
-  mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+  mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
 }
 
 function setOrgResult(data: unknown, error: unknown = null) {
