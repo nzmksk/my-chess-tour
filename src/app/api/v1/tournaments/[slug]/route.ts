@@ -13,6 +13,7 @@ interface Organization {
 
 interface TournamentRow {
   id: string;
+  slug: string;
   name: string;
   description?: string;
   venue_name: string;
@@ -35,43 +36,26 @@ interface TournamentRow {
   organizations: Organization[] | Organization;
 }
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id } = await params;
+  const { slug } = await params;
 
-  if (!UUID_RE.test(id)) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid tournament ID" } },
-      { status: 400 },
-    );
-  }
-
-  const [{ data: row, error }, { count: currentParticipants }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("tournaments")
-        .select(
-          `id, name, description, venue_name, venue_state, venue_address,
-           start_date, end_date, registration_deadline, format,
-           time_control, is_fide_rated, is_mcf_rated, entry_fees, prizes,
-           restrictions, max_participants, status, published_at, updated_at,
-           organizations(id, name, description, avatar_url, links, email, phone)`,
-        )
-        .eq("id", id)
-        .eq("status", "published")
-        .single(),
-
-      supabaseAdmin
-        .from("registrations")
-        .select("*", { count: "exact", head: true })
-        .eq("tournament_id", id)
-        .eq("status", "confirmed"),
-    ]);
+  // The participant count keys off the tournament UUID, which we don't have
+  // until the slug resolves, so the lookup is sequential rather than parallel.
+  const { data: row, error } = await supabaseAdmin
+    .from("tournaments")
+    .select(
+      `id, slug, name, description, venue_name, venue_state, venue_address,
+       start_date, end_date, registration_deadline, format,
+       time_control, is_fide_rated, is_mcf_rated, entry_fees, prizes,
+       restrictions, max_participants, status, published_at, updated_at,
+       organizations(id, name, description, avatar_url, links, email, phone)`,
+    )
+    .eq("slug", slug)
+    .eq("status", "published")
+    .single();
 
   if (error) {
     if (error.code === "PGRST116") {
@@ -87,11 +71,19 @@ export async function GET(
   }
 
   const t = row as TournamentRow;
+
+  const { count: currentParticipants } = await supabaseAdmin
+    .from("registrations")
+    .select("*", { count: "exact", head: true })
+    .eq("tournament_id", t.id)
+    .eq("status", "confirmed");
+
   const orgRaw = t.organizations;
   const org = Array.isArray(orgRaw) ? orgRaw[0] : orgRaw;
 
   const data = {
     id: t.id,
+    slug: t.slug,
     name: t.name,
     description: t.description,
     venue: {

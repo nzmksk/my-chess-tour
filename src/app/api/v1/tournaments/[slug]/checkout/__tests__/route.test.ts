@@ -124,6 +124,7 @@ import { POST } from "../route";
 // ---------------------------------------------------------------------------
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
+const SLUG = "test-open";
 const USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const FUTURE_DEADLINE = "2099-12-31T23:59:59Z";
 // A live pending hold (within PAYMENT_TIMEOUT_MINUTES) vs. a lapsed one (past it).
@@ -201,7 +202,7 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
+describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
   it("resumes a failed_payment registration without erroring (H2) and re-prices to the chosen tier (H1)", async () => {
     setThen(mockExistingBuilder, {
       data: {
@@ -220,9 +221,9 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     ]);
 
     const res = await POST(
-      makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
+      makeRequest(SLUG, { fee_tier: "early_bird" }),
       {
-        params: Promise.resolve({ id: VALID_UUID }),
+        params: Promise.resolve({ slug: SLUG }),
       },
     );
 
@@ -256,8 +257,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     });
     setPaymentBuilders([mockPaymentPriorBuilder]);
 
-    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(201);
@@ -289,8 +290,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     setPaymentBuilders([mockPaymentPriorBuilder]);
 
     const res = await POST(
-      makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
-      { params: Promise.resolve({ id: VALID_UUID }) },
+      makeRequest(SLUG, { fee_tier: "early_bird" }),
+      { params: Promise.resolve({ slug: SLUG }) },
     );
 
     expect(res.status).toBe(409);
@@ -322,8 +323,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     ]);
 
     const res = await POST(
-      makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
-      { params: Promise.resolve({ id: VALID_UUID }) },
+      makeRequest(SLUG, { fee_tier: "early_bird" }),
+      { params: Promise.resolve({ slug: SLUG }) },
     );
 
     expect(res.status).toBe(201);
@@ -354,8 +355,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     ]);
 
     const res = await POST(
-      makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
-      { params: Promise.resolve({ id: VALID_UUID }) },
+      makeRequest(SLUG, { fee_tier: "early_bird" }),
+      { params: Promise.resolve({ slug: SLUG }) },
     );
 
     expect(res.status).toBe(201);
@@ -383,8 +384,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       mockPaymentUpdateBuilder,
     ]);
 
-    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(201);
@@ -416,8 +417,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       mockPaymentUpdateBuilder,
     ]);
 
-    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(201);
@@ -447,8 +448,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     mockCancelChipPurchase.mockRejectedValueOnce(new Error("CHIP 409"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(201);
@@ -461,8 +462,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       error: null,
     });
 
-    const res = await POST(makeRequest(VALID_UUID), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(409);
@@ -484,8 +485,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       },
     });
 
-    const res = await POST(makeRequest(VALID_UUID), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(422);
@@ -504,8 +505,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
       error: { code: "P0001", message: "registration is not resumable" },
     });
 
-    const res = await POST(makeRequest(VALID_UUID), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(409);
@@ -515,14 +516,94 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
   it("creates a new registration when none exists", async () => {
     setThen(mockExistingBuilder, { data: null, error: null });
 
-    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
-      params: Promise.resolve({ id: VALID_UUID }),
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(res.status).toBe(201);
     expect(mockRpc).toHaveBeenCalledWith("create_registration_with_payment", {
       p_user_id: USER_ID,
       p_tournament_id: VALID_UUID,
+      p_fee_tier: "standard",
+      p_amount_cents: 5000,
+    });
+  });
+
+  it("builds the CHIP success/failure redirects from the slug, not the UUID", async () => {
+    setThen(mockExistingBuilder, { data: null, error: null });
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    const arg = mockCreateChipPurchase.mock.calls[0][0];
+    expect(arg.successRedirect).toContain(
+      `/tournaments/${SLUG}/register/success`,
+    );
+    expect(arg.failureRedirect).toContain(
+      `/tournaments/${SLUG}/register/failure`,
+    );
+    expect(arg.successRedirect).not.toContain(VALID_UUID);
+  });
+
+  it("returns 503 PAYMENT_GATEWAY_ERROR when the CHIP purchase fails to create", async () => {
+    // No existing registration → create path; the registration + payment rows are
+    // written, then the CHIP call fails. The user can recover by resuming.
+    setThen(mockExistingBuilder, { data: null, error: null });
+    mockCreateChipPurchase.mockRejectedValue(new Error("CHIP API error 500"));
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(503);
+    const json = await res.json();
+    expect(json.error.code).toBe("PAYMENT_GATEWAY_ERROR");
+  });
+
+  it("recovers from a concurrent create race (23505) by resuming the winner's row", async () => {
+    // First registrations read (existing lookup) finds nothing, so we attempt a
+    // create; it loses the UNIQUE(user_id, tournament_id) race (23505); the
+    // second read returns the winner's pending row, which we then resume.
+    let regReads = 0;
+    mockExistingBuilder.then = (r: (v: unknown) => unknown) => {
+      regReads += 1;
+      const result =
+        regReads === 1
+          ? { data: null, error: null }
+          : {
+              data: {
+                id: "reg-1",
+                status: "pending_payment",
+                current_payment_id: "pay-0",
+              },
+              error: null,
+            };
+      return Promise.resolve(result).then(r);
+    };
+    // create_registration_with_payment loses the race; the resume RPC then wins.
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "23505",
+        message: "duplicate key value violates unique constraint",
+      },
+    });
+    setPaymentBuilders([
+      mockPaymentPriorBuilder,
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    // Recovered as a resume of the winner, not a surfaced 500/409.
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
+      p_registration_id: "reg-1",
       p_fee_tier: "standard",
       p_amount_cents: 5000,
     });

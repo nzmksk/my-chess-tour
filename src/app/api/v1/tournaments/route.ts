@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 interface TournamentRow {
   id: string;
+  slug: string;
   organization_id: string;
   name: string;
   venue_name: string;
@@ -28,7 +29,7 @@ export async function GET() {
   const { data: rows, error } = await supabaseAdmin
     .from("tournaments")
     .select(
-      `id, organization_id, name, venue_name, venue_state, start_date,
+      `id, slug, organization_id, name, venue_name, venue_state, start_date,
       end_date, format, time_control, is_fide_rated, is_mcf_rated, entry_fees,
       restrictions, max_participants, status`,
     )
@@ -60,6 +61,7 @@ export async function GET() {
   const data = (rows as TournamentRow[]).map((t) => {
     return {
       id: t.id,
+      slug: t.slug,
       organization_id: t.organization_id,
       name: t.name,
       venue: {

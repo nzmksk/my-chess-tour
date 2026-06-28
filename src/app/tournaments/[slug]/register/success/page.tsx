@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { supabaseAdmin } from "@/services/supabase/admin";
 import { resolvePaymentState } from "../_lib/resolvePaymentState";
 import PaymentStatusView from "../_components/PaymentStatusView";
 
@@ -23,9 +25,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 export default async function PaymentSuccessPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
 
   const claims = await getAuthClaims();
 
@@ -39,7 +41,7 @@ export default async function PaymentSuccessPage({
               Sign in to check the status of your payment and registration.
             </p>
             <Link
-              href={`/auth/login?next=/tournaments/${id}`}
+              href={`/auth/login?next=/tournaments/${slug}`}
               className="btn-primary mt-2 rounded-md text-center"
             >
               Sign In
@@ -50,14 +52,26 @@ export default async function PaymentSuccessPage({
     );
   }
 
-  const { state, registration } = await resolvePaymentState(id, claims.id);
+  // Payment state is keyed by the tournament UUID; resolve it from the slug.
+  const { data: tournament } = await supabaseAdmin
+    .from("tournaments")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (!tournament) notFound();
+
+  const { state, registration } = await resolvePaymentState(
+    tournament.id,
+    claims.id,
+  );
 
   return (
     <Shell>
       <PaymentStatusView
         state={state}
         registration={registration}
-        tournamentId={id}
+        tournamentSlug={slug}
       />
     </Shell>
   );

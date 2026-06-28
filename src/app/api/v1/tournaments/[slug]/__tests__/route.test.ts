@@ -42,6 +42,7 @@ vi.mock("@/services/supabase/admin", () => ({
 // ---------------------------------------------------------------------------
 
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
+const SLUG = "kl-open-rapid-2026";
 
 const mockOrganization = {
   id: "org-1",
@@ -56,6 +57,7 @@ const mockOrganization = {
 function makeTournament(overrides: Record<string, unknown> = {}) {
   return {
     id: VALID_UUID,
+    slug: SLUG,
     name: "KL Open Rapid 2026",
     description: "Annual rapid chess championship",
     venue_name: "Kuala Lumpur Convention Centre",
@@ -113,7 +115,7 @@ function setRegistrationsCount(count: number | null, error: unknown = null) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("GET /api/v1/tournaments/:id", () => {
+describe("GET /api/v1/tournaments/:slug", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setTournamentResult(null);
@@ -132,8 +134,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("returns 200 with a data object for a valid published tournament", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -146,8 +148,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("shapes the tournament detail correctly", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
       const item = json.data;
@@ -195,8 +197,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("includes a nested organization object with full info", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
       const org = json.data.organization;
@@ -212,8 +214,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("does not expose raw organizations join or organization_id on the tournament item", async () => {
       setTournamentResult(makeTournament());
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -226,8 +228,8 @@ describe("GET /api/v1/tournaments/:id", () => {
         makeTournament({ organizations: [mockOrganization] }),
       );
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -237,8 +239,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("sets organization to null when organizations join is null", async () => {
       setTournamentResult(makeTournament({ organizations: null }));
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -248,8 +250,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("sets prizes to null when prizes is null", async () => {
       setTournamentResult(makeTournament({ prizes: null }));
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -259,8 +261,8 @@ describe("GET /api/v1/tournaments/:id", () => {
     it("sets restrictions to null when restrictions is null", async () => {
       setTournamentResult(makeTournament({ restrictions: null }));
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -277,8 +279,8 @@ describe("GET /api/v1/tournaments/:id", () => {
       setTournamentResult(makeTournament());
       setRegistrationsCount(3);
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -289,8 +291,8 @@ describe("GET /api/v1/tournaments/:id", () => {
       setTournamentResult(makeTournament());
       setRegistrationsCount(null);
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -301,8 +303,8 @@ describe("GET /api/v1/tournaments/:id", () => {
       setTournamentResult(makeTournament());
       setRegistrationsCount(0);
 
-      await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
 
       const eqMock = mockRegistrationsBuilder.eq as ReturnType<typeof vi.fn>;
@@ -316,23 +318,23 @@ describe("GET /api/v1/tournaments/:id", () => {
   // -------------------------------------------------------------------------
 
   describe("query behaviour", () => {
-    it("queries by id and status=published", async () => {
+    it("queries by slug and status=published", async () => {
       setTournamentResult(makeTournament());
 
-      await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
 
       const eqMock = mockTournamentBuilder.eq as ReturnType<typeof vi.fn>;
-      expect(eqMock).toHaveBeenCalledWith("id", VALID_UUID);
+      expect(eqMock).toHaveBeenCalledWith("slug", SLUG);
       expect(eqMock).toHaveBeenCalledWith("status", "published");
     });
 
     it("calls .single() on the tournament query", async () => {
       setTournamentResult(makeTournament());
 
-      await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
 
       const singleMock = mockTournamentBuilder.single as ReturnType<
@@ -347,21 +349,11 @@ describe("GET /api/v1/tournaments/:id", () => {
   // -------------------------------------------------------------------------
 
   describe("error handling", () => {
-    it("returns 400 for a non-UUID id", async () => {
-      const res = await GET(makeRequest("not-a-uuid"), {
-        params: Promise.resolve({ id: "not-a-uuid" }),
-      });
-      const json = await res.json();
-
-      expect(res.status).toBe(400);
-      expect(json.error.message).toMatch(/invalid tournament id/i);
-    });
-
     it("returns 404 when tournament is not found", async () => {
       setTournamentResult(null, { code: "PGRST116", message: "No rows found" });
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 
@@ -375,8 +367,8 @@ describe("GET /api/v1/tournaments/:id", () => {
         message: "DB connection failed",
       });
 
-      const res = await GET(makeRequest(VALID_UUID), {
-        params: Promise.resolve({ id: VALID_UUID }),
+      const res = await GET(makeRequest(SLUG), {
+        params: Promise.resolve({ slug: SLUG }),
       });
       const json = await res.json();
 

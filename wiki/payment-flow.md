@@ -25,7 +25,7 @@ net    = gross - platform_fee         -- what the organizer nets
 
 ## Happy path
 
-1. **Checkout** — `POST /api/v1/tournaments/[id]/checkout` (`src/app/api/v1/tournaments/[id]/checkout/route.ts`). Auth required. Validates tournament is `published`, registration deadline, fee-tier validity (incl. `valid_until`), and profile-based restrictions/eligibility.
+1. **Checkout** — `POST /api/v1/tournaments/[slug]/checkout` (`src/app/api/v1/tournaments/[slug]/checkout/route.ts`). Auth required. Validates tournament is `published`, registration deadline, fee-tier validity (incl. `valid_until`), and profile-based restrictions/eligibility.
 2. **Create** — if the user has no existing registration, calls `create_registration_with_payment()` (`007`): atomically inserts a `registrations` row (`pending_payment`) and a `payments` row (`pending`) with the computed amounts. The `check_tournament_capacity` INSERT trigger (`003_functions_triggers.sql`) enforces capacity inside Postgres.
 3. **Initiate CHIP** — `initiateChipPayment()` calls `createChipPurchase()` (`src/services/chip/chip.ts`), passing `reference = payment.id`, success/failure redirects, and a `due` (purchase expiry, see below). Stores the returned purchase id as `chip_transaction_id` and returns the `checkout_url`. The browser is sent to CHIP.
 4. **Settle (webhook)** — CHIP calls `POST /api/v1/webhooks/chip` (`src/app/api/v1/webhooks/chip/route.ts`). It verifies the RSA signature over the raw body, correlates the payment by `chip_transaction_id` (falling back to `reference`), maps the event to an outcome via `chipOutcome()`, and calls `settle_registration_payment()`.
@@ -43,7 +43,7 @@ net    = gross - platform_fee         -- what the organizer nets
 
 ## Browser return (reconciliation)
 
-The CHIP redirect to `…/register/success` or `…/register/failure` can land _before_ the webhook. Both pages call `resolvePaymentState(tournamentId, userId)` (`src/app/tournaments/[id]/register/_lib/resolvePaymentState.ts`), which:
+The CHIP redirect to `…/register/success` or `…/register/failure` can land _before_ the webhook. Both pages call `resolvePaymentState(tournamentId, userId)` (`src/app/tournaments/[slug]/register/_lib/resolvePaymentState.ts`), which:
 
 - short-circuits `confirmed`;
 - for `pending_payment` **and `failed_payment`**, fetches the live purchase via `getChipPurchase()` and settles through the **same** `settle_registration_payment` RPC the webhook uses (so the page is authoritative even if the webhook is late/missing). A `failed_payment` is reconciled too because a payer can retry on the same CHIP purchase after a decline — a later `paid` then surfaces as `confirmed` rather than a stale `failed`; otherwise it stays `failed` (no expiry, no `pending` fallback);
@@ -95,7 +95,7 @@ Mocks the Supabase RPCs and the CHIP client, so it exercises the route/handler l
 Key files and what each pins down:
 
 - `…/webhooks/chip/__tests__/route.test.ts` — signature verify (valid / quoted-key+`\n` / missing key → 401), `paid` settle + amount forwarding, `reference`-fallback correlation, intermediate event → ack, no-match → ack 200, transient DB error → 500 (CHIP retries).
-- `…/tournaments/[id]/checkout/__tests__/route.test.ts` — create-new, live-resume same tier (reuse link), tier-change lock (`409`), **no-link fallthrough** (CHIP-create failed), lapsed/`failed_payment`/`cancelled_payment` fresh-start + re-price, prior-purchase cancel (and cancel-fails-still-resumes), already-confirmed `409`, capacity-full `422`, non-resumable `409`.
+- `…/tournaments/[slug]/checkout/__tests__/route.test.ts` — create-new, live-resume same tier (reuse link), tier-change lock (`409`), **no-link fallthrough** (CHIP-create failed), lapsed/`failed_payment`/`cancelled_payment` fresh-start + re-price, prior-purchase cancel (and cancel-fails-still-resumes), already-confirmed `409`, capacity-full `422`, non-resumable `409`, **CHIP-create failure → `503`**, **concurrent create race (`23505`) → resume the winner**.
 - `…/register/_lib/__tests__/resolvePaymentState.test.ts` — return-page reconcile: pending→paid/error, **failed_payment→paid rescue** and failed_payment-stays-failed, amount-mismatch stays pending, expiry sweep (terminalized / nothing / no-`chip_transaction_id`), network-error degrades to pending.
 - `…/me/registrations/__tests__/route.test.ts`, `services/payments/__tests__/fees.test.ts` — list-sweep and commission math.
 
@@ -133,7 +133,7 @@ Drive a real checkout and inspect the two rows (`registrations.status`, `payment
 | Decline → retry-success (same purchase) | B-S1, A (resolve), C-2 | `confirmed` / `paid` |
 | Superseded attempt later paid | B-S2 | `confirmed` / `paid` (points at paid attempt) |
 | Cancel on CHIP | A (webhook), C-3 | `failed_payment` / `failed` |
-| Network: CHIP-create fails | C (gateway 503) | unchanged `pending` (no link); recover via resume |
+| Network: CHIP-create fails | A (checkout → 503), C | unchanged `pending` (no link); recover via resume |
 | Network: webhook DB error | A (webhook → 500) | unchanged; CHIP retries |
 | Network: reconcile throws | A (resolve → pending) | unchanged `pending_payment` |
 | Expiry (no CHIP event) | B-S4, A (resolve) | `cancelled_payment` / `pending` |
@@ -142,15 +142,15 @@ Drive a real checkout and inspect the two rows (`registrations.status`, `payment
 | Idempotency: paid then late failed | B-S3c | `confirmed` / `paid` |
 | Amount mismatch | B-S3b, A (resolve) | `pending_payment` / `pending` + `amount_mismatch` |
 | Capacity full (create / resume) | A (checkout → 422), DB trigger | no row created / unchanged |
-| Concurrent double-submit (create) | code path (`23505` recovery) | one winner, resumed |
+| Concurrent double-submit (create) | A (checkout, `23505` recovery) | one winner, resumed |
 | Bad webhook signature / no key | A (webhook → 401) | unchanged |
 
 ## Files
 
 - `src/services/chip/chip.ts` — CHIP client (`createChipPurchase` with `due`, `getChipPurchase`, `cancelChipPurchase`), `chipOutcome`, expiry constants.
-- `src/app/api/v1/tournaments/[id]/checkout/route.ts` — create / continue-live / fresh-resume / initiate (saves `checkout_url`).
+- `src/app/api/v1/tournaments/[slug]/checkout/route.ts` — create / continue-live / fresh-resume / initiate (saves `checkout_url`).
 - `src/app/api/v1/webhooks/chip/route.ts` — signature verify + settle.
-- `src/app/tournaments/[id]/register/_lib/resolvePaymentState.ts` — return-page reconcile + lazy expiry.
-- `src/app/tournaments/[id]/register/page.tsx` + `_components/PaymentInProgress.tsx` — Continue-payment screen for a live pending payment.
+- `src/app/tournaments/[slug]/register/_lib/resolvePaymentState.ts` — return-page reconcile + lazy expiry.
+- `src/app/tournaments/[slug]/register/page.tsx` + `_components/PaymentInProgress.tsx` — Continue-payment screen for a live pending payment.
 - `db/tests/settle_registration_payment.sql` — transaction-wrapped DB money-state regression test (see [Regression testing](#regression-testing) §B).
 - DB functions are flattened into two files: `db/migrations/007_payment_functions.sql` (`compute_registration_amounts`, `create_registration_with_payment`, `start_new_payment_attempt`, `settle_registration_payment`, `expire_stale_pending_payments`) and `db/migrations/003_functions_triggers.sql` (`assert_tournament_capacity` + the `check_tournament_capacity` INSERT trigger). `payments.checkout_url` and the `cancelled_payment` resume path live in `001_tables.sql` / `007`.

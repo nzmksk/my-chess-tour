@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { ensureUniqueSlug, slugify } from "@/lib/slugs";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -11,6 +12,7 @@ const PLACEHOLDER_DEADLINE = "2099-12-30T23:59:59Z";
 interface TournamentRow {
   id: string;
   organization_id: string;
+  slug: string | null;
   name: string;
   venue_name: string;
   venue_state: string;
@@ -126,7 +128,7 @@ export async function POST(
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, organization_id, name, venue_name, venue_state, venue_address, start_date, end_date, registration_deadline, format, time_control, entry_fees, status",
+      "id, organization_id, slug, name, venue_name, venue_state, venue_address, start_date, end_date, registration_deadline, format, time_control, entry_fees, status",
     )
     .eq("id", id)
     .eq("organization_id", orgId)
@@ -229,15 +231,30 @@ export async function POST(
 
   const publishedAt = new Date().toISOString();
 
+  // Assign the public slug on first publish (drafts have none) and keep it stable
+  // on any re-publish so shared links never break. Uniqueness is enforced by the
+  // tournaments_slug_key index; ensureUniqueSlug appends -2/-3… on collision.
+  const slug =
+    t.slug ??
+    (await ensureUniqueSlug(slugify(t.name), async (candidate) => {
+      const { count } = await supabaseAdmin
+        .from("tournaments")
+        .select("id", { count: "exact", head: true })
+        .eq("slug", candidate)
+        .neq("id", id);
+      return (count ?? 0) > 0;
+    }));
+
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("tournaments")
     .update({
       status: "published",
       published_by: claims.id,
       published_at: publishedAt,
+      slug,
     })
     .eq("id", id)
-    .select("id, status, published_at")
+    .select("id, slug, status, published_at")
     .single();
 
   if (updateError) {

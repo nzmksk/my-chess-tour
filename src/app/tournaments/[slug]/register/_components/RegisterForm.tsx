@@ -175,11 +175,14 @@ export default function RegisterForm({
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/v1/tournaments/${tournament.id}/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fee_tier: selectedTier }),
-      });
+      const res = await fetch(
+        `/api/v1/tournaments/${tournament.slug}/checkout`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fee_tier: selectedTier }),
+        },
+      );
       const json = await res.json();
       if (res.ok && json.data?.checkout_url) {
         setStatus("redirecting");
@@ -205,7 +208,7 @@ export default function RegisterForm({
     return (
       <RegistrationPending
         registration={registration}
-        tournamentId={tournament.id}
+        tournamentSlug={tournament.slug}
       />
     );
   }
@@ -351,7 +354,7 @@ export default function RegisterForm({
         </button>
 
         <Link
-          href={`/tournaments/${tournament.id}`}
+          href={`/tournaments/${tournament.slug}`}
           className="font-lato text-text-muted hover:text-text-secondary text-center text-sm transition-colors"
         >
           ← Back to tournament

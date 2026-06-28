@@ -15,7 +15,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 export const revalidate = 60;
 
 async function fetchTournament(
-  id: string,
+  slug: string,
 ): Promise<TournamentDetailType | null> {
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";
@@ -25,9 +25,12 @@ async function fetchTournament(
       : "https";
 
   try {
-    const res = await fetch(`${protocol}://${host}/api/v1/tournaments/${id}`, {
-      next: { revalidate: 60 },
-    });
+    const res = await fetch(
+      `${protocol}://${host}/api/v1/tournaments/${slug}`,
+      {
+        next: { revalidate: 60 },
+      },
+    );
     if (!res.ok) return null;
     const json = await res.json();
     return json.data ?? null;
@@ -148,10 +151,10 @@ async function fetchStartingRank(
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const tournament = await fetchTournament(id);
+  const { slug } = await params;
+  const tournament = await fetchTournament(slug);
 
   if (!tournament) {
     return {
@@ -192,12 +195,15 @@ export async function generateMetadata({
   };
 }
 
-export async function TournamentDetailData({ id }: { id: string }) {
-  const tournament = await fetchTournament(id);
+export async function TournamentDetailData({ slug }: { slug: string }) {
+  const tournament = await fetchTournament(slug);
 
   if (!tournament) {
     return notFound();
   }
+
+  // The slug resolved to a tournament; use its UUID for all internal queries.
+  const tournamentId = tournament.id;
 
   const claims = await getAuthClaims();
 
@@ -207,7 +213,7 @@ export async function TournamentDetailData({ id }: { id: string }) {
       .from("registrations")
       .select("status")
       .eq("user_id", claims.id)
-      .eq("tournament_id", id)
+      .eq("tournament_id", tournamentId)
       .maybeSingle();
     registrationStatus = registration?.status ?? null;
   }
@@ -228,7 +234,7 @@ export async function TournamentDetailData({ id }: { id: string }) {
   const canViewStartingRank = tournamentStarted || isConfirmed || isOrgMember;
 
   const startingRank = canViewStartingRank
-    ? await fetchStartingRank(id, tournament.format.type)
+    ? await fetchStartingRank(tournamentId, tournament.format.type)
     : null;
 
   return (
@@ -246,15 +252,15 @@ export async function TournamentDetailData({ id }: { id: string }) {
 export default async function TournamentDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
 
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
       <Suspense fallback={<DetailSkeleton />}>
-        <TournamentDetailData id={id} />
+        <TournamentDetailData slug={slug} />
       </Suspense>
     </div>
   );

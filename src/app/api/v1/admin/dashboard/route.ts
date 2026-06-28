@@ -9,6 +9,7 @@ type PayoutSummaryRow = { effective_platform_fee_cents: number };
 type PendingOrgRow = { id: string; name: string; email: string | null; created_at: string };
 type RecentTournamentRow = {
   id: string;
+  slug: string | null;
   name: string;
   start_date: string;
   status: string;
@@ -82,7 +83,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       .limit(5),
     supabaseAdmin
       .from("tournaments")
-      .select("id, name, start_date, status, max_participants, organization_id")
+      .select(
+        "id, slug, name, start_date, status, max_participants, organization_id",
+      )
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
@@ -234,6 +237,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
         })),
         recent_tournaments: recentTours.map((t) => ({
           id: t.id,
+          slug: t.slug,
           name: t.name,
           organization_name: t.organization_id
             ? (orgNameMap[t.organization_id] ?? null)

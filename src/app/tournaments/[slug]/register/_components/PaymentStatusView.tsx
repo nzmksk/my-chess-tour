@@ -6,7 +6,7 @@ import RegistrationPending from "./RegistrationPending";
 interface Props {
   state: PaymentState;
   registration: RegistrationRow | null;
-  tournamentId: string;
+  tournamentSlug: string;
 }
 
 /**
@@ -16,7 +16,7 @@ interface Props {
 export default function PaymentStatusView({
   state,
   registration,
-  tournamentId,
+  tournamentSlug,
 }: Props) {
   if (state === "confirmed") {
     return (
@@ -29,7 +29,7 @@ export default function PaymentStatusView({
             look forward to seeing you at the tournament.
           </p>
           <Link
-            href={`/tournaments/${tournamentId}`}
+            href={`/tournaments/${tournamentSlug}`}
             className="btn-secondary mt-2 rounded-md text-center"
           >
             Back to Tournament
@@ -43,7 +43,7 @@ export default function PaymentStatusView({
     return (
       <RegistrationPending
         registration={registration}
-        tournamentId={tournamentId}
+        tournamentSlug={tournamentSlug}
       />
     );
   }
@@ -59,13 +59,13 @@ export default function PaymentStatusView({
             confirmed. Please try again.
           </p>
           <Link
-            href={`/tournaments/${tournamentId}/register`}
+            href={`/tournaments/${tournamentSlug}/register`}
             className="btn-primary mt-2 rounded-md text-center"
           >
             Try Again
           </Link>
           <Link
-            href={`/tournaments/${tournamentId}`}
+            href={`/tournaments/${tournamentSlug}`}
             className="btn-secondary mt-4 rounded-md text-center"
           >
             Back to Tournament
@@ -85,7 +85,7 @@ export default function PaymentStatusView({
           account.
         </p>
         <Link
-          href={`/tournaments/${tournamentId}`}
+          href={`/tournaments/${tournamentSlug}`}
           className="btn-secondary mt-2 rounded-md text-center"
         >
           Back to Tournament

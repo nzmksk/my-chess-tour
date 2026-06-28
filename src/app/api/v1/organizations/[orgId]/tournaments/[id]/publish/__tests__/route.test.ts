@@ -22,6 +22,7 @@ const {
     for (const m of [
       "select",
       "eq",
+      "neq",
       "in",
       "is",
       "order",

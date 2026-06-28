@@ -6,16 +6,13 @@ import {
   checkRestrictions,
   checkFeeTierEligibility,
   normalizeRestrictions,
-} from "@/app/api/v1/tournaments/[id]/registrations/validators";
-import type { RegistrationRequest } from "@/app/tournaments/[id]/register/types";
+} from "@/app/api/v1/tournaments/[slug]/registrations/validators";
+import type { RegistrationRequest } from "@/app/tournaments/[slug]/register/types";
 import {
   cancelChipPurchase,
   createChipPurchase,
   PAYMENT_TIMEOUT_MINUTES,
 } from "@/services/chip/chip";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The seat hold (and the CHIP purchase `due`) lasts PAYMENT_TIMEOUT_MINUTES from
 // registered_at. While live, the pending payment is resumed by reusing its link.
@@ -28,16 +25,9 @@ function isHoldLive(registeredAt: string): boolean {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ slug: string }> },
 ): Promise<NextResponse> {
-  const { id } = await params;
-
-  if (!UUID_RE.test(id)) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid tournament ID" } },
-      { status: 400 },
-    );
-  }
+  const { slug } = await params;
 
   const supabase = await createClient();
   const {
@@ -74,7 +64,7 @@ export async function POST(
     .select(
       "id, name, entry_fees, max_participants, registration_deadline, restrictions, format",
     )
-    .eq("id", id)
+    .eq("slug", slug)
     .eq("status", "published")
     .single();
 
@@ -90,6 +80,10 @@ export async function POST(
       { status: 500 },
     );
   }
+
+  // Internal DB writes/reads key off the resolved UUID; the slug is only used to
+  // build the public success/failure redirect URLs (passed to the helpers below).
+  const tournamentId = tournament.id;
 
   const now = new Date();
 
@@ -207,7 +201,7 @@ export async function POST(
     .from("registrations")
     .select("id, status, fee_tier, registered_at, current_payment_id")
     .eq("user_id", user.id)
-    .eq("tournament_id", id)
+    .eq("tournament_id", tournamentId)
     .maybeSingle();
 
   if (existing) {
@@ -236,7 +230,7 @@ export async function POST(
         existing.registered_at,
         existing.current_payment_id,
         matchedTier.amount_cents,
-        id,
+        slug,
         tournament.name,
         user.email!,
       );
@@ -254,7 +248,7 @@ export async function POST(
         existing.current_payment_id,
         fee_tier,
         matchedTier.amount_cents,
-        id,
+        slug,
         tournament.name,
         user.email!,
       );
@@ -275,7 +269,7 @@ export async function POST(
     "create_registration_with_payment",
     {
       p_user_id: user.id,
-      p_tournament_id: id,
+      p_tournament_id: tournamentId,
       p_fee_tier: fee_tier,
       p_amount_cents: matchedTier.amount_cents,
     },
@@ -299,7 +293,7 @@ export async function POST(
         .from("registrations")
         .select("id, status, current_payment_id")
         .eq("user_id", user.id)
-        .eq("tournament_id", id)
+        .eq("tournament_id", tournamentId)
         .maybeSingle();
       if (
         raced &&
@@ -312,7 +306,7 @@ export async function POST(
           raced.current_payment_id,
           fee_tier,
           matchedTier.amount_cents,
-          id,
+          slug,
           tournament.name,
           user.email!,
         );
@@ -335,7 +329,7 @@ export async function POST(
 
   return initiateChipPayment(
     (registration as { payment_id: string }).payment_id,
-    id,
+    slug,
     tournament.name,
     user.email!,
   );
@@ -355,7 +349,7 @@ async function continuePendingPayment(
   registeredAt: string,
   currentPaymentId: string | null,
   amountCents: number,
-  tournamentId: string,
+  tournamentSlug: string,
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
@@ -378,7 +372,7 @@ async function continuePendingPayment(
       currentPaymentId,
       requestedFeeTier,
       amountCents,
-      tournamentId,
+      tournamentSlug,
       tournamentName,
       userEmail,
     );
@@ -426,7 +420,7 @@ async function resumeRegistration(
   currentPaymentId: string | null,
   feeTier: string,
   amountCents: number,
-  tournamentId: string,
+  tournamentSlug: string,
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
@@ -485,7 +479,7 @@ async function resumeRegistration(
 
   return initiateChipPayment(
     (attempt as { payment_id: string }).payment_id,
-    tournamentId,
+    tournamentSlug,
     tournamentName,
     userEmail,
   );
@@ -493,7 +487,7 @@ async function resumeRegistration(
 
 async function initiateChipPayment(
   paymentId: string,
-  tournamentId: string,
+  tournamentSlug: string,
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
@@ -521,8 +515,8 @@ async function initiateChipPayment(
       clientEmail: userEmail,
       productName: `Tournament Registration — ${tournamentName}`,
       referenceId: payment.id,
-      successRedirect: `${siteUrl}/tournaments/${tournamentId}/register/success`,
-      failureRedirect: `${siteUrl}/tournaments/${tournamentId}/register/failure`,
+      successRedirect: `${siteUrl}/tournaments/${tournamentSlug}/register/success`,
+      failureRedirect: `${siteUrl}/tournaments/${tournamentSlug}/register/failure`,
       // Payment status is delivered server-side by the CHIP account webhook
       // (subscribed to purchase.paid / payment_failure / cancelled) → /api/v1/webhooks/chip.
       // No success_callback: it's signed with a different key than the webhook
