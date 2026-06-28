@@ -203,15 +203,19 @@ END;
 $$;
 
 -- =============================================
--- SETTLE: keyed by a specific payment row (idempotent — acts only while pending).
---   paid  → that payment paid; confirm the registration (rescues a just-expired
---           one — real money wins), pointing it at the paid attempt. A `paid`
---           outcome is only honored if p_amount_cents matches the recorded gross
---           (guards a stale/re-priced purchase); a mismatch is left pending and
---           reported back.
---   !paid → that payment failed; terminalize the registration ONLY if this is its
---           current attempt (a superseded/old attempt's failure is a no-op on the
---           registration).
+-- SETTLE: keyed by a specific payment row (idempotent).
+--   paid  → that payment paid; confirm the registration, pointing it at the paid
+--           attempt. "Real money wins": a `paid` outcome is honored over ANY
+--           non-`paid` state — a row already marked `failed` by supersession (a
+--           newer attempt) or by an earlier decline the payer then retried on the
+--           SAME purchase — so a genuine late `paid` can't be silently dropped.
+--           Idempotent: a row already `paid` is untouched. Only honored if
+--           p_amount_cents matches the recorded gross (guards a stale/re-priced
+--           purchase); a mismatch is left as-is and reported back.
+--   !paid → that payment failed; only terminalizes a still-`pending` row (never
+--           overrides a `paid` one), and flips the registration ONLY if this is
+--           its current attempt (a superseded/old attempt's failure is a no-op on
+--           the registration).
 -- =============================================
 CREATE OR REPLACE FUNCTION settle_registration_payment(
   p_payment_id   uuid,
@@ -233,25 +237,34 @@ BEGIN
     RAISE EXCEPTION 'payment % not found', p_payment_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_payment.status = 'pending' THEN
-    IF p_paid
-       AND p_amount_cents IS NOT NULL
-       AND p_amount_cents <> v_payment.gross_amount_cents THEN
-      v_amount_mismatch := true;
-    ELSIF p_paid THEN
-      UPDATE payments
-        SET status = 'paid', paid_at = now()
-        WHERE id = p_payment_id;
+  IF p_paid THEN
+    -- A `paid` outcome wins over any non-`paid` state (pending, or a row already
+    -- `failed` by supersession / a retried decline) — real money wins. A row
+    -- already `paid` is left untouched (idempotent). The amount guard blocks a
+    -- stale/re-priced purchase from confirming at the wrong price.
+    IF v_payment.status <> 'paid' THEN
+      IF p_amount_cents IS NOT NULL
+         AND p_amount_cents <> v_payment.gross_amount_cents THEN
+        v_amount_mismatch := true;
+      ELSE
+        UPDATE payments
+          SET status = 'paid', paid_at = now()
+          WHERE id = p_payment_id;
 
-      UPDATE registrations
-        SET status              = 'confirmed',
-            confirmed_at        = now(),
-            current_payment_id  = p_payment_id,
-            cancelled_at        = NULL,
-            cancellation_reason = NULL
-        WHERE id = v_payment.registration_id
-          AND status <> 'confirmed';
-    ELSE
+        UPDATE registrations
+          SET status              = 'confirmed',
+              confirmed_at        = now(),
+              current_payment_id  = p_payment_id,
+              cancelled_at        = NULL,
+              cancellation_reason = NULL
+          WHERE id = v_payment.registration_id
+            AND status <> 'confirmed';
+      END IF;
+    END IF;
+  ELSE
+    -- Failure only terminalizes a still-`pending` row (never overrides a `paid`
+    -- one) and only flips the registration when this is its current attempt.
+    IF v_payment.status = 'pending' THEN
       UPDATE payments
         SET status = 'failed'
         WHERE id = p_payment_id;
@@ -267,7 +280,7 @@ BEGIN
   RETURN jsonb_build_object(
     'payment_id', p_payment_id,
     'registration_id', v_payment.registration_id,
-    'already_processed', v_payment.status <> 'pending',
+    'already_processed', v_payment.status = 'paid',
     'amount_mismatch', v_amount_mismatch
   );
 END;

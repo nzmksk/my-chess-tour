@@ -129,7 +129,7 @@ describe("resolvePaymentState", () => {
     expect(mockGetChipPurchase).not.toHaveBeenCalled();
   });
 
-  it("returns 'failed' for a failed_payment registration", async () => {
+  it("returns 'failed' for a failed_payment registration with nothing to reconcile", async () => {
     setResults(
       { data: makeRegistration("failed_payment"), error: null },
       { data: null, error: null },
@@ -139,6 +139,62 @@ describe("resolvePaymentState", () => {
 
     expect(result.state).toBe("failed");
     expect(mockGetChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("rescues a failed_payment registration when the same purchase later cleared", async () => {
+    // A payer retried on the same CHIP purchase after a decline; settle treats
+    // the matching `paid` as authoritative over the failed row.
+    setResults(
+      { data: makeRegistration("failed_payment"), error: null },
+      {
+        data: {
+          id: "pay-uuid",
+          status: "failed",
+          chip_transaction_id: "chip-1",
+        },
+        error: null,
+      },
+    );
+    mockGetChipPurchase.mockResolvedValue({
+      id: "chip-1",
+      status: "paid",
+      amountCents: 5500,
+    });
+
+    const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
+
+    expect(mockGetChipPurchase).toHaveBeenCalledWith("chip-1");
+    expect(mockRpc).toHaveBeenCalledWith("settle_registration_payment", {
+      p_payment_id: "pay-uuid",
+      p_paid: true,
+      p_amount_cents: 5500,
+    });
+    expect(result.state).toBe("confirmed");
+  });
+
+  it("keeps a failed_payment registration 'failed' when CHIP still reports a failure", async () => {
+    setResults(
+      { data: makeRegistration("failed_payment"), error: null },
+      {
+        data: {
+          id: "pay-uuid",
+          status: "failed",
+          chip_transaction_id: "chip-1",
+        },
+        error: null,
+      },
+    );
+    mockGetChipPurchase.mockResolvedValue({
+      id: "chip-1",
+      status: "error",
+      amountCents: null,
+    });
+
+    const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
+
+    // Already terminal — no need to re-settle a failed row.
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(result.state).toBe("failed");
   });
 
   it("reconciles a pending registration that CHIP reports as paid", async () => {

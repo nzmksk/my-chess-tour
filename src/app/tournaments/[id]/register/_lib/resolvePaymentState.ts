@@ -78,16 +78,19 @@ export async function resolvePaymentState(
   if (reg.status === "confirmed") {
     return { state: "confirmed", registration: reg };
   }
-  if (reg.status === "failed_payment") {
-    return { state: "failed", registration: reg };
-  }
-  if (reg.status !== "pending_payment") {
+  if (reg.status !== "pending_payment" && reg.status !== "failed_payment") {
     // cancelled_payment / forfeited — nothing actionable on these pages.
     return { state: "none", registration: reg };
   }
 
-  // Still pending: reconcile the *current* attempt with CHIP so the page is
-  // authoritative even if the webhook hasn't arrived.
+  // Reconcile the *current* attempt with CHIP so the page is authoritative even
+  // if the webhook hasn't arrived. We do this for `failed_payment` too: a payer
+  // can retry on the *same* CHIP purchase after a decline, and settle now treats
+  // a matching `paid` as authoritative over the failed row — so a retry-success
+  // should surface here as `confirmed` rather than a stale `failed`. A failed row
+  // is otherwise terminal on this page (no expiry, no pending fallback).
+  const isTerminalFailed = reg.status === "failed_payment";
+
   const { data: payment } = currentPaymentId
     ? await supabaseAdmin
         .from("payments")
@@ -97,6 +100,7 @@ export async function resolvePaymentState(
     : { data: null };
 
   if (!payment?.chip_transaction_id) {
+    if (isTerminalFailed) return { state: "failed", registration: reg };
     if (isExpired(reg.registered_at)) {
       return expireIfStale(reg);
     }
@@ -106,39 +110,59 @@ export async function resolvePaymentState(
   try {
     const purchase = await getChipPurchase(payment.chip_transaction_id);
     const outcome = chipOutcome(purchase.status);
-    if (outcome === "pending") {
-      // CHIP reconcile ran first, so a late payment was already caught above.
-      // Still non-terminal and past the window → expire.
-      if (isExpired(reg.registered_at)) {
-        return expireIfStale(reg);
+
+    if (outcome !== "paid") {
+      // Not cleared. A failed row stays failed; a pending row either expires
+      // (past the window) or settles to failed on a terminal CHIP failure.
+      if (isTerminalFailed) return { state: "failed", registration: reg };
+      if (outcome === "pending") {
+        // CHIP reconcile ran first, so a late payment was already caught above.
+        // Still non-terminal and past the window → expire.
+        if (isExpired(reg.registered_at)) {
+          return expireIfStale(reg);
+        }
+        return { state: "pending", registration: reg };
       }
-      return { state: "pending", registration: reg };
+      // outcome === "failed": terminalize the pending registration.
+      await supabaseAdmin.rpc("settle_registration_payment", {
+        p_payment_id: payment.id,
+        p_paid: false,
+        p_amount_cents: purchase.amountCents,
+      });
+      return {
+        state: "failed",
+        registration: { ...reg, status: "failed_payment" },
+      };
     }
 
+    // CHIP reports paid — settle authoritatively (rescues a failed row too).
     const { data: settled } = await supabaseAdmin.rpc(
       "settle_registration_payment",
       {
         p_payment_id: payment.id,
-        p_paid: outcome === "paid",
+        p_paid: true,
         p_amount_cents: purchase.amountCents,
       },
     );
 
     // The amount CHIP charged didn't match what we recorded — settlement left
-    // the payment pending for manual reconciliation, so don't claim success.
+    // the payment as-is for manual reconciliation, so don't claim success.
     if ((settled as { amount_mismatch?: boolean } | null)?.amount_mismatch) {
-      return { state: "pending", registration: reg };
+      return {
+        state: isTerminalFailed ? "failed" : "pending",
+        registration: reg,
+      };
     }
 
     return {
-      state: outcome === "paid" ? "confirmed" : "failed",
-      registration: {
-        ...reg,
-        status: outcome === "paid" ? "confirmed" : "failed_payment",
-      },
+      state: "confirmed",
+      registration: { ...reg, status: "confirmed" },
     };
   } catch {
-    // Reconcile failed (CHIP/network) — don't claim success or failure.
-    return { state: "pending", registration: reg };
+    // Reconcile failed (CHIP/network) — reflect the pre-existing state.
+    return {
+      state: isTerminalFailed ? "failed" : "pending",
+      registration: reg,
+    };
   }
 }
