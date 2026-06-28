@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatRmExact, toTitleCase } from "@/app/tournaments/utils";
 
 interface Props {
-  tournamentId: string;
+  tournamentSlug: string;
   feeTier: string;
   grossCents: number;
   checkoutUrl: string;
@@ -34,7 +34,7 @@ function formatCountdown(ms: number): string {
  * selectable again).
  */
 export default function PaymentInProgress({
-  tournamentId,
+  tournamentSlug,
   feeTier,
   grossCents,
   checkoutUrl,
@@ -93,7 +93,7 @@ export default function PaymentInProgress({
           Continue Payment
         </a>
         <Link
-          href={`/tournaments/${tournamentId}`}
+          href={`/tournaments/${tournamentSlug}`}
           className="btn-secondary mt-4 rounded-md text-center"
         >
           Back to Tournament

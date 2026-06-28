@@ -11,6 +11,7 @@ export interface PlayerRegistration {
   id: string;
   tournament: {
     id: string;
+    slug: string;
     name: string;
     start_date: string;
     venue_name: string;

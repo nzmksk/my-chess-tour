@@ -36,6 +36,7 @@ interface AdminDashboardData {
   }[];
   recent_tournaments: {
     id: string;
+    slug: string | null;
     name: string;
     organization_name: string | null;
     start_date: string;

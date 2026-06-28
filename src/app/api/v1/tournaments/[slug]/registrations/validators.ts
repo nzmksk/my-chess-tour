@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { ChessTitle } from "@/app/tournaments/types";
-import type { Restrictions } from "@/app/tournaments/[id]/types";
+import type { Restrictions } from "@/app/tournaments/[slug]/types";
 import { calculateAge } from "@/app/tournaments/utils";
 
 export interface EligibilityProfile {

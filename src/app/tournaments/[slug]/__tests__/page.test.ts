@@ -16,11 +16,11 @@ vi.mock("next/navigation", () => ({
   notFound: mockNotFound,
 }));
 
-vi.mock("@/app/tournaments/[id]/_components/TournamentDetail", () => ({
+vi.mock("@/app/tournaments/[slug]/_components/TournamentDetail", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("@/app/tournaments/[id]/_components/DetailSkeleton", () => ({
+vi.mock("@/app/tournaments/[slug]/_components/DetailSkeleton", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 

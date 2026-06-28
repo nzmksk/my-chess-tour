@@ -16,7 +16,7 @@ import PaymentInProgress from "./_components/PaymentInProgress";
 
 export const dynamic = "force-dynamic";
 
-async function fetchTournament(id: string): Promise<TournamentDetail | null> {
+async function fetchTournament(slug: string): Promise<TournamentDetail | null> {
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";
   const protocol =
@@ -25,7 +25,7 @@ async function fetchTournament(id: string): Promise<TournamentDetail | null> {
       : "https";
 
   try {
-    const res = await fetch(`${protocol}://${host}/api/v1/tournaments/${id}`, {
+    const res = await fetch(`${protocol}://${host}/api/v1/tournaments/${slug}`, {
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -88,24 +88,27 @@ async function getLivePendingPayment(
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const tournament = await fetchTournament(id);
+  const { slug } = await params;
+  const tournament = await fetchTournament(slug);
   if (!tournament) return { title: "Tournament Not Found" };
   return {
     title: `Register – ${tournament.name} | MY Chess Tour`,
   };
 }
 
-async function RegisterPageContent({ id }: { id: string }) {
-  const tournament = await fetchTournament(id);
+async function RegisterPageContent({ slug }: { slug: string }) {
+  const tournament = await fetchTournament(slug);
   if (!tournament) notFound();
+
+  // The slug resolved to a tournament; use its UUID for all internal queries.
+  const tournamentId = tournament.id;
 
   const claims = await getAuthClaims();
 
   if (!claims) {
-    redirect(`/auth/login?next=/tournaments/${id}/register`);
+    redirect(`/auth/login?next=/tournaments/${slug}/register`);
   }
 
   const supabase = await createClient();
@@ -123,7 +126,7 @@ async function RegisterPageContent({ id }: { id: string }) {
   const { data: commission } = await supabaseAdmin
     .from("tournaments")
     .select("commission_rate, organizer_commission_pct")
-    .eq("id", id)
+    .eq("id", tournamentId)
     .single();
 
   const commissionRate = commission?.commission_rate ?? 10;
@@ -146,9 +149,13 @@ async function RegisterPageContent({ id }: { id: string }) {
   // If the user has a still-live pending payment, resuming reuses the same CHIP
   // link with the tier locked — so show a "Continue payment" screen instead of
   // the tier form. Once the hold lapses the row expires and the form returns.
-  const livePending = await getLivePendingPayment(claims.id, id, feeBreakdown);
+  const livePending = await getLivePendingPayment(
+    claims.id,
+    tournamentId,
+    feeBreakdown,
+  );
   if (livePending) {
-    return <PaymentInProgress tournamentId={id} {...livePending} />;
+    return <PaymentInProgress tournamentSlug={slug} {...livePending} />;
   }
 
   return (
@@ -166,15 +173,15 @@ async function RegisterPageContent({ id }: { id: string }) {
 export default async function RegisterPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
 
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
       <main className="mx-auto max-w-2xl px-6 py-10 md:px-10">
-        <RegisterPageContent id={id} />
+        <RegisterPageContent slug={slug} />
       </main>
     </div>
   );

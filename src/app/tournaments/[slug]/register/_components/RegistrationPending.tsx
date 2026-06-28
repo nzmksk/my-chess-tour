@@ -4,12 +4,12 @@ import { toTitleCase } from "@/app/tournaments/utils";
 
 interface Props {
   registration: RegistrationRow;
-  tournamentId: string;
+  tournamentSlug: string;
 }
 
 export default function RegistrationPending({
   registration,
-  tournamentId,
+  tournamentSlug,
 }: Props) {
   return (
     <div className="max-w-lg mx-auto">
@@ -39,7 +39,7 @@ export default function RegistrationPending({
           </div>
         </div>
         <Link
-          href={`/tournaments/${tournamentId}`}
+          href={`/tournaments/${tournamentSlug}`}
           className="btn-secondary rounded-md text-center mt-2"
         >
           Back to Tournament

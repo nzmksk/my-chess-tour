@@ -6,6 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Data-driven roles instead of enums.
 -- Scopes: 'global' (platform-wide), 'organization' (per-org)
 -- =============================================
+DROP TYPE IF EXISTS role_scope CASCADE;
 CREATE TYPE role_scope AS ENUM ('global', 'organization');
 
 CREATE TABLE roles (
@@ -56,6 +57,8 @@ CREATE TABLE user_global_roles (
 -- PLAYER PROFILES
 -- Chess-specific info. All chess IDs optional.
 -- =============================================
+DROP TYPE IF EXISTS gender CASCADE;
+DROP TYPE IF EXISTS chess_title CASCADE;
 CREATE TYPE gender AS ENUM ('male', 'female');
 CREATE TYPE chess_title AS ENUM ('GM', 'WGM', 'IM', 'WIM', 'FM', 'WFM', 'CM', 'WCM');
 
@@ -85,6 +88,7 @@ CREATE TABLE player_profiles (
 -- ORGANIZATIONS
 -- Schools, chess clubs, or any organizing body.
 -- =============================================
+DROP TYPE IF EXISTS approval_status CASCADE;
 CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
 
 CREATE TABLE organizations (
@@ -125,12 +129,14 @@ CREATE TABLE organization_memberships (
 -- TOURNAMENTS
 -- The main event, created by approved organizers.
 -- =============================================
+DROP TYPE IF EXISTS tournament_status CASCADE;
 CREATE TYPE tournament_status AS ENUM ('draft', 'published', 'cancelled');
 
 CREATE TABLE tournaments (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id             uuid REFERENCES organizations(id) ON DELETE SET NULL,
   name                        varchar(255) NOT NULL,
+  slug                        varchar(255), -- public URL identity; assigned at publish (NULL for drafts). Unique index in 002_indexes.sql.
   description                 text,
   venue_name                  varchar(255) NOT NULL,
   venue_state                 varchar(50) NOT NULL,
@@ -170,6 +176,7 @@ CREATE TABLE tournaments (
 -- REGISTRATIONS
 -- A player's registration for a tournament.
 -- =============================================
+DROP TYPE IF EXISTS registration_status CASCADE;
 CREATE TYPE registration_status AS ENUM ('pending_payment', 'failed_payment', 'cancelled_payment', 'confirmed', 'forfeited');
 -- pending_payment: just registered, awaiting payment
 -- failed_payment: payment attempted but failed (e.g. card declined, or user cancelled on CHIP)
@@ -204,6 +211,8 @@ CREATE TABLE registrations (
 -- player_commission = player's share of platform fee
 -- net = gross - platform_fee
 -- =============================================
+DROP TYPE IF EXISTS payment_type CASCADE;
+DROP TYPE IF EXISTS payment_status CASCADE;
 CREATE TYPE payment_type AS ENUM ('registration', 'refund', 'organizer_payout', 'player_prize', 'adjustment');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed');
 
@@ -243,6 +252,7 @@ ALTER TABLE registrations
 -- Approval workflow for refund requests.
 -- When processed, a payment record of type 'refund' is created.
 -- =============================================
+DROP TYPE IF EXISTS refund_status CASCADE;
 CREATE TYPE refund_status AS ENUM ('pending', 'approved', 'rejected');
 
 CREATE TABLE refunds (

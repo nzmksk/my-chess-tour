@@ -13,6 +13,7 @@ interface PendingOrganization {
 
 interface RecentTournament {
   id: string;
+  slug: string | null;
   name: string;
   organization_name: string | null;
   start_date: string;
@@ -132,11 +133,8 @@ function TournamentRow({ tournament }: { tournament: RecentTournament }) {
   const status = tournament.status as TournamentStatus;
   const statusConfig = TOUR_STATUS_CONFIG[status] ?? TOUR_STATUS_CONFIG.draft;
 
-  return (
-    <Link
-      href={`/tournaments/${tournament.id}`}
-      className="flex items-center gap-4 card px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
-    >
+  const inner = (
+    <>
       <div className="text-center min-w-12 shrink-0">
         <div className="font-cinzel text-xs font-bold tracking-widest text-gold-bright">{month}</div>
         <div className="font-cinzel text-2xl font-bold text-text-primary leading-tight">{day}</div>
@@ -157,6 +155,23 @@ function TournamentRow({ tournament }: { tournament: RecentTournament }) {
       >
         {statusConfig.label}
       </span>
+    </>
+  );
+
+  // Only published tournaments have a public slug/page; drafts and cancelled
+  // tournaments render as a non-clickable row.
+  if (!tournament.slug) {
+    return (
+      <div className="flex items-center gap-4 card px-5 py-4">{inner}</div>
+    );
+  }
+
+  return (
+    <Link
+      href={`/tournaments/${tournament.slug}`}
+      className="flex items-center gap-4 card px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
+    >
+      {inner}
     </Link>
   );
 }

@@ -93,7 +93,7 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
 
   return (
     <Link
-      href={`/tournaments/${tournament.id}`}
+      href={`/tournaments/${tournament.slug}`}
       className={`flex items-center gap-4 card px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)] ${dimmed ? "opacity-60" : ""}`}
     >
       {/* Date block */}

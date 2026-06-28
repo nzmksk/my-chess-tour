@@ -65,6 +65,7 @@ export interface StartingRankPlayer {
 
 export interface TournamentDetail {
   id: string;
+  slug: string;
   name: string;
   description?: string | null;
   venue: {

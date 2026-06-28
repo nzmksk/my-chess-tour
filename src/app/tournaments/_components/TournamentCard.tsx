@@ -122,7 +122,7 @@ export default function TournamentCard({
               Full
             </button>
           ) : (
-            <Link href={`/tournaments/${t.id}`} className="card-btn-view">
+            <Link href={`/tournaments/${t.slug}`} className="card-btn-view">
               View →
             </Link>
           )}

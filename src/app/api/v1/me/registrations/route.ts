@@ -16,6 +16,7 @@ const VALID_ORDER = new Set(["asc", "desc"]);
 
 type TournamentRow = {
   id: string;
+  slug: string;
   name: string;
   start_date: string;
   venue_name: string;
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .select(
       `id, fee_tier, status, registered_at, confirmed_at,
       tournaments!inner (
-        id, name, start_date, venue_name, venue_state, format, time_control, entry_fees, status
+        id, slug, name, start_date, venue_name, venue_state, format, time_control, entry_fees, status
       )`,
     )
     .eq("user_id", claims.id)
@@ -149,6 +150,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       id: row.id,
       tournament: {
         id: row.tournaments.id,
+        slug: row.tournaments.slug,
         name: row.tournaments.name,
         start_date: row.tournaments.start_date,
         venue_name: row.tournaments.venue_name,

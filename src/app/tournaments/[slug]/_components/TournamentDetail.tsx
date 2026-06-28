@@ -377,7 +377,7 @@ export default function TournamentDetail({
             </button>
           ) : registrationStatus === "pending_payment" ? (
             <Link
-              href={`/tournaments/${t.id}/register`}
+              href={`/tournaments/${t.slug}/register`}
               className="btn-primary block w-full rounded-md text-center"
             >
               Complete Payment
@@ -391,7 +391,7 @@ export default function TournamentDetail({
             </button>
           ) : (
             <Link
-              href={`/tournaments/${t.id}/register`}
+              href={`/tournaments/${t.slug}/register`}
               className="btn-primary block w-full rounded-md text-center"
             >
               Register Now

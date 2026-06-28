@@ -36,6 +36,7 @@ export interface EntryFees {
 
 export interface Tournament {
   id: string;
+  slug: string;
   name: string;
   venue: {
     name: string;

@@ -17,7 +17,7 @@ import {
   screen,
   act,
 } from "@testing-library/react";
-import type { TournamentDetail } from "@/app/tournaments/[id]/types";
+import type { TournamentDetail } from "@/app/tournaments/[slug]/types";
 import type { PlayerProfile } from "../../types";
 
 // ---------------------------------------------------------------------------
