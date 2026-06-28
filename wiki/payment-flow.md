@@ -85,6 +85,66 @@ The 10-minute hold frees _capacity_ but never terminalizes the row, and CHIP emi
 
 `expire_stale_pending_payments` called with no scoping args sweeps everything, so it doubles as a future **pg_cron backstop** for rows never read again. None is scheduled today — there is no scheduler in this project (Netlify, plain `next build`/`start`).
 
+## Regression testing
+
+Three layers, cheapest first. Run **A** on every change; add **B** when touching the DB money functions (`007`/`003`); run **C** before a release or when changing the CHIP integration.
+
+### A. Automated suite — `npm run test` (vitest)
+
+Mocks the Supabase RPCs and the CHIP client, so it exercises the route/handler logic, **not** the SQL.
+Key files and what each pins down:
+
+- `…/webhooks/chip/__tests__/route.test.ts` — signature verify (valid / quoted-key+`\n` / missing key → 401), `paid` settle + amount forwarding, `reference`-fallback correlation, intermediate event → ack, no-match → ack 200, transient DB error → 500 (CHIP retries).
+- `…/tournaments/[id]/checkout/__tests__/route.test.ts` — create-new, live-resume same tier (reuse link), tier-change lock (`409`), **no-link fallthrough** (CHIP-create failed), lapsed/`failed_payment`/`cancelled_payment` fresh-start + re-price, prior-purchase cancel (and cancel-fails-still-resumes), already-confirmed `409`, capacity-full `422`, non-resumable `409`.
+- `…/register/_lib/__tests__/resolvePaymentState.test.ts` — return-page reconcile: pending→paid/error, **failed_payment→paid rescue** and failed_payment-stays-failed, amount-mismatch stays pending, expiry sweep (terminalized / nothing / no-`chip_transaction_id`), network-error degrades to pending.
+- `…/me/registrations/__tests__/route.test.ts`, `services/payments/__tests__/fees.test.ts` — list-sweep and commission math.
+
+### B. DB money-state scenarios — `db/tests/settle_registration_payment.sql`
+
+The vitest layer can't reach the settlement/supersession/expiry SQL (it mocks the RPCs), so the money-loss-critical paths are covered here. Paste the script into the **Supabase SQL editor** (service role) after applying the migrations. It builds throwaway fixtures and is wrapped in `BEGIN … ROLLBACK`, so it **persists nothing**; it prints `ALL SCENARIOS PASSED` or `RAISE`s on the first failure. Scenarios:
+
+- **S1** decline (`paid=false`) then retry-success on the **same** payment → `confirmed`/`paid` (the "real money wins" fix).
+- **S2** supersede A with B via `start_new_payment_attempt`, then a late `paid` for A → `confirmed`, `current_payment_id` points at A.
+- **S3a** duplicate `paid` is idempotent. **S3b** amount mismatch leaves it `pending_payment`/`pending` + `amount_mismatch=true`. **S3c** a stray late failure never overrides a `paid` row.
+- **S4** a stale hold expires to `cancelled_payment` while the payment stays `pending`. **S5** a late `paid` then rescues that just-expired registration.
+
+### C. End-to-end manual (CHIP sandbox)
+
+Drive a real checkout and inspect the two rows (`registrations.status`, `payments.status`). Steps:
+
+1. **Happy path** — register → pay on CHIP → land on `/register/success`. Expect `confirmed`/`paid` (webhook **and** the return-page reconcile agree).
+2. **Decline → retry** — on the CHIP payform, fail once (test-decline card) then retry successfully on the **same** purchase. Expect `confirmed`/`paid` — verifies CHIP allows same-purchase retry (the premise of S1/#1).
+3. **Cancel on CHIP** — start checkout, cancel on the payform. Expect `failed_payment`/`failed`.
+4. **Abandon, resume live** — start checkout, close the tab, return to the register page within 10 min. Expect the **Continue-payment** card with the same link + a different-tier request blocked (`409`).
+5. **Abandon, resume after expiry** — wait out the 10-min hold, reload. Expect the tier form back (row swept to `cancelled_payment`), and a fresh resume issues a new link/timer.
+6. **Webhook-before / after return** — to exercise the race, pay and immediately return: the success page must reconcile to `confirmed` even if the webhook is slow (or arrives first). Both orders must end `confirmed`/`paid` exactly once.
+
+### Scenario coverage matrix
+
+| Scenario | Covered by | Expected end state (registration / payment) |
+|---|---|---|
+| Happy path | A (webhook+checkout), C-1 | `confirmed` / `paid` |
+| Return-before-webhook reconcile | A (resolve), C-6 | `confirmed` / `paid` |
+| Resume live, same tier | A (checkout) | unchanged `pending_payment` / `pending`, same link |
+| Resume live, different tier | A (checkout), C-4 | `409`, unchanged |
+| Resume live, no stored link | A (checkout) | fresh attempt issued |
+| Resume lapsed / `failed_payment` / `cancelled_payment` | A (checkout), C-5 | new `pending` attempt (re-priced) |
+| Prior CHIP purchase cancelled on resume | A (checkout) | prior link unpayable; best-effort |
+| Decline → retry-success (same purchase) | B-S1, A (resolve), C-2 | `confirmed` / `paid` |
+| Superseded attempt later paid | B-S2 | `confirmed` / `paid` (points at paid attempt) |
+| Cancel on CHIP | A (webhook), C-3 | `failed_payment` / `failed` |
+| Network: CHIP-create fails | C (gateway 503) | unchanged `pending` (no link); recover via resume |
+| Network: webhook DB error | A (webhook → 500) | unchanged; CHIP retries |
+| Network: reconcile throws | A (resolve → pending) | unchanged `pending_payment` |
+| Expiry (no CHIP event) | B-S4, A (resolve) | `cancelled_payment` / `pending` |
+| Late paid rescues expired | B-S5 | `confirmed` / `paid` |
+| Idempotency: duplicate paid | B-S3a, A (webhook) | `confirmed` / `paid` (single effect) |
+| Idempotency: paid then late failed | B-S3c | `confirmed` / `paid` |
+| Amount mismatch | B-S3b, A (resolve) | `pending_payment` / `pending` + `amount_mismatch` |
+| Capacity full (create / resume) | A (checkout → 422), DB trigger | no row created / unchanged |
+| Concurrent double-submit (create) | code path (`23505` recovery) | one winner, resumed |
+| Bad webhook signature / no key | A (webhook → 401) | unchanged |
+
 ## Files
 
 - `src/services/chip/chip.ts` — CHIP client (`createChipPurchase` with `due`, `getChipPurchase`, `cancelChipPurchase`), `chipOutcome`, expiry constants.
@@ -92,4 +152,5 @@ The 10-minute hold frees _capacity_ but never terminalizes the row, and CHIP emi
 - `src/app/api/v1/webhooks/chip/route.ts` — signature verify + settle.
 - `src/app/tournaments/[id]/register/_lib/resolvePaymentState.ts` — return-page reconcile + lazy expiry.
 - `src/app/tournaments/[id]/register/page.tsx` + `_components/PaymentInProgress.tsx` — Continue-payment screen for a live pending payment.
+- `db/tests/settle_registration_payment.sql` — transaction-wrapped DB money-state regression test (see [Regression testing](#regression-testing) §B).
 - DB functions are flattened into two files: `db/migrations/007_payment_functions.sql` (`compute_registration_amounts`, `create_registration_with_payment`, `start_new_payment_attempt`, `settle_registration_payment`, `expire_stale_pending_payments`) and `db/migrations/003_functions_triggers.sql` (`assert_tournament_capacity` + the `check_tournament_capacity` INSERT trigger). `payments.checkout_url` and the `cancelled_payment` resume path live in `001_tables.sql` / `007`.
