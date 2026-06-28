@@ -399,7 +399,7 @@ BEGIN
       END;
 
       INSERT INTO public.tournaments (
-        organization_id, name, description,
+        organization_id, name, slug, description,
         venue_name, venue_state, venue_address,
         start_date, end_date, registration_deadline,
         format, time_control,
@@ -410,6 +410,16 @@ BEGIN
       ) VALUES (
         org_profile_ids[i],
         t_names[idx],
+        -- Published tournaments get a public slug (matches slugify() in
+        -- src/lib/slugs.ts); drafts have none. Seed names are unique → no collision.
+        CASE
+          WHEN t_status = 'published'::tournament_status
+          THEN regexp_replace(
+                 regexp_replace(lower(t_names[idx]), '[^a-z0-9]+', '-', 'g'),
+                 '(^-+|-+$)', '', 'g'
+               )
+          ELSE NULL
+        END,
         t_names[idx] || ' — a competitive chess event open to all Malaysian-rated players.',
         venue_names[v_idx],
         states[((idx - 1) % array_length(states, 1)) + 1],

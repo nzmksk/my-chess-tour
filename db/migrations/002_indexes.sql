@@ -16,6 +16,8 @@ CREATE INDEX idx_org_memberships_role ON organization_memberships (role_id);
 -- Tournaments
 CREATE INDEX idx_tournaments_status_start ON tournaments (status, start_date);
 CREATE INDEX idx_tournaments_organizer ON tournaments (organization_id);
+-- Public URL slug. NULLs allowed (drafts have no slug); also serves slug lookups.
+CREATE UNIQUE INDEX tournaments_slug_key ON tournaments (slug);
 
 -- Registrations
 CREATE INDEX idx_registrations_user ON registrations (user_id);
