@@ -107,8 +107,8 @@ export async function POST(
 
   // Capacity is enforced authoritatively in Postgres: the create path via the
   // check_tournament_capacity trigger, the resume path via
-  // reset_registration_for_payment. Both apply the reservation hold window, so
-  // there is no JS pre-check here (it would double-count lapsed holds).
+  // start_new_payment_attempt. Both apply the reservation hold window, so there
+  // is no JS pre-check here (it would double-count lapsed holds).
 
   const fees = tournament.entry_fees as EntryFees;
 
@@ -359,6 +359,33 @@ async function continuePendingPayment(
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
+  // Look up the current attempt's stored link first. Whether a payment is truly
+  // "in progress" (and thus tier-locked) hinges on a live link existing.
+  const { data: payment } = currentPaymentId
+    ? await supabaseAdmin
+        .from("payments")
+        .select("checkout_url")
+        .eq("id", currentPaymentId)
+        .maybeSingle()
+    : { data: null };
+
+  // No stored link (an earlier purchase-create failed) — nothing is actually in
+  // progress to protect, so start a fresh attempt for whatever tier was requested
+  // rather than leaving the user stuck or locking them out of a different tier.
+  if (!payment?.checkout_url) {
+    return resumeRegistration(
+      registrationId,
+      currentPaymentId,
+      requestedFeeTier,
+      amountCents,
+      tournamentId,
+      tournamentName,
+      userEmail,
+    );
+  }
+
+  // A live link exists: the tier is locked until the hold lapses. A request for a
+  // different tier is rejected with the time it unlocks.
   if (requestedFeeTier !== currentFeeTier) {
     const unlockAt = new Date(
       new Date(registeredAt).getTime() + PAYMENT_TIMEOUT_MINUTES * 60_000,
@@ -374,29 +401,6 @@ async function continuePendingPayment(
         },
       },
       { status: 409 },
-    );
-  }
-
-  // Reuse the current attempt's stored link.
-  const { data: payment } = currentPaymentId
-    ? await supabaseAdmin
-        .from("payments")
-        .select("checkout_url")
-        .eq("id", currentPaymentId)
-        .maybeSingle()
-    : { data: null };
-
-  // No stored link (an earlier purchase-create failed) — recover by starting a
-  // fresh attempt rather than leaving the user stuck.
-  if (!payment?.checkout_url) {
-    return resumeRegistration(
-      registrationId,
-      currentPaymentId,
-      requestedFeeTier,
-      amountCents,
-      tournamentId,
-      tournamentName,
-      userEmail,
     );
   }
 
