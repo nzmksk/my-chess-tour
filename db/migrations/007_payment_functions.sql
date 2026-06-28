@@ -1,34 +1,52 @@
 -- =============================================
--- IMMUTABLE PER-ATTEMPT PAYMENTS + SINGLE TIMEOUT
--- payments is a ledger: each checkout attempt is its own immutable row, never
--- mutated/re-priced. A registration points at its active attempt via
--- registrations.current_payment_id. Settlement only terminalizes the
--- registration for its *current* attempt, so a stale/superseded purchase's
--- webhook can no longer flip the live attempt (fixes the resume race).
+-- REGISTRATION + PAYMENT MONEY FUNCTIONS
+-- payments is an append-only ledger: each checkout attempt is its own immutable
+-- row, never mutated/re-priced. registrations.current_payment_id (001) points at
+-- the active attempt. Settlement only terminalizes the registration for its
+-- *current* attempt, so a stale/superseded purchase's webhook can't flip the live
+-- attempt. A single payment-timeout window (10 min) governs the CHIP `due`, the
+-- seat hold (assert_tournament_capacity), resume "is-live", and expiry; a late
+-- `paid` webhook can still rescue a just-expired registration.
+-- =============================================
+
+-- =============================================
+-- SHARED COMMISSION MATH
+-- Single source of truth for what a player is charged. Used by both
+-- create_registration_with_payment and start_new_payment_attempt.
 --
--- Replaces reset_registration_for_payment (in-place mutation) with
--- start_new_payment_attempt (append a new row). Expiry now leaves the payment
--- pending so a late `paid` webhook can still rescue a just-expired registration
--- (single 10-minute timeout: real money wins).
+--   platform_fee         = floor(amount * commission_rate / 100)
+--   organizer_commission = floor(platform_fee * organizer_commission_pct / 10)
+--   player_commission    = platform_fee - organizer_commission
+--   gross                = amount + player_commission   (what the player pays)
+--   net                  = gross - platform_fee          (what the organizer nets)
 -- =============================================
-
--- The active payment attempt for a registration.
-ALTER TABLE registrations
-  ADD COLUMN IF NOT EXISTS current_payment_id uuid REFERENCES payments(id) ON DELETE CASCADE;
-
--- Backfill existing registrations to their latest registration payment.
-UPDATE registrations r
-  SET current_payment_id = (
-    SELECT p.id FROM payments p
-    WHERE p.registration_id = r.id AND p.type = 'registration'
-    ORDER BY p.created_at DESC
-    LIMIT 1
-  )
-  WHERE r.current_payment_id IS NULL;
+CREATE OR REPLACE FUNCTION compute_registration_amounts(
+  p_amount_cents             integer,
+  p_commission_rate          smallint,
+  p_organizer_commission_pct smallint,
+  OUT platform_fee_cents         integer,
+  OUT organizer_commission_cents integer,
+  OUT player_commission_cents    integer,
+  OUT gross_amount_cents         integer,
+  OUT net_amount_cents           integer
+)
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+BEGIN
+  platform_fee_cents         := FLOOR(p_amount_cents::numeric * p_commission_rate / 100)::integer;
+  organizer_commission_cents := FLOOR(platform_fee_cents::numeric * p_organizer_commission_pct / 10)::integer;
+  player_commission_cents    := platform_fee_cents - organizer_commission_cents;
+  gross_amount_cents         := p_amount_cents + player_commission_cents;
+  net_amount_cents           := gross_amount_cents - platform_fee_cents;
+END;
+$$;
 
 -- =============================================
--- CREATE: first attempt. Now also points the registration at its payment and
--- returns the payment id so the caller can initiate CHIP on that exact row.
+-- CREATE: first attempt. Atomically inserts the registration + its first payment
+-- row, points the registration at it, and returns {registration_id, payment_id}
+-- so the caller can initiate CHIP on that exact row. Capacity is enforced by the
+-- check_tournament_capacity INSERT trigger (003).
 -- =============================================
 CREATE OR REPLACE FUNCTION create_registration_with_payment(
   p_user_id        uuid,
@@ -64,14 +82,31 @@ BEGIN
   );
 
   INSERT INTO payments (
-    type, tournament_id, registration_id, user_id, organization_id,
-    gross_amount_cents, platform_fee_cents, organizer_commission_cents,
-    player_commission_cents, net_amount_cents, currency, status
+    type,
+    tournament_id,
+    registration_id,
+    user_id,
+    organization_id,
+    gross_amount_cents,
+    platform_fee_cents,
+    organizer_commission_cents,
+    player_commission_cents,
+    net_amount_cents,
+    currency,
+    status
   ) VALUES (
-    'registration', p_tournament_id, v_registration.id, p_user_id, v_organization_id,
-    v_amounts.gross_amount_cents, v_amounts.platform_fee_cents,
-    v_amounts.organizer_commission_cents, v_amounts.player_commission_cents,
-    v_amounts.net_amount_cents, 'MYR', 'pending'
+    'registration',
+    p_tournament_id,
+    v_registration.id,
+    p_user_id,
+    v_organization_id,
+    v_amounts.gross_amount_cents,
+    v_amounts.platform_fee_cents,
+    v_amounts.organizer_commission_cents,
+    v_amounts.player_commission_cents,
+    v_amounts.net_amount_cents,
+    'MYR',
+    'pending'
   )
   RETURNING id INTO v_payment_id;
 
@@ -85,12 +120,11 @@ END;
 $$;
 
 -- =============================================
--- START A NEW ATTEMPT (replaces reset_registration_for_payment).
--- Supersedes the prior attempt (marks it failed so its webhooks can't settle the
--- registration), appends a fresh pending payment, and re-arms the hold.
+-- START A NEW ATTEMPT (resume after the link lapsed / a decline / an expiry).
+-- Re-checks capacity excluding this row, supersedes the prior attempt (marks it
+-- failed so its webhooks can't settle the registration), appends a fresh pending
+-- payment, re-arms the hold, and points current_payment_id at the new row.
 -- =============================================
-DROP FUNCTION IF EXISTS reset_registration_for_payment(uuid, varchar, integer);
-
 CREATE OR REPLACE FUNCTION start_new_payment_attempt(
   p_registration_id uuid,
   p_fee_tier        varchar(50),
@@ -120,8 +154,7 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  -- Re-check capacity excluding this row; a lapsed/failed/expired row may have
-  -- lost its slot in the meantime.
+  -- A lapsed/failed/expired row may have lost its slot in the meantime.
   PERFORM assert_tournament_capacity(v_reg.tournament_id, p_registration_id);
 
   -- Supersede the prior attempt so a late webhook for it can't settle the
@@ -170,10 +203,12 @@ END;
 $$;
 
 -- =============================================
--- SETTLE: keyed by a specific payment row.
+-- SETTLE: keyed by a specific payment row (idempotent — acts only while pending).
 --   paid  → that payment paid; confirm the registration (rescues a just-expired
---           one — real money wins), pointing it at the paid attempt. Amount guard
---           unchanged.
+--           one — real money wins), pointing it at the paid attempt. A `paid`
+--           outcome is only honored if p_amount_cents matches the recorded gross
+--           (guards a stale/re-priced purchase); a mismatch is left pending and
+--           reported back.
 --   !paid → that payment failed; terminalize the registration ONLY if this is its
 --           current attempt (a superseded/old attempt's failure is a no-op on the
 --           registration).
@@ -198,7 +233,6 @@ BEGIN
     RAISE EXCEPTION 'payment % not found', p_payment_id USING ERRCODE = 'P0002';
   END IF;
 
-  -- Idempotency: only act while this attempt is still pending.
   IF v_payment.status = 'pending' THEN
     IF p_paid
        AND p_amount_cents IS NOT NULL
@@ -240,13 +274,16 @@ END;
 $$;
 
 -- =============================================
--- EXPIRE: terminalize the *registration* only; leave the current payment pending
--- so a late `paid` webhook can still rescue it. Returns the expired registration
--- ids. (Single timeout: callers pass the 10-minute window.)
+-- EXPIRE STALE PENDING PAYMENTS (app-owned, time-based)
+-- CHIP emits no expiry webhook (see wiki/chip-webhook.md), so an abandoned
+-- checkout never terminalizes on its own. Flips pending_payment registrations
+-- older than the TTL to cancelled_payment, scoped to one registration, one
+-- tournament, or one user (so read paths only sweep what they display); unscoped
+-- it doubles as a future pg_cron backstop. Leaves the payment row pending so a
+-- late `paid` webhook can still rescue the registration. FOR UPDATE SKIP LOCKED
+-- so concurrent callers don't block. Returns the expired registration ids.
 -- =============================================
-DROP FUNCTION IF EXISTS expire_stale_pending_payments(interval, uuid, uuid, uuid);
-
-CREATE FUNCTION expire_stale_pending_payments(
+CREATE OR REPLACE FUNCTION expire_stale_pending_payments(
   p_ttl             interval,
   p_tournament_id   uuid DEFAULT NULL,
   p_registration_id uuid DEFAULT NULL,

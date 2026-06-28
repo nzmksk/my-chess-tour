@@ -73,6 +73,10 @@ CREATE TABLE player_profiles (
   bank_name             varchar(100),
   bank_account_holder   varchar(255),
   bank_account_number   varchar(50),
+  -- Per-player toggles for showing age (derived from date_of_birth) and OKU
+  -- status on the public profile. Default hidden until the player opts in.
+  show_age              boolean NOT NULL DEFAULT false,
+  show_oku              boolean NOT NULL DEFAULT false,
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
@@ -218,10 +222,21 @@ CREATE TABLE payments (
   currency                    varchar(3) NOT NULL DEFAULT 'MYR',
   payment_method              varchar(50),
   chip_transaction_id         varchar(255),
+  checkout_url                text,                               -- CHIP checkout link, reused while the attempt is live
   status                      payment_status NOT NULL DEFAULT 'pending',
   paid_at                     timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now()
 );
+
+-- A registration's active payment attempt. payments is an append-only ledger
+-- (one row per attempt); this points at the live one. Added after the payments
+-- table because the registrations→payments FK is circular. ON DELETE SET NULL:
+-- the pointer simply clears if its payment is ever removed (payments aren't
+-- deleted in practice; never cascade-delete the registration). Settlement only
+-- terminalizes the registration for its current attempt — see
+-- 007_payment_functions.sql.
+ALTER TABLE registrations
+  ADD COLUMN current_payment_id uuid REFERENCES payments(id) ON DELETE SET NULL;
 
 -- =============================================
 -- REFUNDS

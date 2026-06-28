@@ -161,9 +161,14 @@ CREATE POLICY "Org members can view own tournaments"
 ON tournaments FOR SELECT
 USING (has_org_permission(auth.uid(), organization_id, 'tournament.view'));
 
+-- Defense-in-depth: requires both the permission and an approved organization,
+-- so the database enforces approval, not just the API.
 CREATE POLICY "Org members can create tournaments"
 ON tournaments FOR INSERT
-WITH CHECK (has_org_permission(auth.uid(), organization_id, 'tournament.create'));
+WITH CHECK (
+  has_org_permission(auth.uid(), organization_id, 'tournament.create')
+  AND is_org_approved(organization_id)
+);
 
 CREATE POLICY "Org members can update tournaments"
 ON tournaments FOR UPDATE
