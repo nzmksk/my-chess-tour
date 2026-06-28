@@ -8,10 +8,22 @@ import {
   normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[id]/registrations/validators";
 import type { RegistrationRequest } from "@/app/tournaments/[id]/register/types";
-import { cancelChipPurchase, createChipPurchase } from "@/services/chip/chip";
+import {
+  cancelChipPurchase,
+  createChipPurchase,
+  PAYMENT_DUE_MINUTES,
+} from "@/services/chip/chip";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The seat hold (and the CHIP purchase `due`) lasts PAYMENT_DUE_MINUTES from
+// registered_at. While live, the pending payment is resumed by reusing its link.
+function isHoldLive(registeredAt: string): boolean {
+  return (
+    Date.now() - new Date(registeredAt).getTime() < PAYMENT_DUE_MINUTES * 60_000
+  );
+}
 
 export async function POST(
   request: NextRequest,
@@ -192,7 +204,7 @@ export async function POST(
 
   const { data: existing } = await supabaseAdmin
     .from("registrations")
-    .select("id, status")
+    .select("id, status, fee_tier, registered_at")
     .eq("user_id", user.id)
     .eq("tournament_id", id)
     .maybeSingle();
@@ -210,28 +222,49 @@ export async function POST(
       );
     }
 
+    // A still-live pending payment is resumed by reusing its existing CHIP link —
+    // no timer reset, and the fee tier is locked until the hold lapses.
     if (
-      existing.status !== "pending_payment" &&
-      existing.status !== "failed_payment"
+      existing.status === "pending_payment" &&
+      isHoldLive(existing.registered_at)
     ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "ALREADY_REGISTERED",
-            message: `Cannot re-register: existing registration has status '${existing.status}'`,
-          },
-        },
-        { status: 409 },
+      return continuePendingPayment(
+        existing.id,
+        existing.fee_tier,
+        fee_tier,
+        existing.registered_at,
+        matchedTier.amount_cents,
+        id,
+        tournament.name,
+        user.email!,
       );
     }
 
-    return resumeRegistration(
-      existing.id,
-      fee_tier,
-      matchedTier.amount_cents,
-      id,
-      tournament.name,
-      user.email!,
+    // Lapsed pending, a declined payment, or an expired (cancelled) checkout:
+    // start fresh (new link + timer), with a possibly different tier.
+    if (
+      existing.status === "pending_payment" ||
+      existing.status === "failed_payment" ||
+      existing.status === "cancelled_payment"
+    ) {
+      return resumeRegistration(
+        existing.id,
+        fee_tier,
+        matchedTier.amount_cents,
+        id,
+        tournament.name,
+        user.email!,
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: {
+          code: "ALREADY_REGISTERED",
+          message: `Cannot re-register: existing registration has status '${existing.status}'`,
+        },
+      },
+      { status: 409 },
     );
   }
 
@@ -300,6 +333,72 @@ export async function POST(
     id,
     tournament.name,
     user.email!,
+  );
+}
+
+/**
+ * Continues a still-live pending payment by handing back the *same* CHIP
+ * checkout link — no timer reset, no new purchase. The fee tier is locked: a
+ * request for a different tier is rejected until the hold lapses (after which
+ * the registration expires and can be re-registered with any tier). Falls back
+ * to a fresh start only if no checkout link was ever stored.
+ */
+async function continuePendingPayment(
+  registrationId: string,
+  currentFeeTier: string,
+  requestedFeeTier: string,
+  registeredAt: string,
+  amountCents: number,
+  tournamentId: string,
+  tournamentName: string,
+  userEmail: string,
+): Promise<NextResponse> {
+  if (requestedFeeTier !== currentFeeTier) {
+    const unlockAt = new Date(
+      new Date(registeredAt).getTime() + PAYMENT_DUE_MINUTES * 60_000,
+    ).toISOString();
+    return NextResponse.json(
+      {
+        error: {
+          code: "PAYMENT_IN_PROGRESS",
+          message:
+            `You have a payment in progress for the '${currentFeeTier}' fee. ` +
+            `Complete it, or wait until ${unlockAt} to choose a different tier.`,
+          unlock_at: unlockAt,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  const { data: payment } = await supabaseAdmin
+    .from("payments")
+    .select("checkout_url")
+    .eq("registration_id", registrationId)
+    .eq("type", "registration")
+    .maybeSingle();
+
+  // No stored link (an earlier purchase-create failed) — recover by issuing a
+  // fresh one rather than leaving the user stuck.
+  if (!payment?.checkout_url) {
+    return resumeRegistration(
+      registrationId,
+      requestedFeeTier,
+      amountCents,
+      tournamentId,
+      tournamentName,
+      userEmail,
+    );
+  }
+
+  return NextResponse.json(
+    {
+      data: {
+        checkout_url: payment.checkout_url,
+        registration_id: registrationId,
+      },
+    },
+    { status: 201 },
   );
 }
 
@@ -428,7 +527,10 @@ async function initiateChipPayment(
 
   const { error: updErr } = await supabaseAdmin
     .from("payments")
-    .update({ chip_transaction_id: chipPurchase.id })
+    .update({
+      chip_transaction_id: chipPurchase.id,
+      checkout_url: chipPurchase.checkout_url,
+    })
     .eq("id", payment.id);
 
   if (updErr) {
