@@ -166,9 +166,11 @@ describe("POST /api/v1/webhooks/chip", () => {
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
-  it("acks without settling for a stale, superseded purchase", async () => {
-    // chip_transaction_id lookup misses (purchase superseded); reference match
-    // returns a payment whose current purchase id differs from the incoming one.
+  it("settles the reference-matched payment (settlement gating protects the registration)", async () => {
+    // Per-attempt model: each attempt is its own immutable row whose id is its
+    // `reference`. settle_registration_payment only terminalizes the registration
+    // for its *current* attempt, so settling a matched-by-reference row is safe
+    // even if its chip id differs — no stale-purchase guard in the webhook.
     setPaymentResult(
       { data: null, error: null },
       {
@@ -188,7 +190,11 @@ describe("POST /api/v1/webhooks/chip", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenCalledWith("settle_registration_payment", {
+      p_payment_id: "pay-1",
+      p_paid: true,
+      p_amount_cents: 5500,
+    });
   });
 
   it("acks an intermediate (pending) event without settling", async () => {

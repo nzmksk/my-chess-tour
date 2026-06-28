@@ -13,6 +13,7 @@ const {
   mockUsersBuilder,
   mockProfilesBuilder,
   mockFrom,
+  mockRpc,
   mockGetClaims,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: {
@@ -69,6 +70,8 @@ const {
   });
 
   const mockGetClaims = vi.fn();
+  // The manage data loader runs a lazy expiry sweep (rpc) before listing.
+  const mockRpc = vi.fn().mockResolvedValue({ data: [], error: null });
 
   return {
     mockOrgBuilder,
@@ -78,12 +81,13 @@ const {
     mockUsersBuilder,
     mockProfilesBuilder,
     mockFrom,
+    mockRpc,
     mockGetClaims,
   };
 });
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
 vi.mock("@/services/supabase/server", () => ({

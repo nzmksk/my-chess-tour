@@ -1,5 +1,16 @@
 const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 
+// CHIP emits no expiry webhook (see wiki/chip-webhook.md), so expiry is owned by
+// us. A single window governs everything: the CHIP purchase `due` (the link
+// becomes unpayable), the reservation seat hold (db/migrations/003_functions_triggers.sql),
+// "is this pending attempt still live" on resume, and the threshold past which an
+// abandoned registration is terminalized. A late `paid` webhook can still rescue a
+// just-expired registration in settle_registration_payment (real money wins), so
+// no extra safety buffer is needed.
+export const PAYMENT_TIMEOUT_MINUTES = 10;
+// As a Postgres interval literal for the expire_stale_pending_payments RPC.
+export const PAYMENT_TIMEOUT_INTERVAL = `${PAYMENT_TIMEOUT_MINUTES} minutes`;
+
 interface CreatePurchaseParams {
   amountCents: number;
   clientEmail: string;
@@ -75,6 +86,9 @@ export async function createChipPurchase(
       success_redirect: params.successRedirect,
       failure_redirect: params.failureRedirect,
       send_receipt: true,
+      // Expire the checkout so an abandoned link can't be paid after the seat
+      // hold lapses. `due` is a Unix timestamp in seconds.
+      due: Math.floor(Date.now() / 1000) + PAYMENT_TIMEOUT_MINUTES * 60,
     }),
   });
 

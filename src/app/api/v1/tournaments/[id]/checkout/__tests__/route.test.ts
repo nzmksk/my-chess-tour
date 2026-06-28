@@ -114,6 +114,7 @@ vi.mock("next/headers", () => ({
 vi.mock("@/services/chip/chip", () => ({
   createChipPurchase: mockCreateChipPurchase,
   cancelChipPurchase: mockCancelChipPurchase,
+  PAYMENT_TIMEOUT_MINUTES: 10,
 }));
 
 import { POST } from "../route";
@@ -125,6 +126,9 @@ import { POST } from "../route";
 const VALID_UUID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const FUTURE_DEADLINE = "2099-12-31T23:59:59Z";
+// A live pending hold (within PAYMENT_TIMEOUT_MINUTES) vs. a lapsed one (past it).
+const RECENT = new Date(Date.now() - 60_000).toISOString();
+const OLD = new Date(Date.now() - 60 * 60_000).toISOString();
 
 function makeTournament(overrides: Record<string, unknown> = {}) {
   return {
@@ -172,11 +176,16 @@ beforeEach(() => {
     error: null,
   });
   setThen(mockPaymentSelectBuilder, {
-    data: { id: "pay-1", gross_amount_cents: 3300 },
+    data: { id: "pay-1", registration_id: "reg-1", gross_amount_cents: 3300 },
     error: null,
   });
   setThen(mockPaymentUpdateBuilder, { data: null, error: null });
-  mockRpc.mockResolvedValue({ data: { id: "reg-1" }, error: null });
+  // create_registration_with_payment / start_new_payment_attempt both return the
+  // active payment id the route then initiates CHIP on.
+  mockRpc.mockResolvedValue({
+    data: { registration_id: "reg-1", payment_id: "pay-1" },
+    error: null,
+  });
   mockCreateChipPurchase.mockResolvedValue({
     id: "chip-purchase-1",
     checkout_url: "https://pay.example/checkout",
@@ -195,7 +204,13 @@ afterEach(() => {
 describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
   it("resumes a failed_payment registration without erroring (H2) and re-prices to the chosen tier (H1)", async () => {
     setThen(mockExistingBuilder, {
-      data: { id: "reg-1", status: "failed_payment" },
+      data: {
+        id: "reg-1",
+        status: "failed_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
       error: null,
     });
     setPaymentBuilders([
@@ -215,17 +230,151 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     const json = await res.json();
     expect(json.data.checkout_url).toBe("https://pay.example/checkout");
 
-    // H1: reset RPC called with the newly chosen tier + its amount.
-    expect(mockRpc).toHaveBeenCalledWith("reset_registration_for_payment", {
+    // H1: a new attempt is started with the newly chosen tier + its amount.
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
       p_registration_id: "reg-1",
       p_fee_tier: "early_bird",
       p_amount_cents: 3000,
     });
   });
 
-  it("resumes a pending_payment registration", async () => {
+  it("reuses the saved checkout link for a live pending payment (same tier, no reset)", async () => {
     setThen(mockExistingBuilder, {
-      data: { id: "reg-1", status: "pending_payment" },
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+    // Continue path does a single payments read for the saved checkout_url.
+    setThen(mockPaymentPriorBuilder, {
+      data: { checkout_url: "https://pay.example/saved" },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await POST(makeRequest(VALID_UUID, { fee_tier: "standard" }), {
+      params: Promise.resolve({ id: VALID_UUID }),
+    });
+
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.data.checkout_url).toBe("https://pay.example/saved");
+    expect(json.data.registration_id).toBe("reg-1");
+    // Reused, not re-issued: no reset, no cancel, no new purchase, no timer reset.
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("rejects a tier change on a live pending payment with a live link (409 PAYMENT_IN_PROGRESS)", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+    // The lock only applies because a live checkout link exists.
+    setThen(mockPaymentPriorBuilder, {
+      data: { checkout_url: "https://pay.example/saved" },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await POST(
+      makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
+      { params: Promise.resolve({ id: VALID_UUID }) },
+    );
+
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error.code).toBe("PAYMENT_IN_PROGRESS");
+    expect(json.error.unlock_at).toBeTruthy();
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("does not tier-lock a live pending payment that has no stored link (CHIP-create failed): starts a fresh attempt for the new tier", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+    // continuePendingPayment reads checkout_url (none), then resumeRegistration
+    // reads the prior chip_transaction_id, then initiate select + update.
+    setPaymentBuilders([
+      mockPaymentPriorBuilder, // checkout_url read → { chip_transaction_id: null } (no checkout_url)
+      mockPaymentPriorBuilder, // prior chip_transaction_id read → null (skip cancel)
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
+
+    const res = await POST(
+      makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
+      { params: Promise.resolve({ id: VALID_UUID }) },
+    );
+
+    expect(res.status).toBe(201);
+    // Not locked — a fresh attempt is started for the newly chosen tier.
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
+      p_registration_id: "reg-1",
+      p_fee_tier: "early_bird",
+      p_amount_cents: 3000,
+    });
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("fresh-starts a lapsed pending payment (past the hold) and re-prices", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
+      error: null,
+    });
+    setPaymentBuilders([
+      mockPaymentPriorBuilder,
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
+
+    const res = await POST(
+      makeRequest(VALID_UUID, { fee_tier: "early_bird" }),
+      { params: Promise.resolve({ id: VALID_UUID }) },
+    );
+
+    expect(res.status).toBe(201);
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
+      p_registration_id: "reg-1",
+      p_fee_tier: "early_bird",
+      p_amount_cents: 3000,
+    });
+  });
+
+  it("fresh-starts an expired (cancelled_payment) registration", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "cancelled_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
       error: null,
     });
     setPaymentBuilders([
@@ -239,7 +388,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     });
 
     expect(res.status).toBe(201);
-    expect(mockRpc).toHaveBeenCalledWith("reset_registration_for_payment", {
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
       p_registration_id: "reg-1",
       p_fee_tier: "standard",
       p_amount_cents: 5000,
@@ -248,7 +397,13 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
 
   it("cancels the prior CHIP purchase before re-issuing on resume (F1)", async () => {
     setThen(mockExistingBuilder, {
-      data: { id: "reg-1", status: "pending_payment" },
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
       error: null,
     });
     setThen(mockPaymentPriorBuilder, {
@@ -271,7 +426,13 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
 
   it("still resumes when cancelling the prior purchase fails (best-effort)", async () => {
     setThen(mockExistingBuilder, {
-      data: { id: "reg-1", status: "pending_payment" },
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
       error: null,
     });
     setThen(mockPaymentPriorBuilder, {

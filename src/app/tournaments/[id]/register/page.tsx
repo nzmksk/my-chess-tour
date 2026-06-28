@@ -7,10 +7,12 @@ import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { computeEntryFeeBreakdown } from "@/services/payments/fees";
+import { PAYMENT_TIMEOUT_MINUTES } from "@/services/chip/chip";
 import type { TournamentDetail } from "../types";
 import type { FeeBreakdownByTier } from "./_components/RegisterForm";
 import RegisterForm from "./_components/RegisterForm";
 import RegisterFormSkeleton from "./_components/RegisterFormSkeleton";
+import PaymentInProgress from "./_components/PaymentInProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,55 @@ async function fetchTournament(id: string): Promise<TournamentDetail | null> {
   } catch {
     return null;
   }
+}
+
+// Resolves a still-live pending payment (within the seat hold) into the props
+// for the Continue-payment screen, or null if the user should see the normal
+// form. Kept out of the component body so the time check stays out of render.
+async function getLivePendingPayment(
+  userId: string,
+  tournamentId: string,
+  feeBreakdown: FeeBreakdownByTier,
+): Promise<{
+  feeTier: string;
+  grossCents: number;
+  checkoutUrl: string;
+  unlockAt: string;
+} | null> {
+  const { data: existingReg } = await supabaseAdmin
+    .from("registrations")
+    .select("id, status, fee_tier, registered_at, current_payment_id")
+    .eq("user_id", userId)
+    .eq("tournament_id", tournamentId)
+    .maybeSingle();
+
+  if (
+    existingReg?.status !== "pending_payment" ||
+    !existingReg.current_payment_id ||
+    Date.now() - new Date(existingReg.registered_at).getTime() >=
+      PAYMENT_TIMEOUT_MINUTES * 60_000
+  ) {
+    return null;
+  }
+
+  // Reuse the current attempt's stored link.
+  const { data: payment } = await supabaseAdmin
+    .from("payments")
+    .select("checkout_url")
+    .eq("id", existingReg.current_payment_id)
+    .maybeSingle();
+
+  if (!payment?.checkout_url) return null;
+
+  return {
+    feeTier: existingReg.fee_tier,
+    grossCents: feeBreakdown[existingReg.fee_tier]?.gross_cents ?? 0,
+    checkoutUrl: payment.checkout_url,
+    unlockAt: new Date(
+      new Date(existingReg.registered_at).getTime() +
+        PAYMENT_TIMEOUT_MINUTES * 60_000,
+    ).toISOString(),
+  };
 }
 
 export async function generateMetadata({
@@ -90,6 +141,14 @@ async function RegisterPageContent({ id }: { id: string }) {
   );
   for (const tier of tournament.entry_fees.additional ?? []) {
     feeBreakdown[tier.type] = breakdownFor(tier.amount_cents);
+  }
+
+  // If the user has a still-live pending payment, resuming reuses the same CHIP
+  // link with the tier locked — so show a "Continue payment" screen instead of
+  // the tier form. Once the hold lapses the row expires and the form returns.
+  const livePending = await getLivePendingPayment(claims.id, id, feeBreakdown);
+  if (livePending) {
+    return <PaymentInProgress tournamentId={id} {...livePending} />;
   }
 
   return (

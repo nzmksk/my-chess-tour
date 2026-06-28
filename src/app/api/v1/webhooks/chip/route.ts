@@ -136,22 +136,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 500 },
       );
     }
-    // Stale-attempt guard: we matched by `reference` only, but the payment has
-    // since moved to a newer CHIP purchase (resume re-issues the purchase). This
-    // delivery is for a superseded/abandoned purchase — ack without settling so
-    // it can't flip the current attempt's state.
-    if (
-      data?.chip_transaction_id &&
-      purchaseId &&
-      data.chip_transaction_id !== purchaseId
-    ) {
-      console.warn("CHIP webhook: stale purchase for superseded payment", {
-        purchaseId,
-        current: data.chip_transaction_id,
-        reference,
-      });
-      return NextResponse.json({ data: { received: true } }, { status: 200 });
-    }
+    // Each attempt is its own immutable payment row whose id is its `reference`,
+    // and settlement only terminalizes the registration for its *current*
+    // attempt — so settling a superseded attempt here is a harmless no-op on the
+    // registration. No stale-purchase guard needed.
     payment = data;
   }
 

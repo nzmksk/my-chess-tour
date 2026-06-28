@@ -28,7 +28,11 @@ CREATE INDEX idx_audit_logs_changed_by ON audit_logs (changed_by) WHERE changed_
 CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at);
 
 -- Payments
-CREATE INDEX idx_payments_chip_transaction ON payments (chip_transaction_id);
+-- Unique so one CHIP purchase id maps to at most one payment row (webhook
+-- correlation can't fan out). NULLs allowed: a payment has no chip_transaction_id
+-- until checkout creates the purchase.
+CREATE UNIQUE INDEX idx_payments_chip_transaction ON payments (chip_transaction_id)
+  WHERE chip_transaction_id IS NOT NULL;
 CREATE INDEX idx_payments_registration ON payments (registration_id);
 CREATE INDEX idx_payments_payout_summary ON payments (tournament_id, organization_id, type)
   INCLUDE (gross_amount_cents)

@@ -8,10 +8,23 @@ import {
   normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[id]/registrations/validators";
 import type { RegistrationRequest } from "@/app/tournaments/[id]/register/types";
-import { cancelChipPurchase, createChipPurchase } from "@/services/chip/chip";
+import {
+  cancelChipPurchase,
+  createChipPurchase,
+  PAYMENT_TIMEOUT_MINUTES,
+} from "@/services/chip/chip";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The seat hold (and the CHIP purchase `due`) lasts PAYMENT_TIMEOUT_MINUTES from
+// registered_at. While live, the pending payment is resumed by reusing its link.
+function isHoldLive(registeredAt: string): boolean {
+  return (
+    Date.now() - new Date(registeredAt).getTime() <
+    PAYMENT_TIMEOUT_MINUTES * 60_000
+  );
+}
 
 export async function POST(
   request: NextRequest,
@@ -94,8 +107,8 @@ export async function POST(
 
   // Capacity is enforced authoritatively in Postgres: the create path via the
   // check_tournament_capacity trigger, the resume path via
-  // reset_registration_for_payment. Both apply the reservation hold window, so
-  // there is no JS pre-check here (it would double-count lapsed holds).
+  // start_new_payment_attempt. Both apply the reservation hold window, so there
+  // is no JS pre-check here (it would double-count lapsed holds).
 
   const fees = tournament.entry_fees as EntryFees;
 
@@ -192,7 +205,7 @@ export async function POST(
 
   const { data: existing } = await supabaseAdmin
     .from("registrations")
-    .select("id, status")
+    .select("id, status, fee_tier, registered_at, current_payment_id")
     .eq("user_id", user.id)
     .eq("tournament_id", id)
     .maybeSingle();
@@ -210,28 +223,51 @@ export async function POST(
       );
     }
 
+    // A still-live pending payment is resumed by reusing its existing CHIP link —
+    // no timer reset, and the fee tier is locked until the hold lapses.
     if (
-      existing.status !== "pending_payment" &&
-      existing.status !== "failed_payment"
+      existing.status === "pending_payment" &&
+      isHoldLive(existing.registered_at)
     ) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "ALREADY_REGISTERED",
-            message: `Cannot re-register: existing registration has status '${existing.status}'`,
-          },
-        },
-        { status: 409 },
+      return continuePendingPayment(
+        existing.id,
+        existing.fee_tier,
+        fee_tier,
+        existing.registered_at,
+        existing.current_payment_id,
+        matchedTier.amount_cents,
+        id,
+        tournament.name,
+        user.email!,
       );
     }
 
-    return resumeRegistration(
-      existing.id,
-      fee_tier,
-      matchedTier.amount_cents,
-      id,
-      tournament.name,
-      user.email!,
+    // Lapsed pending, a declined payment, or an expired (cancelled) checkout:
+    // start fresh (new link + timer), with a possibly different tier.
+    if (
+      existing.status === "pending_payment" ||
+      existing.status === "failed_payment" ||
+      existing.status === "cancelled_payment"
+    ) {
+      return resumeRegistration(
+        existing.id,
+        existing.current_payment_id,
+        fee_tier,
+        matchedTier.amount_cents,
+        id,
+        tournament.name,
+        user.email!,
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: {
+          code: "ALREADY_REGISTERED",
+          message: `Cannot re-register: existing registration has status '${existing.status}'`,
+        },
+      },
+      { status: 409 },
     );
   }
 
@@ -261,17 +297,19 @@ export async function POST(
     if (insertErr.code === "23505") {
       const { data: raced } = await supabaseAdmin
         .from("registrations")
-        .select("id, status")
+        .select("id, status, current_payment_id")
         .eq("user_id", user.id)
         .eq("tournament_id", id)
         .maybeSingle();
       if (
         raced &&
         (raced.status === "pending_payment" ||
-          raced.status === "failed_payment")
+          raced.status === "failed_payment" ||
+          raced.status === "cancelled_payment")
       ) {
         return resumeRegistration(
           raced.id,
+          raced.current_payment_id,
           fee_tier,
           matchedTier.amount_cents,
           id,
@@ -296,7 +334,7 @@ export async function POST(
   }
 
   return initiateChipPayment(
-    (registration as { id: string }).id,
+    (registration as { payment_id: string }).payment_id,
     id,
     tournament.name,
     user.email!,
@@ -304,38 +342,116 @@ export async function POST(
 }
 
 /**
- * Resumes an existing pending/failed registration: cancels any still-payable
- * CHIP purchase from a prior attempt (so only one checkout link is ever live),
- * re-prices for the chosen tier, and starts a fresh purchase.
+ * Continues a still-live pending payment by handing back the *same* CHIP
+ * checkout link — no timer reset, no new purchase. The fee tier is locked: a
+ * request for a different tier is rejected until the hold lapses (after which
+ * the registration expires and can be re-registered with any tier). Falls back
+ * to a fresh start only if no checkout link was ever stored.
+ */
+async function continuePendingPayment(
+  registrationId: string,
+  currentFeeTier: string,
+  requestedFeeTier: string,
+  registeredAt: string,
+  currentPaymentId: string | null,
+  amountCents: number,
+  tournamentId: string,
+  tournamentName: string,
+  userEmail: string,
+): Promise<NextResponse> {
+  // Look up the current attempt's stored link first. Whether a payment is truly
+  // "in progress" (and thus tier-locked) hinges on a live link existing.
+  const { data: payment } = currentPaymentId
+    ? await supabaseAdmin
+        .from("payments")
+        .select("checkout_url")
+        .eq("id", currentPaymentId)
+        .maybeSingle()
+    : { data: null };
+
+  // No stored link (an earlier purchase-create failed) — nothing is actually in
+  // progress to protect, so start a fresh attempt for whatever tier was requested
+  // rather than leaving the user stuck or locking them out of a different tier.
+  if (!payment?.checkout_url) {
+    return resumeRegistration(
+      registrationId,
+      currentPaymentId,
+      requestedFeeTier,
+      amountCents,
+      tournamentId,
+      tournamentName,
+      userEmail,
+    );
+  }
+
+  // A live link exists: the tier is locked until the hold lapses. A request for a
+  // different tier is rejected with the time it unlocks.
+  if (requestedFeeTier !== currentFeeTier) {
+    const unlockAt = new Date(
+      new Date(registeredAt).getTime() + PAYMENT_TIMEOUT_MINUTES * 60_000,
+    ).toISOString();
+    return NextResponse.json(
+      {
+        error: {
+          code: "PAYMENT_IN_PROGRESS",
+          message:
+            `You have a payment in progress for the '${currentFeeTier}' fee. ` +
+            `Complete it, or wait until ${unlockAt} to choose a different tier.`,
+          unlock_at: unlockAt,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  return NextResponse.json(
+    {
+      data: {
+        checkout_url: payment.checkout_url,
+        registration_id: registrationId,
+      },
+    },
+    { status: 201 },
+  );
+}
+
+/**
+ * Starts a fresh payment attempt for a lapsed/failed/expired registration:
+ * cancels the prior attempt's still-payable CHIP purchase (double-charge guard),
+ * appends a new pending payment row for the chosen tier, and issues a new
+ * purchase. The old payment row is preserved (immutable ledger).
  */
 async function resumeRegistration(
   registrationId: string,
+  currentPaymentId: string | null,
   feeTier: string,
   amountCents: number,
   tournamentId: string,
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
-  // Cancel the previous purchase before reset() nulls its id, so an abandoned
-  // checkout link can't be paid after we issue a new one (double-charge guard).
-  const { data: prior } = await supabaseAdmin
-    .from("payments")
-    .select("chip_transaction_id")
-    .eq("registration_id", registrationId)
-    .eq("type", "registration")
-    .maybeSingle();
+  // Cancel the prior attempt's purchase so its abandoned link can't be paid after
+  // we issue a new one. The new attempt's row supersedes it regardless, so its
+  // late webhook is harmless — this is purely a double-charge guard. Best-effort.
+  if (currentPaymentId) {
+    const { data: prior } = await supabaseAdmin
+      .from("payments")
+      .select("chip_transaction_id")
+      .eq("id", currentPaymentId)
+      .maybeSingle();
 
-  if (prior?.chip_transaction_id) {
-    try {
-      await cancelChipPurchase(prior.chip_transaction_id);
-    } catch (err) {
-      // Best-effort: CHIP may already have cancelled/expired it. Log and go on.
-      console.warn("CHIP purchase cancel failed (continuing):", err);
+    if (prior?.chip_transaction_id) {
+      try {
+        await cancelChipPurchase(prior.chip_transaction_id);
+      } catch (err) {
+        // CHIP may already have cancelled/expired it. Log and go on.
+        console.warn("CHIP purchase cancel failed (continuing):", err);
+      }
     }
   }
 
-  const { error: resetErr } = await supabaseAdmin.rpc(
-    "reset_registration_for_payment",
+  const { data: attempt, error: attemptErr } = await supabaseAdmin.rpc(
+    "start_new_payment_attempt",
     {
       p_registration_id: registrationId,
       p_fee_tier: feeTier,
@@ -343,14 +459,14 @@ async function resumeRegistration(
     },
   );
 
-  if (resetErr) {
-    if (resetErr.message?.toLowerCase().includes("full")) {
+  if (attemptErr) {
+    if (attemptErr.message?.toLowerCase().includes("full")) {
       return NextResponse.json(
         { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },
         { status: 422 },
       );
     }
-    if (resetErr.code === "P0001") {
+    if (attemptErr.code === "P0001") {
       return NextResponse.json(
         {
           error: {
@@ -362,13 +478,13 @@ async function resumeRegistration(
       );
     }
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: resetErr.message } },
+      { error: { code: "INTERNAL_ERROR", message: attemptErr.message } },
       { status: 500 },
     );
   }
 
   return initiateChipPayment(
-    registrationId,
+    (attempt as { payment_id: string }).payment_id,
     tournamentId,
     tournamentName,
     userEmail,
@@ -376,16 +492,15 @@ async function resumeRegistration(
 }
 
 async function initiateChipPayment(
-  registrationId: string,
+  paymentId: string,
   tournamentId: string,
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
   const { data: payment, error: payErr } = await supabaseAdmin
     .from("payments")
-    .select("id, gross_amount_cents")
-    .eq("registration_id", registrationId)
-    .eq("status", "pending")
+    .select("id, registration_id, gross_amount_cents")
+    .eq("id", paymentId)
     .single();
 
   if (payErr || !payment) {
@@ -428,7 +543,10 @@ async function initiateChipPayment(
 
   const { error: updErr } = await supabaseAdmin
     .from("payments")
-    .update({ chip_transaction_id: chipPurchase.id })
+    .update({
+      chip_transaction_id: chipPurchase.id,
+      checkout_url: chipPurchase.checkout_url,
+    })
     .eq("id", payment.id);
 
   if (updErr) {
@@ -446,7 +564,7 @@ async function initiateChipPayment(
     {
       data: {
         checkout_url: chipPurchase.checkout_url,
-        registration_id: registrationId,
+        registration_id: payment.registration_id,
       },
     },
     { status: 201 },
