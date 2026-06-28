@@ -114,7 +114,7 @@ vi.mock("next/headers", () => ({
 vi.mock("@/services/chip/chip", () => ({
   createChipPurchase: mockCreateChipPurchase,
   cancelChipPurchase: mockCancelChipPurchase,
-  PAYMENT_DUE_MINUTES: 10,
+  PAYMENT_TIMEOUT_MINUTES: 10,
 }));
 
 import { POST } from "../route";
@@ -176,11 +176,16 @@ beforeEach(() => {
     error: null,
   });
   setThen(mockPaymentSelectBuilder, {
-    data: { id: "pay-1", gross_amount_cents: 3300 },
+    data: { id: "pay-1", registration_id: "reg-1", gross_amount_cents: 3300 },
     error: null,
   });
   setThen(mockPaymentUpdateBuilder, { data: null, error: null });
-  mockRpc.mockResolvedValue({ data: { id: "reg-1" }, error: null });
+  // create_registration_with_payment / start_new_payment_attempt both return the
+  // active payment id the route then initiates CHIP on.
+  mockRpc.mockResolvedValue({
+    data: { registration_id: "reg-1", payment_id: "pay-1" },
+    error: null,
+  });
   mockCreateChipPurchase.mockResolvedValue({
     id: "chip-purchase-1",
     checkout_url: "https://pay.example/checkout",
@@ -199,7 +204,13 @@ afterEach(() => {
 describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
   it("resumes a failed_payment registration without erroring (H2) and re-prices to the chosen tier (H1)", async () => {
     setThen(mockExistingBuilder, {
-      data: { id: "reg-1", status: "failed_payment" },
+      data: {
+        id: "reg-1",
+        status: "failed_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
       error: null,
     });
     setPaymentBuilders([
@@ -219,8 +230,8 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     const json = await res.json();
     expect(json.data.checkout_url).toBe("https://pay.example/checkout");
 
-    // H1: reset RPC called with the newly chosen tier + its amount.
-    expect(mockRpc).toHaveBeenCalledWith("reset_registration_for_payment", {
+    // H1: a new attempt is started with the newly chosen tier + its amount.
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
       p_registration_id: "reg-1",
       p_fee_tier: "early_bird",
       p_amount_cents: 3000,
@@ -234,6 +245,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
         status: "pending_payment",
         fee_tier: "standard",
         registered_at: RECENT,
+        current_payment_id: "pay-1",
       },
       error: null,
     });
@@ -265,6 +277,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
         status: "pending_payment",
         fee_tier: "standard",
         registered_at: RECENT,
+        current_payment_id: "pay-1",
       },
       error: null,
     });
@@ -289,6 +302,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
         status: "pending_payment",
         fee_tier: "standard",
         registered_at: OLD,
+        current_payment_id: "pay-0",
       },
       error: null,
     });
@@ -304,7 +318,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     );
 
     expect(res.status).toBe(201);
-    expect(mockRpc).toHaveBeenCalledWith("reset_registration_for_payment", {
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
       p_registration_id: "reg-1",
       p_fee_tier: "early_bird",
       p_amount_cents: 3000,
@@ -318,6 +332,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
         status: "cancelled_payment",
         fee_tier: "standard",
         registered_at: OLD,
+        current_payment_id: "pay-0",
       },
       error: null,
     });
@@ -332,7 +347,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
     });
 
     expect(res.status).toBe(201);
-    expect(mockRpc).toHaveBeenCalledWith("reset_registration_for_payment", {
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
       p_registration_id: "reg-1",
       p_fee_tier: "standard",
       p_amount_cents: 5000,
@@ -346,6 +361,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
         status: "pending_payment",
         fee_tier: "standard",
         registered_at: OLD,
+        current_payment_id: "pay-0",
       },
       error: null,
     });
@@ -374,6 +390,7 @@ describe("POST /api/v1/tournaments/:id/checkout — resume", () => {
         status: "pending_payment",
         fee_tier: "standard",
         registered_at: OLD,
+        current_payment_id: "pay-0",
       },
       error: null,
     });

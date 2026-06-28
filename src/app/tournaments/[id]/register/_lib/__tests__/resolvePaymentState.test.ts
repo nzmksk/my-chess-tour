@@ -11,54 +11,52 @@ const {
   mockCancelChipPurchase,
   setResults,
 } = vi.hoisted(() => {
-    function makeBuilder(getResult: () => unknown) {
-      const b: Record<string, unknown> = {};
-      for (const m of [
-        "select",
-        "eq",
-        "order",
-        "limit",
-        "single",
-        "maybeSingle",
-      ]) {
-        b[m] = vi.fn(() => b);
-      }
-      b.then = (
-        onfulfilled: (v: unknown) => unknown,
-        onrejected?: (r: unknown) => unknown,
-      ) => Promise.resolve(getResult()).then(onfulfilled, onrejected);
-      return b;
+  function makeBuilder(getResult: () => unknown) {
+    const b: Record<string, unknown> = {};
+    for (const m of [
+      "select",
+      "eq",
+      "order",
+      "limit",
+      "single",
+      "maybeSingle",
+    ]) {
+      b[m] = vi.fn(() => b);
     }
+    b.then = (
+      onfulfilled: (v: unknown) => unknown,
+      onrejected?: (r: unknown) => unknown,
+    ) => Promise.resolve(getResult()).then(onfulfilled, onrejected);
+    return b;
+  }
 
-    let registrationResult: unknown = { data: null, error: null };
-    let paymentResult: unknown = { data: null, error: null };
-    const setResults = (reg: unknown, pay: unknown) => {
-      registrationResult = reg;
-      paymentResult = pay;
-    };
+  let registrationResult: unknown = { data: null, error: null };
+  let paymentResult: unknown = { data: null, error: null };
+  const setResults = (reg: unknown, pay: unknown) => {
+    registrationResult = reg;
+    paymentResult = pay;
+  };
 
-    const mockFrom = vi.fn((table: string) => {
-      if (table === "registrations")
-        return makeBuilder(() => registrationResult);
-      if (table === "payments") return makeBuilder(() => paymentResult);
-      return makeBuilder(() => ({ data: null, error: null }));
-    });
+  const mockFrom = vi.fn((table: string) => {
+    if (table === "registrations") return makeBuilder(() => registrationResult);
+    if (table === "payments") return makeBuilder(() => paymentResult);
+    return makeBuilder(() => ({ data: null, error: null }));
+  });
 
-    const mockRpc = vi.fn(
-      (): Promise<{ data: unknown; error: unknown }> =>
-        Promise.resolve({ data: null, error: null }),
-    );
-    const mockGetChipPurchase = vi.fn();
-    const mockCancelChipPurchase = vi.fn(() => Promise.resolve());
-    return {
-      mockFrom,
-      mockRpc,
-      mockGetChipPurchase,
-      mockCancelChipPurchase,
-      setResults,
-    };
-  },
-);
+  const mockRpc = vi.fn(
+    (): Promise<{ data: unknown; error: unknown }> =>
+      Promise.resolve({ data: null, error: null }),
+  );
+  const mockGetChipPurchase = vi.fn();
+  const mockCancelChipPurchase = vi.fn(() => Promise.resolve());
+  return {
+    mockFrom,
+    mockRpc,
+    mockGetChipPurchase,
+    mockCancelChipPurchase,
+    setResults,
+  };
+});
 
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
@@ -94,6 +92,7 @@ function makeRegistration(
     confirmed_at: null,
     cancelled_at: null,
     cancellation_reason: null,
+    current_payment_id: "pay-uuid",
   };
 }
 
@@ -273,7 +272,8 @@ describe("resolvePaymentState", () => {
       p_ttl: expect.any(String),
       p_registration_id: "reg-uuid",
     });
-    expect(mockCancelChipPurchase).toHaveBeenCalledWith("chip-1");
+    // Expiry leaves the payment pending (rescue-friendly) and does not cancel.
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
     expect(result.state).toBe("failed");
     expect(result.registration?.status).toBe("cancelled_payment");
   });

@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
-import { PAYMENT_EXPIRY_INTERVAL } from "@/services/chip/chip";
+import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -188,7 +188,7 @@ export const getTournamentManageData = cache(
     // already makes the link unpayable. Best-effort: never block the page.
     const { error: expireErr } = await supabaseAdmin.rpc(
       "expire_stale_pending_payments",
-      { p_ttl: PAYMENT_EXPIRY_INTERVAL, p_tournament_id: id },
+      { p_ttl: PAYMENT_TIMEOUT_INTERVAL, p_tournament_id: id },
     );
     if (expireErr) {
       console.warn("expire_stale_pending_payments failed (continuing):", expireErr);

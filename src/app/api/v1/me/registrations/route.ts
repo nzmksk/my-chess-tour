@@ -2,7 +2,7 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees } from "@/app/tournaments/types";
-import { PAYMENT_EXPIRY_INTERVAL } from "@/services/chip/chip";
+import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 
 const VALID_STATUSES = new Set([
   "pending_payment",
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // the link unpayable. Best-effort: never block the listing.
   const { error: expireErr } = await supabaseAdmin.rpc(
     "expire_stale_pending_payments",
-    { p_ttl: PAYMENT_EXPIRY_INTERVAL, p_user_id: claims.id },
+    { p_ttl: PAYMENT_TIMEOUT_INTERVAL, p_user_id: claims.id },
   );
   if (expireErr) {
     console.warn(

@@ -7,7 +7,7 @@ import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { computeEntryFeeBreakdown } from "@/services/payments/fees";
-import { PAYMENT_DUE_MINUTES } from "@/services/chip/chip";
+import { PAYMENT_TIMEOUT_MINUTES } from "@/services/chip/chip";
 import type { TournamentDetail } from "../types";
 import type { FeeBreakdownByTier } from "./_components/RegisterForm";
 import RegisterForm from "./_components/RegisterForm";
@@ -51,24 +51,25 @@ async function getLivePendingPayment(
 } | null> {
   const { data: existingReg } = await supabaseAdmin
     .from("registrations")
-    .select("id, status, fee_tier, registered_at")
+    .select("id, status, fee_tier, registered_at, current_payment_id")
     .eq("user_id", userId)
     .eq("tournament_id", tournamentId)
     .maybeSingle();
 
   if (
     existingReg?.status !== "pending_payment" ||
+    !existingReg.current_payment_id ||
     Date.now() - new Date(existingReg.registered_at).getTime() >=
-      PAYMENT_DUE_MINUTES * 60_000
+      PAYMENT_TIMEOUT_MINUTES * 60_000
   ) {
     return null;
   }
 
+  // Reuse the current attempt's stored link.
   const { data: payment } = await supabaseAdmin
     .from("payments")
     .select("checkout_url")
-    .eq("registration_id", existingReg.id)
-    .eq("type", "registration")
+    .eq("id", existingReg.current_payment_id)
     .maybeSingle();
 
   if (!payment?.checkout_url) return null;
@@ -79,7 +80,7 @@ async function getLivePendingPayment(
     checkoutUrl: payment.checkout_url,
     unlockAt: new Date(
       new Date(existingReg.registered_at).getTime() +
-        PAYMENT_DUE_MINUTES * 60_000,
+        PAYMENT_TIMEOUT_MINUTES * 60_000,
     ).toISOString(),
   };
 }

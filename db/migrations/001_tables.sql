@@ -168,10 +168,10 @@ CREATE TABLE tournaments (
 -- =============================================
 CREATE TYPE registration_status AS ENUM ('pending_payment', 'failed_payment', 'cancelled_payment', 'confirmed', 'forfeited');
 -- pending_payment: just registered, awaiting payment
--- failed_payment: payment attempted but failed (e.g. card declined)
--- cancelled_payment: player cancelled before payment
+-- failed_payment: payment attempted but failed (e.g. card declined, or user cancelled on CHIP)
+-- cancelled_payment: system-cancelled when the payment window (hold) expired without payment
 -- confirmed: payment successful and registration confirmed
--- forfeited: player confirmed (paid) but later forfeited (no refund)
+-- forfeited: reserved — player confirmed (paid) but later forfeited (no refund); not set by any code yet
 
 CREATE TABLE registrations (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
