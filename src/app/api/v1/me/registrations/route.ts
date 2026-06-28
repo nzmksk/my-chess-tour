@@ -2,6 +2,7 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees } from "@/app/tournaments/types";
+import { PAYMENT_EXPIRY_INTERVAL } from "@/services/chip/chip";
 
 const VALID_STATUSES = new Set([
   "pending_payment",
@@ -88,6 +89,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         },
       },
       { status: 400 },
+    );
+  }
+
+  // Terminalize this user's lapsed pending checkouts before listing so they show
+  // as expired rather than lingering "pending" (CHIP sends no expiry event).
+  // Bulk sweep skips the per-row CHIP cancel — the purchase `due` already makes
+  // the link unpayable. Best-effort: never block the listing.
+  const { error: expireErr } = await supabaseAdmin.rpc(
+    "expire_stale_pending_payments",
+    { p_ttl: PAYMENT_EXPIRY_INTERVAL, p_user_id: claims.id },
+  );
+  if (expireErr) {
+    console.warn(
+      "expire_stale_pending_payments failed (continuing):",
+      expireErr,
     );
   }
 

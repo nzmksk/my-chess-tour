@@ -21,7 +21,7 @@ vi.mock("@/services/supabase/server", () => ({
 // Mock Supabase admin client (data queries)
 // ---------------------------------------------------------------------------
 
-const { mockRegistrationsBuilder, mockFrom } = vi.hoisted(() => {
+const { mockRegistrationsBuilder, mockFrom, mockRpc } = vi.hoisted(() => {
   function makeBuilder(finalResult: { data: unknown; error: unknown }) {
     const chain: Record<string, unknown> = {};
     const methods = ["select", "eq", "in", "order"];
@@ -37,11 +37,13 @@ const { mockRegistrationsBuilder, mockFrom } = vi.hoisted(() => {
 
   const mockRegistrationsBuilder = makeBuilder({ data: [], error: null });
   const mockFrom = vi.fn(() => mockRegistrationsBuilder);
-  return { mockRegistrationsBuilder, mockFrom };
+  // The lazy expiry sweep runs before the listing query.
+  const mockRpc = vi.fn().mockResolvedValue({ data: [], error: null });
+  return { mockRegistrationsBuilder, mockFrom, mockRpc };
 });
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
 // ---------------------------------------------------------------------------
@@ -102,6 +104,7 @@ describe("GET /api/v1/me/registrations", () => {
     mockGetClaims.mockResolvedValue({
       data: { claims: { sub: AUTHENTICATED_USER.id } },
     });
+    mockRpc.mockResolvedValue({ data: [], error: null });
     setQueryResult([]);
   });
 

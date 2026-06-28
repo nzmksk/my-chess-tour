@@ -1,5 +1,11 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { chipOutcome, getChipPurchase } from "@/services/chip/chip";
+import {
+  cancelChipPurchase,
+  chipOutcome,
+  getChipPurchase,
+  PAYMENT_EXPIRY_INTERVAL,
+  PAYMENT_EXPIRY_MINUTES,
+} from "@/services/chip/chip";
 import type { RegistrationRow } from "../types";
 
 export type PaymentState = "confirmed" | "pending" | "failed" | "none";
@@ -7,6 +13,48 @@ export type PaymentState = "confirmed" | "pending" | "failed" | "none";
 export interface ResolvedPayment {
   state: PaymentState;
   registration: RegistrationRow | null;
+}
+
+function isExpired(registeredAt: string): boolean {
+  return Date.now() - new Date(registeredAt).getTime() >
+    PAYMENT_EXPIRY_MINUTES * 60_000;
+}
+
+/**
+ * Terminalizes a still-pending registration whose payment window has lapsed.
+ * The DB function re-checks the TTL + status, so it's authoritative: if it
+ * expired nothing (e.g. a concurrent confirm), we stay pending rather than
+ * wrongly reporting a failure. Best-effort cancels the CHIP purchase too,
+ * though `due` already makes the link unpayable.
+ */
+async function expireIfStale(
+  reg: RegistrationRow,
+  chipTransactionId: string | null,
+): Promise<ResolvedPayment> {
+  const { data } = await supabaseAdmin.rpc("expire_stale_pending_payments", {
+    p_ttl: PAYMENT_EXPIRY_INTERVAL,
+    p_registration_id: reg.id,
+  });
+
+  const expired = (data as Array<{ chip_transaction_id: string | null }> | null)
+    ?.[0];
+  if (!expired) {
+    return { state: "pending", registration: reg };
+  }
+
+  const chipId = expired.chip_transaction_id ?? chipTransactionId;
+  if (chipId) {
+    try {
+      await cancelChipPurchase(chipId);
+    } catch (err) {
+      console.warn("CHIP cancel failed during expiry (continuing):", err);
+    }
+  }
+
+  return {
+    state: "failed",
+    registration: { ...reg, status: "cancelled_payment" },
+  };
 }
 
 /**
@@ -59,6 +107,9 @@ export async function resolvePaymentState(
     .maybeSingle();
 
   if (!payment?.chip_transaction_id) {
+    if (isExpired(reg.registered_at)) {
+      return expireIfStale(reg, null);
+    }
     return { state: "pending", registration: reg };
   }
 
@@ -66,6 +117,11 @@ export async function resolvePaymentState(
     const purchase = await getChipPurchase(payment.chip_transaction_id);
     const outcome = chipOutcome(purchase.status);
     if (outcome === "pending") {
+      // CHIP reconcile ran first, so a late payment was already caught above.
+      // Still non-terminal and past the window → expire.
+      if (isExpired(reg.registered_at)) {
+        return expireIfStale(reg, payment.chip_transaction_id);
+      }
       return { state: "pending", registration: reg };
     }
 
