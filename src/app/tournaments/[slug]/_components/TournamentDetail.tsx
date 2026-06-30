@@ -368,13 +368,6 @@ export default function TournamentDetail({
             >
               Registration Closed
             </button>
-          ) : !isAuthenticated ? (
-            <button
-              className="btn-primary w-full rounded-md opacity-50"
-              disabled
-            >
-              Sign In to Register
-            </button>
           ) : registrationStatus === "pending_payment" ? (
             <Link
               href={`/tournaments/${t.slug}/register`}
@@ -389,6 +382,13 @@ export default function TournamentDetail({
             >
               Full Capacity
             </button>
+          ) : !isAuthenticated ? (
+            <button
+              className="btn-primary w-full rounded-md opacity-50"
+              disabled
+            >
+              Sign In to Register
+            </button>
           ) : (
             <Link
               href={`/tournaments/${t.slug}/register`}
@@ -400,8 +400,10 @@ export default function TournamentDetail({
 
           {/* Spots */}
           <div className="font-lato text-text-secondary text-sm">
-            <span className={`font-semibold ${spotsClass}`}>{spotsLeft}</span>{" "}
-            of {t.max_participants} spots remaining
+            <p aria-label={`${spotsLeft} of ${t.max_participants} spots remaining`}>
+              <span className={`font-semibold ${spotsClass}`}>{spotsLeft}</span>{" "}
+              of {t.max_participants} spots remaining
+            </p>
             {/* Deadline */}
             <p className="font-lato text-text-muted text-sm">
               ⏰ Registration closes {formatDeadline(t.registration_deadline)}

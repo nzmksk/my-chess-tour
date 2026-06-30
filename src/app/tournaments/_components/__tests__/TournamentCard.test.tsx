@@ -68,8 +68,12 @@ describe("spots badge", () => {
   it("shows full state when no spots remain", () => {
     const html = render({ max_participants: 100, current_participants: 100 });
     expect(html).toContain("spots-full");
-    expect(html).toContain("card-btn-full");
-    expect(html).not.toContain("card-btn-view");
+  });
+
+  it("keeps the View link enabled even when no spots remain", () => {
+    const html = render({ max_participants: 100, current_participants: 100 });
+    expect(html).toContain("card-btn-view");
+    expect(html).not.toContain("card-btn-full");
   });
 });
 

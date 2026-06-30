@@ -445,12 +445,13 @@ describe("CTA button auth states", () => {
     expect(htmlAuth).toContain("disabled");
   });
 
-  it("shows 'Sign In to Register' for unauthenticated users even when no spots remain", () => {
+  it("shows 'Full Capacity' over 'Sign In to Register' for unauthenticated users when no spots remain", () => {
     const htmlNoAuth = render(
       { max_participants: 100, current_participants: 100 },
       false,
     );
-    expect(htmlNoAuth).toContain("Sign In to Register");
+    expect(htmlNoAuth).toContain("Full Capacity");
+    expect(htmlNoAuth).not.toContain("Sign In to Register");
     expect(htmlNoAuth).toContain("disabled");
   });
 
