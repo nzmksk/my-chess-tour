@@ -17,7 +17,8 @@ import {
   tournamentTag,
 } from "@/lib/cache-tags";
 
-export const revalidate = ONE_DAY_SECONDS;
+// Must be a literal — Next statically analyzes this export. Mirrors ONE_DAY_SECONDS (86400).
+export const revalidate = 86400;
 
 async function fetchTournament(
   slug: string,
