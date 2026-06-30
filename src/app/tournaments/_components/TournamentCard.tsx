@@ -52,7 +52,7 @@ export default function TournamentCard({
   if (spotsLeft === 0) {
     spotsLabel = "Full";
     spotsClass = "spots-full";
-  } else if (spotsRatio <= 0.2) {
+  } else if (spotsRatio <= 0.2 || spotsLeft <= 5) {
     spotsClass = "spots-low";
   }
 
@@ -117,15 +117,9 @@ export default function TournamentCard({
             </span>
           </div>
 
-          {spotsLeft === 0 ? (
-            <button className="card-btn-full" disabled>
-              Full
-            </button>
-          ) : (
-            <Link href={`/tournaments/${t.slug}`} className="card-btn-view">
-              View →
-            </Link>
-          )}
+          <Link href={`/tournaments/${t.slug}`} className="card-btn-view">
+            View →
+          </Link>
         </div>
       </div>
     </article>
