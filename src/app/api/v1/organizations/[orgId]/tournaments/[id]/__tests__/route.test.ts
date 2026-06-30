@@ -97,6 +97,10 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+vi.mock("next/cache", () => ({
+  revalidateTag: vi.fn(),
+}));
+
 import { PATCH } from "../route";
 
 // ---------------------------------------------------------------------------
