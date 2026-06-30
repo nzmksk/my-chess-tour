@@ -40,28 +40,13 @@ export async function proxy(request: NextRequest) {
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims ?? null;
 
-  // Prevent sign-up step-skipping
+  // Prevent sign-up step-skipping: the verify step is only reachable once an
+  // account has been created (the create-account / re-verify paths set the
+  // cookie). After verification the user is signed in and lands in the app.
   const { pathname } = request.nextUrl;
   const signupStep = request.cookies.get(SIGNUP_STEP_COOKIE)?.value;
 
-  if (pathname.startsWith("/auth/signup/profile")) {
-    // Account created but email not yet verified — send back to verification
-    // instead of letting the user skip the step by editing the URL.
-    if (signupStep === "verify") {
-      return NextResponse.redirect(new URL("/auth/signup/verify", request.url));
-    }
-    if (signupStep !== "profile") {
-      return NextResponse.redirect(new URL("/auth/signup", request.url));
-    }
-  }
-
   if (pathname.startsWith("/auth/signup/verify")) {
-    // Already verified — don't let the user redo verification; move forward.
-    if (signupStep === "profile") {
-      return NextResponse.redirect(
-        new URL("/auth/signup/profile", request.url),
-      );
-    }
     if (signupStep !== "verify") {
       return NextResponse.redirect(new URL("/auth/signup", request.url));
     }

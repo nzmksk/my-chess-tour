@@ -9,7 +9,7 @@ import {
   resetVerifyAttempts,
   MAX_VERIFY_ATTEMPTS,
 } from "@/services/redis/redis";
-import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
+import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -187,17 +187,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Advance the signup step so the route guard lets the user into the profile
-  // step — and only now, after the email is actually verified.
+  // Email is verified and the user is signed in — onboarding is complete.
+  // Clear the now-stale signup step cookie; the client redirects into the app.
   const response = NextResponse.json(
     { message: "Email verified successfully" },
     { status: 200 },
   );
-  response.cookies.set(SIGNUP_STEP_COOKIE, "profile", {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SIGNUP_STEP_MAX_AGE,
-  });
+  response.cookies.delete(SIGNUP_STEP_COOKIE);
   return response;
 }

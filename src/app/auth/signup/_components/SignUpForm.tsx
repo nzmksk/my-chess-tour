@@ -79,7 +79,6 @@ export default function SignUpForm() {
             steps={[
               { label: "Account", state: "current" },
               { label: "Verify", state: "pending" },
-              { label: "Profile", state: "pending" },
             ]}
           />
 

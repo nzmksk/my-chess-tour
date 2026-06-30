@@ -21,7 +21,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function VerifyForm() {
-  const { form } = useSignUpForm();
+  const { form, clearForm } = useSignUpForm();
   const router = useRouter();
   const email = form.email;
   const [code, setCode] = useState("");
@@ -89,7 +89,10 @@ export default function VerifyForm() {
         );
         return;
       }
-      router.push("/auth/signup/profile");
+      // Onboarding is done — clear the in-progress signup state and drop the
+      // user into the app. Profile details are completed later in /settings.
+      clearForm();
+      router.push("/tournaments");
     } catch {
       setVerifyError("Network error. Please try again.");
     } finally {
@@ -151,7 +154,6 @@ export default function VerifyForm() {
             steps={[
               { label: "Account", state: "done" },
               { label: "Verify", state: "current" },
-              { label: "Profile", state: "pending" },
             ]}
           />
 

@@ -155,12 +155,11 @@ These are handled primarily by Supabase's client-side SDK. The API layer provide
 | POST   | `/auth/signup/create-account`   | Public        | Step 1: Create the account and send a 6-character code |
 | POST   | `/auth/signup/verify-code`      | Public        | Step 2: Verify the code, mark verified, and sign in    |
 | POST   | `/auth/signup/request-code`     | Public        | Request a new verification code                        |
-| POST   | `/auth/signup/complete-profile` | Authenticated | Step 3 (optional): Save the player profile             |
 | POST   | `/auth/login`                   | Public        | Supabase login. Returns `user_id`.                     |
 | POST   | `/auth/logout`                  | Authenticated | Destroys session.                                      |
 | GET    | `/auth/me`                      | Authenticated | Returns current user with all roles.                   |
 
-> **Note:** Signup is a three-step flow: (1) create the account, which provisions the Supabase auth user (the `handle_new_user` DB trigger creates the `users` + `player_profiles` rows) and emails a verification code; (2) verify the code, which marks the account verified and signs the user in; (3) optionally complete the player profile. A per-IP rate limit and a per-email resend cooldown guard the code-sending endpoints.
+> **Note:** Signup is a two-step flow: (1) create the account, which provisions the Supabase auth user (the `handle_new_user` DB trigger creates the `users` + `player_profiles` rows) and emails a verification code; (2) verify the code, which marks the account verified and signs the user in, then lands them in the app. Profile details (gender, DOB, nationality, FIDE/MCF IDs, OKU, avatar) are completed later in `/settings`. A per-IP rate limit and a per-email resend cooldown guard the code-sending endpoints.
 
 #### `POST /auth/signup/create-account`
 
@@ -194,7 +193,7 @@ Password must be ≥8 chars and include uppercase, lowercase, a number, and a sy
 
 #### `POST /auth/signup/verify-code`
 
-Verifies the submitted code against the Redis-stored value. On success it marks the account verified (`users.is_verified`), signs the user in (writing the session cookies), consumes the code, and sets the `signup_step=profile` cookie. After 5 incorrect attempts the address is locked out until the code window expires.
+Verifies the submitted code against the Redis-stored value. On success it marks the account verified (`users.is_verified`), signs the user in (writing the session cookies), consumes the code, and clears the `signup_step` cookie — the client then redirects into the app. After 5 incorrect attempts the address is locked out until the code window expires.
 
 **Request:**
 
@@ -243,36 +242,6 @@ Requests (resends) a verification code. The response is intentionally generic fo
 - `400` — Email missing or invalid format
 - `429` — `{ "error": { "code": "RATE_LIMITED", "message": "Too many attempts. Please try again later." } }` (per-IP)
 - `500` — Failed to store or send the code
-
-#### `POST /auth/signup/complete-profile`
-
-Saves the optional player profile for the signed-in user. Upserts the `player_profiles` row (keyed on `user_id`) and, if an `avatarUrl` is given, updates `users.avatar_url`.
-
-**Request:** (all fields optional)
-
-```json
-{
-  "gender": "male",
-  "nationality": "Malaysian",
-  "dateOfBirth": "1995-06-15",
-  "fideId": "5834567",
-  "mcfId": null,
-  "isOku": false,
-  "avatarUrl": "https://.../avatar.png"
-}
-```
-
-**Response `200`:**
-
-```json
-{ "message": "Profile updated" }
-```
-
-**Error responses:**
-
-- `400` — Invalid gender, FIDE/MCF ID (digits only), or date of birth (valid `YYYY-MM-DD`, not future, not implausibly old)
-- `401` — `{ "error": { "code": "UNAUTHORIZED", "message": "Not authenticated" } }`
-- `500` — Failed to save the profile or avatar
 
 #### `POST /auth/login`
 
