@@ -99,7 +99,8 @@ DECLARE
   tourney_ids      uuid[] := '{}';
 
   -- RBAC role IDs (look them up)
-  r_owner_id       integer;
+  r_owner_id          integer;
+  r_platform_admin_id integer;
 
   -- Loop / temp vars
   i            integer;
@@ -230,6 +231,62 @@ BEGIN
 
   -- Look up the owner role ID
   SELECT id INTO r_owner_id FROM roles WHERE name = 'owner';
+  SELECT id INTO r_platform_admin_id FROM roles WHERE name = 'platform_admin';
+
+  -- ===========================================================================
+  -- 0. PLATFORM ADMIN
+  -- A global-scope admin (platform.manage) — assigned via user_global_roles, not
+  -- an organization membership. Used to review CHIP applications, etc.
+  -- ===========================================================================
+  RAISE NOTICE '[0b/4] Seeding platform admin...';
+
+  new_user_id := gen_random_uuid();
+
+  INSERT INTO auth.users (
+    id, instance_id, aud, role,
+    email, encrypted_password,
+    email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at,
+    confirmation_token, recovery_token, email_change,
+    email_change_token_new, email_change_token_current,
+    phone_change, phone_change_token, reauthentication_token
+  ) VALUES (
+    new_user_id,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated', 'authenticated',
+    'chip-review@gmail.com', pwd_hash,
+    now(),
+    '{"provider":"email","providers":["email"]}',
+    json_build_object('first_name', 'CHIP', 'last_name', 'Review'),
+    now(), now(),
+    '', '', '', '', '', '', '', ''
+  );
+
+  -- Email/password sign-in resolves through auth.identities; raw inserts into
+  -- auth.users bypass the Auth Admin API, so create the identity explicitly.
+  INSERT INTO auth.identities (
+    provider_id, user_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) VALUES (
+    new_user_id::text, new_user_id,
+    jsonb_build_object('sub', new_user_id::text, 'email', 'chip-review@gmail.com',
+                       'email_verified', true, 'phone_verified', false),
+    'email', now(), now(), now()
+  );
+
+  -- Mark verified so the account is immediately login-ready.
+  INSERT INTO public.users (id, email, first_name, last_name, is_verified, verified_at)
+  VALUES (new_user_id, 'chip-review@gmail.com', 'CHIP', 'Review', true, now())
+  ON CONFLICT (id) DO UPDATE SET
+    is_verified = true,
+    verified_at = now();
+
+  -- Grant the global platform_admin role.
+  INSERT INTO public.user_global_roles (user_id, role_id)
+  VALUES (new_user_id, r_platform_admin_id);
+
+  RAISE NOTICE '  > 1 platform admin created (chip-review@gmail.com)';
 
   -- ===========================================================================
   -- 1. ORGANIZERS
@@ -244,7 +301,10 @@ BEGIN
       email, encrypted_password,
       email_confirmed_at,
       raw_app_meta_data, raw_user_meta_data,
-      created_at, updated_at
+      created_at, updated_at,
+      confirmation_token, recovery_token, email_change,
+      email_change_token_new, email_change_token_current,
+      phone_change, phone_change_token, reauthentication_token
     ) VALUES (
       new_user_id,
       '00000000-0000-0000-0000-000000000000',
@@ -253,7 +313,20 @@ BEGIN
       now(),
       '{"provider":"email","providers":["email"]}',
       json_build_object('first_name', org_first[i], 'last_name', org_last[i]),
-      now(), now()
+      now(), now(),
+      '', '', '', '', '', '', '', ''
+    );
+
+    -- Email/password sign-in resolves through auth.identities; raw inserts into
+    -- auth.users bypass the Auth Admin API, so create the identity explicitly.
+    INSERT INTO auth.identities (
+      provider_id, user_id, identity_data, provider,
+      last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      new_user_id::text, new_user_id,
+      jsonb_build_object('sub', new_user_id::text, 'email', org_emails[i],
+                         'email_verified', true, 'phone_verified', false),
+      'email', now(), now(), now()
     );
 
     -- The trigger already created the row (is_verified=false); mark seed
@@ -268,11 +341,13 @@ BEGIN
 
     INSERT INTO public.organizations (
       name, description, email,
-      phone, approval_status, reviewed_at
+      phone, approval_status, reviewed_at,
+      reviewed_by, created_by
     ) VALUES (
       org_names[i], org_descs[i], org_emails[i],
       '+601' || (i + 1)::text || '-' || (1000000 + i * 123456)::text,
-      'approved', now()
+      'approved', now(),
+      new_user_id, new_user_id
     ) RETURNING id INTO new_org_id;
 
     org_profile_ids := array_append(org_profile_ids, new_org_id);
@@ -316,7 +391,10 @@ BEGIN
       email, encrypted_password,
       email_confirmed_at,
       raw_app_meta_data, raw_user_meta_data,
-      created_at, updated_at
+      created_at, updated_at,
+      confirmation_token, recovery_token, email_change,
+      email_change_token_new, email_change_token_current,
+      phone_change, phone_change_token, reauthentication_token
     ) VALUES (
       new_user_id,
       '00000000-0000-0000-0000-000000000000',
@@ -325,6 +403,22 @@ BEGIN
       now(),
       '{"provider":"email","providers":["email"]}',
       json_build_object('first_name', p_first, 'last_name', p_last),
+      now() - (i || ' days')::interval,
+      now() - (i || ' days')::interval,
+      '', '', '', '', '', '', '', ''
+    );
+
+    -- Email/password sign-in resolves through auth.identities; raw inserts into
+    -- auth.users bypass the Auth Admin API, so create the identity explicitly.
+    INSERT INTO auth.identities (
+      provider_id, user_id, identity_data, provider,
+      last_sign_in_at, created_at, updated_at
+    ) VALUES (
+      new_user_id::text, new_user_id,
+      jsonb_build_object('sub', new_user_id::text, 'email', p_email,
+                         'email_verified', true, 'phone_verified', false),
+      'email',
+      now() - (i || ' days')::interval,
       now() - (i || ' days')::interval,
       now() - (i || ' days')::interval
     );
