@@ -400,8 +400,10 @@ export default function TournamentDetail({
 
           {/* Spots */}
           <div className="font-lato text-text-secondary text-sm">
-            <span className={`font-semibold ${spotsClass}`}>{spotsLeft}</span>{" "}
-            of {t.max_participants} spots remaining
+            <p aria-label={`${spotsLeft} of ${t.max_participants} spots remaining`}>
+              <span className={`font-semibold ${spotsClass}`}>{spotsLeft}</span>{" "}
+              of {t.max_participants} spots remaining
+            </p>
             {/* Deadline */}
             <p className="font-lato text-text-muted text-sm">
               ⏰ Registration closes {formatDeadline(t.registration_deadline)}
