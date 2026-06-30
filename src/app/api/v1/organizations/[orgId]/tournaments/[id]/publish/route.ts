@@ -1,6 +1,12 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { ensureUniqueSlug, slugify } from "@/lib/slugs";
+import {
+  PURGE_PROFILE,
+  TOURNAMENTS_LIST_TAG,
+  tournamentTag,
+} from "@/lib/cache-tags";
+import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -263,6 +269,11 @@ export async function POST(
       { status: 500 },
     );
   }
+
+  // A newly published tournament enters the public list and gains a detail page;
+  // bust both caches so it appears without waiting for the 1-day fallback.
+  revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
+  revalidateTag(tournamentTag(slug), PURGE_PROFILE);
 
   return NextResponse.json({ data: updated }, { status: 200 });
 }

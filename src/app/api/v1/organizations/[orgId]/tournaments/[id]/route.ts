@@ -1,6 +1,12 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { getTournamentManageData } from "@/app/my/organizations/[orgId]/tournaments/[id]/_data/getTournamentManageData";
+import {
+  PURGE_PROFILE,
+  TOURNAMENTS_LIST_TAG,
+  tournamentTag,
+} from "@/lib/cache-tags";
+import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -344,7 +350,7 @@ export async function PATCH(
     .from("tournaments")
     .update(patch)
     .eq("id", id)
-    .select("id, name, status, updated_at")
+    .select("id, slug, name, status, updated_at")
     .single();
 
   if (updateError) {
@@ -353,6 +359,12 @@ export async function PATCH(
       { status: 500 },
     );
   }
+
+  // Edited details are visible on the detail page and the list (name, venue,
+  // dates); bust both so changes show immediately. A draft has no slug yet, so
+  // only the detail tag is skippable when slug is null.
+  revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
+  if (updated.slug) revalidateTag(tournamentTag(updated.slug), PURGE_PROFILE);
 
   return NextResponse.json({ data: updated }, { status: 200 });
 }
