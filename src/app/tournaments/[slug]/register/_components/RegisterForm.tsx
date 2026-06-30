@@ -17,13 +17,6 @@ import RegistrationPending from "./RegistrationPending";
 /** Server-computed fee totals keyed by tier type (e.g. "standard", "junior"). */
 export type FeeBreakdownByTier = Record<string, EntryFeeBreakdown>;
 
-const PAYMENT_METHODS = [
-  { id: "fpx", label: "FPX", description: "Online Banking" },
-  { id: "duitnow", label: "DuitNow QR", description: "Scan & Pay" },
-  { id: "card", label: "Credit / Debit Card", description: "Visa, Mastercard" },
-  { id: "ewallet", label: "E-Wallet", description: "TNG, GrabPay" },
-] as const;
-
 interface TierRestrictions {
   gender?: "female";
   oku?: boolean;
@@ -147,7 +140,6 @@ export default function RegisterForm({
   const [selectedTier, setSelectedTier] = useState<string>(
     () => tiers[0]?.type ?? "standard",
   );
-  const [paymentMethod, setPaymentMethod] = useState<string>("fpx");
   const [status, setStatus] = useState<FormStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [registration, setRegistration] = useState<RegistrationRow | null>(
@@ -292,40 +284,6 @@ export default function RegisterForm({
                 ? "Free"
                 : formatRmExact(breakdown.gross_cents)}
             </span>
-          </div>
-        </div>
-
-        {/* Payment method */}
-        <div className="card flex flex-col gap-3 p-6">
-          <p className="font-cinzel text-text-muted text-xs font-semibold tracking-widest uppercase">
-            Payment Method
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            {PAYMENT_METHODS.map((method) => (
-              <label
-                key={method.id}
-                className={`flex cursor-pointer flex-col gap-0.5 rounded-md border p-3 transition-colors ${
-                  paymentMethod === method.id
-                    ? "border-gold-bright bg-bg-raised"
-                    : "border-border hover:border-gold-bright/50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="payment_method"
-                  value={method.id}
-                  checked={paymentMethod === method.id}
-                  onChange={() => setPaymentMethod(method.id)}
-                  className="sr-only"
-                />
-                <span className="font-lato text-text-primary text-sm font-medium">
-                  {method.label}
-                </span>
-                <span className="font-lato text-text-muted text-xs">
-                  {method.description}
-                </span>
-              </label>
-            ))}
           </div>
         </div>
 

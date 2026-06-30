@@ -220,18 +220,6 @@ describe("RegisterForm", () => {
         screen.getByRole("button", { name: "Confirm & Pay" }),
       ).toBeDefined();
     });
-
-    it("renders payment method options", () => {
-      render(
-        <RegisterForm
-          tournament={makeTournament()}
-          userId="u1"
-          playerProfile={MALE_PROFILE}
-        />,
-      );
-      expect(screen.getByText("FPX")).toBeDefined();
-      expect(screen.getByText("DuitNow QR")).toBeDefined();
-    });
   });
 
   // --- Default selection / cheapest eligible --------------------------------
