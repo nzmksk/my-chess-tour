@@ -368,13 +368,6 @@ export default function TournamentDetail({
             >
               Registration Closed
             </button>
-          ) : !isAuthenticated ? (
-            <button
-              className="btn-primary w-full rounded-md opacity-50"
-              disabled
-            >
-              Sign In to Register
-            </button>
           ) : registrationStatus === "pending_payment" ? (
             <Link
               href={`/tournaments/${t.slug}/register`}
@@ -388,6 +381,13 @@ export default function TournamentDetail({
               disabled
             >
               Full Capacity
+            </button>
+          ) : !isAuthenticated ? (
+            <button
+              className="btn-primary w-full rounded-md opacity-50"
+              disabled
+            >
+              Sign In to Register
             </button>
           ) : (
             <Link
