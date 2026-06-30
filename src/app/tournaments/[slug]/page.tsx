@@ -11,8 +11,14 @@ import type {
 } from "./types";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
+import {
+  ONE_DAY_SECONDS,
+  TOURNAMENTS_LIST_TAG,
+  tournamentTag,
+} from "@/lib/cache-tags";
 
-export const revalidate = 60;
+// Must be a literal — Next statically analyzes this export. Mirrors ONE_DAY_SECONDS (86400).
+export const revalidate = 86400;
 
 async function fetchTournament(
   slug: string,
@@ -28,7 +34,10 @@ async function fetchTournament(
     const res = await fetch(
       `${protocol}://${host}/api/v1/tournaments/${slug}`,
       {
-        next: { revalidate: 60 },
+        next: {
+          revalidate: ONE_DAY_SECONDS,
+          tags: [TOURNAMENTS_LIST_TAG, tournamentTag(slug)],
+        },
       },
     );
     if (!res.ok) return null;

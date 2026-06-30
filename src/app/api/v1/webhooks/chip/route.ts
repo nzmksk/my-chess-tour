@@ -1,5 +1,11 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { chipOutcome } from "@/services/chip/chip";
+import {
+  PURGE_PROFILE,
+  TOURNAMENTS_LIST_TAG,
+  tournamentTag,
+} from "@/lib/cache-tags";
+import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 
@@ -167,7 +173,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if ((settled as { amount_mismatch?: boolean } | null)?.amount_mismatch) {
+  const result = settled as {
+    amount_mismatch?: boolean;
+    registration_id?: string;
+  } | null;
+
+  if (result?.amount_mismatch) {
     // Paid amount didn't match the recorded total — left pending for manual
     // reconciliation. Ack so CHIP stops retrying; surface loudly for ops.
     console.error("CHIP webhook: amount mismatch, payment left pending", {
@@ -175,6 +186,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       purchaseId,
       paidAmount: payload.purchase?.total,
     });
+  } else if (paid && result?.registration_id) {
+    // A paid settlement moves the registration to `confirmed`, which is the only
+    // transition that changes the (confirmed-only) capacity shown on the public
+    // pages. This webhook is the authoritative settlement path (CHIP retries on
+    // failure), so it's where we broadcast the cache invalidation. Resolve the
+    // tournament slug from the settled registration to target its detail tag.
+    const { data: reg } = await supabaseAdmin
+      .from("registrations")
+      .select("tournaments(slug)")
+      .eq("id", result.registration_id)
+      .maybeSingle();
+    const tRaw = (
+      reg as { tournaments?: { slug: string } | { slug: string }[] } | null
+    )?.tournaments;
+    const slug = Array.isArray(tRaw) ? tRaw[0]?.slug : tRaw?.slug;
+
+    revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
+    if (slug) revalidateTag(tournamentTag(slug), PURGE_PROFILE);
   }
 
   return NextResponse.json({ data: { received: true } }, { status: 200 });

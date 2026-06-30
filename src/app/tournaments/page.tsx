@@ -6,8 +6,10 @@ import TournamentsClient from "./_components/TournamentsClient";
 import TournamentsGridSkeleton from "./_components/TournamentsGridSkeleton";
 import { getTodayInTimeZone } from "./utils";
 import type { Tournament } from "./types";
+import { ONE_DAY_SECONDS, TOURNAMENTS_LIST_TAG } from "@/lib/cache-tags";
 
-export const revalidate = 60;
+// Must be a literal — Next statically analyzes this export. Mirrors ONE_DAY_SECONDS (86400).
+export const revalidate = 86400;
 
 export const metadata: Metadata = {
   title: "Upcoming Chess Tournaments in Malaysia",
@@ -40,7 +42,7 @@ async function TournamentsData() {
 
   try {
     const res = await fetch(`${protocol}://${host}/api/v1/tournaments`, {
-      next: { revalidate: 60 },
+      next: { revalidate: ONE_DAY_SECONDS, tags: [TOURNAMENTS_LIST_TAG] },
     });
 
     if (res.ok) {
