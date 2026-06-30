@@ -182,14 +182,13 @@ if (!claims) {
 
 ## 6. Where getUser() is still used, and why
 
-`getUser()` is retained in exactly **three** places. Everything else was migrated
+`getUser()` is retained in exactly **two** places. Everything else was migrated
 to `getAuthClaims()`.
 
 | File | Reason it keeps `getUser()` |
 | --- | --- |
 | `src/app/api/v1/tournaments/[id]/checkout/route.ts` | **Payment initiation.** Needs an immediate server-side **revocation check** right before taking money — the ~1h local-verification window is unacceptable here. Worth the round trip. |
 | `src/app/settings/_components/ProfileClient.tsx` | **Client component.** `getAuthClaims()` is server-only; this needs the live browser session. |
-| `src/app/auth/signup/_components/ProfileForm.tsx` | **Client component.** Same reason. |
 
 If you're adding a money-movement or account-takeover-sensitive server action,
 consider `getUser()` for the immediate revocation guarantee. Otherwise default to
@@ -229,8 +228,7 @@ check has passed.
   redirect to `/auth/login?redirectTo=…`.
 - **Guest-only:** `/auth/login`, `/auth/signup`, `/auth/forgot-password`,
   `/auth/logout` — authenticated users are bounced to `/tournaments`.
-- **Signup step gating:** a `SIGNUP_STEP_COOKIE` (`verify` → `profile`) prevents
-  skipping signup steps by editing the URL.
+- **Signup step gating:** a `SIGNUP_STEP_COOKIE` (`verify`) prevents reaching the verify step by URL before an account exists; it's cleared once verified.
 - **Password reset:** `/auth/update-password` requires a *recovery* session —
   checked via the JWT's `amr` containing an `otp` method.
 

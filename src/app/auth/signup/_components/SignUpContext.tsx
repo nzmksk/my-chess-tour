@@ -17,12 +17,6 @@ const defaultForm: RegistrationFields = {
   password: "",
   confirmPassword: "",
   termsAccepted: false,
-  gender: "",
-  nationality: "",
-  dateOfBirth: "",
-  fideId: "",
-  mcfId: "",
-  isOku: false,
 };
 
 // Read any in-progress signup back from storage. Runs on the server (where

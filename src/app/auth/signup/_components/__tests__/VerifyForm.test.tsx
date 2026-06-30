@@ -28,15 +28,9 @@ vi.mock("../SignUpContext", () => ({
       password: "Password1!",
       firstName: "Alice",
       lastName: "Wong",
-      gender: "Female",
-      nationality: "Malaysian",
-      dateOfBirth: "1990-01-01",
-      state: "Selangor",
-      fideId: "",
-      mcfId: "",
-      isOku: false,
     },
     setForm: vi.fn(),
+    clearForm: vi.fn(),
   }),
 }));
 
@@ -147,7 +141,7 @@ describe("VerifyForm", () => {
     );
   });
 
-  it("navigates to /auth/signup/profile after successful verification", async () => {
+  it("navigates to /tournaments after successful verification", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -161,7 +155,7 @@ describe("VerifyForm", () => {
       fireEvent.change(getCodeInput(), { target: { value: VALID_CODE } });
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/auth/signup/profile");
+    expect(mockPush).toHaveBeenCalledWith("/tournaments");
   });
 
   it("shows an inline error when verification fails", async () => {
