@@ -35,6 +35,7 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
   const [dob, setDob] = useState("");
   const [fideId, setFideId] = useState("");
   const [mcfId, setMcfId] = useState("");
+  const [nationality, setNationality] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +45,9 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
   function validate(): string | null {
     if (needs("gender") && gender !== "male" && gender !== "female") {
       return "Please select your gender.";
+    }
+    if (needs("nationality") && !nationality) {
+      return "Please select your nationality.";
     }
     if (needs("date_of_birth")) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
@@ -87,6 +91,10 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
     if (needs("date_of_birth")) {
       payload.date_of_birth = dob;
       updated.date_of_birth = dob;
+    }
+    if (needs("nationality")) {
+      payload.nationality = nationality;
+      updated.nationality = nationality;
     }
     if (needs("fide_id")) {
       const n = parseInt(fideId, 10);
@@ -153,6 +161,18 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
             className={inputClass}
           />
         </label>
+      )}
+
+      {needs("nationality") && (
+        <div className="flex flex-col gap-1">
+          <span className="font-lato text-text-secondary text-sm">
+            {FIELD_LABELS.nationality}
+          </span>
+          <CountryDropdown
+            placeholder="Select your nationality"
+            onChange={(c) => setNationality(c.name)}
+          />
+        </div>
       )}
 
       {needs("fide_id") && (

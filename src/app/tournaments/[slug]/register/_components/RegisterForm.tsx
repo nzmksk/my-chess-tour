@@ -11,6 +11,7 @@ import {
   calculateAge,
 } from "@/app/tournaments/utils";
 import type { EntryFeeBreakdown } from "@/services/payments/fees";
+import { nationalityMatches, resolveCountry } from "@/lib/countries";
 import type { RegistrationRow, PlayerProfile } from "../types";
 import RegistrationPending from "./RegistrationPending";
 import CompleteProfilePrompt, {
@@ -50,6 +51,17 @@ function checkHardEligibility(
     profile.gender !== restrictions.gender
   )
     return `This tournament is for ${restrictions.gender} players only.`;
+
+  // Nationality mismatch is a hard block; a null nationality is collectable.
+  if (
+    restrictions?.nationality != null &&
+    profile?.nationality != null &&
+    !nationalityMatches(restrictions.nationality, profile.nationality)
+  ) {
+    const label =
+      resolveCountry(restrictions.nationality)?.name ?? restrictions.nationality;
+    return `This tournament is for ${label} players only.`;
+  }
 
   // OKU and titles are not self-serviceable, so a shortfall is a hard block.
   if (tier.oku && !profile?.is_oku)
@@ -101,6 +113,9 @@ function getMissingProfileFields(
 
   const needsGender = tier.gender === "female" || restrictions?.gender != null;
   if (needsGender && !profile?.gender) missing.add("gender");
+
+  if (restrictions?.nationality != null && !profile?.nationality)
+    missing.add("nationality");
 
   if (tournament.is_fide_rated && profile?.fide_id == null)
     missing.add("fide_id");
@@ -230,6 +245,7 @@ export default function RegisterForm({
       national_rating: prev?.national_rating ?? null,
       fide_id: updated.fide_id ?? prev?.fide_id ?? null,
       mcf_id: updated.mcf_id ?? prev?.mcf_id ?? null,
+      nationality: updated.nationality ?? prev?.nationality ?? null,
     }));
   }
 

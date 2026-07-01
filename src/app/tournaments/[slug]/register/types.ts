@@ -9,6 +9,7 @@ export interface PlayerProfile {
   national_rating: number | null;
   fide_id: number | null;
   mcf_id: number | null;
+  nationality: string | null;
 }
 
 export interface RegistrationRequest {

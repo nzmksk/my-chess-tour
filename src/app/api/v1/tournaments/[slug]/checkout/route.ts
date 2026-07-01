@@ -172,7 +172,8 @@ export async function POST(
     restrictions?.max_rating != null ||
     restrictions?.min_age != null ||
     restrictions?.max_age != null ||
-    restrictions?.gender != null
+    restrictions?.gender != null ||
+    restrictions?.nationality != null
   );
 
   const needsRatedProfile =
@@ -182,7 +183,7 @@ export async function POST(
     const { data: profile } = await supabaseAdmin
       .from("player_profiles")
       .select(
-        "date_of_birth, gender, is_oku, title, fide_rating, national_rating, fide_id, mcf_id",
+        "date_of_birth, gender, is_oku, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
       )
       .eq("user_id", user.id)
       .single();

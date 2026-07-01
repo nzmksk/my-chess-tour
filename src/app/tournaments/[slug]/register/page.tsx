@@ -116,7 +116,7 @@ async function RegisterPageContent({ slug }: { slug: string }) {
   const { data: playerProfile } = await supabase
     .from("player_profiles")
     .select(
-      "gender, is_oku, date_of_birth, title, fide_rating, national_rating, fide_id, mcf_id",
+      "gender, is_oku, date_of_birth, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
     )
     .eq("user_id", claims.id)
     .single();

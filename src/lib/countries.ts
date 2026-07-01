@@ -30,3 +30,20 @@ export function resolveCountry(value?: string | null): Country | undefined {
     (c) => c.name === target || c.alpha2 === target || c.alpha3 === target,
   );
 }
+
+/**
+ * Whether a player's stored nationality satisfies a tournament's nationality
+ * restriction. Both values come from the CountryDropdown, so each must resolve
+ * to a known country; they're then compared by canonical alpha-3 code (so
+ * "Malaysia" / "MY" / "MYS" all match). Anything that doesn't resolve is treated
+ * as a non-match.
+ */
+export function nationalityMatches(
+  required: string,
+  playerNationality?: string | null,
+): boolean {
+  const req = resolveCountry(required);
+  const player = resolveCountry(playerNationality);
+  if (!req || !player) return false;
+  return req.alpha3 === player.alpha3;
+}
