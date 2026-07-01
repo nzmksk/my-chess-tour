@@ -6,6 +6,10 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
 import type { PersistedState } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
 import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell";
+import {
+  fromPersistedRestrictions,
+  type PersistedRestriction,
+} from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",
@@ -59,7 +63,7 @@ interface TournamentForEdit {
     }>;
     special?: Array<{ name: string; amount_cents: number }>;
   } | null;
-  restrictions: Array<{ type: string; value: string }> | null;
+  restrictions: PersistedRestriction[] | null;
 }
 
 async function fetchTournamentForEdit(
@@ -114,11 +118,7 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     venueAddress: t.venue.address ?? "",
   };
 
-  const restrictions = (t.restrictions ?? []).map((r, idx) => ({
-    id: `r-${idx}`,
-    type: r.type,
-    value: r.value,
-  }));
+  const restrictions = fromPersistedRestrictions(t.restrictions ?? []);
 
   const formatData = {
     formatType: t.format?.type

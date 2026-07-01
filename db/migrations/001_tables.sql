@@ -150,7 +150,7 @@ CREATE TABLE tournaments (
   is_mcf_rated                boolean NOT NULL DEFAULT false,
   entry_fees                  jsonb NOT NULL, -- {"standard": {"amount_cents": 4000},"additional": [{"type": "early_bird","valid_until": "2026-02-19T00:00:00+00:00","valid_for":20,"amount_cents": 3200},{"type": "age_based","age_max": 12,"age_min": 0,"amount_cents": 2400}]}
   prizes                      jsonb,          -- {"categories": [{"name": "Open","entries": [{"place": "1st","amount_cents": 80000},{"place": "2nd","amount_cents": 48000},{"place": "3rd","amount_cents": 32000}]}],"subcategories": [{"name": "Best Under-1500","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"max_rating": 1499}},{"name": "Best Female Player","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"gender": "female"}}]}
-  restrictions                jsonb,          -- {"age_max": 18} or {"gender": "female"}
+  restrictions                jsonb,          -- {"age": {"max": 18}} or {"gender": "female"}
   max_participants            integer NOT NULL,
   commission_rate             smallint NOT NULL DEFAULT 10, -- platform's cut (%)
   organizer_commission_pct    smallint NOT NULL DEFAULT 0,  -- % organizer absorbs (0=pass all to player, 10=absorb all, 3=split 3%/7%)
