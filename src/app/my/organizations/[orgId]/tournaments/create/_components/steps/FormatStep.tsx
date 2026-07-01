@@ -487,6 +487,23 @@ export default function FormatStep() {
                     defaultValue={nameToAlpha3(r.value)}
                     onChange={(c) => updateRestriction(r.id, "value", c.name)}
                   />
+                ) : r.type === "Gender" ? (
+                  <select
+                    className={`input ${
+                      showErrors && errors.restrictions?.[r.id]
+                        ? "input-error"
+                        : ""
+                    }`}
+                    value={r.value}
+                    aria-label="Restriction value"
+                    onChange={(e) =>
+                      updateRestriction(r.id, "value", e.target.value)
+                    }
+                  >
+                    <option value="">Select…</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
                 ) : (
                   <input
                     type="text"
