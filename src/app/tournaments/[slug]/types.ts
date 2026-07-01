@@ -39,6 +39,7 @@ export interface Restrictions {
   max_age?: number | null;
   titles?: ChessTitle[] | null;
   gender?: string | null;
+  nationality?: string | null;
 }
 
 interface OrganizerDetail {

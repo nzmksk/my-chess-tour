@@ -5,6 +5,7 @@ import type { EntryFees } from "@/app/tournaments/types";
 import {
   checkRestrictions,
   checkFeeTierEligibility,
+  checkRatedRequirements,
   normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
 import type { RegistrationRequest } from "@/app/tournaments/[slug]/register/types";
@@ -62,7 +63,7 @@ export async function POST(
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, name, entry_fees, max_participants, registration_deadline, restrictions, format",
+      "id, name, entry_fees, max_participants, registration_deadline, restrictions, format, is_fide_rated, is_mcf_rated",
     )
     .eq("slug", slug)
     .eq("status", "published")
@@ -174,11 +175,14 @@ export async function POST(
     restrictions?.gender != null
   );
 
-  if (needsTierProfile || needsRestrictionProfile) {
+  const needsRatedProfile =
+    tournament.is_fide_rated === true || tournament.is_mcf_rated === true;
+
+  if (needsTierProfile || needsRestrictionProfile || needsRatedProfile) {
     const { data: profile } = await supabaseAdmin
       .from("player_profiles")
       .select(
-        "date_of_birth, gender, is_oku, title, fide_rating, national_rating",
+        "date_of_birth, gender, is_oku, title, fide_rating, national_rating, fide_id, mcf_id",
       )
       .eq("user_id", user.id)
       .single();
@@ -195,6 +199,15 @@ export async function POST(
 
     const tierError = checkFeeTierEligibility(matchedTier, profile, now);
     if (tierError) return tierError;
+
+    const ratedError = checkRatedRequirements(
+      {
+        is_fide_rated: tournament.is_fide_rated === true,
+        is_mcf_rated: tournament.is_mcf_rated === true,
+      },
+      profile,
+    );
+    if (ratedError) return ratedError;
   }
 
   const { data: existing } = await supabaseAdmin

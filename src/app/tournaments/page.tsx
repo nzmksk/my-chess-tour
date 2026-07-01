@@ -4,9 +4,12 @@ import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import TournamentsClient from "./_components/TournamentsClient";
 import TournamentsGridSkeleton from "./_components/TournamentsGridSkeleton";
+import ProfileNudge from "./_components/ProfileNudge";
 import { getTodayInTimeZone } from "./utils";
 import type { Tournament } from "./types";
 import { ONE_DAY_SECONDS, TOURNAMENTS_LIST_TAG } from "@/lib/cache-tags";
+import { getAuthClaims } from "@/services/supabase/permission";
+import { createClient } from "@/services/supabase/server";
 
 // Must be a literal — Next statically analyzes this export. Mirrors ONE_DAY_SECONDS (86400).
 export const revalidate = 86400;
@@ -59,10 +62,39 @@ async function TournamentsData() {
   return <TournamentsClient tournaments={tournaments} today={today} />;
 }
 
+// Signed-in players with a half-empty profile get a dismissible nudge above the
+// list. "Incomplete" = missing gender, date of birth, or nationality (the
+// broadly-needed fields); FIDE/MCF IDs are situational and handled at registration.
+async function ProfileNudgeSlot() {
+  const claims = await getAuthClaims();
+  if (!claims) return null;
+
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("player_profiles")
+    .select("gender, date_of_birth, nationality")
+    .eq("user_id", claims.id)
+    .maybeSingle();
+
+  const incomplete =
+    !profile ||
+    profile.gender == null ||
+    profile.date_of_birth == null ||
+    profile.nationality == null;
+  if (!incomplete) return null;
+
+  return <ProfileNudge />;
+}
+
 export default function TournamentsPage() {
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
+      <div className="mx-auto w-full max-w-6xl px-4">
+        <Suspense fallback={null}>
+          <ProfileNudgeSlot />
+        </Suspense>
+      </div>
       <Suspense fallback={<TournamentsGridSkeleton />}>
         <TournamentsData />
       </Suspense>

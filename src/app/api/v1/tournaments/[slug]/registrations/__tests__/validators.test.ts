@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkRestrictions,
   checkFeeTierEligibility,
+  checkRatedRequirements,
   normalizeRestrictions,
 } from "../validators";
 import type { EligibilityProfile, FeeTier } from "../validators";
@@ -26,6 +27,8 @@ function makeProfile(
     title: null,
     fide_rating: null,
     national_rating: null,
+    fide_id: null,
+    mcf_id: null,
     ...overrides,
   };
 }
@@ -546,5 +549,72 @@ describe("checkFeeTierEligibility", () => {
       );
       expect(result).toBeNull();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkRatedRequirements
+// ---------------------------------------------------------------------------
+
+describe("checkRatedRequirements", () => {
+  const UNRATED = { is_fide_rated: false, is_mcf_rated: false };
+
+  it("returns null when the tournament is unrated", () => {
+    expect(checkRatedRequirements(UNRATED, makeProfile())).toBeNull();
+  });
+
+  it("returns 422 when a FIDE-rated tournament player has no FIDE ID", async () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: true, is_mcf_rated: false },
+      makeProfile({ fide_id: null }),
+    );
+    expect(result?.status).toBe(422);
+    const json = await result!.json();
+    expect(json.error.message).toMatch(/FIDE ID/);
+  });
+
+  it("returns null when a FIDE-rated tournament player has a FIDE ID", () => {
+    expect(
+      checkRatedRequirements(
+        { is_fide_rated: true, is_mcf_rated: false },
+        makeProfile({ fide_id: 5834567 }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns 422 when an MCF-rated tournament player has no MCF ID", async () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: false, is_mcf_rated: true },
+      makeProfile({ mcf_id: null }),
+    );
+    expect(result?.status).toBe(422);
+    const json = await result!.json();
+    expect(json.error.message).toMatch(/MCF ID/);
+  });
+
+  it("returns null when an MCF-rated tournament player has an MCF ID", () => {
+    expect(
+      checkRatedRequirements(
+        { is_fide_rated: false, is_mcf_rated: true },
+        makeProfile({ mcf_id: 12345 }),
+      ),
+    ).toBeNull();
+  });
+
+  it("flags the missing FIDE ID first when both ratings are required", async () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: true, is_mcf_rated: true },
+      makeProfile({ fide_id: null, mcf_id: null }),
+    );
+    const json = await result!.json();
+    expect(json.error.message).toMatch(/FIDE ID/);
+  });
+
+  it("returns 422 for a missing profile on a rated tournament", () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: true, is_mcf_rated: false },
+      null,
+    );
+    expect(result?.status).toBe(422);
   });
 });

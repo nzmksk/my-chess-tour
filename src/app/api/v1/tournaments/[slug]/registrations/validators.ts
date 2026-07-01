@@ -10,6 +10,8 @@ export interface EligibilityProfile {
   title: string | null;
   fide_rating: Record<string, number> | null;
   national_rating: number | null;
+  fide_id: number | null;
+  mcf_id: number | null;
 }
 
 export interface FeeTier {
@@ -254,6 +256,45 @@ export function checkFeeTierEligibility(
         { status: 400 },
       );
     }
+  }
+
+  return null;
+}
+
+/**
+ * A FIDE-rated tournament requires the player to have a FIDE ID, and an MCF-rated
+ * tournament requires an MCF ID, so the result can be submitted to the federation
+ * for rating. Both IDs are self-serviceable (set once in the profile), so a missing
+ * one is a fixable VALIDATION_ERROR rather than a hard ELIGIBILITY_ERROR.
+ */
+export function checkRatedRequirements(
+  flags: { is_fide_rated: boolean; is_mcf_rated: boolean },
+  profile: EligibilityProfile | null,
+): NextResponse | null {
+  if (flags.is_fide_rated && profile?.fide_id == null) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "Your profile is missing a FIDE ID required for this FIDE-rated tournament",
+        },
+      },
+      { status: 422 },
+    );
+  }
+
+  if (flags.is_mcf_rated && profile?.mcf_id == null) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "Your profile is missing an MCF ID required for this MCF-rated tournament",
+        },
+      },
+      { status: 422 },
+    );
   }
 
   return null;
