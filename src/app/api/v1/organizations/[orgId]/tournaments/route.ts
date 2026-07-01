@@ -27,7 +27,9 @@ interface EntryFeesInput {
 
 interface Restriction {
   type: string;
-  value: string;
+  value?: string;
+  min?: number | null;
+  max?: number | null;
 }
 
 interface PrizesInput {

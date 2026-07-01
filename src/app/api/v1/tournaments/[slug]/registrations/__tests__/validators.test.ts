@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkRestrictions,
   checkFeeTierEligibility,
+  checkRatedRequirements,
   normalizeRestrictions,
 } from "../validators";
 import type { EligibilityProfile, FeeTier } from "../validators";
@@ -26,6 +27,9 @@ function makeProfile(
     title: null,
     fide_rating: null,
     national_rating: null,
+    fide_id: null,
+    mcf_id: null,
+    nationality: null,
     ...overrides,
   };
 }
@@ -87,8 +91,13 @@ describe("normalizeRestrictions", () => {
     });
   });
 
-  it("ignores unknown restriction types (e.g. nationality)", () => {
-    const raw = [{ type: "nationality", value: "Malaysian" }];
+  it("normalizes a nationality restriction", () => {
+    const raw = [{ type: "nationality", value: "Malaysia" }];
+    expect(normalizeRestrictions(raw)).toEqual({ nationality: "Malaysia" });
+  });
+
+  it("ignores unknown restriction types (e.g. state)", () => {
+    const raw = [{ type: "state", value: "Selangor" }];
     expect(normalizeRestrictions(raw)).toBeNull();
   });
 
@@ -98,10 +107,13 @@ describe("normalizeRestrictions", () => {
 
   it("handles combined seed-style restrictions", () => {
     const raw = [
-      { type: "nationality", value: "Malaysian" },
+      { type: "nationality", value: "Malaysia" },
       { type: "age", max: 20 },
     ];
-    expect(normalizeRestrictions(raw)).toEqual({ max_age: 20 });
+    expect(normalizeRestrictions(raw)).toEqual({
+      nationality: "Malaysia",
+      max_age: 20,
+    });
   });
 });
 
@@ -110,6 +122,55 @@ describe("normalizeRestrictions", () => {
 // ---------------------------------------------------------------------------
 
 describe("checkRestrictions", () => {
+  describe("nationality restriction", () => {
+    it("returns null when the player's nationality matches (by full name)", () => {
+      expect(
+        checkRestrictions(
+          { nationality: "Malaysia" },
+          makeProfile({ nationality: "Malaysia" }),
+          "rapid",
+          NOW,
+        ),
+      ).toBeNull();
+    });
+
+    it("matches across formats (restriction 'MY' vs profile 'Malaysia')", () => {
+      expect(
+        checkRestrictions(
+          { nationality: "MY" },
+          makeProfile({ nationality: "Malaysia" }),
+          "rapid",
+          NOW,
+        ),
+      ).toBeNull();
+    });
+
+    it("returns 422 ELIGIBILITY_ERROR when the nationality does not match", async () => {
+      const result = checkRestrictions(
+        { nationality: "Malaysia" },
+        makeProfile({ nationality: "Singapore" }),
+        "rapid",
+        NOW,
+      );
+      expect(result?.status).toBe(422);
+      const json = await result!.json();
+      expect(json.error.code).toBe("ELIGIBILITY_ERROR");
+      expect(json.error.message).toMatch(/Malaysia/);
+    });
+
+    it("returns 422 VALIDATION_ERROR when the player's nationality is missing", async () => {
+      const result = checkRestrictions(
+        { nationality: "Malaysia" },
+        makeProfile({ nationality: null }),
+        "rapid",
+        NOW,
+      );
+      expect(result?.status).toBe(422);
+      const json = await result!.json();
+      expect(json.error.code).toBe("VALIDATION_ERROR");
+    });
+  });
+
   describe("gender restriction", () => {
     it("returns 422 when tournament is female-only and player is male", async () => {
       const result = checkRestrictions(
@@ -546,5 +607,72 @@ describe("checkFeeTierEligibility", () => {
       );
       expect(result).toBeNull();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkRatedRequirements
+// ---------------------------------------------------------------------------
+
+describe("checkRatedRequirements", () => {
+  const UNRATED = { is_fide_rated: false, is_mcf_rated: false };
+
+  it("returns null when the tournament is unrated", () => {
+    expect(checkRatedRequirements(UNRATED, makeProfile())).toBeNull();
+  });
+
+  it("returns 422 when a FIDE-rated tournament player has no FIDE ID", async () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: true, is_mcf_rated: false },
+      makeProfile({ fide_id: null }),
+    );
+    expect(result?.status).toBe(422);
+    const json = await result!.json();
+    expect(json.error.message).toMatch(/FIDE ID/);
+  });
+
+  it("returns null when a FIDE-rated tournament player has a FIDE ID", () => {
+    expect(
+      checkRatedRequirements(
+        { is_fide_rated: true, is_mcf_rated: false },
+        makeProfile({ fide_id: 5834567 }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns 422 when an MCF-rated tournament player has no MCF ID", async () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: false, is_mcf_rated: true },
+      makeProfile({ mcf_id: null }),
+    );
+    expect(result?.status).toBe(422);
+    const json = await result!.json();
+    expect(json.error.message).toMatch(/MCF ID/);
+  });
+
+  it("returns null when an MCF-rated tournament player has an MCF ID", () => {
+    expect(
+      checkRatedRequirements(
+        { is_fide_rated: false, is_mcf_rated: true },
+        makeProfile({ mcf_id: 12345 }),
+      ),
+    ).toBeNull();
+  });
+
+  it("flags the missing FIDE ID first when both ratings are required", async () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: true, is_mcf_rated: true },
+      makeProfile({ fide_id: null, mcf_id: null }),
+    );
+    const json = await result!.json();
+    expect(json.error.message).toMatch(/FIDE ID/);
+  });
+
+  it("returns 422 for a missing profile on a rated tournament", () => {
+    const result = checkRatedRequirements(
+      { is_fide_rated: true, is_mcf_rated: false },
+      null,
+    );
+    expect(result?.status).toBe(422);
   });
 });

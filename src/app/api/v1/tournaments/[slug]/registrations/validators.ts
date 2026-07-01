@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ChessTitle } from "@/app/tournaments/types";
 import type { Restrictions } from "@/app/tournaments/[slug]/types";
 import { calculateAge } from "@/app/tournaments/utils";
+import { nationalityMatches, resolveCountry } from "@/lib/countries";
 
 export interface EligibilityProfile {
   date_of_birth: string | null;
@@ -10,6 +11,9 @@ export interface EligibilityProfile {
   title: string | null;
   fide_rating: Record<string, number> | null;
   national_rating: number | null;
+  fide_id: number | null;
+  mcf_id: number | null;
+  nationality: string | null;
 }
 
 export interface FeeTier {
@@ -45,6 +49,9 @@ export function normalizeRestrictions(raw: unknown): Restrictions | null {
       case "gender":
         if (item.value != null) result.gender = item.value;
         break;
+      case "nationality":
+        if (item.value != null) result.nationality = item.value;
+        break;
     }
   }
   return Object.keys(result).length > 0 ? result : null;
@@ -66,6 +73,37 @@ export function checkRestrictions(
       },
       { status: 422 },
     );
+  }
+
+  if (restrictions.nationality != null) {
+    // A missing nationality is self-serviceable (fixed via the inline prompt),
+    // so it's a fixable VALIDATION_ERROR; a mismatch is a hard ELIGIBILITY_ERROR.
+    if (profile?.nationality == null) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message:
+              "Your profile is missing a nationality required for this tournament",
+          },
+        },
+        { status: 422 },
+      );
+    }
+    if (!nationalityMatches(restrictions.nationality, profile.nationality)) {
+      const label =
+        resolveCountry(restrictions.nationality)?.name ??
+        restrictions.nationality;
+      return NextResponse.json(
+        {
+          error: {
+            code: "ELIGIBILITY_ERROR",
+            message: `This tournament is for ${label} players only`,
+          },
+        },
+        { status: 422 },
+      );
+    }
   }
 
   if ((restrictions.titles?.length ?? 0) > 0) {
@@ -254,6 +292,45 @@ export function checkFeeTierEligibility(
         { status: 400 },
       );
     }
+  }
+
+  return null;
+}
+
+/**
+ * A FIDE-rated tournament requires the player to have a FIDE ID, and an MCF-rated
+ * tournament requires an MCF ID, so the result can be submitted to the federation
+ * for rating. Both IDs are self-serviceable (set once in the profile), so a missing
+ * one is a fixable VALIDATION_ERROR rather than a hard ELIGIBILITY_ERROR.
+ */
+export function checkRatedRequirements(
+  flags: { is_fide_rated: boolean; is_mcf_rated: boolean },
+  profile: EligibilityProfile | null,
+): NextResponse | null {
+  if (flags.is_fide_rated && profile?.fide_id == null) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "Your profile is missing a FIDE ID required for this FIDE-rated tournament",
+        },
+      },
+      { status: 422 },
+    );
+  }
+
+  if (flags.is_mcf_rated && profile?.mcf_id == null) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "Your profile is missing an MCF ID required for this MCF-rated tournament",
+        },
+      },
+      { status: 422 },
+    );
   }
 
   return null;

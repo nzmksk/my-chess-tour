@@ -8,6 +8,7 @@ import {
   type FeeTier,
 } from "./TournamentWizardContext";
 import WizardProgressBar from "./WizardProgressBar";
+import { toPersistedRestrictions } from "./restrictions";
 import BasicInfoStep from "./steps/BasicInfoStep";
 import FormatStep from "./steps/FormatStep";
 import FeesStep from "./steps/FeesStep";
@@ -159,10 +160,7 @@ export default function WizardShell({
     body.is_mcf_rated = formatData.mcfRated;
 
     if (formatData.restrictions.length > 0) {
-      body.restrictions = formatData.restrictions.map((r) => ({
-        type: r.type,
-        value: r.value,
-      }));
+      body.restrictions = toPersistedRestrictions(formatData.restrictions);
     }
 
     body.entry_fees = entryFees;

@@ -7,6 +7,7 @@ import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { computeEntryFeeBreakdown } from "@/services/payments/fees";
+import { normalizeRestrictions } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
 import { PAYMENT_TIMEOUT_MINUTES } from "@/services/chip/chip";
 import type { TournamentDetail } from "../types";
 import type { FeeBreakdownByTier } from "./_components/RegisterForm";
@@ -115,7 +116,7 @@ async function RegisterPageContent({ slug }: { slug: string }) {
   const { data: playerProfile } = await supabase
     .from("player_profiles")
     .select(
-      "gender, is_oku, date_of_birth, title, fide_rating, national_rating",
+      "gender, is_oku, date_of_birth, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
     )
     .eq("user_id", claims.id)
     .single();
@@ -164,6 +165,7 @@ async function RegisterPageContent({ slug }: { slug: string }) {
         tournament={tournament}
         userId={claims.id}
         playerProfile={playerProfile ?? null}
+        restrictions={normalizeRestrictions(tournament.restrictions)}
         feeBreakdown={feeBreakdown}
       />
     </Suspense>

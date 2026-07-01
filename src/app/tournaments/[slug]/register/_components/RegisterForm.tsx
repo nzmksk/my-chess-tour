@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import type { TournamentDetail } from "../../types";
+import type { TournamentDetail, Restrictions } from "../../types";
 import {
   formatRm,
   formatRmExact,
@@ -11,8 +11,12 @@ import {
   calculateAge,
 } from "@/app/tournaments/utils";
 import type { EntryFeeBreakdown } from "@/services/payments/fees";
+import { nationalityMatches, resolveCountry } from "@/lib/countries";
 import type { RegistrationRow, PlayerProfile } from "../types";
 import RegistrationPending from "./RegistrationPending";
+import CompleteProfilePrompt, {
+  type CompletableField,
+} from "./CompleteProfilePrompt";
 
 /** Server-computed fee totals keyed by tier type (e.g. "standard", "junior"). */
 export type FeeBreakdownByTier = Record<string, EntryFeeBreakdown>;
@@ -25,50 +29,106 @@ interface TierRestrictions {
   age_max?: number;
 }
 
-function checkEligibility(
+/**
+ * Hard eligibility: reasons the player can NEVER satisfy by filling in the prompt
+ * (wrong gender, age out of range, missing OKU/title/rating). A field that is
+ * simply *null* is not a hard block — it's collected via CompleteProfilePrompt and
+ * surfaced by getMissingProfileFields instead.
+ */
+function checkHardEligibility(
   tier: TierRestrictions,
-  playerProfile: PlayerProfile | null,
+  restrictions: Restrictions | null,
+  profile: PlayerProfile | null,
   now: Date,
 ): string | null {
-  if (tier.gender === "female") {
-    if (!playerProfile)
-      return "Complete your player profile to select this tier.";
-    if (playerProfile.gender !== "female")
-      return "This fee is for female players only.";
+  // Gender mismatch only blocks when gender is actually set; a null gender is
+  // "missing" (collectable), not ineligible.
+  if (tier.gender === "female" && profile?.gender === "male")
+    return "This fee is for female players only.";
+  if (
+    restrictions?.gender != null &&
+    profile?.gender != null &&
+    profile.gender !== restrictions.gender
+  )
+    return `This tournament is for ${restrictions.gender} players only.`;
+
+  // Nationality mismatch is a hard block; a null nationality is collectable.
+  if (
+    restrictions?.nationality != null &&
+    profile?.nationality != null &&
+    !nationalityMatches(restrictions.nationality, profile.nationality)
+  ) {
+    const label =
+      resolveCountry(restrictions.nationality)?.name ?? restrictions.nationality;
+    return `This tournament is for ${label} players only.`;
   }
 
-  if (tier.oku) {
-    if (!playerProfile)
-      return "Complete your player profile to select this tier.";
-    if (!playerProfile.is_oku)
-      return "This fee is for OKU (disabled) players only.";
-  }
+  // OKU and titles are not self-serviceable, so a shortfall is a hard block.
+  if (tier.oku && !profile?.is_oku)
+    return "This fee is for OKU (disabled) players only.";
 
-  if (tier.titles?.length) {
-    if (!playerProfile)
-      return "Complete your player profile to select this tier.";
-    if (!playerProfile.title || !tier.titles.includes(playerProfile.title))
-      return `This fee is for titled players only (${tier.titles.join(", ")}).`;
-  }
+  if (
+    tier.titles?.length &&
+    (!profile?.title || !tier.titles.includes(profile.title))
+  )
+    return `This fee is for titled players only (${tier.titles.join(", ")}).`;
+  if (
+    restrictions?.titles?.length &&
+    (!profile?.title || !restrictions.titles.includes(profile.title))
+  )
+    return `This tournament is for titled players only (${restrictions.titles.join(", ")}).`;
 
-  if (tier.age_min != null || tier.age_max != null) {
-    if (!playerProfile?.date_of_birth)
-      return "Complete your player profile (date of birth) to select this tier.";
-    const dob = new Date(playerProfile.date_of_birth);
-    const age = calculateAge(dob, now);
-    if (tier.age_min != null && age < tier.age_min)
-      return `You must be at least ${tier.age_min} years old for this tier.`;
-    if (tier.age_max != null && age > tier.age_max)
-      return `You must be ${tier.age_max} years old or younger for this tier.`;
+  // Age only resolves once the date of birth is known; a null DOB is collectable.
+  const ageMin = tier.age_min ?? restrictions?.min_age ?? null;
+  const ageMax = tier.age_max ?? restrictions?.max_age ?? null;
+  if ((ageMin != null || ageMax != null) && profile?.date_of_birth) {
+    const age = calculateAge(new Date(profile.date_of_birth), now);
+    if (ageMin != null && age < ageMin)
+      return `You must be at least ${ageMin} years old for this tier.`;
+    if (ageMax != null && age > ageMax)
+      return `You must be ${ageMax} years old or younger for this tier.`;
   }
 
   return null;
+}
+
+/**
+ * Self-serviceable profile fields this registration requires but the player hasn't
+ * set yet — collected inline so the user never leaves the registration flow.
+ */
+function getMissingProfileFields(
+  tier: TierRestrictions,
+  tournament: Pick<TournamentDetail, "is_fide_rated" | "is_mcf_rated">,
+  restrictions: Restrictions | null,
+  profile: PlayerProfile | null,
+): CompletableField[] {
+  const missing = new Set<CompletableField>();
+
+  const needsDob =
+    tier.age_min != null ||
+    tier.age_max != null ||
+    restrictions?.min_age != null ||
+    restrictions?.max_age != null;
+  if (needsDob && !profile?.date_of_birth) missing.add("date_of_birth");
+
+  const needsGender = tier.gender === "female" || restrictions?.gender != null;
+  if (needsGender && !profile?.gender) missing.add("gender");
+
+  if (restrictions?.nationality != null && !profile?.nationality)
+    missing.add("nationality");
+
+  if (tournament.is_fide_rated && profile?.fide_id == null)
+    missing.add("fide_id");
+  if (tournament.is_mcf_rated && profile?.mcf_id == null) missing.add("mcf_id");
+
+  return Array.from(missing);
 }
 
 interface Props {
   tournament: TournamentDetail;
   userId: string;
   playerProfile: PlayerProfile | null;
+  restrictions?: Restrictions | null;
   feeBreakdown?: FeeBreakdownByTier;
 }
 
@@ -77,9 +137,14 @@ type FormStatus = "idle" | "submitting" | "redirecting" | "success" | "error";
 export default function RegisterForm({
   tournament,
   playerProfile,
+  restrictions = null,
   feeBreakdown = {},
 }: Props) {
   const now = new Date();
+
+  // Profile is held in state (seeded from the server prop) so the inline
+  // CompleteProfilePrompt can update it and re-run eligibility without a reload.
+  const [profile, setProfile] = useState<PlayerProfile | null>(playerProfile);
 
   const additional = tournament.entry_fees.additional ?? [];
 
@@ -126,16 +191,18 @@ export default function RegisterForm({
     return raw
       .map((t) => ({
         ...t,
+        // A tier is "eligible" (selectable) unless there's a hard block. A merely
+        // missing self-serviceable field keeps it selectable — the prompt collects it.
         eligible:
-          !t.expired && checkEligibility(t, playerProfile, now) === null,
+          !t.expired && checkHardEligibility(t, restrictions, profile, now) === null,
       }))
       .sort((a, b) => {
         if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
         return a.amount_cents - b.amount_cents;
       });
-    // now is stable for the lifetime of this render; playerProfile is the real dep
+    // now is stable for the lifetime of this render; profile is the real dep
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournament, playerProfile]);
+  }, [tournament, restrictions, profile]);
 
   const [selectedTier, setSelectedTier] = useState<string>(
     () => tiers[0]?.type ?? "standard",
@@ -155,9 +222,32 @@ export default function RegisterForm({
 
   const eligibilityError = useMemo<string | null>(() => {
     if (selected.expired) return "This fee tier has expired.";
-    return checkEligibility(selected, playerProfile, now);
+    return checkHardEligibility(selected, restrictions, profile, now);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, playerProfile]);
+  }, [selected, restrictions, profile]);
+
+  // Self-serviceable fields missing for the selected tier — only when there's no
+  // hard block (an unfixable error takes precedence over the completion prompt).
+  const missingFields = useMemo<CompletableField[]>(() => {
+    if (selected.expired || eligibilityError) return [];
+    return getMissingProfileFields(selected, tournament, restrictions, profile);
+  }, [selected, eligibilityError, tournament, restrictions, profile]);
+
+  // Merge inline-completed fields into local profile state so eligibility and the
+  // missing-field list recompute and the normal Confirm & Pay button returns.
+  function handleProfileSaved(updated: Partial<PlayerProfile>) {
+    setProfile((prev) => ({
+      gender: updated.gender ?? prev?.gender ?? null,
+      is_oku: prev?.is_oku ?? false,
+      date_of_birth: updated.date_of_birth ?? prev?.date_of_birth ?? null,
+      title: prev?.title ?? null,
+      fide_rating: prev?.fide_rating ?? null,
+      national_rating: prev?.national_rating ?? null,
+      fide_id: updated.fide_id ?? prev?.fide_id ?? null,
+      mcf_id: updated.mcf_id ?? prev?.mcf_id ?? null,
+      nationality: updated.nationality ?? prev?.nationality ?? null,
+    }));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -294,22 +384,29 @@ export default function RegisterForm({
           </p>
         )}
 
-        {/* Submit */}
-        <button
-          type="submit"
-          className="btn-primary w-full rounded-md"
-          disabled={
-            status === "submitting" ||
-            status === "redirecting" ||
-            !!eligibilityError
-          }
-        >
-          {status === "submitting"
-            ? "Submitting…"
-            : status === "redirecting"
-              ? "Redirecting to payment…"
-              : "Confirm & Pay"}
-        </button>
+        {/* Inline profile completion, or the submit button once nothing's missing */}
+        {missingFields.length > 0 ? (
+          <CompleteProfilePrompt
+            missing={missingFields}
+            onSaved={handleProfileSaved}
+          />
+        ) : (
+          <button
+            type="submit"
+            className="btn-primary w-full rounded-md"
+            disabled={
+              status === "submitting" ||
+              status === "redirecting" ||
+              !!eligibilityError
+            }
+          >
+            {status === "submitting"
+              ? "Submitting…"
+              : status === "redirecting"
+                ? "Redirecting to payment…"
+                : "Confirm & Pay"}
+          </button>
+        )}
 
         <Link
           href={`/tournaments/${tournament.slug}`}

@@ -87,6 +87,9 @@ const MALE_PROFILE: PlayerProfile = {
   title: null,
   fide_rating: null,
   national_rating: null,
+  fide_id: null,
+  mcf_id: null,
+  nationality: null,
 };
 const FEMALE_PROFILE: PlayerProfile = {
   gender: "female",
@@ -95,6 +98,9 @@ const FEMALE_PROFILE: PlayerProfile = {
   title: null,
   fide_rating: null,
   national_rating: null,
+  fide_id: null,
+  mcf_id: null,
+  nationality: null,
 };
 const OKU_PROFILE: PlayerProfile = {
   gender: "male",
@@ -103,6 +109,9 @@ const OKU_PROFILE: PlayerProfile = {
   title: null,
   fide_rating: null,
   national_rating: null,
+  fide_id: null,
+  mcf_id: null,
+  nationality: null,
 };
 const GM_PROFILE: PlayerProfile = {
   gender: "male",
@@ -111,6 +120,9 @@ const GM_PROFILE: PlayerProfile = {
   title: "GM",
   fide_rating: null,
   national_rating: null,
+  fide_id: null,
+  mcf_id: null,
+  nationality: null,
 };
 // Age 10 on 2026-05-12 (born 2016-01-01 → 10 years old)
 const YOUNG_PROFILE: PlayerProfile = {
@@ -120,6 +132,9 @@ const YOUNG_PROFILE: PlayerProfile = {
   title: null,
   fide_rating: null,
   national_rating: null,
+  fide_id: null,
+  mcf_id: null,
+  nationality: null,
 };
 // Age 36 — reuse MALE_PROFILE
 const ADULT_PROFILE = MALE_PROFILE;
@@ -131,6 +146,9 @@ const NO_DOB_PROFILE: PlayerProfile = {
   title: null,
   fide_rating: null,
   national_rating: null,
+  fide_id: null,
+  mcf_id: null,
+  nationality: null,
 };
 
 const FAKE_REGISTRATION = {
@@ -443,7 +461,7 @@ describe("RegisterForm", () => {
       ).toBeNull();
     });
 
-    it("shows 'Complete your player profile' when profile is null and a restricted tier is selected", async () => {
+    it("prompts to complete gender when a female-only tier is selected with no gender set", async () => {
       const { container } = render(
         <RegisterForm
           tournament={makeTournament([
@@ -457,8 +475,9 @@ describe("RegisterForm", () => {
         fireEvent.change(selectEl(container), { target: { value: "women" } });
       });
       expect(
-        screen.getByText("Complete your player profile to select this tier."),
+        screen.getByText("A few details are needed for this tournament"),
       ).toBeDefined();
+      expect(screen.getByText("Gender")).toBeDefined();
     });
   });
 
@@ -500,7 +519,7 @@ describe("RegisterForm", () => {
       ).toBeNull();
     });
 
-    it("shows 'Complete your player profile' for OKU tier when profile is null", async () => {
+    it("shows the OKU-only error (no prompt) for an OKU tier when profile is null", async () => {
       const { container } = render(
         <RegisterForm
           tournament={makeTournament([
@@ -513,9 +532,13 @@ describe("RegisterForm", () => {
       await act(async () => {
         fireEvent.change(selectEl(container), { target: { value: "oku" } });
       });
+      // OKU is not self-serviceable, so it stays a hard block — no prompt.
       expect(
-        screen.getByText("Complete your player profile to select this tier."),
+        screen.getByText("This fee is for OKU (disabled) players only."),
       ).toBeDefined();
+      expect(
+        screen.queryByText("A few details are needed for this tournament"),
+      ).toBeNull();
     });
   });
 
@@ -555,7 +578,7 @@ describe("RegisterForm", () => {
       expect(screen.queryByText(/titled players only/)).toBeNull();
     });
 
-    it("shows 'Complete your player profile' for titled tier when profile is null", async () => {
+    it("shows the titled-only error (no prompt) for a titled tier when profile is null", async () => {
       const { container } = render(
         <RegisterForm
           tournament={makeTournament([
@@ -568,9 +591,13 @@ describe("RegisterForm", () => {
       await act(async () => {
         fireEvent.change(selectEl(container), { target: { value: "titled" } });
       });
+      // Title is admin-set, not self-serviceable — stays a hard block.
       expect(
-        screen.getByText("Complete your player profile to select this tier."),
+        screen.getByText("This fee is for titled players only (GM)."),
       ).toBeDefined();
+      expect(
+        screen.queryByText("A few details are needed for this tournament"),
+      ).toBeNull();
     });
   });
 
@@ -630,7 +657,7 @@ describe("RegisterForm", () => {
       expect(screen.queryByText(/years old/)).toBeNull();
     });
 
-    it("shows a missing DOB error when date_of_birth is null for an age-restricted tier", async () => {
+    it("prompts for date of birth when it is null for an age-restricted tier", async () => {
       const { container } = render(
         <RegisterForm
           tournament={makeTournament([
@@ -644,10 +671,9 @@ describe("RegisterForm", () => {
         fireEvent.change(selectEl(container), { target: { value: "junior" } });
       });
       expect(
-        screen.getByText(
-          "Complete your player profile (date of birth) to select this tier.",
-        ),
+        screen.getByText("A few details are needed for this tournament"),
       ).toBeDefined();
+      expect(screen.getByText("Date of Birth")).toBeDefined();
     });
   });
 
@@ -873,6 +899,122 @@ describe("RegisterForm", () => {
         });
       });
       expect(screen.getAllByText("RM30").length).toBeGreaterThan(0);
+    });
+  });
+
+  // --- Just-in-time profile completion --------------------------------------
+
+  describe("just-in-time profile completion", () => {
+    it("prompts for a FIDE ID on a FIDE-rated tournament when missing", () => {
+      render(
+        <RegisterForm
+          tournament={{ ...makeTournament(), is_fide_rated: true }}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+        />,
+      );
+      expect(
+        screen.getByText("A few details are needed for this tournament"),
+      ).toBeDefined();
+      expect(screen.getByText("FIDE ID")).toBeDefined();
+      // The submit button is replaced by the prompt until the field is filled.
+      expect(
+        screen.queryByRole("button", { name: "Confirm & Pay" }),
+      ).toBeNull();
+    });
+
+    it("prompts for an MCF ID on an MCF-rated tournament when missing", () => {
+      render(
+        <RegisterForm
+          tournament={{ ...makeTournament(), is_mcf_rated: true }}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+        />,
+      );
+      expect(screen.getByText("MCF ID")).toBeDefined();
+    });
+
+    it("does not prompt when the required FIDE ID is already set", () => {
+      render(
+        <RegisterForm
+          tournament={{ ...makeTournament(), is_fide_rated: true }}
+          userId="u1"
+          playerProfile={{ ...MALE_PROFILE, fide_id: 5834567 }}
+        />,
+      );
+      expect(
+        screen.queryByText("A few details are needed for this tournament"),
+      ).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Confirm & Pay" }),
+      ).toBeDefined();
+    });
+
+    it("PATCHes the profile and unblocks Confirm & Pay after inline completion", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ success: true }),
+      });
+      render(
+        <RegisterForm
+          tournament={{ ...makeTournament(), is_fide_rated: true }}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+        />,
+      );
+
+      await act(async () => {
+        fireEvent.change(screen.getByPlaceholderText("e.g. 5834567"), {
+          target: { value: "5834567" },
+        });
+      });
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Save & Continue" }),
+        );
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/v1/profile",
+        expect.objectContaining({ method: "PATCH" }),
+      );
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.fide_id).toBe(5834567);
+      expect(
+        screen.getByRole("button", { name: "Confirm & Pay" }),
+      ).toBeDefined();
+    });
+
+    it("prompts for nationality on a nationality-restricted tournament when missing", () => {
+      render(
+        <RegisterForm
+          tournament={makeTournament()}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+          restrictions={{ nationality: "Malaysia" }}
+        />,
+      );
+      expect(
+        screen.getByText("A few details are needed for this tournament"),
+      ).toBeDefined();
+      expect(screen.getByText("Nationality")).toBeDefined();
+    });
+
+    it("hard-blocks when the player's nationality does not match the restriction", () => {
+      render(
+        <RegisterForm
+          tournament={makeTournament()}
+          userId="u1"
+          playerProfile={{ ...MALE_PROFILE, nationality: "Singapore" }}
+          restrictions={{ nationality: "Malaysia" }}
+        />,
+      );
+      expect(
+        screen.getByText("This tournament is for Malaysia players only."),
+      ).toBeDefined();
+      expect(
+        screen.queryByText("A few details are needed for this tournament"),
+      ).toBeNull();
     });
   });
 });

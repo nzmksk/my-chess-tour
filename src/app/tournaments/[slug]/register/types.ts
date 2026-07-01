@@ -7,6 +7,9 @@ export interface PlayerProfile {
   title: ChessTitle | null;
   fide_rating: Record<string, number> | null;
   national_rating: number | null;
+  fide_id: number | null;
+  mcf_id: number | null;
+  nationality: string | null;
 }
 
 export interface RegistrationRequest {
