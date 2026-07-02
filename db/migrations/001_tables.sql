@@ -59,15 +59,18 @@ CREATE TABLE user_global_roles (
 -- =============================================
 DROP TYPE IF EXISTS gender CASCADE;
 DROP TYPE IF EXISTS chess_title CASCADE;
+DROP TYPE IF EXISTS oku_status CASCADE;
 CREATE TYPE gender AS ENUM ('male', 'female');
 CREATE TYPE chess_title AS ENUM ('GM', 'WGM', 'IM', 'WIM', 'FM', 'WFM', 'CM', 'WCM');
+-- OKU (Orang Kurang Upaya / disabled) verification state. Admin-verified via an
+-- uploaded card, never self-declared; 'verified' is what gates OKU fee tiers.
+CREATE TYPE oku_status AS ENUM ('none', 'pending', 'verified', 'rejected');
 
 CREATE TABLE player_profiles (
   user_id               uuid PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date_of_birth         date,
   gender                gender,
   nationality           varchar(100),
-  is_oku                boolean NOT NULL DEFAULT false,
   fide_id               integer,
   fide_rating           jsonb,  -- {"standard": 1800, "rapid": 1750, "blitz": 1700}
   title                 chess_title,
@@ -76,10 +79,13 @@ CREATE TABLE player_profiles (
   bank_name             varchar(100),
   bank_account_holder   varchar(255),
   bank_account_number   varchar(50),
-  -- Per-player toggles for showing age (derived from date_of_birth) and OKU
-  -- status on the public profile. Default hidden until the player opts in.
-  show_age              boolean NOT NULL DEFAULT false,
-  show_oku              boolean NOT NULL DEFAULT false,
+  -- OKU verification. The card is uploaded to the private oku-documents bucket
+  -- (path in oku_document_path); a platform admin sets oku_status.
+  oku_status            oku_status NOT NULL DEFAULT 'none',
+  oku_document_path     text,
+  oku_reviewed_by       uuid REFERENCES users(id) ON DELETE SET NULL,
+  oku_reviewed_at       timestamptz,
+  oku_rejection_reason  text,
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
 );

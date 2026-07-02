@@ -23,7 +23,7 @@ function makeProfile(
   return {
     date_of_birth: null,
     gender: "male",
-    is_oku: false,
+    oku_status: "none",
     title: null,
     fide_rating: null,
     national_rating: null,
@@ -478,11 +478,11 @@ describe("checkFeeTierEligibility", () => {
   // -------------------------------------------------------------------------
 
   describe("OKU restriction", () => {
-    it("returns 400 when tier is OKU-only and player is not OKU", async () => {
+    it("returns 400 when tier is OKU-only and player is not verified", async () => {
       const tier: FeeTier = { oku: true };
       const result = checkFeeTierEligibility(
         tier,
-        makeProfile({ is_oku: false }),
+        makeProfile({ oku_status: "none" }),
         NOW,
       );
       expect(result!.status).toBe(400);
@@ -490,11 +490,21 @@ describe("checkFeeTierEligibility", () => {
       expect(json.error.code).toBe("INVALID_FEE_TIER");
     });
 
-    it("returns null when tier is OKU-only and player is OKU", () => {
+    it("returns 400 when the player's OKU is only pending (not yet verified)", async () => {
       const tier: FeeTier = { oku: true };
       const result = checkFeeTierEligibility(
         tier,
-        makeProfile({ is_oku: true }),
+        makeProfile({ oku_status: "pending" }),
+        NOW,
+      );
+      expect(result!.status).toBe(400);
+    });
+
+    it("returns null when tier is OKU-only and player is verified OKU", () => {
+      const tier: FeeTier = { oku: true };
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ oku_status: "verified" }),
         NOW,
       );
       expect(result).toBeNull();

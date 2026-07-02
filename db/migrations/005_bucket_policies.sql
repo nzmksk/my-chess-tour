@@ -53,3 +53,45 @@ USING (
   AND (storage.foldername(name))[1] = 'organizations'
   AND has_org_permission(auth.uid(), ((storage.foldername(name))[2])::uuid, 'org.manage')
 );
+
+-- =============================================
+-- OKU DOCUMENTS BUCKET (private)
+-- Upload convention: oku-documents/users/{user_id}/oku/{filename}
+-- Sensitive government IDs — NOT public. Read only by the owner or a platform
+-- admin (who views via a server-generated signed URL).
+-- =============================================
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('oku-documents', 'oku-documents', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Owner can upload their own OKU document.
+CREATE POLICY "Users can upload own OKU document"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'oku-documents'
+  AND (storage.foldername(name))[1] = 'users'
+  AND (storage.foldername(name))[2] = auth.uid()::text
+);
+
+-- Owner can replace/delete their own OKU document (re-upload after rejection).
+CREATE POLICY "Users can delete own OKU document"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'oku-documents'
+  AND (storage.foldername(name))[1] = 'users'
+  AND (storage.foldername(name))[2] = auth.uid()::text
+);
+
+-- Owner or a platform admin can read OKU documents.
+CREATE POLICY "OKU documents readable by owner or admin"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'oku-documents'
+  AND (
+    (storage.foldername(name))[2] = auth.uid()::text
+    OR has_global_permission(auth.uid(), 'platform.manage')
+  )
+);

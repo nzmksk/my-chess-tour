@@ -6,6 +6,7 @@ import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
 import { createClient } from "@/services/supabase/client";
+import OkuVerificationCard from "./OkuVerificationCard";
 import { broadcastAvatar } from "@/lib/avatar-cache";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -26,9 +27,6 @@ type EditForm = {
   date_of_birth: string;
   gender: Gender | "";
   nationality: string;
-  is_oku: boolean;
-  show_age: boolean;
-  show_oku: boolean;
   fide_id: string;
   mcf_id: string;
 };
@@ -104,9 +102,6 @@ export default function ProfileClient({ profile }: Props) {
     date_of_birth: profile.date_of_birth ?? "",
     gender: profile.gender ?? "",
     nationality: profile.nationality ?? "",
-    is_oku: profile.is_oku,
-    show_age: profile.show_age,
-    show_oku: profile.show_oku,
     fide_id: profile.fide_id != null ? String(profile.fide_id) : "",
     mcf_id: profile.mcf_id != null ? String(profile.mcf_id) : "",
   });
@@ -175,9 +170,6 @@ export default function ProfileClient({ profile }: Props) {
       date_of_birth: current.date_of_birth ?? "",
       gender: current.gender ?? "",
       nationality: current.nationality ?? "",
-      is_oku: current.is_oku,
-      show_age: current.show_age,
-      show_oku: current.show_oku,
       fide_id: current.fide_id != null ? String(current.fide_id) : "",
       mcf_id: current.mcf_id != null ? String(current.mcf_id) : "",
     });
@@ -212,14 +204,10 @@ export default function ProfileClient({ profile }: Props) {
     setSaveError(null);
     setSaveSuccess(false);
 
-    // Only send fields the user is actually allowed to edit: is_oku always,
-    // plus each set-once field that was still null at load. title and
-    // national_rating are never editable and are never sent.
-    const payload: Record<string, unknown> = {
-      is_oku: form.is_oku,
-      show_age: form.show_age,
-      show_oku: form.show_oku,
-    };
+    // Only send set-once fields that were still null at load. title and
+    // national_rating are never editable and are never sent; OKU verification
+    // is handled separately via its own upload flow.
+    const payload: Record<string, unknown> = {};
     if (canEditDob) payload.date_of_birth = form.date_of_birth || null;
     if (canEditGender) payload.gender = form.gender || null;
     if (canEditNationality)
@@ -291,9 +279,6 @@ export default function ProfileClient({ profile }: Props) {
 
       setCurrent({
         ...current,
-        is_oku: payload.is_oku as boolean,
-        show_age: payload.show_age as boolean,
-        show_oku: payload.show_oku as boolean,
         ...(canEditDob && {
           date_of_birth: payload.date_of_birth as string | null,
         }),
@@ -572,56 +557,6 @@ export default function ProfileClient({ profile }: Props) {
               />
             )}
 
-            {/* OKU */}
-            <div className="check-row mt-2">
-              <input
-                id="is_oku"
-                type="checkbox"
-                className="checkbox"
-                checked={form.is_oku}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, is_oku: e.target.checked }))
-                }
-              />
-              <label className="check-label" htmlFor="is_oku">
-                I am an OKU (Orang Kurang Upaya) card holder
-              </label>
-            </div>
-
-            {/* Public profile visibility */}
-            <div className="border-border mt-4 border-t pt-4">
-              <p className="font-cinzel text-gold-dim mb-2 text-xs font-semibold tracking-widest uppercase">
-                Public Profile Visibility
-              </p>
-              <div className="check-row">
-                <input
-                  id="show_age"
-                  type="checkbox"
-                  className="checkbox"
-                  checked={form.show_age}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, show_age: e.target.checked }))
-                  }
-                />
-                <label className="check-label" htmlFor="show_age">
-                  Show my age on my public profile
-                </label>
-              </div>
-              <div className="check-row mt-2">
-                <input
-                  id="show_oku"
-                  type="checkbox"
-                  className="checkbox"
-                  checked={form.show_oku}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, show_oku: e.target.checked }))
-                  }
-                />
-                <label className="check-label" htmlFor="show_oku">
-                  Show my OKU status on my public profile
-                </label>
-              </div>
-            </div>
           </div>
 
           {/* Chess Details */}
@@ -769,19 +704,13 @@ export default function ProfileClient({ profile }: Props) {
               label="Nationality"
               value={current.nationality ?? ""}
             />
-            <ProfileField
-              label="OKU Status"
-              value={current.is_oku ? "OKU card holder" : "Not applicable"}
-            />
-            <ProfileField
-              label="Show Age Publicly"
-              value={current.show_age ? "Yes" : "No"}
-            />
-            <ProfileField
-              label="Show OKU Status Publicly"
-              value={current.show_oku ? "Yes" : "No"}
-            />
           </SectionCard>
+
+          <OkuVerificationCard
+            userId={current.id}
+            status={current.oku_status}
+            rejectionReason={current.oku_rejection_reason}
+          />
 
           {/* Chess Details */}
           <SectionCard title="Chess Details">

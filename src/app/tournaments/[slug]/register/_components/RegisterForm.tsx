@@ -59,13 +59,15 @@ function checkHardEligibility(
     !nationalityMatches(restrictions.nationality, profile.nationality)
   ) {
     const label =
-      resolveCountry(restrictions.nationality)?.name ?? restrictions.nationality;
+      resolveCountry(restrictions.nationality)?.name ??
+      restrictions.nationality;
     return `This tournament is for ${label} players only.`;
   }
 
   // OKU and titles are not self-serviceable, so a shortfall is a hard block.
-  if (tier.oku && !profile?.is_oku)
-    return "This fee is for OKU (disabled) players only.";
+  // OKU requires admin-verified status — direct the player to Settings.
+  if (tier.oku && profile?.oku_status !== "verified")
+    return "This fee is for verified OKU players only — get verified in Settings.";
 
   if (
     tier.titles?.length &&
@@ -194,7 +196,8 @@ export default function RegisterForm({
         // A tier is "eligible" (selectable) unless there's a hard block. A merely
         // missing self-serviceable field keeps it selectable — the prompt collects it.
         eligible:
-          !t.expired && checkHardEligibility(t, restrictions, profile, now) === null,
+          !t.expired &&
+          checkHardEligibility(t, restrictions, profile, now) === null,
       }))
       .sort((a, b) => {
         if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
@@ -238,7 +241,7 @@ export default function RegisterForm({
   function handleProfileSaved(updated: Partial<PlayerProfile>) {
     setProfile((prev) => ({
       gender: updated.gender ?? prev?.gender ?? null,
-      is_oku: prev?.is_oku ?? false,
+      oku_status: prev?.oku_status ?? "none",
       date_of_birth: updated.date_of_birth ?? prev?.date_of_birth ?? null,
       title: prev?.title ?? null,
       fide_rating: prev?.fide_rating ?? null,

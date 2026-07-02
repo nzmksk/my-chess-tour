@@ -82,7 +82,7 @@ function makeTournament(
 // Profiles — ages computed relative to the frozen date 2026-05-12
 const MALE_PROFILE: PlayerProfile = {
   gender: "male",
-  is_oku: false,
+  oku_status: "none",
   date_of_birth: "1990-01-01", // age 36
   title: null,
   fide_rating: null,
@@ -93,7 +93,7 @@ const MALE_PROFILE: PlayerProfile = {
 };
 const FEMALE_PROFILE: PlayerProfile = {
   gender: "female",
-  is_oku: false,
+  oku_status: "none",
   date_of_birth: "1990-01-01",
   title: null,
   fide_rating: null,
@@ -104,7 +104,7 @@ const FEMALE_PROFILE: PlayerProfile = {
 };
 const OKU_PROFILE: PlayerProfile = {
   gender: "male",
-  is_oku: true,
+  oku_status: "verified",
   date_of_birth: "1990-01-01",
   title: null,
   fide_rating: null,
@@ -115,7 +115,7 @@ const OKU_PROFILE: PlayerProfile = {
 };
 const GM_PROFILE: PlayerProfile = {
   gender: "male",
-  is_oku: false,
+  oku_status: "none",
   date_of_birth: "1990-01-01",
   title: "GM",
   fide_rating: null,
@@ -127,7 +127,7 @@ const GM_PROFILE: PlayerProfile = {
 // Age 10 on 2026-05-12 (born 2016-01-01 → 10 years old)
 const YOUNG_PROFILE: PlayerProfile = {
   gender: "male",
-  is_oku: false,
+  oku_status: "none",
   date_of_birth: "2016-01-01",
   title: null,
   fide_rating: null,
@@ -141,7 +141,7 @@ const ADULT_PROFILE = MALE_PROFILE;
 // No DOB
 const NO_DOB_PROFILE: PlayerProfile = {
   gender: "male",
-  is_oku: false,
+  oku_status: "none",
   date_of_birth: null,
   title: null,
   fide_rating: null,
@@ -498,7 +498,9 @@ describe("RegisterForm", () => {
         fireEvent.change(selectEl(container), { target: { value: "oku" } });
       });
       expect(
-        screen.getByText("This fee is for OKU (disabled) players only."),
+        screen.getByText(
+          "This fee is for verified OKU players only — get verified in Settings.",
+        ),
       ).toBeDefined();
     });
 
@@ -515,7 +517,9 @@ describe("RegisterForm", () => {
       // oku tier is cheapest eligible for OKU player
       expect(selectEl(container).value).toBe("oku");
       expect(
-        screen.queryByText("This fee is for OKU (disabled) players only."),
+        screen.queryByText(
+          "This fee is for verified OKU players only — get verified in Settings.",
+        ),
       ).toBeNull();
     });
 
@@ -534,7 +538,9 @@ describe("RegisterForm", () => {
       });
       // OKU is not self-serviceable, so it stays a hard block — no prompt.
       expect(
-        screen.getByText("This fee is for OKU (disabled) players only."),
+        screen.getByText(
+          "This fee is for verified OKU players only — get verified in Settings.",
+        ),
       ).toBeDefined();
       expect(
         screen.queryByText("A few details are needed for this tournament"),
