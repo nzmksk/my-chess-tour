@@ -4,6 +4,7 @@ import {
   toTitleCase,
   formatDeadline,
   calculateAge,
+  checkAgeEligibility,
   getTodayInTimeZone,
   getMinFeeCents,
 } from "../utils";
@@ -156,6 +157,71 @@ describe("calculateAge", () => {
     const dob = new Date("2008-05-13");
     const now = new Date("2026-05-12");
     expect(calculateAge(dob, now)).toBe(17);
+  });
+});
+
+describe("checkAgeEligibility", () => {
+  // Event starts 1 July 2026. An "under 12" cap (age_max: 12) admits anyone who
+  // has NOT reached 12 before the start date, i.e. born on/after 2014-07-01.
+  const start = new Date("2026-07-01");
+
+  it("admits a player who turns the cap age exactly on the start date (boundary)", () => {
+    expect(checkAgeEligibility(new Date("2014-07-01"), start, null, 12)).toBe(
+      null,
+    );
+  });
+
+  it("rejects a player who turned the cap age one day before the start date", () => {
+    expect(checkAgeEligibility(new Date("2014-06-30"), start, null, 12)).toBe(
+      "too_old",
+    );
+  });
+
+  it("rejects a 12y5m player for an age_max 12 tier (the reported regression)", () => {
+    // Born 2014-02-01 → 12 years 5 months on the 2026-07-01 start date.
+    expect(checkAgeEligibility(new Date("2014-02-01"), start, null, 12)).toBe(
+      "too_old",
+    );
+  });
+
+  it("admits a clearly-younger player for an age_max cap", () => {
+    expect(checkAgeEligibility(new Date("2016-01-01"), start, null, 12)).toBe(
+      null,
+    );
+  });
+
+  it("admits a player who reaches the min age exactly on the start date (boundary)", () => {
+    // age_min 17: must have reached 17 by the start → born on/before 2009-07-01.
+    expect(checkAgeEligibility(new Date("2009-07-01"), start, 17, null)).toBe(
+      null,
+    );
+  });
+
+  it("rejects a player who reaches the min age one day after the start date", () => {
+    expect(checkAgeEligibility(new Date("2009-07-02"), start, 17, null)).toBe(
+      "too_young",
+    );
+  });
+
+  it("checks too_young before too_old when both bounds are set", () => {
+    // Band [12, 15]. A 10-year-old (born 2016-07-01) is too_young.
+    expect(checkAgeEligibility(new Date("2016-07-01"), start, 12, 15)).toBe(
+      "too_young",
+    );
+    // A 16-year-old (born 2010-01-01) is too_old.
+    expect(checkAgeEligibility(new Date("2010-01-01"), start, 12, 15)).toBe(
+      "too_old",
+    );
+    // Squarely inside the band.
+    expect(checkAgeEligibility(new Date("2013-01-01"), start, 12, 15)).toBe(
+      null,
+    );
+  });
+
+  it("returns null when no age bounds are set", () => {
+    expect(checkAgeEligibility(new Date("2000-01-01"), start, null, null)).toBe(
+      null,
+    );
   });
 });
 

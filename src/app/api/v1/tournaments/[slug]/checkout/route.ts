@@ -63,7 +63,7 @@ export async function POST(
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, name, entry_fees, max_participants, registration_deadline, restrictions, format, is_fide_rated, is_mcf_rated",
+      "id, name, entry_fees, max_participants, registration_deadline, start_date, restrictions, format, is_fide_rated, is_mcf_rated",
     )
     .eq("slug", slug)
     .eq("status", "published")
@@ -87,6 +87,11 @@ export async function POST(
   const tournamentId = tournament.id;
 
   const now = new Date();
+  // Age eligibility is anchored to the tournament start date (see
+  // checkAgeEligibility), not "now" — a player who ages out between registration
+  // and the event, or registers in a different calendar year, is judged by the
+  // event date, not their registration-day age.
+  const startDate = new Date(tournament.start_date);
 
   if (new Date(tournament.registration_deadline) < now) {
     return NextResponse.json(
@@ -193,12 +198,12 @@ export async function POST(
         restrictions,
         profile,
         (tournament.format as { type: string }).type,
-        now,
+        startDate,
       );
       if (restrictionError) return restrictionError;
     }
 
-    const tierError = checkFeeTierEligibility(matchedTier, profile, now);
+    const tierError = checkFeeTierEligibility(matchedTier, profile, startDate);
     if (tierError) return tierError;
 
     const ratedError = checkRatedRequirements(

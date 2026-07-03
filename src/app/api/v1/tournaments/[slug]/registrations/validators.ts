@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { ChessTitle } from "@/app/tournaments/types";
 import type { Restrictions } from "@/app/tournaments/[slug]/types";
 import type { OkuStatus } from "@/app/profile/types";
-import { calculateAge } from "@/app/tournaments/utils";
+import { checkAgeEligibility } from "@/app/tournaments/utils";
 import { nationalityMatches, resolveCountry } from "@/lib/countries";
 
 export interface EligibilityProfile {
@@ -62,7 +62,7 @@ export function checkRestrictions(
   restrictions: Restrictions,
   profile: EligibilityProfile | null,
   formatType: string,
-  now: Date,
+  startDate: Date,
 ): NextResponse | null {
   if (restrictions.gender != null && profile?.gender !== restrictions.gender) {
     return NextResponse.json(
@@ -180,26 +180,31 @@ export function checkRestrictions(
       );
     }
 
-    const age = calculateAge(new Date(profile.date_of_birth), now);
+    const ageResult = checkAgeEligibility(
+      new Date(profile.date_of_birth),
+      startDate,
+      restrictions.min_age ?? null,
+      restrictions.max_age ?? null,
+    );
 
-    if (restrictions.min_age != null && age < restrictions.min_age) {
+    if (ageResult === "too_young") {
       return NextResponse.json(
         {
           error: {
             code: "ELIGIBILITY_ERROR",
-            message: `You must be at least ${restrictions.min_age} years old to enter`,
+            message: `You must be at least ${restrictions.min_age} years old on the tournament start date to enter`,
           },
         },
         { status: 422 },
       );
     }
 
-    if (restrictions.max_age != null && age > restrictions.max_age) {
+    if (ageResult === "too_old") {
       return NextResponse.json(
         {
           error: {
             code: "ELIGIBILITY_ERROR",
-            message: `You must be ${restrictions.max_age} years old or younger to enter`,
+            message: `You must not turn ${restrictions.max_age} before the tournament start date to enter`,
           },
         },
         { status: 422 },
@@ -213,7 +218,7 @@ export function checkRestrictions(
 export function checkFeeTierEligibility(
   tier: FeeTier,
   profile: EligibilityProfile | null,
-  now: Date,
+  startDate: Date,
 ): NextResponse | null {
   if (tier.gender === "female" && profile?.gender !== "female") {
     return NextResponse.json(
@@ -268,26 +273,31 @@ export function checkFeeTierEligibility(
       );
     }
 
-    const age = calculateAge(new Date(profile.date_of_birth), now);
+    const ageResult = checkAgeEligibility(
+      new Date(profile.date_of_birth),
+      startDate,
+      tier.age_min ?? null,
+      tier.age_max ?? null,
+    );
 
-    if (tier.age_min != null && age < tier.age_min) {
+    if (ageResult === "too_young") {
       return NextResponse.json(
         {
           error: {
             code: "INVALID_FEE_TIER",
-            message: `You must be at least ${tier.age_min} years old for this tier`,
+            message: `You must be at least ${tier.age_min} years old on the tournament start date for this tier`,
           },
         },
         { status: 400 },
       );
     }
 
-    if (tier.age_max != null && age > tier.age_max) {
+    if (ageResult === "too_old") {
       return NextResponse.json(
         {
           error: {
             code: "INVALID_FEE_TIER",
-            message: `You must be ${tier.age_max} years old or younger for this tier`,
+            message: `You must not turn ${tier.age_max} before the tournament start date for this tier`,
           },
         },
         { status: 400 },
