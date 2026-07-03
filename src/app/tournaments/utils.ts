@@ -9,6 +9,48 @@ export function calculateAge(dob: Date, now: Date): number {
   return age;
 }
 
+function subtractYearsUTC(date: Date, years: number): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear() - years, date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+export type AgeEligibility = "too_young" | "too_old" | null;
+
+// Age eligibility for tournament categories / fee tiers is judged as of the
+// tournament's START DATE with day precision (FIDE-style, but anchored to the
+// start date rather than Jan 1): a player is eligible for an "under ageMax" cap
+// only if they have NOT reached ageMax before the start date, i.e.
+//   DOB >= start_date - ageMax years.
+// Symmetrically, ageMin requires the player to have reached ageMin by the start
+// date: DOB <= start_date - ageMin years.
+//
+// Example — event starting 2026-07-01 with ageMax 12: born 2014-07-01 (turns 12
+// exactly on the start day) is eligible; born 2014-06-30 (12y 0m 1d) is not.
+// This is stricter than completed-whole-years age, so it can't reuse
+// calculateAge(). Both `date_of_birth` and `start_date` are Postgres `date`
+// columns (parsed at UTC midnight), so the comparison is a pure calendar-date
+// one, independent of the runtime timezone.
+export function checkAgeEligibility(
+  dob: Date,
+  startDate: Date,
+  ageMin: number | null,
+  ageMax: number | null,
+): AgeEligibility {
+  const dobDay = Date.UTC(
+    dob.getUTCFullYear(),
+    dob.getUTCMonth(),
+    dob.getUTCDate(),
+  );
+  if (ageMax != null && dobDay < subtractYearsUTC(startDate, ageMax).getTime()) {
+    return "too_old";
+  }
+  if (ageMin != null && dobDay > subtractYearsUTC(startDate, ageMin).getTime()) {
+    return "too_young";
+  }
+  return null;
+}
+
 export function formatDeadline(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-MY", {

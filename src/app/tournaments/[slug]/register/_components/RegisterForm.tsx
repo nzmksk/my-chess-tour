@@ -8,7 +8,7 @@ import {
   formatRmExact,
   toTitleCase,
   formatDeadline,
-  calculateAge,
+  checkAgeEligibility,
 } from "@/app/tournaments/utils";
 import type { EntryFeeBreakdown } from "@/services/payments/fees";
 import { nationalityMatches, resolveCountry } from "@/lib/countries";
@@ -39,7 +39,7 @@ function checkHardEligibility(
   tier: TierRestrictions,
   restrictions: Restrictions | null,
   profile: PlayerProfile | null,
-  now: Date,
+  startDate: Date,
 ): string | null {
   // Gender mismatch only blocks when gender is actually set; a null gender is
   // "missing" (collectable), not ineligible.
@@ -81,14 +81,20 @@ function checkHardEligibility(
     return `This tournament is for titled players only (${restrictions.titles.join(", ")}).`;
 
   // Age only resolves once the date of birth is known; a null DOB is collectable.
+  // Judged as of the tournament start date (see checkAgeEligibility), not today.
   const ageMin = tier.age_min ?? restrictions?.min_age ?? null;
   const ageMax = tier.age_max ?? restrictions?.max_age ?? null;
   if ((ageMin != null || ageMax != null) && profile?.date_of_birth) {
-    const age = calculateAge(new Date(profile.date_of_birth), now);
-    if (ageMin != null && age < ageMin)
-      return `You must be at least ${ageMin} years old for this tier.`;
-    if (ageMax != null && age > ageMax)
-      return `You must be ${ageMax} years old or younger for this tier.`;
+    const ageResult = checkAgeEligibility(
+      new Date(profile.date_of_birth),
+      startDate,
+      ageMin,
+      ageMax,
+    );
+    if (ageResult === "too_young")
+      return `You must be at least ${ageMin} years old on the tournament start date for this tier.`;
+    if (ageResult === "too_old")
+      return `You must not turn ${ageMax} before the tournament start date for this tier.`;
   }
 
   return null;
@@ -143,6 +149,9 @@ export default function RegisterForm({
   feeBreakdown = {},
 }: Props) {
   const now = new Date();
+  // Age eligibility is judged as of the tournament start date, not today (see
+  // checkAgeEligibility). `now` is still used below for tier valid_until expiry.
+  const startDate = new Date(tournament.start_date);
 
   // Profile is held in state (seeded from the server prop) so the inline
   // CompleteProfilePrompt can update it and re-run eligibility without a reload.
@@ -197,7 +206,7 @@ export default function RegisterForm({
         // missing self-serviceable field keeps it selectable — the prompt collects it.
         eligible:
           !t.expired &&
-          checkHardEligibility(t, restrictions, profile, now) === null,
+          checkHardEligibility(t, restrictions, profile, startDate) === null,
       }))
       .sort((a, b) => {
         if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
