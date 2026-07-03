@@ -1,8 +1,16 @@
-type ChessTitle = "GM" | "WGM" | "IM" | "WIM" | "FM" | "WFM" | "CM" | "WCM";
+export type ChessTitle =
+  | "GM"
+  | "WGM"
+  | "IM"
+  | "WIM"
+  | "FM"
+  | "WFM"
+  | "CM"
+  | "WCM";
 export type Gender = "male" | "female";
 export type OkuStatus = "none" | "pending" | "verified" | "rejected";
 
-type FideRating = {
+export type FideRating = {
   standard?: number | null;
   rapid?: number | null;
   blitz?: number | null;
@@ -21,6 +29,12 @@ export type PlayerProfile = {
   oku_rejection_reason: string | null;
   fide_id: number | null;
   fide_rating: FideRating | null;
+  // When fide_rating/title were last fetched from FIDE (null = never synced).
+  fide_rating_synced_at: string | null;
+  // Whether the stored name matched the FIDE profile at last sync (null = unchecked).
+  fide_name_verified: boolean | null;
+  // Raw name FIDE reported ("Last, First"), shown to admins on a mismatch.
+  fide_verified_name: string | null;
   title: ChessTitle | null;
   mcf_id: number | null;
   national_rating: number | null;
