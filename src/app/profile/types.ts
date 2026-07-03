@@ -24,6 +24,11 @@ export type PlayerProfile = {
   title: ChessTitle | null;
   mcf_id: number | null;
   national_rating: number | null;
+  // Banking / payout details. The full account number is never sent to the
+  // client; only the last 4 digits are exposed for display.
+  bank_name: string | null;
+  bank_account_holder: string | null;
+  bank_account_number_last4: string | null;
 };
 
 // Public-facing subset of a player's profile. Excludes private fields
@@ -56,4 +61,12 @@ export type UpdateProfilePayload = {
   title?: ChessTitle | null;
   mcf_id?: number | null;
   national_rating?: number | null;
+};
+
+// Write shape for the banking sub-route. Unlike the read shape, this carries the
+// full account number (only ever travels client -> server on save).
+export type UpdateBankingPayload = {
+  bank_name: string | null;
+  bank_account_holder: string | null;
+  bank_account_number: string | null;
 };

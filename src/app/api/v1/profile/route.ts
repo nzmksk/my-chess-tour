@@ -25,7 +25,7 @@ export async function GET(): Promise<NextResponse> {
       supabaseAdmin
         .from("player_profiles")
         .select(
-          "date_of_birth, gender, nationality, oku_status, oku_rejection_reason, fide_id, fide_rating, title, mcf_id, national_rating",
+          "date_of_birth, gender, nationality, oku_status, oku_rejection_reason, fide_id, fide_rating, title, mcf_id, national_rating, bank_name, bank_account_holder, bank_account_number",
         )
         .eq("user_id", claims.id)
         .maybeSingle(),
@@ -55,6 +55,12 @@ export async function GET(): Promise<NextResponse> {
       title: profileData?.title ?? null,
       mcf_id: profileData?.mcf_id ?? null,
       national_rating: profileData?.national_rating ?? null,
+      bank_name: profileData?.bank_name ?? null,
+      bank_account_holder: profileData?.bank_account_holder ?? null,
+      // Never expose the full account number; only the last 4 digits for display.
+      bank_account_number_last4: profileData?.bank_account_number
+        ? profileData.bank_account_number.slice(-4)
+        : null,
     },
   });
 }

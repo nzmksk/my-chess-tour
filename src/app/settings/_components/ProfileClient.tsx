@@ -7,6 +7,7 @@ import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
 import { createClient } from "@/services/supabase/client";
 import OkuVerificationCard from "./OkuVerificationCard";
+import BankingCard from "./BankingCard";
 import { broadcastAvatar } from "@/lib/avatar-cache";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -556,7 +557,6 @@ export default function ProfileClient({ profile }: Props) {
                 value={current.nationality ?? ""}
               />
             )}
-
           </div>
 
           {/* Chess Details */}
@@ -710,6 +710,12 @@ export default function ProfileClient({ profile }: Props) {
             userId={current.id}
             status={current.oku_status}
             rejectionReason={current.oku_rejection_reason}
+          />
+
+          <BankingCard
+            bankName={current.bank_name}
+            accountHolder={current.bank_account_holder}
+            accountNumberLast4={current.bank_account_number_last4}
           />
 
           {/* Chess Details */}
