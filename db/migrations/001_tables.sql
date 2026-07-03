@@ -72,7 +72,14 @@ CREATE TABLE player_profiles (
   gender                gender,
   nationality           varchar(100),
   fide_id               integer,
+  -- fide_rating/title are fetched from ratings.fide.com when a fide_id is first
+  -- saved and refreshed monthly. The *_synced_at / name-verification columns
+  -- record when that last ran and whether the stored name matched the FIDE
+  -- profile ("Last, First"); fide_name_verified NULL = not yet checked.
   fide_rating           jsonb,  -- {"standard": 1800, "rapid": 1750, "blitz": 1700}
+  fide_rating_synced_at timestamptz,
+  fide_name_verified    boolean,
+  fide_verified_name    text,
   title                 chess_title,
   mcf_id                integer,
   national_rating       integer,

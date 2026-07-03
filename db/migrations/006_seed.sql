@@ -446,7 +446,7 @@ BEGIN
       p_nat,
       (date '1985-01-01' + ((i * 173) % 9131 || ' days')::interval)::date,
       p_gender::gender,
-      'Malaysian'
+      'Malaysia'
     )
     ON CONFLICT (user_id) DO UPDATE SET
       fide_id         = EXCLUDED.fide_id,
@@ -485,11 +485,11 @@ BEGIN
       -- Vary restrictions: open, nationality, age, gender, rating, combined
       t_restrictions := CASE (idx % 6)
         WHEN 0 THEN NULL                                                                            -- open
-        WHEN 1 THEN '[{"type":"nationality","value":"Malaysian"}]'::jsonb                           -- nationals only
+        WHEN 1 THEN '[{"type":"nationality","value":"Malaysia"}]'::jsonb                           -- nationals only
         WHEN 2 THEN '[{"type":"age","max":18}]'::jsonb                                             -- under 18
         WHEN 3 THEN '[{"type":"gender","value":"female"}]'::jsonb                                  -- women only
         WHEN 4 THEN '[{"type":"rating","max":1799}]'::jsonb                                        -- under 1800
-        WHEN 5 THEN '[{"type":"nationality","value":"Malaysian"},{"type":"age","max":20}]'::jsonb   -- nationals + under 21
+        WHEN 5 THEN '[{"type":"nationality","value":"Malaysia"},{"type":"age","max":20}]'::jsonb   -- nationals + under 21
       END;
 
       INSERT INTO public.tournaments (
