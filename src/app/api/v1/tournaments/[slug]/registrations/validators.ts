@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import type { ChessTitle } from "@/app/tournaments/types";
 import type { Restrictions } from "@/app/tournaments/[slug]/types";
+import type { OkuStatus } from "@/app/profile/types";
 import { calculateAge } from "@/app/tournaments/utils";
 import { nationalityMatches, resolveCountry } from "@/lib/countries";
 
 export interface EligibilityProfile {
   date_of_birth: string | null;
   gender: string | null;
-  is_oku: boolean;
+  oku_status: OkuStatus;
   title: string | null;
   fide_rating: Record<string, number> | null;
   national_rating: number | null;
@@ -226,12 +227,12 @@ export function checkFeeTierEligibility(
     );
   }
 
-  if (tier.oku && !profile?.is_oku) {
+  if (tier.oku && profile?.oku_status !== "verified") {
     return NextResponse.json(
       {
         error: {
           code: "INVALID_FEE_TIER",
-          message: "This fee tier is for OKU players only",
+          message: "This fee tier is for verified OKU players only",
         },
       },
       { status: 400 },

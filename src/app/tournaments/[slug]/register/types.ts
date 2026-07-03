@@ -1,8 +1,9 @@
 import type { ChessTitle } from "@/app/tournaments/types";
+import type { OkuStatus } from "@/app/profile/types";
 
 export interface PlayerProfile {
   gender: "male" | "female" | null;
-  is_oku: boolean;
+  oku_status: OkuStatus;
   date_of_birth: string | null;
   title: ChessTitle | null;
   fide_rating: Record<string, number> | null;

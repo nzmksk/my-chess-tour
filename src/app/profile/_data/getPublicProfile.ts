@@ -21,9 +21,9 @@ function computeAge(dob: string | null | undefined): number | null {
 
 // Fetches the public-facing profile for a given user id. Returns null when the
 // user does not exist so callers can render a 404. The email is never read;
-// date_of_birth is read only to derive age and is never returned. Gender is
-// always public. Age and OKU status are gated behind the owner's show_age /
-// show_oku toggles.
+// date_of_birth is read only to derive age and is never returned. Gender, age,
+// and OKU status are always public — the OKU badge shows only when the player's
+// oku_status is verified.
 export async function getPublicProfile(
   userId: string,
 ): Promise<PublicPlayerProfile | null> {
@@ -40,7 +40,7 @@ export async function getPublicProfile(
     supabaseAdmin
       .from("player_profiles")
       .select(
-        "gender, nationality, fide_id, fide_rating, title, mcf_id, national_rating, date_of_birth, is_oku, show_age, show_oku",
+        "gender, nationality, fide_id, fide_rating, title, mcf_id, national_rating, date_of_birth, oku_status",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -62,8 +62,8 @@ export async function getPublicProfile(
     avatar_url: userData.avatar_url ?? null,
     gender: profileData?.gender ?? null,
     nationality: profileData?.nationality ?? null,
-    age: profileData?.show_age ? computeAge(profileData.date_of_birth) : null,
-    is_oku: profileData?.show_oku ? (profileData.is_oku ?? false) : false,
+    age: computeAge(profileData?.date_of_birth),
+    is_oku: profileData?.oku_status === "verified",
     fide_id: profileData?.fide_id ?? null,
     fide_rating: profileData?.fide_rating ?? null,
     title: profileData?.title ?? null,

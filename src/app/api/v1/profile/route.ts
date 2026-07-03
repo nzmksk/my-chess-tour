@@ -25,7 +25,7 @@ export async function GET(): Promise<NextResponse> {
       supabaseAdmin
         .from("player_profiles")
         .select(
-          "date_of_birth, gender, nationality, is_oku, fide_id, fide_rating, title, mcf_id, national_rating, show_age, show_oku",
+          "date_of_birth, gender, nationality, oku_status, oku_rejection_reason, fide_id, fide_rating, title, mcf_id, national_rating",
         )
         .eq("user_id", claims.id)
         .maybeSingle(),
@@ -48,14 +48,13 @@ export async function GET(): Promise<NextResponse> {
       date_of_birth: profileData?.date_of_birth ?? null,
       gender: profileData?.gender ?? null,
       nationality: profileData?.nationality ?? null,
-      is_oku: profileData?.is_oku ?? false,
+      oku_status: profileData?.oku_status ?? "none",
+      oku_rejection_reason: profileData?.oku_rejection_reason ?? null,
       fide_id: profileData?.fide_id ?? null,
       fide_rating: profileData?.fide_rating ?? null,
       title: profileData?.title ?? null,
       mcf_id: profileData?.mcf_id ?? null,
       national_rating: profileData?.national_rating ?? null,
-      show_age: profileData?.show_age ?? false,
-      show_oku: profileData?.show_oku ?? false,
     },
   });
 }
@@ -247,30 +246,6 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       errors.push(
         "nationality can only be set once; contact support to change",
       );
-    }
-  }
-
-  if ("is_oku" in body) {
-    if (typeof body.is_oku === "boolean") {
-      update.is_oku = body.is_oku;
-    } else {
-      errors.push("is_oku must be a boolean");
-    }
-  }
-
-  if ("show_age" in body) {
-    if (typeof body.show_age === "boolean") {
-      update.show_age = body.show_age;
-    } else {
-      errors.push("show_age must be a boolean");
-    }
-  }
-
-  if ("show_oku" in body) {
-    if (typeof body.show_oku === "boolean") {
-      update.show_oku = body.show_oku;
-    } else {
-      errors.push("show_oku must be a boolean");
     }
   }
 

@@ -26,9 +26,12 @@ async function fetchTournament(slug: string): Promise<TournamentDetail | null> {
       : "https";
 
   try {
-    const res = await fetch(`${protocol}://${host}/api/v1/tournaments/${slug}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${protocol}://${host}/api/v1/tournaments/${slug}`,
+      {
+        cache: "no-store",
+      },
+    );
     if (!res.ok) return null;
     const json = await res.json();
     return json.data ?? null;
@@ -116,7 +119,7 @@ async function RegisterPageContent({ slug }: { slug: string }) {
   const { data: playerProfile } = await supabase
     .from("player_profiles")
     .select(
-      "gender, is_oku, date_of_birth, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
+      "gender, oku_status, date_of_birth, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
     )
     .eq("user_id", claims.id)
     .single();

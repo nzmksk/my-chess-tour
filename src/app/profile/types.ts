@@ -1,13 +1,6 @@
-type ChessTitle =
-  | "GM"
-  | "WGM"
-  | "IM"
-  | "WIM"
-  | "FM"
-  | "WFM"
-  | "CM"
-  | "WCM";
+type ChessTitle = "GM" | "WGM" | "IM" | "WIM" | "FM" | "WFM" | "CM" | "WCM";
 export type Gender = "male" | "female";
+export type OkuStatus = "none" | "pending" | "verified" | "rejected";
 
 type FideRating = {
   standard?: number | null;
@@ -24,21 +17,20 @@ export type PlayerProfile = {
   date_of_birth: string | null;
   gender: Gender | null;
   nationality: string | null;
-  is_oku: boolean;
+  oku_status: OkuStatus;
+  oku_rejection_reason: string | null;
   fide_id: number | null;
   fide_rating: FideRating | null;
   title: ChessTitle | null;
   mcf_id: number | null;
   national_rating: number | null;
-  show_age: boolean;
-  show_oku: boolean;
 };
 
 // Public-facing subset of a player's profile. Excludes private fields
-// (email, date_of_birth) that must never be exposed publicly. Age is a
-// computed integer (never the raw date_of_birth) and is_oku is gated behind the
-// owner's visibility toggles — both are null/false unless the owner opted in.
-// Gender is always public.
+// (email, date_of_birth) that must never be exposed publicly. Age is a computed
+// integer (never the raw date_of_birth). `is_oku` is a computed boolean that is
+// true only when the player's OKU status is verified. Age and OKU status are
+// always public. Gender is always public.
 export type PublicPlayerProfile = {
   id: string;
   first_name: string;
@@ -60,11 +52,8 @@ export type UpdateProfilePayload = {
   date_of_birth?: string | null;
   gender?: Gender | null;
   nationality?: string | null;
-  is_oku?: boolean;
   fide_id?: number | null;
   title?: ChessTitle | null;
   mcf_id?: number | null;
   national_rating?: number | null;
-  show_age?: boolean;
-  show_oku?: boolean;
 };
