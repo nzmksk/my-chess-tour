@@ -611,7 +611,7 @@ describe("RegisterForm", () => {
 
   describe("eligibility — age", () => {
     it("shows an error when the player is too young for the minimum age", async () => {
-      // YOUNG_PROFILE DOB 2016-01-01 → age 10 on 2026-05-12; age_min=18 fails
+      // YOUNG_PROFILE DOB 2016-01-01 → age 10 on the 2026-07-01 start; age_min=18 fails
       const { container } = render(
         <RegisterForm
           tournament={makeTournament([
@@ -625,12 +625,14 @@ describe("RegisterForm", () => {
         fireEvent.change(selectEl(container), { target: { value: "adult" } });
       });
       expect(
-        screen.getByText("You must be at least 18 years old for this tier."),
+        screen.getByText(
+          "You must be at least 18 years old on the tournament start date for this tier.",
+        ),
       ).toBeDefined();
     });
 
     it("shows an error when the player is too old for the maximum age", async () => {
-      // ADULT_PROFILE DOB 1990-01-01 → age 36; age_max=12 fails
+      // ADULT_PROFILE DOB 1990-01-01 → turned 12 long before the start; age_max=12 fails
       const { container } = render(
         <RegisterForm
           tournament={makeTournament([
@@ -644,7 +646,9 @@ describe("RegisterForm", () => {
         fireEvent.change(selectEl(container), { target: { value: "junior" } });
       });
       expect(
-        screen.getByText("You must be 12 years old or younger for this tier."),
+        screen.getByText(
+          "You must not turn 12 before the tournament start date for this tier.",
+        ),
       ).toBeDefined();
     });
 
@@ -661,6 +665,52 @@ describe("RegisterForm", () => {
       );
       expect(selectEl(container).value).toBe("junior");
       expect(screen.queryByText(/years old/)).toBeNull();
+    });
+
+    it("rejects a 12y5m player for an age_max 12 tier, judged at the start date (regression)", async () => {
+      // start_date 2026-07-01. Born 2014-02-01 → 12 years 5 months on the start
+      // date → already turned 12 → ineligible for an "under 12" tier, even though
+      // registration happens earlier (frozen 2026-05-12).
+      const profile: PlayerProfile = {
+        ...YOUNG_PROFILE,
+        date_of_birth: "2014-02-01",
+      };
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "junior", amount_cents: 1500, age_max: 12 },
+          ])}
+          userId="u1"
+          playerProfile={profile}
+        />,
+      );
+      await act(async () => {
+        fireEvent.change(selectEl(container), { target: { value: "junior" } });
+      });
+      expect(
+        screen.getByText(
+          "You must not turn 12 before the tournament start date for this tier.",
+        ),
+      ).toBeDefined();
+    });
+
+    it("admits a player who turns the cap age exactly on the start date (boundary)", () => {
+      // Born 2014-07-01 → turns 12 exactly on the 2026-07-01 start date → eligible.
+      const profile: PlayerProfile = {
+        ...YOUNG_PROFILE,
+        date_of_birth: "2014-07-01",
+      };
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "junior", amount_cents: 1500, age_max: 12 },
+          ])}
+          userId="u1"
+          playerProfile={profile}
+        />,
+      );
+      expect(selectEl(container).value).toBe("junior");
+      expect(screen.queryByText(/tournament start date/)).toBeNull();
     });
 
     it("prompts for date of birth when it is null for an age-restricted tier", async () => {
