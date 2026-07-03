@@ -33,7 +33,7 @@ function StatusBadge({ status }: { status: ApprovalStatus }) {
   const config = STATUS_CONFIG[status];
   return (
     <span
-      className={`font-cinzel text-xs font-bold tracking-widest uppercase px-2.5 py-1 rounded-md whitespace-nowrap ${config.className}`}
+      className={`font-cinzel rounded-md px-2.5 py-1 text-xs font-bold tracking-widest whitespace-nowrap uppercase ${config.className}`}
     >
       {config.label}
     </span>
@@ -48,15 +48,16 @@ function DetailRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-1 py-2 border-b border-border last:border-0">
-      <span className="font-lato text-xs text-text-muted pt-0.5">{label}</span>
-      <div className="font-lato text-sm text-text-primary">{children}</div>
+    <div className="border-border grid grid-cols-[140px_1fr] gap-x-4 gap-y-1 border-b py-2 last:border-0">
+      <span className="font-lato text-text-muted pt-0.5 text-xs">{label}</span>
+      <div className="font-lato text-text-primary text-sm">{children}</div>
     </div>
   );
 }
 
 function LinksDisplay({ links }: { links: OrgLinks | null }) {
-  if (!links || links.length === 0) return <span className="text-text-muted">—</span>;
+  if (!links || links.length === 0)
+    return <span className="text-text-muted">—</span>;
 
   return (
     <div className="flex flex-col gap-1">
@@ -67,7 +68,7 @@ function LinksDisplay({ links }: { links: OrgLinks | null }) {
             href={entry.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gold-bright hover:underline break-all"
+            className="text-gold-bright break-all hover:underline"
           >
             {entry.url}
           </a>
@@ -153,16 +154,16 @@ export default function ApplicationDetailClient({ application }: Props) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
+    <div className="mx-auto max-w-3xl px-6 py-8">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <Link
           href="/admin/applications"
-          className="font-lato text-sm text-text-muted hover:text-text-primary transition-colors"
+          className="font-lato text-text-muted hover:text-text-primary text-sm transition-colors"
         >
           ← Back
         </Link>
-        <h1 className="font-cinzel text-2xl font-bold text-text-primary tracking-wide">
+        <h1 className="font-cinzel text-text-primary text-2xl font-bold tracking-wide">
           {application.name}
         </h1>
         <StatusBadge status={application.approval_status} />
@@ -170,8 +171,8 @@ export default function ApplicationDetailClient({ application }: Props) {
 
       {/* Action bar */}
       {application.approval_status === "pending" && (
-        <div className="card px-5 py-4 flex flex-wrap items-center gap-3 mb-4">
-          <span className="font-lato text-sm text-text-muted">
+        <div className="card mb-4 flex flex-wrap items-center gap-3 px-5 py-4">
+          <span className="font-lato text-text-muted text-sm">
             Applied on {appliedDate} at {appliedTime}
             {applicant && (
               <>
@@ -183,7 +184,7 @@ export default function ApplicationDetailClient({ application }: Props) {
               </>
             )}
           </span>
-          <div className="flex gap-2 ml-auto">
+          <div className="ml-auto flex gap-2">
             <button
               type="button"
               onClick={() => {
@@ -191,7 +192,7 @@ export default function ApplicationDetailClient({ application }: Props) {
                 setActionError(null);
               }}
               disabled={isPending}
-              className="font-lato text-sm font-semibold px-4 py-2 rounded-md bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20 transition-colors disabled:opacity-50"
+              className="font-lato bg-danger/10 text-danger border-danger/20 hover:bg-danger/20 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
             >
               Reject
             </button>
@@ -199,7 +200,7 @@ export default function ApplicationDetailClient({ application }: Props) {
               type="button"
               onClick={handleApprove}
               disabled={isPending}
-              className="font-lato text-sm font-semibold px-4 py-2 rounded-md bg-success/10 text-success border border-success/20 hover:bg-success/20 transition-colors disabled:opacity-50"
+              className="font-lato bg-success/10 text-success border-success/20 hover:bg-success/20 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
             >
               {isPending ? "Processing…" : "✓ Approve"}
             </button>
@@ -209,8 +210,8 @@ export default function ApplicationDetailClient({ application }: Props) {
 
       {/* Rejection reason form */}
       {showRejectForm && application.approval_status === "pending" && (
-        <div className="mb-4 p-4 rounded-lg bg-danger/10 border border-danger/20">
-          <p className="font-lato text-sm font-semibold text-danger mb-3">
+        <div className="bg-danger/10 border-danger/20 mb-4 rounded-lg border p-4">
+          <p className="font-lato text-danger mb-3 text-sm font-semibold">
             Rejection Reason
           </p>
           <textarea
@@ -218,10 +219,10 @@ export default function ApplicationDetailClient({ application }: Props) {
             onChange={(e) => setRejectionReason(e.target.value)}
             placeholder="Explain why this application is being rejected. This will be communicated to the applicant."
             rows={3}
-            className="w-full font-lato text-sm px-3 py-2 bg-bg-raised border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-danger resize-vertical mb-3"
+            className="font-lato bg-bg-raised border-border text-text-primary placeholder:text-text-muted focus:border-danger resize-vertical mb-3 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none"
           />
           {actionError && (
-            <p className="font-lato text-xs text-danger mb-2">{actionError}</p>
+            <p className="font-lato text-danger mb-2 text-xs">{actionError}</p>
           )}
           <div className="flex justify-end gap-2">
             <button
@@ -231,7 +232,7 @@ export default function ApplicationDetailClient({ application }: Props) {
                 setActionError(null);
               }}
               disabled={isPending}
-              className="font-lato text-sm font-semibold px-4 py-2 rounded-md bg-bg-raised border border-border text-text-primary hover:border-gold-dim transition-colors disabled:opacity-50"
+              className="font-lato bg-bg-raised border-border text-text-primary hover:border-gold-dim rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
@@ -239,7 +240,7 @@ export default function ApplicationDetailClient({ application }: Props) {
               type="button"
               onClick={handleReject}
               disabled={isPending}
-              className="font-lato text-sm font-semibold px-4 py-2 rounded-md bg-danger text-white hover:bg-danger/80 transition-colors disabled:opacity-50"
+              className="font-lato bg-danger hover:bg-danger/80 rounded-md px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
             >
               {isPending ? "Processing…" : "Confirm Rejection"}
             </button>
@@ -249,17 +250,17 @@ export default function ApplicationDetailClient({ application }: Props) {
 
       {/* Action error (outside form, e.g. approve error) */}
       {actionError && !showRejectForm && (
-        <p className="font-lato text-xs text-danger mb-4">{actionError}</p>
+        <p className="font-lato text-danger mb-4 text-xs">{actionError}</p>
       )}
 
       {/* Rejection reason display (already rejected) */}
       {application.approval_status === "rejected" &&
         application.rejection_reason && (
-          <div className="mb-4 p-4 rounded-lg bg-danger/10 border border-danger/20">
-            <p className="font-lato text-xs font-semibold text-danger mb-1 uppercase tracking-wide">
+          <div className="bg-danger/10 border-danger/20 mb-4 rounded-lg border p-4">
+            <p className="font-lato text-danger mb-1 text-xs font-semibold tracking-wide uppercase">
               Rejection Reason
             </p>
-            <p className="font-lato text-sm text-text-primary">
+            <p className="font-lato text-text-primary text-sm">
               {application.rejection_reason}
             </p>
           </div>
@@ -267,8 +268,8 @@ export default function ApplicationDetailClient({ application }: Props) {
 
       {/* Organization details */}
       <section className="card mb-4 overflow-hidden">
-        <div className="px-5 py-3 border-b border-border bg-bg-raised">
-          <h2 className="font-cinzel text-sm font-bold text-text-primary tracking-wide uppercase">
+        <div className="border-border bg-bg-raised border-b px-5 py-3">
+          <h2 className="font-cinzel text-text-primary text-sm font-bold tracking-wide uppercase">
             Organization Details
           </h2>
         </div>
@@ -293,18 +294,18 @@ export default function ApplicationDetailClient({ application }: Props) {
 
       {/* Past tournament references */}
       <section className="card mb-4 overflow-hidden">
-        <div className="px-5 py-3 border-b border-border bg-bg-raised">
-          <h2 className="font-cinzel text-sm font-bold text-text-primary tracking-wide uppercase">
+        <div className="border-border bg-bg-raised border-b px-5 py-3">
+          <h2 className="font-cinzel text-text-primary text-sm font-bold tracking-wide uppercase">
             Past Tournament References
           </h2>
         </div>
         <div className="px-5 py-4">
           {application.past_tournament_refs ? (
-            <p className="font-lato text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
+            <p className="font-lato text-text-primary text-sm leading-relaxed whitespace-pre-wrap">
               {application.past_tournament_refs}
             </p>
           ) : (
-            <p className="font-lato text-sm text-text-muted">
+            <p className="font-lato text-text-muted text-sm">
               No tournament references provided.
             </p>
           )}
@@ -313,8 +314,8 @@ export default function ApplicationDetailClient({ application }: Props) {
 
       {/* Applicant account info */}
       <section className="card mb-4 overflow-hidden">
-        <div className="px-5 py-3 border-b border-border bg-bg-raised">
-          <h2 className="font-cinzel text-sm font-bold text-text-primary tracking-wide uppercase">
+        <div className="border-border bg-bg-raised border-b px-5 py-3">
+          <h2 className="font-cinzel text-text-primary text-sm font-bold tracking-wide uppercase">
             Applicant Account
           </h2>
         </div>
@@ -357,6 +358,18 @@ export default function ApplicationDetailClient({ application }: Props) {
                           No rating information
                         </span>
                       )}
+                    {profile.fide_name_verified === false && (
+                      <span
+                        className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-semibold text-amber-500"
+                        title={
+                          profile.fide_verified_name
+                            ? `FIDE lists this ID as "${profile.fide_verified_name}"`
+                            : undefined
+                        }
+                      >
+                        ⚠ FIDE name mismatch
+                      </span>
+                    )}
                   </span>
                 ) : (
                   <span className="text-text-muted">No player profile</span>
@@ -364,7 +377,7 @@ export default function ApplicationDetailClient({ application }: Props) {
               </DetailRow>
             </>
           ) : (
-            <p className="font-lato text-sm text-text-muted">
+            <p className="font-lato text-text-muted text-sm">
               Applicant information not available.
             </p>
           )}

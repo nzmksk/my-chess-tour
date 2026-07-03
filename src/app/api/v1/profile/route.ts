@@ -2,6 +2,11 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import type { Gender, UpdateProfilePayload } from "@/app/profile/types";
+import {
+  buildFideProfileUpdate,
+  fetchFidePlayer,
+  type FidePlayer,
+} from "@/services/fide/fide";
 
 const VALID_GENDERS = new Set<string>(["male", "female"]);
 
@@ -25,7 +30,7 @@ export async function GET(): Promise<NextResponse> {
       supabaseAdmin
         .from("player_profiles")
         .select(
-          "date_of_birth, gender, nationality, oku_status, oku_rejection_reason, fide_id, fide_rating, title, mcf_id, national_rating, bank_name, bank_account_holder, bank_account_number",
+          "date_of_birth, gender, nationality, oku_status, oku_rejection_reason, fide_id, fide_rating, fide_rating_synced_at, fide_name_verified, fide_verified_name, title, mcf_id, national_rating, bank_name, bank_account_holder, bank_account_number",
         )
         .eq("user_id", claims.id)
         .maybeSingle(),
@@ -52,6 +57,9 @@ export async function GET(): Promise<NextResponse> {
       oku_rejection_reason: profileData?.oku_rejection_reason ?? null,
       fide_id: profileData?.fide_id ?? null,
       fide_rating: profileData?.fide_rating ?? null,
+      fide_rating_synced_at: profileData?.fide_rating_synced_at ?? null,
+      fide_name_verified: profileData?.fide_name_verified ?? null,
+      fide_verified_name: profileData?.fide_verified_name ?? null,
       title: profileData?.title ?? null,
       mcf_id: profileData?.mcf_id ?? null,
       national_rating: profileData?.national_rating ?? null,
@@ -279,10 +287,58 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // When a FIDE ID is set for the first time, fetch the player's ratings, title
+  // and validate their name against the FIDE profile. A nonexistent ID is
+  // rejected so a typo isn't stored in this set-once field; if FIDE is
+  // unreachable we still save the ID and let the monthly sync backfill ratings.
+  let fideFields: Partial<ReturnType<typeof buildFideProfileUpdate>> = {};
+  if (update.fide_id != null && update.fide_id !== existing?.fide_id) {
+    let player: FidePlayer | null = null;
+    let reachable = true;
+    try {
+      player = await fetchFidePlayer(update.fide_id);
+    } catch (error) {
+      reachable = false;
+      console.error(
+        `FIDE lookup unavailable for user ${claims.id} (fide_id ${update.fide_id}):`,
+        error,
+      );
+    }
+
+    if (reachable && player === null) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: `FIDE ID ${update.fide_id} was not found on FIDE. Please check the number.`,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (player) {
+      const { data: nameRow } = await supabaseAdmin
+        .from("users")
+        .select("first_name, last_name")
+        .eq("id", claims.id)
+        .single();
+      fideFields = buildFideProfileUpdate(
+        player,
+        nameRow?.first_name ?? "",
+        nameRow?.last_name ?? "",
+        new Date().toISOString(),
+      );
+    }
+  }
+
   if (Object.keys(update).length > 0) {
     const { error } = await supabaseAdmin
       .from("player_profiles")
-      .upsert({ user_id: claims.id, ...update }, { onConflict: "user_id" });
+      .upsert(
+        { user_id: claims.id, ...update, ...fideFields },
+        { onConflict: "user_id" },
+      );
 
     if (error) {
       return NextResponse.json(
