@@ -580,9 +580,9 @@ export default function ProfileClient({ profile }: Props) {
                   >
                     ?
                     <div className="tooltip" role="tooltip">
-                      Your FIDE player ID number. Your standard, rapid, and
-                      blitz ratings are stored from when your profile was
-                      created.
+                      Your FIDE player ID number. Your standard, rapid and blitz
+                      ratings and title are fetched from FIDE when you save your
+                      ID, then refreshed automatically every month.
                     </div>
                   </span>
                 </div>
@@ -771,6 +771,19 @@ export default function ProfileClient({ profile }: Props) {
                 </div>
               ) : (
                 <span className="font-lato text-text-body text-sm">—</span>
+              )}
+              {current.fide_rating_synced_at && (
+                <span className="font-lato text-text-muted mt-1 text-xs">
+                  As of{" "}
+                  {new Date(current.fide_rating_synced_at).toLocaleDateString(
+                    "en-MY",
+                    {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    },
+                  )}
+                </span>
               )}
             </div>
             <ProfileField

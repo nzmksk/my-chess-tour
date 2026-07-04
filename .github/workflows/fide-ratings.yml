@@ -1,0 +1,25 @@
+name: Refresh FIDE ratings
+
+# FIDE publishes its new monthly rating list on the 2nd, so refresh then.
+# Also runnable on demand from the Actions tab.
+on:
+  schedule:
+    - cron: "0 0 2 * *"
+  workflow_dispatch:
+
+# This workflow only makes an outbound request; it needs no GITHUB_TOKEN access.
+permissions: {}
+
+jobs:
+  refresh:
+    name: Trigger monthly FIDE rating sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST to the cron route
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${PRODUCTION_URL}/api/v1/cron/fide-ratings"

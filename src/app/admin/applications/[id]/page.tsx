@@ -27,6 +27,8 @@ export interface PlayerProfile {
   fide_id: number | null;
   fide_rating: { standard?: number; rapid?: number; blitz?: number } | null;
   title: string | null;
+  fide_name_verified: boolean | null;
+  fide_verified_name: string | null;
 }
 
 export interface Applicant {
@@ -87,7 +89,7 @@ export default async function AdminApplicationDetailPage({
        approval_status, rejection_reason, created_at, reviewed_at,
        applicant:users!created_by(
          id, first_name, last_name, email, created_at,
-         player_profiles(fide_id, fide_rating, title)
+         player_profiles(fide_id, fide_rating, title, fide_name_verified, fide_verified_name)
        )`,
     )
     .eq("id", id)
@@ -99,9 +101,11 @@ export default async function AdminApplicationDetailPage({
   }
 
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <ApplicationDetailClient application={data as unknown as ApplicationDetail} />
+      <ApplicationDetailClient
+        application={data as unknown as ApplicationDetail}
+      />
     </div>
   );
 }
