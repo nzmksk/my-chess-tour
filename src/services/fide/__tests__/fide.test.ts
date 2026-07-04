@@ -175,6 +175,15 @@ describe("fetchFidePlayer", () => {
     );
     await expect(fetchFidePlayer(1503014)).rejects.toThrow("network down");
   });
+
+  it("rejects an out-of-range / non-integer id without hitting the network", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    for (const bad of [0, -1, 1.5, 2147483648, NaN]) {
+      await expect(fetchFidePlayer(bad)).rejects.toThrow(/Invalid FIDE ID/);
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("syncFidePlayer", () => {

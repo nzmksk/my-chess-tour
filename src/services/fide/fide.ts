@@ -13,7 +13,7 @@ const FIDE_PROFILE_URL = "https://ratings.fide.com/profile";
 // our chess_title enum. Arena titles (AGM/ACM/…) and "None" have no enum value
 // and stay unset.
 const FIDE_TITLE_MAP: Record<string, ChessTitle> = {
-  "grandmaster": "GM",
+  grandmaster: "GM",
   "international master": "IM",
   "fide master": "FM",
   "candidate master": "CM",
@@ -46,7 +46,9 @@ export function parseRating(raw: string | null | undefined): number | null {
  * Maps FIDE's full title text (e.g. "Grandmaster") to our chess_title enum.
  * Unknown / "None" / Arena titles return null.
  */
-export function parseFideTitle(raw: string | null | undefined): ChessTitle | null {
+export function parseFideTitle(
+  raw: string | null | undefined,
+): ChessTitle | null {
   if (raw == null) return null;
   return FIDE_TITLE_MAP[raw.trim().toLowerCase()] ?? null;
 }
@@ -103,7 +105,13 @@ export function matchesFideName(
 export async function fetchFidePlayer(
   fideId: number,
 ): Promise<FidePlayer | null> {
-  const res = await fetch(`${FIDE_PROFILE_URL}/${fideId}`, {
+  // The fetch URL is built from a caller-supplied id, so validate it here
+  // rather than trusting callers: a FIDE ID is a positive int4. This also
+  // guarantees the value is safe to interpolate into the request path.
+  if (!Number.isInteger(fideId) || fideId <= 0 || fideId > 2147483647) {
+    throw new Error(`Invalid FIDE ID: ${fideId}`);
+  }
+  const res = await fetch(`${FIDE_PROFILE_URL}/${encodeURIComponent(fideId)}`, {
     headers: {
       // FIDE serves the profile HTML to browser-like clients.
       "User-Agent":
@@ -121,7 +129,9 @@ export async function fetchFidePlayer(
 
   // The player name lives in the profile header. Its absence is FIDE's
   // "not found" shell (no rating blocks either), so treat it as not found.
-  const name = html.match(/<h1 class="player-title">([^<]*)<\/h1>/i)?.[1]?.trim();
+  const name = html
+    .match(/<h1 class="player-title">([^<]*)<\/h1>/i)?.[1]
+    ?.trim();
   if (!name) return null;
 
   return {
@@ -158,7 +168,10 @@ export async function syncFidePlayer(
   try {
     player = await fetchFidePlayer(fideId);
   } catch (error) {
-    console.error(`FIDE fetch failed for user ${userId} (fide_id ${fideId}):`, error);
+    console.error(
+      `FIDE fetch failed for user ${userId} (fide_id ${fideId}):`,
+      error,
+    );
     return "failed";
   }
 

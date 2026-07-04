@@ -300,7 +300,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     } catch (error) {
       reachable = false;
       console.error(
-        `FIDE lookup unavailable for user ${claims.id} (fide_id ${update.fide_id}):`,
+        `FIDE lookup unavailable for user %s (fide_id %d):`,
+        claims.id,
+        update.fide_id,
         error,
       );
     }
