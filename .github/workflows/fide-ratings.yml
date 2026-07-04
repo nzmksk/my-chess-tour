@@ -7,6 +7,9 @@ on:
     - cron: "0 0 2 * *"
   workflow_dispatch:
 
+# This workflow only makes an outbound request; it needs no GITHUB_TOKEN access.
+permissions: {}
+
 jobs:
   refresh:
     name: Trigger monthly FIDE rating sync
