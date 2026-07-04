@@ -138,7 +138,7 @@ const DRAFT_TOURNAMENT = {
 };
 
 const PAYOUT_ROW = {
-  total_registration_cents: 100000,
+  net_revenue_cents: 100000,
   net_payout_cents: 90000,
 };
 
@@ -451,10 +451,10 @@ describe("GET /api/v1/organizations/:orgId/dashboard", () => {
       expect(data.stats.total_registrations).toBe(0);
     });
 
-    it("sums total_registration_cents from payout summary for revenue", async () => {
+    it("sums net_revenue_cents from payout summary for revenue", async () => {
       setPayoutResult([
-        { total_registration_cents: 50000, net_payout_cents: 45000 },
-        { total_registration_cents: 30000, net_payout_cents: 27000 },
+        { net_revenue_cents: 50000, net_payout_cents: 45000 },
+        { net_revenue_cents: 30000, net_payout_cents: 27000 },
       ]);
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
@@ -465,8 +465,8 @@ describe("GET /api/v1/organizations/:orgId/dashboard", () => {
 
     it("sums net_payout_cents from payout summary for pending_payout", async () => {
       setPayoutResult([
-        { total_registration_cents: 50000, net_payout_cents: 45000 },
-        { total_registration_cents: 30000, net_payout_cents: 27000 },
+        { net_revenue_cents: 50000, net_payout_cents: 45000 },
+        { net_revenue_cents: 30000, net_payout_cents: 27000 },
       ]);
       const res = await GET(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),

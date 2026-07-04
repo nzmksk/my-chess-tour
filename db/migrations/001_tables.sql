@@ -317,8 +317,13 @@ CREATE TABLE waitlist (
 
 -- =============================================
 -- TOURNAMENT PAYOUT SUMMARY
--- Computed on demand from payments table.
--- net_payout = (total_registrations - total_refunds) - effective_platform_fee - total_prizes
+-- Computed on demand from the payments ledger.
+-- Every amount is read straight from the per-payment ledger columns
+-- (gross_amount_cents / platform_fee_cents / net_amount_cents) rather than
+-- re-derived from tournaments.commission_rate, so the figures always match
+-- what was actually charged and split at payment time.
+--   net_revenue = organizer's portion (net of platform fee AND refunds)
+--   net_payout  = net_revenue - prizes paid - payouts already executed
 -- =============================================
 
 -- Why view is preferred over materialized view:
@@ -335,49 +340,62 @@ WITH payment_totals AS (
     tournament_id,
     organization_id,
 
+    -- Registrations (paid): gross = what the player paid,
+    -- platform_fee = platform's cut, net = organizer's portion.
     SUM(CASE WHEN type = 'registration' AND status = 'paid'
         THEN gross_amount_cents ELSE 0 END
     ) AS total_registration_cents,
+    SUM(CASE WHEN type = 'registration' AND status = 'paid'
+        THEN platform_fee_cents ELSE 0 END
+    ) AS registration_fee_cents,
+    SUM(CASE WHEN type = 'registration' AND status = 'paid'
+        THEN net_amount_cents ELSE 0 END
+    ) AS net_registration_cents,
 
+    -- Refunds (paid): reverse the corresponding registration amounts.
     SUM(CASE WHEN type = 'refund' AND status = 'paid'
         THEN gross_amount_cents ELSE 0 END
     ) AS total_refunded_cents,
+    SUM(CASE WHEN type = 'refund' AND status = 'paid'
+        THEN platform_fee_cents ELSE 0 END
+    ) AS refunded_fee_cents,
+    SUM(CASE WHEN type = 'refund' AND status = 'paid'
+        THEN net_amount_cents ELSE 0 END
+    ) AS net_refunded_cents,
 
+    -- Prizes paid out to players.
     SUM(CASE WHEN type = 'player_prize' AND status = 'paid'
         THEN gross_amount_cents ELSE 0 END
-    ) AS total_prizes_cents
+    ) AS total_prizes_cents,
+
+    -- Payouts already executed to the organizer.
+    SUM(CASE WHEN type = 'organizer_payout' AND status = 'paid'
+        THEN gross_amount_cents ELSE 0 END
+    ) AS total_payouts_cents
 
   FROM payments
   GROUP BY tournament_id, organization_id
 )
 
 SELECT
-  x.tournament_id,
-  x.organization_id,
-  x.total_registration_cents,
-  x.total_refunded_cents,
-  x.net_collected_cents,
-  x.effective_platform_fee_cents,
-  x.total_prizes_cents,
-  x.net_collected_cents
-    - x.effective_platform_fee_cents
-    - x.total_prizes_cents AS net_payout_cents
-FROM (
-  SELECT
-    pt.tournament_id,
-    pt.organization_id,
-    pt.total_registration_cents,
-    pt.total_refunded_cents,
-    pt.total_prizes_cents,
+  tournament_id,
+  organization_id,
+  total_registration_cents,
+  total_refunded_cents,
+  total_prizes_cents,
+  total_payouts_cents,
 
-    pt.total_registration_cents - pt.total_refunded_cents
-      AS net_collected_cents,
+  -- Gross collected from players, net of refunds (kept for reference).
+  total_registration_cents - total_refunded_cents AS net_collected_cents,
 
-    FLOOR(
-      (pt.total_registration_cents - pt.total_refunded_cents)
-      * t.commission_rate / 100.0
-    )::integer AS effective_platform_fee_cents
+  -- Platform's actual revenue, summed from the ledger (not re-derived).
+  registration_fee_cents - refunded_fee_cents AS effective_platform_fee_cents,
 
-  FROM payment_totals pt
-  JOIN tournaments t ON t.id = pt.tournament_id
-) x;
+  -- Organizer's revenue: net of platform fee and net of refunds.
+  net_registration_cents - net_refunded_cents AS net_revenue_cents,
+
+  -- Amount still owed to the organizer.
+  (net_registration_cents - net_refunded_cents)
+    - total_prizes_cents
+    - total_payouts_cents AS net_payout_cents
+FROM payment_totals;

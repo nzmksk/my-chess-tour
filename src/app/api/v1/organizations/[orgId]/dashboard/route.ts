@@ -14,7 +14,7 @@ type TournamentRow = {
 };
 
 type PayoutSummaryRow = {
-  total_registration_cents: number;
+  net_revenue_cents: number;
   net_payout_cents: number;
 };
 
@@ -116,7 +116,7 @@ export async function GET(
       .order("created_at", { ascending: false }),
     supabaseAdmin
       .from("tournament_payout_summary")
-      .select("total_registration_cents, net_payout_cents")
+      .select("net_revenue_cents, net_payout_cents")
       .eq("organization_id", orgId),
   ]);
 
@@ -141,7 +141,7 @@ export async function GET(
 
   const payout = (payoutRows ?? []) as PayoutSummaryRow[];
   const totalRevenueCents = payout.reduce(
-    (sum, row) => sum + (row.total_registration_cents ?? 0),
+    (sum, row) => sum + (row.net_revenue_cents ?? 0),
     0,
   );
   const pendingPayoutCents = payout.reduce(
