@@ -278,9 +278,12 @@ export default function RegisterForm({
         },
       );
       const json = await res.json();
-      if (res.ok && json.data?.checkout_url) {
+      // A paid tier returns a CHIP checkout_url; a free (RM0.00) tier is
+      // confirmed server-side and returns a redirect_url to the success page.
+      const nextUrl = json.data?.checkout_url ?? json.data?.redirect_url;
+      if (res.ok && nextUrl) {
         setStatus("redirecting");
-        window.location.href = json.data.checkout_url;
+        window.location.href = nextUrl;
         return;
       }
       if (res.ok) {
