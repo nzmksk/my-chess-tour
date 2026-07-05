@@ -72,12 +72,7 @@ function makeTournament(overrides: Record<string, unknown> = {}) {
     is_mcf_rated: false,
     entry_fees: { standard: { amount_cents: 5000 }, additional: [] },
     prizes: { first: 2000, second: 1000, third: 500 },
-    restrictions: {
-      min_rating: null,
-      max_rating: 2200,
-      min_age: null,
-      max_age: null,
-    },
+    restrictions: [{ type: "rating", max: 2200 }],
     max_participants: 120,
     status: "published",
     published_at: "2026-03-01T00:00:00Z",
@@ -183,10 +178,7 @@ describe("GET /api/v1/tournaments/:slug", () => {
       });
       expect(item.prizes).toEqual({ first: 2000, second: 1000, third: 500 });
       expect(item.restrictions).toEqual({
-        min_rating: null,
         max_rating: 2200,
-        min_age: null,
-        max_age: null,
       });
       expect(item.max_participants).toBe(120);
       expect(item.status).toBe("published");

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type {
   TournamentDetail as TournamentDetailType,
-  Restrictions,
   StartingRankPlayer,
 } from "../types";
 import {
@@ -10,6 +9,7 @@ import {
   getMinFeeCents,
   toTitleCase,
 } from "../../utils";
+import { resolveCountry } from "@/lib/countries";
 import TournamentTabs from "./TournamentTabs";
 import StartingRankTab from "./StartingRankTab";
 
@@ -37,15 +37,6 @@ function formatDateRange(start: string, end: string): string {
 function capitalise(s: string): string {
   if (!s) return "";
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-function hasRestrictions(r: Restrictions): boolean {
-  return (
-    r.min_rating != null ||
-    r.max_rating != null ||
-    r.min_age != null ||
-    r.max_age != null
-  );
 }
 
 // ── Sub-sections ──────────────────────────────────────────────
@@ -243,42 +234,57 @@ export default function TournamentDetail({
         {/* Restrictions */}
         {t.restrictions && (
           <Section title="Restrictions">
-            {hasRestrictions(t.restrictions) ? (
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {(t.restrictions.min_rating != null ||
-                  t.restrictions.max_rating != null) && (
-                  <InfoRow
-                    label="Rating"
-                    value={
-                      t.restrictions.min_rating != null &&
-                      t.restrictions.max_rating != null
-                        ? `${t.restrictions.min_rating} – ${t.restrictions.max_rating}`
-                        : t.restrictions.min_rating != null
-                          ? `${t.restrictions.min_rating}+`
-                          : `Up to ${t.restrictions.max_rating}`
-                    }
-                  />
-                )}
-                {(t.restrictions.min_age != null ||
-                  t.restrictions.max_age != null) && (
-                  <InfoRow
-                    label="Age"
-                    value={
-                      t.restrictions.min_age != null &&
-                      t.restrictions.max_age != null
-                        ? `${t.restrictions.min_age} – ${t.restrictions.max_age} years`
-                        : t.restrictions.min_age != null
-                          ? `${t.restrictions.min_age}+ years`
-                          : `Up to ${t.restrictions.max_age} years`
-                    }
-                  />
-                )}
-              </dl>
-            ) : (
-              <p className="font-lato text-text-body text-sm">
-                Open to all players — no rating or age restrictions apply.
-              </p>
-            )}
+            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {(t.restrictions.min_rating != null ||
+                t.restrictions.max_rating != null) && (
+                <InfoRow
+                  label="Rating"
+                  value={
+                    t.restrictions.min_rating != null &&
+                    t.restrictions.max_rating != null
+                      ? `${t.restrictions.min_rating} – ${t.restrictions.max_rating}`
+                      : t.restrictions.min_rating != null
+                        ? `${t.restrictions.min_rating}+`
+                        : `Up to ${t.restrictions.max_rating}`
+                  }
+                />
+              )}
+              {(t.restrictions.min_age != null ||
+                t.restrictions.max_age != null) && (
+                <InfoRow
+                  label="Age"
+                  value={
+                    t.restrictions.min_age != null &&
+                    t.restrictions.max_age != null
+                      ? `${t.restrictions.min_age} – ${t.restrictions.max_age} years`
+                      : t.restrictions.min_age != null
+                        ? `${t.restrictions.min_age}+ years`
+                        : `Up to ${t.restrictions.max_age} years`
+                  }
+                />
+              )}
+              {t.restrictions.gender && (
+                <InfoRow
+                  label="Gender"
+                  value={capitalise(t.restrictions.gender)}
+                />
+              )}
+              {t.restrictions.nationality && (
+                <InfoRow
+                  label="Nationality"
+                  value={
+                    resolveCountry(t.restrictions.nationality)?.name ??
+                    t.restrictions.nationality
+                  }
+                />
+              )}
+              {(t.restrictions.titles?.length ?? 0) > 0 && (
+                <InfoRow
+                  label="Titles"
+                  value={t.restrictions.titles!.join(", ")}
+                />
+              )}
+            </dl>
           </Section>
         )}
 
@@ -400,7 +406,9 @@ export default function TournamentDetail({
 
           {/* Spots */}
           <div className="font-lato text-text-secondary text-sm">
-            <p aria-label={`${spotsLeft} of ${t.max_participants} spots remaining`}>
+            <p
+              aria-label={`${spotsLeft} of ${t.max_participants} spots remaining`}
+            >
               <span className={`font-semibold ${spotsClass}`}>{spotsLeft}</span>{" "}
               of {t.max_participants} spots remaining
             </p>
@@ -448,9 +456,7 @@ export default function TournamentDetail({
             {!t.is_fide_rated && !t.is_mcf_rated && (
               <span className="badge-unrated">Unrated</span>
             )}
-            {(!t.restrictions || !hasRestrictions(t.restrictions)) && (
-              <span className="badge-open">Open to All</span>
-            )}
+            {!t.restrictions && <span className="badge-open">Open to All</span>}
           </div>
         </div>
 

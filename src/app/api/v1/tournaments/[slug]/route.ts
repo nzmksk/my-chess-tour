@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeRestrictions } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
 
 interface Organization {
   id: string;
@@ -100,7 +101,7 @@ export async function GET(
     is_mcf_rated: t.is_mcf_rated,
     entry_fees: t.entry_fees,
     prizes: t.prizes,
-    restrictions: t.restrictions,
+    restrictions: normalizeRestrictions(t.restrictions),
     max_participants: t.max_participants,
     current_participants: currentParticipants ?? 0,
     status: t.status,
