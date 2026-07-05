@@ -142,6 +142,7 @@ export async function resolvePaymentState(
         p_payment_id: payment.id,
         p_paid: true,
         p_amount_cents: purchase.amountCents,
+        p_payment_method: purchase.paymentMethod,
       },
     );
 

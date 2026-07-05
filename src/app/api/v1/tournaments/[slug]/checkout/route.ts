@@ -523,6 +523,9 @@ async function settleFreeRegistration(
       p_payment_id: paymentId,
       p_paid: true,
       p_amount_cents: 0,
+      // No gateway/instrument for a zero-gross registration; record a sentinel
+      // so the column is never null and free registrations stay distinguishable.
+      p_payment_method: "free",
     },
   );
 

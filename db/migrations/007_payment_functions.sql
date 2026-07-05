@@ -211,16 +211,24 @@ $$;
 --           SAME purchase — so a genuine late `paid` can't be silently dropped.
 --           Idempotent: a row already `paid` is untouched. Only honored if
 --           p_amount_cents matches the recorded gross (guards a stale/re-priced
---           purchase); a mismatch is left as-is and reported back.
+--           purchase); a mismatch is left as-is and reported back. The CHIP-
+--           reported instrument (p_payment_method) is back-filled here — it isn't
+--           known at insert time, only once the payer picks one at checkout.
 --   !paid → that payment failed; only terminalizes a still-`pending` row (never
 --           overrides a `paid` one), and flips the registration ONLY if this is
 --           its current attempt (a superseded/old attempt's failure is a no-op on
 --           the registration).
 -- =============================================
+-- Dropped explicitly: adding p_payment_method changes the signature, so a bare
+-- CREATE OR REPLACE would leave the old 3-arg version in place and make a 3-arg
+-- call ambiguous ("function is not unique") when re-applying this file alone.
+DROP FUNCTION IF EXISTS settle_registration_payment(uuid, boolean, integer);
+
 CREATE OR REPLACE FUNCTION settle_registration_payment(
-  p_payment_id   uuid,
-  p_paid         boolean,
-  p_amount_cents integer DEFAULT NULL
+  p_payment_id     uuid,
+  p_paid           boolean,
+  p_amount_cents   integer DEFAULT NULL,
+  p_payment_method varchar(50) DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -247,8 +255,14 @@ BEGIN
          AND p_amount_cents <> v_payment.gross_amount_cents THEN
         v_amount_mismatch := true;
       ELSE
+        -- COALESCE keeps any already-recorded method if a later settling call
+        -- omits it (this UPDATE only runs on the first `paid` transition, so the
+        -- method is written once by whichever path — webhook or reconciliation —
+        -- settles first).
         UPDATE payments
-          SET status = 'paid', paid_at = now()
+          SET status = 'paid',
+              paid_at = now(),
+              payment_method = COALESCE(p_payment_method, payment_method)
           WHERE id = p_payment_id;
 
         UPDATE registrations

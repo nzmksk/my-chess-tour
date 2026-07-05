@@ -560,11 +560,13 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     );
     expect(json.data.registration_id).toBe("reg-1");
     expect(mockCreateChipPurchase).not.toHaveBeenCalled();
-    // Settled as paid through the same idempotent RPC the webhook uses.
+    // Settled as paid through the same idempotent RPC the webhook uses, with a
+    // 'free' sentinel method (no gateway/instrument for a zero-gross tier).
     expect(mockRpc).toHaveBeenCalledWith("settle_registration_payment", {
       p_payment_id: "pay-1",
       p_paid: true,
       p_amount_cents: 0,
+      p_payment_method: "free",
     });
   });
 

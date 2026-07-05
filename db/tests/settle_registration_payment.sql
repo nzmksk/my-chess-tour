@@ -27,6 +27,7 @@ DECLARE
   v_gross  integer;
   v_pay    text;
   v_regst  text;
+  v_method text;
   v_rows   integer;
 BEGIN
   -- ---- fixtures -----------------------------------------------------------
@@ -57,15 +58,18 @@ BEGIN
   v_pay_a := (v_res->>'payment_id')::uuid;
   SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay_a;
 
-  PERFORM settle_registration_payment(v_pay_a, false, NULL);     -- purchase.payment_failure
-  PERFORM settle_registration_payment(v_pay_a, true,  v_gross);  -- retry clears the same purchase
+  PERFORM settle_registration_payment(v_pay_a, false, NULL);                 -- purchase.payment_failure
+  PERFORM settle_registration_payment(v_pay_a, true,  v_gross, 'fpx_b2c');   -- retry clears the same purchase
 
-  SELECT status INTO v_pay   FROM payments      WHERE id = v_pay_a;
+  SELECT status, payment_method INTO v_pay, v_method FROM payments WHERE id = v_pay_a;
   SELECT status INTO v_regst FROM registrations WHERE id = v_reg;
   IF v_pay <> 'paid' OR v_regst <> 'confirmed' THEN
     RAISE EXCEPTION 'S1 FAIL: payment=% registration=% (expected paid/confirmed)', v_pay, v_regst;
   END IF;
-  RAISE NOTICE 'S1 PASS — decline-then-retry rescued';
+  IF v_method IS DISTINCT FROM 'fpx_b2c' THEN
+    RAISE EXCEPTION 'S1 FAIL: payment_method=% (expected fpx_b2c)', v_method;
+  END IF;
+  RAISE NOTICE 'S1 PASS — decline-then-retry rescued, method recorded';
 
   -- ===== S2 (#2/#4): supersede A with B, then a late paid for A =============
   v_res   := create_registration_with_payment(v_user_b, v_tournament, 'standard', 4000);
@@ -93,14 +97,18 @@ BEGIN
   v_reg   := (v_res->>'registration_id')::uuid;
   v_pay_a := (v_res->>'payment_id')::uuid;
   SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay_a;
-  PERFORM settle_registration_payment(v_pay_a, true, v_gross);
-  PERFORM settle_registration_payment(v_pay_a, true, v_gross);
-  SELECT status INTO v_pay   FROM payments      WHERE id = v_pay_a;
+  PERFORM settle_registration_payment(v_pay_a, true, v_gross, 'visa');
+  PERFORM settle_registration_payment(v_pay_a, true, v_gross, NULL);  -- late dup w/o method
+  SELECT status, payment_method INTO v_pay, v_method FROM payments WHERE id = v_pay_a;
   SELECT status INTO v_regst FROM registrations WHERE id = v_reg;
   IF v_pay <> 'paid' OR v_regst <> 'confirmed' THEN
     RAISE EXCEPTION 'S3a FAIL: payment=% registration=%', v_pay, v_regst;
   END IF;
-  RAISE NOTICE 'S3a PASS — duplicate paid idempotent';
+  -- The idempotent re-settle must not clobber the recorded method with NULL.
+  IF v_method IS DISTINCT FROM 'visa' THEN
+    RAISE EXCEPTION 'S3a FAIL: payment_method=% (expected visa preserved)', v_method;
+  END IF;
+  RAISE NOTICE 'S3a PASS — duplicate paid idempotent, method preserved';
 
   -- ===== S3b: amount mismatch leaves it untouched ==========================
   v_res   := create_registration_with_payment(v_user_d, v_tournament, 'standard', 4000);
