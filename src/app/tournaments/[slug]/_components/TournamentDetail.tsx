@@ -75,7 +75,6 @@ interface Props {
   tournament: TournamentDetailType;
   isAuthenticated: boolean;
   registrationStatus?: string | null;
-  isOrgMember?: boolean;
   canViewStartingRank: boolean;
   startingRank: StartingRankPlayer[] | null;
 }
