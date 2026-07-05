@@ -176,6 +176,12 @@ export default function RegistrationsClient({ registrations }: Props) {
       else if (tab === "cancelled") cancelled.push(reg);
     }
 
+    // Upcoming arrives from the API already sorted by nearest start date first.
+    // Past reads best most-recent-first, i.e. the reverse chronological order.
+    past.sort((a, b) =>
+      b.tournament.start_date.localeCompare(a.tournament.start_date),
+    );
+
     return { upcoming, past, cancelled };
   }, [registrations, today]);
 

@@ -292,33 +292,84 @@ describe("GET /api/v1/me/registrations", () => {
   });
 
   describe("sorting", () => {
-    it("defaults to sorting by registered_at descending", async () => {
-      setQueryResult([]);
-
-      await GET(makeRequest());
-
-      const orderMock = mockRegistrationsBuilder.order as ReturnType<
-        typeof vi.fn
-      >;
-      expect(orderMock).toHaveBeenCalledWith("registered_at", {
-        ascending: false,
+    function regWithStart(id: string, startDate: string, registeredAt: string) {
+      return makeRegistration({
+        id,
+        registered_at: registeredAt,
+        tournaments: {
+          ...makeRegistration().tournaments,
+          start_date: startDate,
+        },
       });
+    }
+
+    it("defaults to sorting by tournament start_date ascending", async () => {
+      // DB returns rows in registered_at-desc order; the API re-sorts by start_date.
+      setQueryResult([
+        regWithStart("reg-aug", "2026-08-10", "2026-02-01T00:00:00Z"),
+        regWithStart("reg-jul", "2026-07-05", "2026-01-01T00:00:00Z"),
+      ]);
+
+      const res = await GET(makeRequest());
+      const json = await res.json();
+
+      expect(json.data.map((r: { id: string }) => r.id)).toEqual([
+        "reg-jul",
+        "reg-aug",
+      ]);
     });
 
-    it("sorts ascending when order=asc", async () => {
-      setQueryResult([]);
+    it("sorts descending when order=desc", async () => {
+      setQueryResult([
+        regWithStart("reg-jul", "2026-07-05", "2026-01-01T00:00:00Z"),
+        regWithStart("reg-aug", "2026-08-10", "2026-02-01T00:00:00Z"),
+      ]);
+      const req = makeRequest(
+        "http://localhost/api/v1/me/registrations?sort=start_date&order=desc",
+      );
+
+      const res = await GET(req);
+      const json = await res.json();
+
+      expect(json.data.map((r: { id: string }) => r.id)).toEqual([
+        "reg-aug",
+        "reg-jul",
+      ]);
+    });
+
+    it("breaks start_date ties by most recently registered first", async () => {
+      // Same start_date; DB base order is registered_at desc, preserved by the
+      // stable sort so the newer registration stays on top.
+      setQueryResult([
+        regWithStart("reg-new", "2026-07-05", "2026-03-01T00:00:00Z"),
+        regWithStart("reg-old", "2026-07-05", "2026-01-01T00:00:00Z"),
+      ]);
+
+      const res = await GET(makeRequest());
+      const json = await res.json();
+
+      expect(json.data.map((r: { id: string }) => r.id)).toEqual([
+        "reg-new",
+        "reg-old",
+      ]);
+    });
+
+    it("can sort by registered_at when requested", async () => {
+      setQueryResult([
+        regWithStart("reg-aug", "2026-08-10", "2026-01-01T00:00:00Z"),
+        regWithStart("reg-jul", "2026-07-05", "2026-02-01T00:00:00Z"),
+      ]);
       const req = makeRequest(
         "http://localhost/api/v1/me/registrations?sort=registered_at&order=asc",
       );
 
-      await GET(req);
+      const res = await GET(req);
+      const json = await res.json();
 
-      const orderMock = mockRegistrationsBuilder.order as ReturnType<
-        typeof vi.fn
-      >;
-      expect(orderMock).toHaveBeenCalledWith("registered_at", {
-        ascending: true,
-      });
+      expect(json.data.map((r: { id: string }) => r.id)).toEqual([
+        "reg-aug",
+        "reg-jul",
+      ]);
     });
 
     it("returns 400 for invalid sort field", async () => {
