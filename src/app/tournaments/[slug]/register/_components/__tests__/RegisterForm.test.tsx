@@ -948,13 +948,13 @@ describe("RegisterForm", () => {
           playerProfile={MALE_PROFILE}
         />,
       );
-      // Switch to standard (3000 cents = RM30)
+      // Switch to standard (3000 cents = RM30.00)
       await act(async () => {
         fireEvent.change(selectEl(container), {
           target: { value: "standard" },
         });
       });
-      expect(screen.getAllByText("RM30").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("RM30.00").length).toBeGreaterThan(0);
     });
   });
 
