@@ -105,7 +105,7 @@ describe("POST /api/v1/webhooks/chip", () => {
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
-  it("settles a paid purchase and forwards the charged amount", async () => {
+  it("settles a paid purchase and forwards the charged amount + payment method", async () => {
     setPaymentResult({
       data: { id: "pay-1", chip_transaction_id: "chip-1" },
       error: null,
@@ -118,6 +118,7 @@ describe("POST /api/v1/webhooks/chip", () => {
         status: "paid",
         event_type: "purchase.paid",
         purchase: { total: 5500 },
+        transaction_data: { payment_method: "fpx_b2c" },
       }),
     );
 
@@ -126,6 +127,7 @@ describe("POST /api/v1/webhooks/chip", () => {
       p_payment_id: "pay-1",
       p_paid: true,
       p_amount_cents: 5500,
+      p_payment_method: "fpx_b2c",
     });
   });
 
@@ -190,10 +192,12 @@ describe("POST /api/v1/webhooks/chip", () => {
     );
 
     expect(res.status).toBe(200);
+    // No transaction_data in this payload → method settles as null.
     expect(mockRpc).toHaveBeenCalledWith("settle_registration_payment", {
       p_payment_id: "pay-1",
       p_paid: true,
       p_amount_cents: 5500,
+      p_payment_method: null,
     });
   });
 

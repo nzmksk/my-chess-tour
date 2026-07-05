@@ -22,7 +22,7 @@ async function fetchRegistrations(
 
   try {
     const res = await fetch(
-      `${protocol}://${host}/api/v1/me/registrations?sort=registered_at&order=desc`,
+      `${protocol}://${host}/api/v1/me/registrations`,
       {
         cache: "no-store",
         headers: { cookie: cookieHeader },

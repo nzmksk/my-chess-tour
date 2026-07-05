@@ -60,9 +60,12 @@ export function formatDeadline(iso: string): string {
   });
 }
 
+// Display RM formatting for tournament listings: renders a zero fee as "Free"
+// and otherwise always shows two decimal places so cents are never truncated
+// (e.g. RM0.10 stays "RM0.10", not "RM0"). See #359.
 export function formatRm(cents: number): string {
   if (cents === 0) return "Free";
-  return `RM${(cents / 100).toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return formatRmExact(cents);
 }
 
 // Exact (sen-precision) RM formatting for checkout/payment summaries where the

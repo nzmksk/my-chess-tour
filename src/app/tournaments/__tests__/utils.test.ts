@@ -83,24 +83,24 @@ describe("formatRm", () => {
     expect(formatRm(0)).toBe("Free");
   });
 
-  it("formats whole RM amounts correctly", () => {
-    expect(formatRm(3000)).toBe("RM30");
-    expect(formatRm(2400)).toBe("RM24");
-    expect(formatRm(1800)).toBe("RM18");
+  it("formats whole RM amounts with two decimal places", () => {
+    expect(formatRm(3000)).toBe("RM30.00");
+    expect(formatRm(2400)).toBe("RM24.00");
+    expect(formatRm(1800)).toBe("RM18.00");
   });
 
   it("formats RM1 from 100 cents", () => {
-    expect(formatRm(100)).toBe("RM1");
+    expect(formatRm(100)).toBe("RM1.00");
+  });
+
+  it("does not truncate cents (#359)", () => {
+    expect(formatRm(10)).toBe("RM0.10");
+    expect(formatRm(5050)).toBe("RM50.50");
   });
 
   it("formats thousands with a thousands separator", () => {
     const result = formatRm(100000);
-    expect(result).toMatch(/^RM1.000$/);
-  });
-
-  it("rounds to whole RM (no decimal places)", () => {
-    const result = formatRm(5050);
-    expect(result).not.toContain(".");
+    expect(result).toMatch(/^RM1.000\.00$/);
   });
 });
 

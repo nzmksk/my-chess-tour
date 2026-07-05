@@ -342,10 +342,11 @@ describe("generateMetadata", () => {
 
 // ── fetchStartingRank coverage ────────────────────────────────
 //
-// Use a past start_date so tournamentStarted=true and canViewStartingRank=true,
-// which causes fetchStartingRank to be called. With user=null the isRegistered
-// and isOrgMember auth checks are skipped, so fetchStartingRank makes the
-// FIRST call to from("registrations") — no counter needed.
+// The default payload's registration_deadline is in the past, so
+// registrationClosed=true and canViewStartingRank=true, which causes
+// fetchStartingRank to be called. With user=null the isConfirmed auth
+// check is skipped, so fetchStartingRank makes the FIRST call to
+// from("registrations") — no counter needed.
 //
 // makeChain: thenable object so `await chain.eq().eq()` resolves with the
 // wrapped value, while chain.in() is overridable for the .in()-terminated paths.
@@ -740,7 +741,7 @@ describe("fetchStartingRank coverage", () => {
     expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
   });
 
-  it("covers isOrgMember branch for logged-in user with org tournament", async () => {
+  it("covers the logged-in user path: registration status check then fetchStartingRank", async () => {
     const serverModule = await import("@/services/supabase/server");
     vi.mocked(serverModule.createClient).mockResolvedValueOnce({
       auth: {
@@ -763,7 +764,6 @@ describe("fetchStartingRank coverage", () => {
     // With a logged-in user, from("registrations") is called twice:
     //   1st: registration status check (.select().eq().eq().maybeSingle() → {data:null})
     //   2nd: fetchStartingRank data (.select().eq().eq() → await chain)
-    // organization_memberships is called once for isOrgMember.
     let regCallIdx = 0;
     mockFrom.mockImplementation((t: string) => {
       if (t === "registrations") {
@@ -775,13 +775,118 @@ describe("fetchStartingRank coverage", () => {
         }
         return { select: vi.fn(() => makeChain({ data: [], error: null })) };
       }
-      if (t === "organization_memberships") {
-        return { select: vi.fn(() => makeChain({ count: 0 })) };
-      }
       return { select: vi.fn(() => makeChain({ data: null, error: null })) };
     });
 
     const { TournamentDetailData } = await import("../page");
     expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+  });
+});
+
+// ── Starting rank visibility rules ────────────────────────────
+//
+// canViewStartingRank is true when the tournament has started, registration
+// has closed, the tournament is at full capacity, or the viewer is a confirmed
+// player / org member. The unauthenticated (claims=null) path skips the
+// registration-status and org-membership checks, so from("registrations") is
+// only reached by fetchStartingRank when canViewStartingRank is true.
+
+describe("starting rank visibility rules", () => {
+  let mockFrom: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    globalThis.fetch = mockFetch;
+    mockHeadersGet.mockReturnValue("localhost:3000");
+    const mod = await import("@/services/supabase/admin");
+    mockFrom = vi.mocked(mod.supabaseAdmin.from);
+  });
+
+  function canViewProp(element: unknown) {
+    const props = (element as { props: { canViewStartingRank: boolean } })
+      .props;
+    return props.canViewStartingRank;
+  }
+
+  it("hides starting rank when not started, registration open, below capacity, and anonymous", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2999-01-01",
+          end_date: "2999-01-02",
+          registration_deadline: "2999-01-01T00:00:00Z",
+          max_participants: 120,
+          current_participants: 78,
+        }),
+    });
+
+    const { TournamentDetailData } = await import("../page");
+    const result = await TournamentDetailData({ id: "t1" });
+
+    expect(canViewProp(result)).toBe(false);
+  });
+
+  it("shows starting rank once registration has closed", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock({ data: [], error: null }, [], []),
+    );
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2999-01-01",
+          end_date: "2999-01-02",
+          registration_deadline: "2000-01-01T00:00:00Z",
+          max_participants: 120,
+          current_participants: 78,
+        }),
+    });
+
+    const { TournamentDetailData } = await import("../page");
+    const result = await TournamentDetailData({ id: "t1" });
+
+    expect(canViewProp(result)).toBe(true);
+  });
+
+  it("shows starting rank once the tournament is at full capacity", async () => {
+    mockFrom.mockImplementation(
+      makeFromMock({ data: [], error: null }, [], []),
+    );
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2999-01-01",
+          end_date: "2999-01-02",
+          registration_deadline: "2999-01-01T00:00:00Z",
+          max_participants: 120,
+          current_participants: 120,
+        }),
+    });
+
+    const { TournamentDetailData } = await import("../page");
+    const result = await TournamentDetailData({ id: "t1" });
+
+    expect(canViewProp(result)).toBe(true);
+  });
+
+  it("does not treat max_participants of 0 as full capacity", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2999-01-01",
+          end_date: "2999-01-02",
+          registration_deadline: "2999-01-01T00:00:00Z",
+          max_participants: 0,
+          current_participants: 0,
+        }),
+    });
+
+    const { TournamentDetailData } = await import("../page");
+    const result = await TournamentDetailData({ id: "t1" });
+
+    expect(canViewProp(result)).toBe(false);
   });
 });

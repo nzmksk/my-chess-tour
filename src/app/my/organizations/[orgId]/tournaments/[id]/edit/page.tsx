@@ -59,7 +59,7 @@ interface TournamentForEdit {
   prizes: {
     categories?: Array<{
       name: string;
-      entries: Array<{ placement: string; amount_cents: number }>;
+      entries: Array<{ place: string; amount_cents: number }>;
     }>;
     special?: Array<{ name: string; amount_cents: number }>;
   } | null;
@@ -166,7 +166,7 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     name: cat.name,
     prizes: cat.entries.map((e, ei) => ({
       id: `prize-${ci}-${ei}`,
-      placement: e.placement,
+      placement: e.place,
       amount: e.amount_cents / 100,
     })),
   }));

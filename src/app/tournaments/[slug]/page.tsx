@@ -228,19 +228,14 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
   }
   const isConfirmed = registrationStatus === "confirmed";
 
-  let isOrgMember = false;
-  if (claims && tournament.organization?.id) {
-    const { count } = await supabaseAdmin
-      .from("organization_memberships")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", claims.id)
-      .eq("organization_id", tournament.organization.id);
-    isOrgMember = (count ?? 0) > 0;
-  }
-
-  const tournamentStarted =
-    new Date(tournament.start_date + "T00:00:00") <= new Date();
-  const canViewStartingRank = tournamentStarted || isConfirmed || isOrgMember;
+  const now = new Date();
+  // Registration always closes on or before the tournament starts, so a closed
+  // deadline already covers the "tournament has started" case.
+  const registrationClosed = new Date(tournament.registration_deadline) <= now;
+  const isAtCapacity =
+    tournament.max_participants > 0 &&
+    tournament.current_participants >= tournament.max_participants;
+  const canViewStartingRank = registrationClosed || isAtCapacity || isConfirmed;
 
   const startingRank = canViewStartingRank
     ? await fetchStartingRank(tournamentId, tournament.format.type)
@@ -251,7 +246,6 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
       tournament={tournament}
       isAuthenticated={!!claims}
       registrationStatus={registrationStatus}
-      isOrgMember={isOrgMember}
       canViewStartingRank={canViewStartingRank}
       startingRank={startingRank}
     />

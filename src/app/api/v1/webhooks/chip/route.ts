@@ -23,6 +23,9 @@ interface ChipCallbackPayload {
   // The nested Purchase carries the total CHIP charged (smallest currency unit),
   // used to guard against settling a stale/re-priced purchase.
   purchase?: { total?: number };
+  // The instrument the payer used (raw CHIP value, e.g. "fpx_b2c", "visa"),
+  // recorded on the payment at settlement.
+  transaction_data?: { payment_method?: string };
 }
 
 // Normalizes a PEM read from an env var. Env managers store keys inconsistently:
@@ -163,6 +166,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       p_payment_id: payment.id,
       p_paid: paid,
       p_amount_cents: payload.purchase?.total ?? null,
+      p_payment_method: payload.transaction_data?.payment_method ?? null,
     },
   );
 

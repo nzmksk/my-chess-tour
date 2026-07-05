@@ -107,7 +107,7 @@ export default function WizardShell({
             categories: prizesData.categories.map((cat) => ({
               name: cat.name,
               entries: cat.prizes.map((p) => ({
-                placement: p.placement,
+                place: p.placement,
                 amount_cents:
                   p.amount === "" ? 0 : Math.round(Number(p.amount) * 100),
               })),

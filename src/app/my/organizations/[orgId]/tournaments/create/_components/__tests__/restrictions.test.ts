@@ -17,8 +17,6 @@ describe("toPersistedRestrictions", () => {
         { type: "Max Rating", value: "2000" },
         { type: "Gender", value: "Female" },
         { type: "Nationality", value: "Malaysia" },
-        { type: "State", value: "Selangor" },
-        { type: "Custom", value: "Members only" },
       ]),
     ).toEqual([
       { type: "age", max: 18 },
@@ -26,8 +24,6 @@ describe("toPersistedRestrictions", () => {
       { type: "rating", max: 2000 },
       { type: "gender", value: "female" },
       { type: "nationality", value: "Malaysia" },
-      { type: "state", value: "Selangor" },
-      { type: "custom", value: "Members only" },
     ]);
   });
 

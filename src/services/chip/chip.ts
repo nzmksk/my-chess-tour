@@ -106,9 +106,12 @@ export async function createChipPurchase(
  * is the total CHIP actually charged (purchase.total), used to guard settlement
  * against a stale/re-priced purchase being paid.
  */
-export async function getChipPurchase(
-  id: string,
-): Promise<{ id: string; status: string; amountCents: number | null }> {
+export async function getChipPurchase(id: string): Promise<{
+  id: string;
+  status: string;
+  amountCents: number | null;
+  paymentMethod: string | null;
+}> {
   const apiKey = process.env.CHIP_API_KEY;
   if (!apiKey) {
     throw new Error("CHIP_API_KEY must be configured");
@@ -132,11 +135,13 @@ export async function getChipPurchase(
     id: string;
     status: string;
     purchase?: { total?: number };
+    transaction_data?: { payment_method?: string };
   };
   return {
     id: body.id,
     status: body.status,
     amountCents: body.purchase?.total ?? null,
+    paymentMethod: body.transaction_data?.payment_method ?? null,
   };
 }
 

@@ -32,9 +32,23 @@ type RawRestrictionItem = {
   value?: string;
 };
 
+function hasAnyRestriction(r: Restrictions): boolean {
+  return (
+    r.min_rating != null ||
+    r.max_rating != null ||
+    r.min_age != null ||
+    r.max_age != null ||
+    !!r.gender ||
+    !!r.nationality
+  );
+}
+
 export function normalizeRestrictions(raw: unknown): Restrictions | null {
   if (!raw) return null;
-  if (!Array.isArray(raw)) return raw as Restrictions;
+  if (!Array.isArray(raw)) {
+    const obj = raw as Restrictions;
+    return hasAnyRestriction(obj) ? obj : null;
+  }
 
   const result: Restrictions = {};
   for (const item of raw as RawRestrictionItem[]) {
@@ -55,7 +69,7 @@ export function normalizeRestrictions(raw: unknown): Restrictions | null {
         break;
     }
   }
-  return Object.keys(result).length > 0 ? result : null;
+  return hasAnyRestriction(result) ? result : null;
 }
 
 export function checkRestrictions(

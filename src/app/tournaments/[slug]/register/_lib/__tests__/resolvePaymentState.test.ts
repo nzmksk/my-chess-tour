@@ -159,6 +159,7 @@ describe("resolvePaymentState", () => {
       id: "chip-1",
       status: "paid",
       amountCents: 5500,
+      paymentMethod: "visa",
     });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
@@ -168,6 +169,7 @@ describe("resolvePaymentState", () => {
       p_payment_id: "pay-uuid",
       p_paid: true,
       p_amount_cents: 5500,
+      p_payment_method: "visa",
     });
     expect(result.state).toBe("confirmed");
   });
@@ -213,6 +215,7 @@ describe("resolvePaymentState", () => {
       id: "chip-1",
       status: "paid",
       amountCents: 5500,
+      paymentMethod: "fpx_b2c",
     });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
@@ -222,6 +225,7 @@ describe("resolvePaymentState", () => {
       p_payment_id: "pay-uuid",
       p_paid: true,
       p_amount_cents: 5500,
+      p_payment_method: "fpx_b2c",
     });
     expect(result.state).toBe("confirmed");
   });

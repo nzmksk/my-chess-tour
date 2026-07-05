@@ -504,6 +504,49 @@ async function resumeRegistration(
   );
 }
 
+/**
+ * Completes a free (zero-gross) registration without touching the payment
+ * gateway. Settles the pending payment as paid through the same idempotent RPC
+ * the CHIP webhook uses — flipping the registration to confirmed — and sends the
+ * user to the success page, where the confirmed registration is shown. If the
+ * settle fails, the registration is left pending and auto-expires, so the user
+ * can simply retry.
+ */
+async function settleFreeRegistration(
+  paymentId: string,
+  registrationId: string,
+  tournamentSlug: string,
+): Promise<NextResponse> {
+  const { error: settleErr } = await supabaseAdmin.rpc(
+    "settle_registration_payment",
+    {
+      p_payment_id: paymentId,
+      p_paid: true,
+      p_amount_cents: 0,
+      // No gateway/instrument for a zero-gross registration; record a sentinel
+      // so the column is never null and free registrations stay distinguishable.
+      p_payment_method: "free",
+    },
+  );
+
+  if (settleErr) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: settleErr.message } },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json(
+    {
+      data: {
+        registration_id: registrationId,
+        redirect_url: `/tournaments/${tournamentSlug}/register/success`,
+      },
+    },
+    { status: 201 },
+  );
+}
+
 async function initiateChipPayment(
   paymentId: string,
   tournamentSlug: string,
@@ -522,6 +565,18 @@ async function initiateChipPayment(
         error: { code: "INTERNAL_ERROR", message: "Payment record not found" },
       },
       { status: 500 },
+    );
+  }
+
+  // A zero-gross tier (e.g. a RM0.00 fee for titled players) has nothing to
+  // charge, so bypass the payment gateway entirely: settle the attempt as paid
+  // and confirm the registration immediately. Every payment path funnels through
+  // here (create, resume, race-recovery), so this is the one place to branch.
+  if (payment.gross_amount_cents === 0) {
+    return settleFreeRegistration(
+      payment.id,
+      payment.registration_id,
+      tournamentSlug,
     );
   }
 

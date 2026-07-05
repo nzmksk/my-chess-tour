@@ -4,16 +4,13 @@
 // checkRestrictions at registration time (e.g. { type: "age", max: 18 }).
 //
 // Persisting the normalized shape is what makes wizard-created restrictions
-// actually enforce — the UI labels are never stored. "state" and "custom" have
-// no player-profile counterpart, so they're kept for display but not enforced.
+// actually enforce — the UI labels are never stored.
 
 export type PersistedRestriction =
   | { type: "age"; min?: number | null; max?: number | null }
   | { type: "rating"; min?: number | null; max?: number | null }
   | { type: "gender"; value: string }
-  | { type: "nationality"; value: string }
-  | { type: "state"; value: string }
-  | { type: "custom"; value: string };
+  | { type: "nationality"; value: string };
 
 interface RestrictionRow {
   id: string;
@@ -45,10 +42,8 @@ export function toPersistedRestrictions(
         return { type: "gender", value: value.toLowerCase() };
       case "Nationality":
         return { type: "nationality", value };
-      case "State":
-        return { type: "state", value };
       default:
-        return { type: "custom", value };
+        throw new Error(`Unknown restriction type: ${r.type}`);
     }
   });
 }
@@ -79,12 +74,6 @@ export function fromPersistedRestrictions(
         break;
       case "nationality":
         push("Nationality", item.value ?? "");
-        break;
-      case "state":
-        push("State", item.value ?? "");
-        break;
-      default:
-        push("Custom", (item as { value?: string }).value ?? "");
         break;
     }
   }

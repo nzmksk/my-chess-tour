@@ -533,7 +533,7 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
             categories: [
               {
                 name: "Open",
-                entries: [{ placement: "1st", amount_cents: 100000 }],
+                entries: [{ place: "1st", amount_cents: 100000 }],
               },
             ],
             special: [{ name: "Best Game", amount_cents: 20000 }],

@@ -529,6 +529,47 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     });
   });
 
+  it("confirms a free (RM0.00) tier without hitting the payment gateway", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({
+        entry_fees: {
+          standard: { amount_cents: 5000 },
+          additional: [{ type: "titled", amount_cents: 0 }],
+        },
+      }),
+      error: null,
+    });
+    setThen(mockExistingBuilder, { data: null, error: null });
+    // The created payment row nets a zero gross, so the route settles instead of
+    // creating a CHIP purchase.
+    setThen(mockPaymentSelectBuilder, {
+      data: { id: "pay-1", registration_id: "reg-1", gross_amount_cents: 0 },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "titled" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    // No gateway redirect — confirmed server-side and pointed at the success page.
+    expect(json.data.checkout_url).toBeUndefined();
+    expect(json.data.redirect_url).toBe(
+      `/tournaments/${SLUG}/register/success`,
+    );
+    expect(json.data.registration_id).toBe("reg-1");
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+    // Settled as paid through the same idempotent RPC the webhook uses, with a
+    // 'free' sentinel method (no gateway/instrument for a zero-gross tier).
+    expect(mockRpc).toHaveBeenCalledWith("settle_registration_payment", {
+      p_payment_id: "pay-1",
+      p_paid: true,
+      p_amount_cents: 0,
+      p_payment_method: "free",
+    });
+  });
+
   it("builds the CHIP success/failure redirects from the slug, not the UUID", async () => {
     setThen(mockExistingBuilder, { data: null, error: null });
 

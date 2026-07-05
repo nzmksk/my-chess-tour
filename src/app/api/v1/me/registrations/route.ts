@@ -11,7 +11,7 @@ const VALID_STATUSES = new Set([
   "confirmed",
   "forfeited",
 ]);
-const VALID_SORT = new Set(["registered_at", "confirmed_at"]);
+const VALID_SORT = new Set(["start_date", "registered_at", "confirmed_at"]);
 const VALID_ORDER = new Set(["asc", "desc"]);
 
 type TournamentRow = {
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     statuses = requested;
   }
 
-  const sort = searchParams.get("sort") ?? "registered_at";
+  const sort = searchParams.get("sort") ?? "start_date";
   if (!VALID_SORT.has(sort)) {
     return NextResponse.json(
       {
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const order = searchParams.get("order") ?? "desc";
+  const order = searchParams.get("order") ?? "asc";
   if (!VALID_ORDER.has(order)) {
     return NextResponse.json(
       {
@@ -117,7 +117,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       )`,
     )
     .eq("user_id", claims.id)
-    .order(sort, { ascending: order === "asc" });
+    // Deterministic base order so equal sort keys (e.g. same start_date) resolve
+    // to a stable "most recently registered first" tiebreak. The requested sort
+    // is applied in-memory below because `start_date` lives on the joined
+    // tournaments table, which PostgREST cannot use to order the parent rows.
+    .order("registered_at", { ascending: false });
 
   if (statuses) {
     query = query.in("status", statuses);
@@ -166,6 +170,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       confirmed_at: row.confirmed_at,
     };
   });
+
+  const sortKey = (item: (typeof formatted)[number]): string => {
+    if (sort === "start_date") return item.tournament.start_date;
+    if (sort === "confirmed_at") return item.confirmed_at ?? "";
+    return item.registered_at;
+  };
+  const direction = order === "asc" ? 1 : -1;
+  // Stable sort (V8) keeps the DB tiebreak order for equal keys.
+  formatted.sort((a, b) => sortKey(a).localeCompare(sortKey(b)) * direction);
 
   return NextResponse.json(
     { data: formatted, next_cursor: null, has_more: false },

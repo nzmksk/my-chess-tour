@@ -52,6 +52,23 @@ describe("normalizeRestrictions", () => {
     expect(normalizeRestrictions(flat)).toEqual(flat);
   });
 
+  it("returns null for an empty object", () => {
+    expect(normalizeRestrictions({})).toBeNull();
+  });
+
+  it("returns null for an object whose fields are all null", () => {
+    const empty = {
+      min_rating: null,
+      max_rating: null,
+      min_age: null,
+      max_age: null,
+      gender: null,
+      nationality: null,
+      titles: [],
+    };
+    expect(normalizeRestrictions(empty)).toBeNull();
+  });
+
   it("converts array rating restriction to flat format", () => {
     const raw = [{ type: "rating", max: 1799 }];
     expect(normalizeRestrictions(raw)).toEqual({ max_rating: 1799 });

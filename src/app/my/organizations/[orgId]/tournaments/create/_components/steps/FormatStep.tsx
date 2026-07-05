@@ -13,9 +13,7 @@ const RESTRICTION_TYPES = [
   "Max Rating",
   "Min Rating",
   "Gender",
-  "State",
   "Nationality",
-  "Custom",
 ];
 
 type FieldErrors = Partial<

@@ -301,16 +301,9 @@ describe("restrictions section", () => {
     expect(html).not.toContain("Restrictions");
   });
 
-  it("shows 'Open to all' when all restriction fields are null/absent", () => {
-    const html = render({
-      restrictions: {
-        min_rating: null,
-        max_rating: null,
-        min_age: null,
-        max_age: null,
-      },
-    });
-    expect(html).toContain("Open to all");
+  it("shows 'Open to All' badge when restrictions are null", () => {
+    const html = render({ restrictions: null });
+    expect(html).toContain("Open to All");
   });
 
   it("renders min and max rating when both are set", () => {
@@ -331,6 +324,26 @@ describe("restrictions section", () => {
       },
     });
     expect(html).toContain("18");
+  });
+
+  it("renders gender restriction and hides 'Open to All' badge", () => {
+    const html = render({ restrictions: { gender: "female" } });
+    expect(html).toContain("Female");
+    expect(html).not.toContain("Open to All");
+  });
+
+  it("renders nationality restriction resolved to a country name", () => {
+    const html = render({ restrictions: { nationality: "Malaysia" } });
+    expect(html).toContain("Malaysia");
+    expect(html).not.toContain("Open to All");
+  });
+
+  it("renders titles restriction", () => {
+    const html = render({
+      restrictions: { titles: ["GM", "IM"] },
+    });
+    expect(html).toContain("GM, IM");
+    expect(html).not.toContain("Open to All");
   });
 });
 
