@@ -62,7 +62,11 @@ beforeEach(() => {
 describe("AuthProvider", () => {
   it("renders children", () => {
     const { getByText } = render(
-      <AuthProvider initialUser={null} initialAvatar={null}>
+      <AuthProvider
+        initialUser={null}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span>Child Content</span>
       </AuthProvider>,
     );
@@ -74,6 +78,7 @@ describe("AuthProvider", () => {
       <AuthProvider
         initialUser={initialUser}
         initialAvatar="https://example.com/avatar.png"
+        initialOrganizations={[]}
       >
         <span />
       </AuthProvider>,
@@ -86,6 +91,7 @@ describe("AuthProvider", () => {
       <AuthProvider
         initialUser={initialUser}
         initialAvatar="https://example.com/avatar.png"
+        initialOrganizations={[]}
       >
         <span />
       </AuthProvider>,
@@ -94,12 +100,17 @@ describe("AuthProvider", () => {
     expect(mocks.setState).toHaveBeenCalledWith({
       user: initialUser,
       avatarUrl: "https://example.com/avatar.png",
+      organizations: [],
     });
   });
 
   it("subscribes to Supabase auth state changes", () => {
     render(
-      <AuthProvider initialUser={null} initialAvatar={null}>
+      <AuthProvider
+        initialUser={null}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span />
       </AuthProvider>,
     );
@@ -115,7 +126,11 @@ describe("AuthProvider", () => {
     mocks.toAuthUser.mockReturnValue(null);
 
     render(
-      <AuthProvider initialUser={null} initialAvatar={null}>
+      <AuthProvider
+        initialUser={null}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span />
       </AuthProvider>,
     );
@@ -133,7 +148,11 @@ describe("AuthProvider", () => {
     mocks.toAuthUser.mockReturnValue(initialUser);
 
     render(
-      <AuthProvider initialUser={null} initialAvatar={null}>
+      <AuthProvider
+        initialUser={null}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span />
       </AuthProvider>,
     );
@@ -144,7 +163,11 @@ describe("AuthProvider", () => {
 
   it("subscribes to cross-tab avatar broadcasts", () => {
     render(
-      <AuthProvider initialUser={null} initialAvatar={null}>
+      <AuthProvider
+        initialUser={null}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span />
       </AuthProvider>,
     );
@@ -164,7 +187,11 @@ describe("AuthProvider", () => {
     });
 
     render(
-      <AuthProvider initialUser={initialUser} initialAvatar={null}>
+      <AuthProvider
+        initialUser={initialUser}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span />
       </AuthProvider>,
     );
@@ -186,7 +213,11 @@ describe("AuthProvider", () => {
     });
 
     render(
-      <AuthProvider initialUser={initialUser} initialAvatar={null}>
+      <AuthProvider
+        initialUser={initialUser}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span />
       </AuthProvider>,
     );
@@ -203,7 +234,11 @@ describe("AuthProvider", () => {
     mocks.subscribeAvatar.mockReturnValue(mockUnsubscribeAvatar);
 
     const { unmount } = render(
-      <AuthProvider initialUser={null} initialAvatar={null}>
+      <AuthProvider
+        initialUser={null}
+        initialAvatar={null}
+        initialOrganizations={[]}
+      >
         <span />
       </AuthProvider>,
     );

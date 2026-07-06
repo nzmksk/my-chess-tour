@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MY Chess Tour — Org Switcher Wireframes</title>
+<style>
+  :root {
+    --ink: #1c1c1c;
+    --line: #b8b8b8;
+    --line-strong: #6b6b6b;
+    --fill: #efefef;
+    --fill-2: #e2e2e2;
+    --paper: #fafafa;
+    --muted: #7a7a7a;
+    --accent-line: #444;
+    --sketch-radius: 4px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #d9d9d9;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--ink);
+    padding: 32px 16px 80px;
+    line-height: 1.4;
+  }
+  .page-head {
+    max-width: 1180px;
+    margin: 0 auto 24px;
+  }
+  .page-head h1 {
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+  }
+  .page-head p {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0;
+  }
+  .tabs {
+    max-width: 1180px;
+    margin: 0 auto 20px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    border: 1.5px solid var(--line-strong);
+    background: var(--fill);
+    padding: 8px 14px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: var(--sketch-radius);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tab[aria-selected="true"] {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  .grid {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .state { display: none; }
+  .state.active { display: block; }
+
+  .state-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin: 0 0 10px;
+    padding-left: 2px;
+  }
+
+  /* screens row */
+  .screens {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 22px;
+  }
+
+  /* device frame */
+  .device {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column;
+    min-height: 460px;
+  }
+  .caption {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 8px 4px 0;
+    text-align: center;
+  }
+  .browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-bottom: 1.5px dashed var(--line);
+    background: var(--fill);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line-strong); }
+  .url {
+    flex: 1;
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 3px 10px;
+    background: #fff;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* top app nav */
+  .topnav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1.5px solid var(--line);
+  }
+  .logo {
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+  }
+  .logo span { color: var(--muted); font-weight: normal; }
+  .nav-right { display: flex; align-items: center; gap: 8px; }
+
+  /* the account/org control */
+  .switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 6px;
+    padding: 5px 8px;
+    background: #fff;
+    font-size: 10px;
+    cursor: pointer;
+    max-width: 210px;
+  }
+  .switcher .avatar {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 1.5px solid var(--ink);
+    display: grid; place-items: center;
+    font-size: 9px; font-weight: bold;
+    flex-shrink: 0;
+  }
+  .switcher .avatar.sq { border-radius: 4px; }
+  .switcher .sw-text { display: flex; flex-direction: column; overflow: hidden; }
+  .switcher .sw-text b { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .switcher .sw-text small { font-size: 8px; color: var(--muted); }
+  .chev { margin-left: auto; font-size: 9px; color: var(--muted); }
+  .check { color: var(--muted); font-size: 9px; }
+
+  .body-area { padding: 14px 14px 18px; flex: 1; }
+
+  /* skeleton blocks */
+  .h-title { height: 14px; width: 55%; background: var(--fill-2); border-radius: 3px; margin-bottom: 12px; }
+  .sk-line { height: 8px; background: var(--fill); border-radius: 3px; margin-bottom: 7px; }
+  .sk-line.s { width: 40%; }
+  .sk-line.m { width: 70%; }
+  .sk-line.l { width: 90%; }
+
+  .card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .mini-card {
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    padding: 10px;
+    background: #fff;
+  }
+  .mini-card .k { height: 7px; width: 60%; background: var(--fill-2); border-radius: 3px; margin-bottom: 8px; }
+  .mini-card .v { height: 16px; width: 40%; background: var(--fill); border-radius: 3px; }
+
+  .cta {
+    border: 2px dashed var(--line-strong);
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 8px;
+    background: repeating-linear-gradient(45deg,#f5f5f5,#f5f5f5 6px,#efefef 6px,#efefef 12px);
+  }
+  .cta b { display: block; color: var(--ink); font-size: 12px; margin-bottom: 6px; }
+  .btn-fake {
+    display: inline-block;
+    margin-top: 10px;
+    border: 1.5px solid var(--ink);
+    background: var(--ink);
+    color: #fff;
+    border-radius: 5px;
+    padding: 6px 14px;
+    font-size: 10px;
+  }
+  .btn-ghost {
+    display: inline-block;
+    border: 1.5px solid var(--line-strong);
+    background: #fff;
+    border-radius: 5px;
+    padding: 5px 12px;
+    font-size: 10px;
+    color: var(--ink);
+  }
+
+  /* sidebar layout for org dashboard */
+  .dash { display: grid; grid-template-columns: 96px 1fr; flex: 1; }
+  .sidebar {
+    border-right: 1.5px solid var(--line);
+    padding: 10px 8px;
+    background: var(--fill);
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .side-item { height: 9px; background: var(--fill-2); border-radius: 3px; }
+  .side-item.active { background: var(--line-strong); }
+  .side-item.dim { opacity: 0.5; }
+  .side-head {
+    font-size: 8px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.5px; margin: 6px 0 2px;
+  }
+
+  /* dropdown panel (open state) */
+  .dropdown {
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+    width: 250px;
+    overflow: hidden;
+  }
+  .dd-section-label {
+    font-size: 8px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); padding: 8px 12px 4px;
+  }
+  .dd-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--fill);
+    font-size: 10px;
+  }
+  .dd-item.sel { background: var(--fill); }
+  .dd-item .avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid var(--ink); display: grid; place-items: center;
+    font-size: 9px; font-weight: bold; flex-shrink: 0;
+  }
+  .dd-item .avatar.sq { border-radius: 4px; }
+  .dd-item .txt { display: flex; flex-direction: column; overflow: hidden; }
+  .dd-item .txt b { font-size: 10px; }
+  .dd-item .txt small { font-size: 8px; color: var(--muted); }
+  .role-badge {
+    margin-left: auto;
+    font-size: 7px; text-transform: uppercase; letter-spacing: 0.5px;
+    border: 1px solid var(--line-strong); border-radius: 3px;
+    padding: 2px 5px; color: var(--muted);
+  }
+  .dd-foot {
+    border-top: 1.5px solid var(--line);
+    padding: 8px 12px; font-size: 10px; color: var(--ink);
+    background: var(--fill);
+  }
+  .dd-foot .plus { font-weight: bold; margin-right: 4px; }
+  .pending-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); margin-left: auto; }
+
+  .annot {
+    font-size: 10px; color: var(--muted);
+    border-left: 3px solid var(--line-strong);
+    padding: 4px 0 4px 10px;
+    margin: 10px 4px 0;
+  }
+
+  .dd-standalone-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: flex-start; padding-top: 30px; flex: 1;
+    background: repeating-linear-gradient(0deg,#fafafa,#fafafa 22px,#f2f2f2 22px,#f2f2f2 23px);
+  }
+  .badge-note {
+    display:inline-block; font-size:8px; text-transform:uppercase; letter-spacing:0.5px;
+    color: var(--muted); border:1px solid var(--line); border-radius:3px; padding:2px 6px; margin-left:6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>MY Chess Tour — Account &amp; Organization Switcher</h1>
+  <p>Low-fidelity wireframes · grayscale on purpose · route model: <code>/my</code> (player) ↔ <code>/my/organizations/[orgId]</code></p>
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true" data-state="s1">1 · No organization</button>
+  <button class="tab" role="tab" aria-selected="false" data-state="s2">2 · One organization</button>
+  <button class="tab" role="tab" aria-selected="false" data-state="s3">3 · Multiple organizations</button>
+</div>
+
+<div class="grid">
+
+  <!-- ============ STATE 1 ============ -->
+  <section class="state active" data-state="s1">
+    <p class="state-label">State 1 — User belongs to no organization</p>
+    <div class="screens">
+
+      <!-- screen: player dashboard -->
+      <div>
+        <div class="device">
+          <div class="browser-bar">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            <div class="url">mychesstour.com/my</div>
+          </div>
+          <div class="topnav">
+            <div class="logo">MY <span>Chess Tour</span></div>
+            <div class="nav-right">
+              <div class="switcher">
+                <div class="avatar">H</div>
+                <div class="sw-text"><b>Hafiz</b><small>Personal account</small></div>
+                <div class="chev">▼</div>
+              </div>
+            </div>
+          </div>
+          <div class="body-area">
+            <div class="h-title"></div>
+            <div class="sk-line l"></div>
+            <div class="sk-line m"></div>
+            <div class="card-row">
+              <div class="mini-card"><div class="k"></div><div class="v"></div></div>
+              <div class="mini-card"><div class="k"></div><div class="v"></div></div>
+            </div>
+            <div class="cta">
+              <b>Run your own tournaments?</b>
+              Apply to become an organizer
+              <div class="btn-fake">Become an organizer</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Player dashboard — only a personal account exists</div>
+      </div>
+
+      <!-- screen: switcher open -->
+      <div>
+        <div class="device">
+          <div class="browser-bar">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            <div class="url">mychesstour.com/my</div>
+          </div>
+          <div class="topnav">
+            <div class="logo">MY <span>Chess Tour</span></div>
+            <div class="nav-right">
+              <div class="switcher" style="border-color:var(--ink)">
+                <div class="avatar">H</div>
+                <div class="sw-text"><b>Hafiz</b><small>Personal account</small></div>
+                <div class="chev">▲</div>
+              </div>
+            </div>
+          </div>
+          <div class="dd-standalone-wrap">
+            <div class="dropdown">
+              <div class="dd-section-label">Account</div>
+              <div class="dd-item sel">
+                <div class="avatar">H</div>
+                <div class="txt"><b>Hafiz</b><small>Personal account</small></div>
+                <div class="check">✓</div>
+              </div>
+              <div class="dd-section-label">Organizations</div>
+              <div class="dd-item" style="color:var(--muted)">
+                <div class="txt"><small>You don't manage any organizations yet.</small></div>
+              </div>
+              <div class="dd-foot"><span class="plus">＋</span> Become an organizer</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Switcher open — no orgs, single path forward</div>
+      </div>
+
+    </div>
+    <p class="annot">Login routing: 0 orgs → land on player dashboard. The switcher still renders so the affordance is discoverable, but the only org action is "Become an organizer."</p>
+  </section>
+
+  <!-- ============ STATE 2 ============ -->
+  <section class="state" data-state="s2">
+    <p class="state-label">State 2 — User belongs to exactly one organization</p>
+    <div class="screens">
+
+      <!-- switcher open showing 1 org -->
+      <div>
+        <div class="device">
+          <div class="browser-bar">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            <div class="url">mychesstour.com/my</div>
+          </div>
+          <div class="topnav">
+            <div class="logo">MY <span>Chess Tour</span></div>
+            <div class="nav-right">
+              <div class="switcher" style="border-color:var(--ink)">
+                <div class="avatar">H</div>
+                <div class="sw-text"><b>Hafiz</b><small>Personal account</small></div>
+                <div class="chev">▲</div>
+              </div>
+            </div>
+          </div>
+          <div class="dd-standalone-wrap">
+            <div class="dropdown">
+              <div class="dd-section-label">Account</div>
+              <div class="dd-item sel">
+                <div class="avatar">H</div>
+                <div class="txt"><b>Hafiz</b><small>Personal account</small></div>
+                <div class="check">✓</div>
+              </div>
+              <div class="dd-section-label">Organizations</div>
+              <div class="dd-item">
+                <div class="avatar sq">KL</div>
+                <div class="txt"><b>KL Chess Club ✔</b><small>Switch to organizer view</small></div>
+                <div class="role-badge">Owner</div>
+              </div>
+              <div class="dd-foot"><span class="plus">＋</span> Create / apply for organization</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Switcher open — one org listed with role badge</div>
+      </div>
+
+      <!-- org dashboard after switching -->
+      <div>
+        <div class="device">
+          <div class="browser-bar">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            <div class="url">mychesstour.com/my/organizations/kl-chess/dashboard</div>
+          </div>
+          <div class="topnav">
+            <div class="logo">MY <span>Chess Tour</span></div>
+            <div class="nav-right">
+              <div class="switcher">
+                <div class="avatar sq">KL</div>
+                <div class="sw-text"><b>KL Chess Club ✔</b><small>Owner</small></div>
+                <div class="chev">▼</div>
+              </div>
+            </div>
+          </div>
+          <div class="dash">
+            <div class="sidebar">
+              <div class="side-head">Org</div>
+              <div class="side-item active"></div>
+              <div class="side-item"></div>
+              <div class="side-item"></div>
+              <div class="side-item"></div>
+              <div class="side-head">Manage</div>
+              <div class="side-item"></div>
+              <div class="side-item"></div>
+            </div>
+            <div class="body-area">
+              <div class="h-title"></div>
+              <div class="card-row">
+                <div class="mini-card"><div class="k"></div><div class="v"></div></div>
+                <div class="mini-card"><div class="k"></div><div class="v"></div></div>
+              </div>
+              <div class="sk-line l"></div>
+              <div class="sk-line m"></div>
+              <div class="sk-line s"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Organizer dashboard — org context carried in URL + sidebar</div>
+      </div>
+
+    </div>
+    <p class="annot">Login routing: exactly 1 org → you can route straight into that org's dashboard, or keep them on the player side and let them switch. Sidebar items and controls re-derive from this org's role (Owner here = full Manage section).</p>
+  </section>
+
+  <!-- ============ STATE 3 ============ -->
+  <section class="state" data-state="s3">
+    <p class="state-label">State 3 — User belongs to multiple organizations</p>
+    <div class="screens">
+
+      <!-- switcher open, multiple orgs + pending -->
+      <div>
+        <div class="device">
+          <div class="browser-bar">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            <div class="url">mychesstour.com/my/organizations/kl-chess/dashboard</div>
+          </div>
+          <div class="topnav">
+            <div class="logo">MY <span>Chess Tour</span></div>
+            <div class="nav-right">
+              <div class="switcher" style="border-color:var(--ink)">
+                <div class="avatar sq">KL</div>
+                <div class="sw-text"><b>KL Chess Club ✔</b><small>Owner</small></div>
+                <div class="chev">▲</div>
+              </div>
+            </div>
+          </div>
+          <div class="dd-standalone-wrap">
+            <div class="dropdown">
+              <div class="dd-section-label">Account</div>
+              <div class="dd-item">
+                <div class="avatar">H</div>
+                <div class="txt"><b>Hafiz</b><small>Personal account</small></div>
+              </div>
+              <div class="dd-section-label">Organizations</div>
+              <div class="dd-item sel">
+                <div class="avatar sq">KL</div>
+                <div class="txt"><b>KL Chess Club ✔</b><small>Active</small></div>
+                <div class="role-badge">Owner</div>
+              </div>
+              <div class="dd-item">
+                <div class="avatar sq">PJ</div>
+                <div class="txt"><b>PJ Open Series</b></div>
+                <div class="role-badge">Admin</div>
+              </div>
+              <div class="dd-item">
+                <div class="avatar sq">JB</div>
+                <div class="txt"><b>Johor Chess Assoc</b></div>
+                <div class="role-badge">Member</div>
+              </div>
+              <div class="dd-section-label">Pending invitations</div>
+              <div class="dd-item">
+                <div class="avatar sq" style="border-style:dashed">SB</div>
+                <div class="txt"><b>Sabah Blitz League</b><small>Accept / Decline</small></div>
+                <div class="pending-dot"></div>
+              </div>
+              <div class="dd-foot"><span class="plus">＋</span> Create / apply for organization</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Switcher open — orgs with per-org role badges + pending invites</div>
+      </div>
+
+      <!-- after switching to a member-role org -->
+      <div>
+        <div class="device">
+          <div class="browser-bar">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            <div class="url">mychesstour.com/my/organizations/johor-chess/dashboard</div>
+          </div>
+          <div class="topnav">
+            <div class="logo">MY <span>Chess Tour</span></div>
+            <div class="nav-right">
+              <div class="switcher">
+                <div class="avatar sq">JB</div>
+                <div class="sw-text"><b>Johor Chess Assoc</b><small>Member</small></div>
+                <div class="chev">▼</div>
+              </div>
+            </div>
+          </div>
+          <div class="dash">
+            <div class="sidebar">
+              <div class="side-head">Org</div>
+              <div class="side-item active"></div>
+              <div class="side-item"></div>
+              <div class="side-head">Manage</div>
+              <div class="side-item dim"></div>
+              <div class="side-item dim"></div>
+            </div>
+            <div class="body-area">
+              <div class="h-title"></div>
+              <div class="sk-line l"></div>
+              <div class="sk-line m"></div>
+              <span class="badge-note">Read-only · Member role</span>
+              <div class="card-row" style="margin-top:14px">
+                <div class="mini-card"><div class="k"></div><div class="v"></div></div>
+                <div class="mini-card"><div class="k"></div><div class="v"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">Same layout, different org — Manage items dimmed for Member role</div>
+      </div>
+
+    </div>
+    <p class="annot">Login routing: 2+ orgs → route to <code>last_active_org_id</code>. Switching swaps <code>[orgId]</code> in the path. Role badges are per-org (Owner / Admin / Member), and the dashboard UI re-derives permissions from the active org — note Manage is dimmed when the active org role is Member.</p>
+  </section>
+
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const states = document.querySelectorAll('.state');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.setAttribute('aria-selected', 'false'));
+      tab.setAttribute('aria-selected', 'true');
+      const id = tab.dataset.state;
+      states.forEach(s => s.classList.toggle('active', s.dataset.state === id));
+    });
+  });
+</script>
+</body>
+</html>

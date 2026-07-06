@@ -8,6 +8,8 @@ import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
 import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/auth/logout/_actions/logout";
 import { ThemeToggle } from "./ThemeToggle";
+import OrgSwitcher from "./OrgSwitcher";
+import { RoleBadge } from "@/lib/roles";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 
 const NAV_LINKS = [
@@ -26,6 +28,7 @@ export default function NavBar() {
   // kept live there) — no per-navigation fetch here.
   const authUser = useAuthStore((s) => s.user);
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
+  const organizations = useAuthStore((s) => s.organizations);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [, startSignOut] = useTransition();
@@ -114,6 +117,11 @@ export default function NavBar() {
 
             {authUser ? (
               <>
+                {/* Account & organization switcher — a distinct control from the
+                    avatar menu below (which handles Profile / Settings / Sign
+                    Out). Switching context is separate from account actions. */}
+                <OrgSwitcher />
+
                 {/* Avatar + dropdown */}
                 <div className="relative ml-2" ref={dropdownRef}>
                   <button
@@ -157,6 +165,9 @@ export default function NavBar() {
                         >
                           My Tournaments
                         </Link>
+                        {/* Distinct from the switcher: this lists the user's
+                            founded orgs + application/approval status, whereas
+                            the switcher only lists approved memberships. */}
                         <Link
                           href="/my/organizations/applications"
                           className="nav-dropdown-item"
@@ -290,6 +301,49 @@ export default function NavBar() {
               >
                 My Organizations
               </Link>
+
+              {/* Mobile equivalent of the desktop OrgSwitcher: the popover is
+                  desktop-oriented, so in the drawer the memberships render as a
+                  flat list of links. */}
+              <p className="font-cinzel text-text-muted mt-2 px-1 text-xs font-bold tracking-widest uppercase">
+                Organizations
+              </p>
+              {organizations.length === 0 ? (
+                <p className="font-lato text-text-muted px-1 text-sm">
+                  You don&apos;t manage any organizations yet.
+                </p>
+              ) : (
+                organizations.map((org) => {
+                  const href = `/my/organizations/${org.id}`;
+                  return (
+                    <Link
+                      key={org.id}
+                      href={href}
+                      onClick={() =>
+                        setDrawerState((current) => closeDrawer(current))
+                      }
+                      className={`nav-drawer-link flex items-center gap-2 ${pathname?.startsWith(href) ? "nav-drawer-link--active" : ""}`}
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        {org.name}
+                      </span>
+                      <RoleBadge role={org.role} className="shrink-0" />
+                    </Link>
+                  );
+                })
+              )}
+              <Link
+                href="/organizations"
+                onClick={() =>
+                  setDrawerState((current) => closeDrawer(current))
+                }
+                className="nav-drawer-link"
+              >
+                {organizations.length === 0
+                  ? "+ Become an organizer"
+                  : "+ Create / apply for organization"}
+              </Link>
+
               <Link
                 href="/settings"
                 onClick={() =>

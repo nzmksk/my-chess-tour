@@ -24,11 +24,35 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 const createClient = vi.mocked(supabaseServer.createClient);
 const mockAdmin = vi.mocked(supabaseAdmin);
 
-function mockAdminAvatarQuery(avatarData: { avatar_url?: string } | null) {
-  const maybeSingle = vi.fn().mockResolvedValue({ data: avatarData });
-  const eq = vi.fn().mockReturnValue({ maybeSingle });
-  const select = vi.fn().mockReturnValue({ eq });
-  mockAdmin.from.mockReturnValue({ select } as never);
+// getNavUser issues two admin reads: the users avatar lookup and the org
+// memberships query (getUserOrganizations). Route by table so both chains
+// resolve independently.
+function mockAdminNavQueries(
+  avatarData: { avatar_url?: string } | null,
+  orgRows: unknown[] = [],
+) {
+  const usersChain = {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: avatarData }),
+      }),
+    }),
+  };
+  // organization_memberships: select → eq → eq → is → order → { data }
+  const membershipsChain = {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          is: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: orgRows }),
+          }),
+        }),
+      }),
+    }),
+  };
+  mockAdmin.from.mockImplementation((table: string) =>
+    (table === "users" ? usersChain : membershipsChain) as never,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +91,7 @@ describe("getNavUser", () => {
       role: "authenticated",
     };
     createClient.mockResolvedValue(makeClient({ claims }) as never);
-    mockAdminAvatarQuery({ avatar_url: "https://example.com/avatar.png" });
+    mockAdminNavQueries({ avatar_url: "https://example.com/avatar.png" });
 
     const result = await getNavUser();
 
@@ -79,6 +103,7 @@ describe("getNavUser", () => {
         role: "authenticated",
       },
       avatarUrl: "https://example.com/avatar.png",
+      organizations: [],
     });
   });
 
@@ -90,11 +115,33 @@ describe("getNavUser", () => {
       role: "authenticated",
     };
     createClient.mockResolvedValue(makeClient({ claims }) as never);
-    mockAdminAvatarQuery(null);
+    mockAdminNavQueries(null);
 
     const result = await getNavUser();
 
     expect(result?.avatarUrl).toBeNull();
+  });
+
+  it("maps org memberships to the switcher shape", async () => {
+    const claims = {
+      sub: "u1",
+      email: "alice@example.com",
+      user_metadata: {},
+      role: "authenticated",
+    };
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+    mockAdminNavQueries(null, [
+      {
+        organizations: { id: "o1", name: "KL Chess Club", avatar_url: null },
+        roles: { name: "owner" },
+      },
+    ]);
+
+    const result = await getNavUser();
+
+    expect(result?.organizations).toEqual([
+      { id: "o1", name: "KL Chess Club", avatar_url: null, role: "owner" },
+    ]);
   });
 });
 

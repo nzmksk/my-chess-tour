@@ -74,6 +74,7 @@ export default async function RootLayout({
       })
     : null;
   const initialAvatar = nav?.avatarUrl ?? null;
+  const initialOrganizations = nav?.organizations ?? [];
 
   return (
     <html
@@ -87,7 +88,11 @@ export default async function RootLayout({
       </head>
       <body>
         <ThemeProvider>
-          <AuthProvider initialUser={initialUser} initialAvatar={initialAvatar}>
+          <AuthProvider
+            initialUser={initialUser}
+            initialAvatar={initialAvatar}
+            initialOrganizations={initialOrganizations}
+          >
             {children}
           </AuthProvider>
         </ThemeProvider>

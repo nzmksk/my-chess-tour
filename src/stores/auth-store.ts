@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { UserOrganization } from "@/lib/roles";
 
 export type AuthUser = {
   id: string;
@@ -11,8 +12,10 @@ export type AuthUser = {
 type AuthState = {
   user: AuthUser | null;
   avatarUrl: string | null;
+  organizations: UserOrganization[];
   setUser: (user: AuthUser | null) => void;
   setAvatar: (avatarUrl: string | null) => void;
+  setOrganizations: (organizations: UserOrganization[]) => void;
   reset: () => void;
 };
 
@@ -27,9 +30,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       avatarUrl: null,
+      organizations: [],
       setUser: (user) => set({ user }),
       setAvatar: (avatarUrl) => set({ avatarUrl }),
-      reset: () => set({ user: null, avatarUrl: null }),
+      setOrganizations: (organizations) => set({ organizations }),
+      reset: () => set({ user: null, avatarUrl: null, organizations: [] }),
     }),
     {
       name: "mct-auth",
