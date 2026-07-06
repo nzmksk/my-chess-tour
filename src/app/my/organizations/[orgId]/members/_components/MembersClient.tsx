@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { ROLE_CONFIG, getRoleConfig, type Role } from "@/lib/roles";
 
 interface Member {
   user_id: string;
@@ -18,27 +19,6 @@ interface Props {
   orgName: string;
   members: Member[];
   currentUserId: string;
-}
-
-type Role = "owner" | "admin" | "member";
-
-const ROLE_CONFIG: Record<Role, { label: string; className: string }> = {
-  owner: {
-    label: "Owner",
-    className: "bg-gold-ghost text-gold-bright border border-gold-dim",
-  },
-  admin: {
-    label: "Admin",
-    className: "bg-info-bg text-info border border-info-border",
-  },
-  member: {
-    label: "Member",
-    className: "bg-bg-raised text-text-secondary border border-border",
-  },
-};
-
-function getRoleConfig(role: string) {
-  return ROLE_CONFIG[role as Role] ?? ROLE_CONFIG.member;
 }
 
 function MemberCard({
