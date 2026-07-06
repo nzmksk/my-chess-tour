@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Check, ChevronsUpDown, LogOut, Plus, Settings } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/command";
 import { RoleBadge, getRoleConfig, type UserOrganization } from "@/lib/roles";
 import { useAuthStore } from "@/stores/auth-store";
+import { logout } from "@/app/auth/logout/_actions/logout";
 import { cn } from "@/lib/utils";
 
 /** First letters of an org name, for the fallback avatar when there's no image. */
@@ -78,6 +79,7 @@ export default function OrgSwitcher() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [, startSignOut] = useTransition();
 
   const user = useAuthStore((s) => s.user);
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
@@ -96,6 +98,14 @@ export default function OrgSwitcher() {
   const go = (href: string) => {
     setOpen(false);
     router.push(href);
+  };
+
+  // Sign out immediately (no confirmation) — mirrors the previous avatar menu.
+  const handleSignOut = () => {
+    setOpen(false);
+    startSignOut(() => {
+      logout();
+    });
   };
 
   const hasOrgs = organizations.length > 0;
@@ -153,7 +163,7 @@ export default function OrgSwitcher() {
             >
               <CommandItem
                 value="__personal_account"
-                onSelect={() => go("/my/tournaments")}
+                onSelect={() => go("/my")}
                 className="data-[selected=true]:bg-bg-raised gap-2"
               >
                 <Avatar
@@ -211,16 +221,34 @@ export default function OrgSwitcher() {
           </CommandList>
 
           <CommandSeparator className="bg-border" />
-          <button
-            type="button"
-            onClick={() => go("/organizations")}
-            className="border-border bg-bg-raised text-text-primary font-lato hover:text-gold-bright flex w-full cursor-pointer items-center gap-2 border-t px-3 py-2.5 text-left text-sm transition-colors"
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            {hasOrgs
-              ? "Create / apply for organization"
-              : "Become an organizer"}
-          </button>
+          <div className="bg-bg-raised flex flex-col">
+            <button
+              type="button"
+              onClick={() => go("/organizations")}
+              className="border-border text-text-primary font-lato hover:text-gold-bright flex w-full cursor-pointer items-center gap-2 border-t px-3 py-2.5 text-left text-sm transition-colors"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              {hasOrgs
+                ? "Create / apply for organization"
+                : "Become an organizer"}
+            </button>
+            <button
+              type="button"
+              onClick={() => go("/settings")}
+              className="border-border text-text-primary font-lato hover:text-gold-bright flex w-full cursor-pointer items-center gap-2 border-t px-3 py-2.5 text-left text-sm transition-colors"
+            >
+              <Settings className="h-4 w-4 shrink-0" />
+              Settings
+            </button>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="border-border text-danger font-lato hover:text-danger flex w-full cursor-pointer items-center gap-2 border-t px-3 py-2.5 text-left text-sm transition-colors"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              Sign Out
+            </button>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>

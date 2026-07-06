@@ -24,13 +24,11 @@ export default function NavBar() {
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerOpen = getIsDrawerOpen(drawerState, pathname ?? "");
 
-  // User + avatar come from the shared auth store (seeded by AuthProvider and
-  // kept live there) — no per-navigation fetch here.
+  // User + orgs come from the shared auth store (seeded by AuthProvider and
+  // kept live there) — no per-navigation fetch here. The avatar is read inside
+  // OrgSwitcher, which owns the desktop account control.
   const authUser = useAuthStore((s) => s.user);
-  const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const organizations = useAuthStore((s) => s.organizations);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const [, startSignOut] = useTransition();
 
   // Sign out immediately — no confirmation. The action clears the session and
@@ -40,28 +38,6 @@ export default function NavBar() {
       logout();
     });
   }
-
-  // Close dropdown on outside click or Escape
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setDropdownOpen(false);
-      }
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setDropdownOpen(false);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [dropdownOpen]);
 
   // Prevent body scroll when drawer is open
   useEffect(() => {
@@ -116,88 +92,11 @@ export default function NavBar() {
             <ThemeToggle />
 
             {authUser ? (
-              <>
-                {/* Account & organization switcher — a distinct control from the
-                    avatar menu below (which handles Profile / Settings / Sign
-                    Out). Switching context is separate from account actions. */}
-                <OrgSwitcher />
-
-                {/* Avatar + dropdown */}
-                <div className="relative ml-2" ref={dropdownRef}>
-                  <button
-                    className={`nav-avatar ${dropdownOpen ? "nav-avatar--open" : ""} ${avatarUrl ? "overflow-hidden" : ""}`}
-                    onClick={() => setDropdownOpen((v) => !v)}
-                    aria-label="Account menu"
-                    aria-expanded={dropdownOpen}
-                  >
-                    {avatarUrl ? (
-                      <Image
-                        src={avatarUrl}
-                        alt={`${authUser.fullName} avatar`}
-                        width={34}
-                        height={34}
-                        unoptimized
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      authUser.initials
-                    )}
-                  </button>
-
-                  {dropdownOpen && (
-                    <div className="nav-dropdown">
-                      <div className="nav-dropdown-user">
-                        <p className="nav-dropdown-name">{authUser.fullName}</p>
-                        <p className="nav-dropdown-email">{authUser.email}</p>
-                      </div>
-                      <div>
-                        <Link
-                          href="/profile"
-                          className="nav-dropdown-item"
-                          onClick={() => setDropdownOpen(false)}
-                        >
-                          My Profile
-                        </Link>
-                        <Link
-                          href="/my/tournaments"
-                          className="nav-dropdown-item"
-                          onClick={() => setDropdownOpen(false)}
-                        >
-                          My Tournaments
-                        </Link>
-                        {/* Distinct from the switcher: this lists the user's
-                            founded orgs + application/approval status, whereas
-                            the switcher only lists approved memberships. */}
-                        <Link
-                          href="/my/organizations/applications"
-                          className="nav-dropdown-item"
-                          onClick={() => setDropdownOpen(false)}
-                        >
-                          My Organizations
-                        </Link>
-                        <Link
-                          href="/settings"
-                          className="nav-dropdown-item"
-                          onClick={() => setDropdownOpen(false)}
-                        >
-                          Settings
-                        </Link>
-                      </div>
-                      <div className="nav-dropdown-divider" />
-                      <button
-                        type="button"
-                        className="nav-dropdown-item nav-dropdown-item--danger"
-                        onClick={() => {
-                          setDropdownOpen(false);
-                          handleSignOut();
-                        }}
-                      >
-                        Sign Out
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </>
+              // Account & organization switcher — the single authed control.
+              // It carries the personal account, org switching, and the account
+              // actions (Settings / Sign Out) that used to live in a separate
+              // avatar menu.
+              <OrgSwitcher />
             ) : (
               <>
                 <Link href="/auth/login" className="nav-btn-login">
@@ -284,22 +183,13 @@ export default function NavBar() {
                 My Profile
               </Link>
               <Link
-                href="/my/tournaments"
+                href="/my"
                 onClick={() =>
                   setDrawerState((current) => closeDrawer(current))
                 }
-                className={`nav-drawer-link ${pathname === "/my/tournaments" ? "nav-drawer-link--active" : ""}`}
+                className={`nav-drawer-link ${pathname === "/my" ? "nav-drawer-link--active" : ""}`}
               >
                 My Tournaments
-              </Link>
-              <Link
-                href="/my/organizations/applications"
-                onClick={() =>
-                  setDrawerState((current) => closeDrawer(current))
-                }
-                className={`nav-drawer-link ${pathname === "/my/organizations/applications" ? "nav-drawer-link--active" : ""}`}
-              >
-                My Organizations
               </Link>
 
               {/* Mobile equivalent of the desktop OrgSwitcher: the popover is

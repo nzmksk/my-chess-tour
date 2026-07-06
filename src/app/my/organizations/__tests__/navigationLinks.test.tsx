@@ -149,11 +149,12 @@ const PROGRAMMATIC_NAV = [
   `/my/organizations/${ORG_ID}`,
   // edit/page.tsx passes this redirectPath to WizardShell
   `/my/organizations/${ORG_ID}/tournaments/${TOURNAMENT_ID}`,
-  // OrgSwitcher (navbar) router.push targets: personal account, an org switch,
-  // and the "become an organizer / create org" footer CTA.
-  `/my/tournaments`,
+  // OrgSwitcher (navbar) router.push targets: personal account dashboard, an org
+  // switch, the "become an organizer / create org" CTA, and Settings.
+  `/my`,
   `/my/organizations/${ORG_ID}`,
   `/organizations`,
+  `/settings`,
 ];
 
 // ---------------------------------------------------------------------------
