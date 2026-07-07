@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import TournamentActions from "./TournamentActions";
 
 type TournamentStatus =
   | "draft"
@@ -28,6 +29,8 @@ interface Tournament {
   status: TournamentStatus;
   start_date: string;
   end_date: string;
+  registration_deadline: string | null;
+  registration_closed_at: string | null;
   venue: Venue;
   format: Format | null;
   max_participants: number;
@@ -56,6 +59,7 @@ interface Props {
   tournament: Tournament;
   stats: Stats;
   participants: Participant[];
+  cancellationPending: boolean;
 }
 
 const STATUS_CONFIG: Record<
@@ -145,6 +149,7 @@ export default function TournamentManageClient({
   tournament,
   stats,
   participants,
+  cancellationPending,
 }: Props) {
   const [search, setSearch] = useState("");
   const statusConfig = STATUS_CONFIG[tournament.status] ?? STATUS_CONFIG.draft;
@@ -335,6 +340,16 @@ export default function TournamentManageClient({
           </div>
         )}
       </div>
+
+      {/* Organizer actions: close registration / request cancellation */}
+      <TournamentActions
+        orgId={orgId}
+        tournamentId={tournament.id}
+        status={tournament.status}
+        registrationClosedAt={tournament.registration_closed_at}
+        registrationDeadline={tournament.registration_deadline}
+        cancellationPending={cancellationPending}
+      />
     </div>
   );
 }

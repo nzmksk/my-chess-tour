@@ -40,6 +40,7 @@ DROP VIEW IF EXISTS public.tournament_payout_summary CASCADE;
 --    triggers, indexes, and foreign keys.
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS public.audit_logs              CASCADE;
+DROP TABLE IF EXISTS public.tournament_cancellation_requests CASCADE;
 DROP TABLE IF EXISTS public.refunds                 CASCADE;
 DROP TABLE IF EXISTS public.payments                CASCADE;
 DROP TABLE IF EXISTS public.registrations           CASCADE;
@@ -102,7 +103,8 @@ WHERE table_schema = 'public'
   AND table_name IN (
     'roles','permissions','role_permissions','users','user_global_roles',
     'player_profiles','organizations','organization_memberships','tournaments',
-    'registrations','payments','refunds','audit_logs','waitlist'
+    'registrations','payments','refunds','tournament_cancellation_requests',
+    'audit_logs','waitlist'
   );
 
 SELECT 'app_enums' AS check, count(*)
