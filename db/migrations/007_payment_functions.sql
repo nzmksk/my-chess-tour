@@ -219,10 +219,6 @@ $$;
 --           its current attempt (a superseded/old attempt's failure is a no-op on
 --           the registration).
 -- =============================================
--- Dropped explicitly: adding p_payment_method changes the signature, so a bare
--- CREATE OR REPLACE would leave the old 3-arg version in place and make a 3-arg
--- call ambiguous ("function is not unique") when re-applying this file alone.
-DROP FUNCTION IF EXISTS settle_registration_payment(uuid, boolean, integer);
 
 CREATE OR REPLACE FUNCTION settle_registration_payment(
   p_payment_id     uuid,
