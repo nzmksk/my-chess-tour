@@ -188,8 +188,8 @@ DECLARE
     'The national governing body for chess in Malaysia, affiliated with FIDE.'
   ];
   org_emails  text[] := ARRAY[
-    'organizer1@mct-seed.local','organizer2@mct-seed.local','organizer3@mct-seed.local',
-    'organizer4@mct-seed.local','organizer5@mct-seed.local'
+    'organizer1@mct.com','organizer2@mct.com','organizer3@mct.com',
+    'organizer4@mct.com','organizer5@mct.com'
   ];
   org_first   text[] := ARRAY['Ahmad','Mohd','Wei','Raj','Siti'];
   org_last    text[] := ARRAY['Kamaruddin','Yusof','Ming','Krishnan','Rahman'];
@@ -255,7 +255,7 @@ BEGIN
     new_user_id,
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated',
-    'chip-review@gmail.com', pwd_hash,
+    'review@chip.com', pwd_hash,
     now(),
     '{"provider":"email","providers":["email"]}',
     json_build_object('first_name', 'CHIP', 'last_name', 'Review'),
@@ -270,14 +270,14 @@ BEGIN
     last_sign_in_at, created_at, updated_at
   ) VALUES (
     new_user_id::text, new_user_id,
-    jsonb_build_object('sub', new_user_id::text, 'email', 'chip-review@gmail.com',
+    jsonb_build_object('sub', new_user_id::text, 'email', 'review@chip.com',
                        'email_verified', true, 'phone_verified', false),
     'email', now(), now(), now()
   );
 
   -- Mark verified so the account is immediately login-ready.
   INSERT INTO public.users (id, email, first_name, last_name, is_verified, verified_at)
-  VALUES (new_user_id, 'chip-review@gmail.com', 'CHIP', 'Review', true, now())
+  VALUES (new_user_id, 'review@chip.com', 'CHIP', 'Review', true, now())
   ON CONFLICT (id) DO UPDATE SET
     is_verified = true,
     verified_at = now();
@@ -286,7 +286,7 @@ BEGIN
   INSERT INTO public.user_global_roles (user_id, role_id)
   VALUES (new_user_id, r_platform_admin_id);
 
-  RAISE NOTICE '  > 1 platform admin created (chip-review@gmail.com)';
+  RAISE NOTICE '  > 1 platform admin created (review@chip.com)';
 
   -- ===========================================================================
   -- 1. ORGANIZERS
@@ -377,7 +377,7 @@ BEGIN
       p_last  := indian_last [((i - 1) % array_length(indian_last,  1)) + 1];
     END IF;
 
-    p_email  := lower(p_first) || '.' || lower(p_last) || i || '@mct-seed.local';
+    p_email  := lower(p_first) || '.' || lower(p_last) || i || '@mct.com';
     p_state  := states[((i - 1) % array_length(states, 1)) + 1];
     p_gender := CASE WHEN i % 4 = 0 THEN 'female' ELSE 'male' END;
     -- Deterministic but varied ratings
