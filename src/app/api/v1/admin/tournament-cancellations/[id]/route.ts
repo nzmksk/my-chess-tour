@@ -79,9 +79,12 @@ interface MembershipRecipient {
   roles: { name: string } | null;
 }
 
-// Emails the organization members who can cancel tournaments about the outcome
-// of their cancellation request (approved or declined). Best-effort: any failure
-// to load members or send an email is logged but never fails the review.
+// Emails the organization about the outcome of their cancellation request
+// (approved or declined). Recipients are the owner/admin members who can cancel
+// tournaments, plus the organization's own contact email (organizations.email) —
+// deduplicated by address so a member who shares the org email isn't notified
+// twice. Best-effort: any failure to load recipients or send an email is logged
+// but never fails the review.
 async function notifyCancellationReviewers(
   organizationId: string,
   params: {
@@ -90,30 +93,53 @@ async function notifyCancellationReviewers(
     rejectionReason?: string;
   },
 ): Promise<void> {
-  const { data, error } = await supabaseAdmin
-    .from("organization_memberships")
-    .select("user:users(email, first_name), roles!inner(name)")
-    .eq("organization_id", organizationId);
+  const [membersRes, orgRes] = await Promise.all([
+    supabaseAdmin
+      .from("organization_memberships")
+      .select("user:users(email, first_name), roles!inner(name)")
+      .eq("organization_id", organizationId),
+    supabaseAdmin
+      .from("organizations")
+      .select("name, email")
+      .eq("id", organizationId)
+      .single(),
+  ]);
 
-  if (error) {
+  if (membersRes.error) {
     console.error(
       `Failed to load members for cancellation review (org ${organizationId}):`,
-      error,
+      membersRes.error,
     );
     return;
   }
 
-  const recipients = (data as unknown as MembershipRecipient[])
-    .filter((m) => m.roles && CANCEL_REVIEWER_ROLES.includes(m.roles.name))
-    .map((m) => m.user)
-    .filter((u): u is { email: string; first_name: string | null } =>
-      Boolean(u?.email),
-    );
+  // Deduplicate recipients by lowercased email. Owner/admin members are added
+  // first (keyed by their name); the org contact email is added only if no
+  // member already covers that address.
+  const recipients = new Map<string, { email: string; name: string }>();
+
+  for (const m of membersRes.data as unknown as MembershipRecipient[]) {
+    if (!m.roles || !CANCEL_REVIEWER_ROLES.includes(m.roles.name)) continue;
+    const email = m.user?.email;
+    if (!email) continue;
+    recipients.set(email.toLowerCase(), {
+      email,
+      name: m.user?.first_name ?? "there",
+    });
+  }
+
+  const org = orgRes.data as { name: string | null; email: string | null } | null;
+  if (org?.email && !recipients.has(org.email.toLowerCase())) {
+    recipients.set(org.email.toLowerCase(), {
+      email: org.email,
+      name: org.name ?? "there",
+    });
+  }
 
   const results = await Promise.allSettled(
-    recipients.map((u) =>
-      sendCancellationReviewEmail(u.email, {
-        recipientName: u.first_name ?? "there",
+    [...recipients.values()].map((r) =>
+      sendCancellationReviewEmail(r.email, {
+        recipientName: r.name,
         tournamentName: params.tournamentName,
         approved: params.approved,
         rejectionReason: params.rejectionReason,
@@ -124,7 +150,7 @@ async function notifyCancellationReviewers(
   const failed = results.filter((r) => r.status === "rejected").length;
   if (failed > 0) {
     console.error(
-      `Failed to send ${failed}/${recipients.length} cancellation review email(s) for org ${organizationId}`,
+      `Failed to send ${failed}/${recipients.size} cancellation review email(s) for org ${organizationId}`,
     );
   }
 }

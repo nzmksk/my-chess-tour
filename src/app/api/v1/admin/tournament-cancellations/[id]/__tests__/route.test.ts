@@ -9,6 +9,7 @@ const {
   mockTournamentBuilder,
   mockRegistrationsBuilder,
   mockMembershipsBuilder,
+  mockOrganizationsBuilder,
   mockFrom,
   mockGetClaims,
   mockRpc,
@@ -31,9 +32,11 @@ const {
   const mockTournamentBuilder = makeBuilder({ data: null, error: null });
   const mockRegistrationsBuilder = makeBuilder({ data: [], error: null });
   const mockMembershipsBuilder = makeBuilder({ data: [], error: null });
+  const mockOrganizationsBuilder = makeBuilder({ data: null, error: null });
   const mockFrom = vi.fn((table: string) => {
     if (table === "registrations") return mockRegistrationsBuilder;
     if (table === "organization_memberships") return mockMembershipsBuilder;
+    if (table === "organizations") return mockOrganizationsBuilder;
     return mockTournamentBuilder;
   });
   const mockGetClaims = vi.fn();
@@ -46,6 +49,7 @@ const {
     mockTournamentBuilder,
     mockRegistrationsBuilder,
     mockMembershipsBuilder,
+    mockOrganizationsBuilder,
     mockFrom,
     mockGetClaims,
     mockRpc,
@@ -157,6 +161,10 @@ beforeEach(() => {
         roles: { name: "member" },
       },
     ],
+    error: null,
+  };
+  mockOrganizationsBuilder.result = {
+    data: { name: "KL Chess Club", email: "contact@klchess.org" },
     error: null,
   };
   mockSendCancellationEmail.mockResolvedValue(undefined);
@@ -335,7 +343,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       "organization_id",
       ORG_ID,
     );
-    expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(3);
     expect(mockSendReviewEmail).toHaveBeenCalledWith(
       "owner@example.com",
       expect.objectContaining({
@@ -354,6 +362,52 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     );
   });
 
+  it("also emails the organization's own contact email", async () => {
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith("organizations");
+    expect(mockOrganizationsBuilder.eq).toHaveBeenCalledWith("id", ORG_ID);
+    expect(mockSendReviewEmail).toHaveBeenCalledWith(
+      "contact@klchess.org",
+      expect.objectContaining({
+        recipientName: "KL Chess Club",
+        tournamentName: "KL Open 2026",
+        approved: true,
+      }),
+    );
+  });
+
+  it("does not duplicate when the org email matches a member's email", async () => {
+    mockOrganizationsBuilder.result = {
+      data: { name: "KL Chess Club", email: "OWNER@example.com" },
+      error: null,
+    };
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    // owner + admin only — the org email collides with the owner (case-insensitively).
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendReviewEmail).not.toHaveBeenCalledWith(
+      "OWNER@example.com",
+      expect.anything(),
+    );
+  });
+
+  it("still notifies members when the org has no contact email", async () => {
+    mockOrganizationsBuilder.result = {
+      data: { name: "KL Chess Club", email: null },
+      error: null,
+    };
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
+  });
+
   it("emails owner/admin members the rejection outcome with the reason", async () => {
     mockAdminRpc.mockResolvedValue({
       data: { id: REQ_ID, tournament_id: TOUR_ID, status: "rejected" },
@@ -364,13 +418,20 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       { params: Promise.resolve({ id: REQ_ID }) },
     );
 
-    expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(3);
     expect(mockSendReviewEmail).toHaveBeenCalledWith(
       "owner@example.com",
       expect.objectContaining({
         approved: false,
         rejectionReason: "Event is proceeding",
         tournamentName: "KL Open 2026",
+      }),
+    );
+    expect(mockSendReviewEmail).toHaveBeenCalledWith(
+      "contact@klchess.org",
+      expect.objectContaining({
+        approved: false,
+        rejectionReason: "Event is proceeding",
       }),
     );
   });
@@ -391,9 +452,14 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       params: Promise.resolve({ id: REQ_ID }),
     });
 
-    expect(mockSendReviewEmail).toHaveBeenCalledTimes(1);
+    // owner (valid member) + org contact email.
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
     expect(mockSendReviewEmail).toHaveBeenCalledWith(
       "owner@example.com",
+      expect.anything(),
+    );
+    expect(mockSendReviewEmail).toHaveBeenCalledWith(
+      "contact@klchess.org",
       expect.anything(),
     );
   });
