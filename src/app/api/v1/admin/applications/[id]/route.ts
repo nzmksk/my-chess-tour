@@ -73,7 +73,7 @@ export async function GET(
        approval_status, rejection_reason, created_at, reviewed_at,
        applicant:users!created_by(
          id, first_name, last_name, email, created_at,
-         player_profiles(fide_id, fide_rating, title)
+         player_profiles!user_id(fide_id, fide_rating, title)
        )`,
     )
     .eq("id", id)
