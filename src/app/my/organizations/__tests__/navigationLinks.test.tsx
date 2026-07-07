@@ -67,6 +67,8 @@ const tournament = {
   status: "draft" as const,
   start_date: "2026-08-01",
   end_date: "2026-08-02",
+  registration_deadline: "2026-07-25T00:00:00Z",
+  registration_closed_at: null,
   venue: { name: "City Hall", state: "Selangor", address: "1 Main St" },
   format: null,
   max_participants: 16,
@@ -119,6 +121,7 @@ const CASES: { name: string; markup: () => string }[] = [
           tournament={tournament}
           stats={{ total: 0, confirmed: 0, pending: 0 }}
           participants={[]}
+          cancellationPending={false}
         />,
       ),
   },
