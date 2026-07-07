@@ -346,6 +346,8 @@ export default function TournamentManageClient({
         orgId={orgId}
         tournamentId={tournament.id}
         status={tournament.status}
+        startDate={tournament.start_date}
+        endDate={tournament.end_date}
         registrationClosedAt={tournament.registration_closed_at}
         registrationDeadline={tournament.registration_deadline}
         cancellationPending={cancellationPending}

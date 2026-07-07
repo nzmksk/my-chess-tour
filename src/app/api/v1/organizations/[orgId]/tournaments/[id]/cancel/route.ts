@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { getTournamentDateState } from "@/app/tournaments/utils";
 import { authorizeTournamentManager } from "../_lib/authorize";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -45,7 +46,7 @@ export async function POST(
 
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
-    .select("id, status")
+    .select("id, status, start_date, end_date")
     .eq("id", id)
     .eq("organization_id", orgId)
     .single();
@@ -69,6 +70,24 @@ export async function POST(
         error: {
           code: "CONFLICT",
           message: "Only published tournaments can be cancelled",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  // "ongoing"/"completed" are date-derived, not stored on the status column — an
+  // in-progress or past tournament is still `published`. Cancellation only makes
+  // sense before it starts, so reject anything that isn't still upcoming.
+  if (
+    getTournamentDateState(tournament.start_date, tournament.end_date) !==
+    "upcoming"
+  ) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message: "Ongoing or completed tournaments cannot be cancelled",
         },
       },
       { status: 409 },

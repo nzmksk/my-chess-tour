@@ -113,12 +113,23 @@ function setThen(builder: Record<string, unknown>, data: unknown, error: unknown
 // Tests
 // ---------------------------------------------------------------------------
 
+// Fixed "today" so date-derived state (upcoming/ongoing/completed) is
+// deterministic. In Asia/Kuala_Lumpur (UTC+8) this instant is 2026-06-15.
+const TODAY = new Date("2026-06-15T00:00:00Z");
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(TODAY);
   setUser();
   setThen(mockOrgBuilder, APPROVED_ORG);
   setThen(mockMembershipBuilder, { roles: { name: "admin" } });
-  setThen(mockTournamentFetchBuilder, { id: TOUR_ID, status: "published" });
+  setThen(mockTournamentFetchBuilder, {
+    id: TOUR_ID,
+    status: "published",
+    start_date: "2026-08-01",
+    end_date: "2026-08-03",
+  });
   setThen(mockCancellationInsertBuilder, {
     id: "dddddddd-0000-0000-0000-000000000001",
     tournament_id: TOUR_ID,
@@ -129,6 +140,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -170,6 +182,36 @@ describe("POST .../tournaments/[id]/cancel", () => {
       params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
     });
     expect(res.status).toBe(409);
+  });
+
+  it("returns 409 when the tournament is already ongoing", async () => {
+    // start ≤ today ≤ end (today is 2026-06-15)
+    setThen(mockTournamentFetchBuilder, {
+      id: TOUR_ID,
+      status: "published",
+      start_date: "2026-06-14",
+      end_date: "2026-06-16",
+    });
+    const res = await POST(makeRequest({ reason: "x" }), {
+      params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+    });
+    expect(res.status).toBe(409);
+    expect(mockCancellationInsertBuilder.insert).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when the tournament has completed", async () => {
+    // end < today (today is 2026-06-15)
+    setThen(mockTournamentFetchBuilder, {
+      id: TOUR_ID,
+      status: "published",
+      start_date: "2026-06-01",
+      end_date: "2026-06-03",
+    });
+    const res = await POST(makeRequest({ reason: "x" }), {
+      params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+    });
+    expect(res.status).toBe(409);
+    expect(mockCancellationInsertBuilder.insert).not.toHaveBeenCalled();
   });
 
   it("returns 409 when a pending request already exists (unique violation)", async () => {

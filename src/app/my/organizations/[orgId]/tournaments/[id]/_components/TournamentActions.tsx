@@ -2,11 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { getTournamentDateState } from "@/app/tournaments/utils";
 
 interface Props {
   orgId: string;
   tournamentId: string;
   status: string;
+  startDate: string;
+  endDate: string;
   registrationClosedAt: string | null;
   registrationDeadline: string | null;
   cancellationPending: boolean;
@@ -31,6 +34,8 @@ export default function TournamentActions(props: Props) {
 function PublishedActions({
   orgId,
   tournamentId,
+  startDate,
+  endDate,
   registrationClosedAt,
   registrationDeadline,
   cancellationPending,
@@ -45,6 +50,11 @@ function PublishedActions({
   const deadlinePassed =
     !!registrationDeadline && new Date(registrationDeadline) < new Date();
   const registrationClosed = !!registrationClosedAt || deadlinePassed;
+
+  // Cancellation only makes sense before a tournament starts. Once it's ongoing
+  // or completed (both still `published` in the DB — those states are purely
+  // date-derived), hide the action. The server enforces the same rule.
+  const cancellable = getTournamentDateState(startDate, endDate) === "upcoming";
 
   const base = `/api/v1/organizations/${orgId}/tournaments/${tournamentId}`;
 
@@ -163,11 +173,13 @@ function PublishedActions({
             <p className="font-lato text-text-muted mt-1 text-sm">
               {cancellationPending
                 ? "A cancellation request has been submitted and is awaiting platform-admin approval."
-                : "Request to cancel this tournament. A platform admin must approve it; once approved the tournament is cancelled and refunds are initiated for registered players."}
+                : !cancellable
+                  ? "This tournament has already started or finished and can no longer be cancelled."
+                  : "Request to cancel this tournament. A platform admin must approve it; once approved the tournament is cancelled and refunds are initiated for registered players."}
             </p>
           </div>
 
-          {!cancellationPending && !showCancelForm && (
+          {!cancellationPending && !showCancelForm && cancellable && (
             <button
               type="button"
               onClick={() => {
