@@ -34,7 +34,7 @@ export default async function TournamentManagePage({
     notFound();
   }
 
-  const { tournament, stats, participants } = result.data;
+  const { tournament, stats, participants, cancellationPending } = result.data;
 
   return (
     <div className="bg-bg-base min-h-screen">
@@ -44,6 +44,7 @@ export default async function TournamentManagePage({
         tournament={tournament}
         stats={stats}
         participants={participants}
+        cancellationPending={cancellationPending}
       />
     </div>
   );

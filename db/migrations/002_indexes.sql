@@ -23,6 +23,14 @@ CREATE UNIQUE INDEX tournaments_slug_key ON tournaments (slug);
 CREATE INDEX idx_registrations_user ON registrations (user_id);
 CREATE INDEX idx_registrations_tournament_status ON registrations (tournament_id, status);
 
+-- Tournament cancellation requests
+-- At most one live (pending) request per tournament; a rejected request may be
+-- re-filed. The API relies on this unique violation (23505) to reject duplicates.
+CREATE UNIQUE INDEX uniq_pending_cancellation_per_tournament
+  ON tournament_cancellation_requests (tournament_id)
+  WHERE status = 'pending';
+CREATE INDEX idx_cancellation_requests_status ON tournament_cancellation_requests (status, created_at);
+
 -- Audit logs
 CREATE INDEX idx_audit_logs_table_record ON audit_logs (table_name, record_id);
 CREATE INDEX idx_audit_logs_org ON audit_logs (organization_id) WHERE organization_id IS NOT NULL;

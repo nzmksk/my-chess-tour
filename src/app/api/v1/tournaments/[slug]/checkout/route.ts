@@ -63,7 +63,7 @@ export async function POST(
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, name, entry_fees, max_participants, registration_deadline, start_date, restrictions, format, is_fide_rated, is_mcf_rated",
+      "id, name, entry_fees, max_participants, registration_deadline, registration_closed_at, start_date, restrictions, format, is_fide_rated, is_mcf_rated",
     )
     .eq("slug", slug)
     .eq("status", "published")
@@ -92,6 +92,18 @@ export async function POST(
   // and the event, or registers in a different calendar year, is judged by the
   // event date, not their registration-day age.
   const startDate = new Date(tournament.start_date);
+
+  if (tournament.registration_closed_at) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "REGISTRATION_CLOSED",
+          message: "Registration has been closed by the organizer",
+        },
+      },
+      { status: 422 },
+    );
+  }
 
   if (new Date(tournament.registration_deadline) < now) {
     return NextResponse.json(

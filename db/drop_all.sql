@@ -2,8 +2,9 @@
 -- DROP ALL — full teardown of the MY Chess Tour schema
 -- Reverses migrations 001–007 so you can re-apply them from scratch.
 --
--- Scope: drops everything this app owns in `public`, the avatars storage bucket
--- and its policies, the auth trigger this app adds to auth.users, and the seed
+-- Scope: drops everything this app owns in `public`, the avatars and
+-- oku-documents storage buckets and their policies, the auth trigger this app
+-- adds to auth.users, and the seed
 -- accounts. It does NOT touch Supabase-managed schemas (auth/storage) beyond
 -- those app-owned objects, and does NOT drop the `public` schema itself (so
 -- role grants / extensions stay intact).
@@ -15,14 +16,17 @@
 -- -----------------------------------------------------------------------------
 -- 1. Storage (migration 005): policies, objects, bucket
 -- -----------------------------------------------------------------------------
+-- avatars bucket (public)
 DROP POLICY IF EXISTS "Avatars are publicly readable" ON storage.objects;
 DROP POLICY IF EXISTS "Users can manage own avatar"    ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete own avatar"    ON storage.objects;
 DROP POLICY IF EXISTS "Org managers can manage org avatar" ON storage.objects;
 DROP POLICY IF EXISTS "Org managers can delete org avatar" ON storage.objects;
 
-DELETE FROM storage.objects WHERE bucket_id = 'avatars';
-DELETE FROM storage.buckets WHERE id = 'avatars';
+-- oku-documents bucket (private)
+DROP POLICY IF EXISTS "Users can upload own OKU document"     ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own OKU document"     ON storage.objects;
+DROP POLICY IF EXISTS "OKU documents readable by owner or admin" ON storage.objects;
 
 -- -----------------------------------------------------------------------------
 -- 2. Auth trigger this app adds to auth.users (migration 003)
@@ -40,6 +44,7 @@ DROP VIEW IF EXISTS public.tournament_payout_summary CASCADE;
 --    triggers, indexes, and foreign keys.
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS public.audit_logs              CASCADE;
+DROP TABLE IF EXISTS public.tournament_cancellation_requests CASCADE;
 DROP TABLE IF EXISTS public.refunds                 CASCADE;
 DROP TABLE IF EXISTS public.payments                CASCADE;
 DROP TABLE IF EXISTS public.registrations           CASCADE;
@@ -78,6 +83,7 @@ END $$;
 DROP TYPE IF EXISTS public.role_scope           CASCADE;
 DROP TYPE IF EXISTS public.gender               CASCADE;
 DROP TYPE IF EXISTS public.chess_title          CASCADE;
+DROP TYPE IF EXISTS public.oku_status           CASCADE;
 DROP TYPE IF EXISTS public.approval_status      CASCADE;
 DROP TYPE IF EXISTS public.tournament_status    CASCADE;
 DROP TYPE IF EXISTS public.registration_status  CASCADE;
@@ -90,8 +96,8 @@ DROP TYPE IF EXISTS public.refund_status        CASCADE;
 --    auth.identities. Scoped to seed/admin emails only.
 -- -----------------------------------------------------------------------------
 DELETE FROM auth.users
-WHERE email LIKE '%@mct-seed.local'
-   OR email = 'chip-review@gmail.com';
+WHERE email LIKE '%@mct.com'
+   OR email = 'review@chip.com';
 
 -- -----------------------------------------------------------------------------
 -- Verification (all should return 0)
@@ -102,7 +108,8 @@ WHERE table_schema = 'public'
   AND table_name IN (
     'roles','permissions','role_permissions','users','user_global_roles',
     'player_profiles','organizations','organization_memberships','tournaments',
-    'registrations','payments','refunds','audit_logs','waitlist'
+    'registrations','payments','refunds','tournament_cancellation_requests',
+    'audit_logs','waitlist'
   );
 
 SELECT 'app_enums' AS check, count(*)
@@ -110,8 +117,9 @@ FROM pg_type t
 JOIN pg_namespace n ON n.oid = t.typnamespace
 WHERE n.nspname = 'public'
   AND t.typname IN (
-    'role_scope','gender','chess_title','approval_status','tournament_status',
-    'registration_status','payment_type','payment_status','refund_status'
+    'role_scope','gender','chess_title','oku_status','approval_status',
+    'tournament_status','registration_status','payment_type','payment_status',
+    'refund_status'
   );
 
 SELECT 'public_functions' AS check, count(*)
@@ -120,4 +128,4 @@ WHERE n.nspname = 'public';
 
 SELECT 'seed_auth_users' AS check, count(*)
 FROM auth.users
-WHERE email LIKE '%@mct-seed.local' OR email = 'chip-review@gmail.com';
+WHERE email LIKE '%@mct.com' OR email = 'review@chip.com';

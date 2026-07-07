@@ -25,6 +25,9 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON organizations
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournaments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournament_cancellation_requests
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- =============================================
 -- AUTH SIGNUP TRIGGER
 -- Creates user + player_profile on auth signup.
@@ -51,8 +54,6 @@ EXCEPTION
       USING ERRCODE = 'P0001';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -205,6 +206,9 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournaments
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON registrations
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancellation_requests
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
 -- =============================================
 -- TOURNAMENT CAPACITY ENFORCEMENT
 -- Prevents over-registration via a row-level lock. A pending_payment seat is
@@ -347,3 +351,64 @@ BEGIN
 END;
 $$;
 
+-- =============================================
+-- REVIEW TOURNAMENT CANCELLATION
+-- Platform admin approves/rejects an organizer's request to cancel a published
+-- tournament. Approve → the request is marked 'approved' AND the tournament is
+-- flipped to 'cancelled' atomically. Reject → the request is marked 'rejected'
+-- with a reason and the tournament stays published. Player refunds are initiated
+-- separately (wired up later); this function only moves the tournament state.
+-- =============================================
+CREATE OR REPLACE FUNCTION review_tournament_cancellation(
+  p_request_id        uuid,
+  p_reviewer_id       uuid,
+  p_action            text,
+  p_rejection_reason  text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_request      tournament_cancellation_requests;
+  v_new_status   approval_status;
+  v_reviewed_at  timestamptz := now();
+BEGIN
+  -- Lock the request row so concurrent reviews serialize.
+  SELECT * INTO v_request
+    FROM tournament_cancellation_requests
+    WHERE id = p_request_id
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'cancellation request % not found', p_request_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_request.status <> 'pending' THEN
+    RAISE EXCEPTION 'cancellation request % already reviewed', p_request_id USING ERRCODE = 'P0001';
+  END IF;
+
+  v_new_status := CASE p_action WHEN 'approve' THEN 'approved' ELSE 'rejected' END;
+
+  UPDATE tournament_cancellation_requests
+    SET status           = v_new_status,
+        reviewed_by      = p_reviewer_id,
+        reviewed_at      = v_reviewed_at,
+        rejection_reason = CASE WHEN p_action = 'reject' THEN p_rejection_reason ELSE NULL END
+    WHERE id = p_request_id;
+
+  IF p_action = 'approve' THEN
+    UPDATE tournaments
+      SET status = 'cancelled'
+      WHERE id = v_request.tournament_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'id', v_request.id,
+    'tournament_id', v_request.tournament_id,
+    'status', v_new_status,
+    'reviewed_at', v_reviewed_at
+  );
+END;
+$$;

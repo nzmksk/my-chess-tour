@@ -27,6 +27,7 @@ interface TournamentManageData {
     start_date: string;
     end_date: string;
     registration_deadline: string | null;
+    registration_closed_at: string | null;
     venue: { name: string; state: string; address?: string | null };
     format: { type?: string; system?: string; rounds?: number } | null;
     time_control: unknown;
@@ -39,6 +40,8 @@ interface TournamentManageData {
   };
   stats: { total: number; confirmed: number; pending: number };
   participants: ManageParticipant[];
+  // A cancellation request awaiting platform-admin review, if one is open.
+  cancellationPending: boolean;
 }
 
 export type TournamentManageResult =
@@ -159,7 +162,7 @@ export const getTournamentManageData = cache(
     const { data: tournament, error: tErr } = await supabaseAdmin
       .from("tournaments")
       .select(
-        "id, name, description, status, start_date, end_date, registration_deadline, venue_name, venue_state, venue_address, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
+        "id, name, description, status, start_date, end_date, registration_deadline, registration_closed_at, venue_name, venue_state, venue_address, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
       )
       .eq("id", id)
       .eq("organization_id", orgId)
@@ -289,6 +292,14 @@ export const getTournamentManageData = cache(
       (r) => r.status === "pending_payment",
     ).length;
 
+    // Is there a cancellation request awaiting admin review? Drives the manage
+    // page's "cancellation pending" banner (and hides the cancel action).
+    const { count: pendingCancellationCount } = await supabaseAdmin
+      .from("tournament_cancellation_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("tournament_id", id)
+      .eq("status", "pending");
+
     return {
       ok: true,
       data: {
@@ -300,6 +311,7 @@ export const getTournamentManageData = cache(
           start_date: tournament.start_date,
           end_date: tournament.end_date,
           registration_deadline: tournament.registration_deadline,
+          registration_closed_at: tournament.registration_closed_at ?? null,
           venue: {
             name: tournament.venue_name,
             state: tournament.venue_state,
@@ -316,6 +328,7 @@ export const getTournamentManageData = cache(
         },
         stats: { total, confirmed, pending },
         participants,
+        cancellationPending: (pendingCancellationCount ?? 0) > 0,
       },
     };
   },

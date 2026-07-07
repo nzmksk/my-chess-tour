@@ -113,3 +113,20 @@ export function getTodayInTimeZone(
     day: "2-digit",
   }).format(now);
 }
+
+export type TournamentDateState = "upcoming" | "ongoing" | "completed";
+
+// Derives a tournament's temporal state from its calendar dates. The status
+// column only tracks draft/published/cancelled; ongoing/completed are never
+// stored — they're purely date-derived. `start_date`/`end_date` are Postgres
+// `date` columns ("YYYY-MM-DD"), so lexicographic string comparison against
+// `today` is chronological and timezone-safe.
+export function getTournamentDateState(
+  startDate: string,
+  endDate: string,
+  today: string = getTodayInTimeZone(),
+): TournamentDateState {
+  if (startDate > today) return "upcoming";
+  if (endDate >= today) return "ongoing";
+  return "completed";
+}

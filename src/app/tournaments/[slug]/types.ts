@@ -77,6 +77,7 @@ export interface TournamentDetail {
   start_date: string;
   end_date: string;
   registration_deadline: string;
+  registration_closed_at?: string | null;
   format: TournamentFormat;
   time_control?: TimeControl;
   is_fide_rated: boolean;

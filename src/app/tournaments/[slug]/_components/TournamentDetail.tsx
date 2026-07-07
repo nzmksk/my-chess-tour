@@ -91,6 +91,8 @@ export default function TournamentDetail({
     t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
   const minFee = getMinFeeCents(t.entry_fees);
   const isDeadlinePassed = new Date(t.registration_deadline) < new Date();
+  // The organizer may have closed registration early, before the deadline.
+  const isRegistrationClosed = isDeadlinePassed || !!t.registration_closed_at;
   const lowestFeeEntry =
     t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
   const tournamentStarted = new Date(t.start_date + "T00:00:00") <= new Date();
@@ -366,7 +368,7 @@ export default function TournamentDetail({
             >
               Registered
             </button>
-          ) : isDeadlinePassed ? (
+          ) : isRegistrationClosed ? (
             <button
               className="btn-primary w-full rounded-md opacity-50"
               disabled
@@ -413,7 +415,9 @@ export default function TournamentDetail({
             </p>
             {/* Deadline */}
             <p className="font-lato text-text-muted text-sm">
-              ⏰ Registration closes {formatDeadline(t.registration_deadline)}
+              {t.registration_closed_at
+                ? "⏰ Registration has been closed by the organizer"
+                : `⏰ Registration closes ${formatDeadline(t.registration_deadline)}`}
             </p>
           </div>
         </div>

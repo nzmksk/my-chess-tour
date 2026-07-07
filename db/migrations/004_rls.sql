@@ -10,6 +10,7 @@ ALTER TABLE player_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournaments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_cancellation_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
@@ -257,6 +258,36 @@ USING (
 
 CREATE POLICY "Platform admins full access to refunds"
 ON refunds FOR ALL
+USING (has_global_permission(auth.uid(), 'platform.manage'));
+
+-- =============================================
+-- TOURNAMENT CANCELLATION REQUESTS
+-- Org members with tournament.delete (owner) can file and view their org's
+-- requests; platform admins review them. Writes in the app go through the
+-- service-role client (bypasses RLS), so these are defense-in-depth.
+-- =============================================
+CREATE POLICY "Org members can file cancellation requests"
+ON tournament_cancellation_requests FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM tournaments t
+    WHERE t.id = tournament_cancellation_requests.tournament_id
+      AND has_org_permission(auth.uid(), t.organization_id, 'tournament.delete')
+  )
+);
+
+CREATE POLICY "Org members can view own cancellation requests"
+ON tournament_cancellation_requests FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM tournaments t
+    WHERE t.id = tournament_cancellation_requests.tournament_id
+      AND has_org_permission(auth.uid(), t.organization_id, 'tournament.view')
+  )
+);
+
+CREATE POLICY "Platform admins full access to cancellation requests"
+ON tournament_cancellation_requests FOR ALL
 USING (has_global_permission(auth.uid(), 'platform.manage'));
 
 -- =============================================

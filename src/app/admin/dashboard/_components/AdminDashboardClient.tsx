@@ -293,6 +293,12 @@ export default function AdminDashboardClient({ data }: Props) {
         >
           OKU verifications →
         </Link>
+        <Link
+          href="/admin/cancellations"
+          className="card hover:border-gold-dim font-lato text-text-primary flex-1 rounded-md px-4 py-3 text-sm font-semibold transition-colors"
+        >
+          Tournament cancellations →
+        </Link>
       </div>
 
       {/* Pending org applications */}
