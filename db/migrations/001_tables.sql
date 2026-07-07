@@ -170,6 +170,7 @@ CREATE TABLE tournaments (
   status                      tournament_status NOT NULL DEFAULT 'draft',
   published_by                uuid REFERENCES users(id) ON DELETE SET NULL,
   published_at                timestamptz,
+  registration_closed_at      timestamptz,                        -- set when the organizer manually closes registration early (before the deadline). Irreversible: registration cannot be re-opened.
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now(),
 
@@ -183,6 +184,30 @@ CREATE TABLE tournaments (
     CHECK (organizer_commission_pct BETWEEN 0 AND 10),
   CONSTRAINT chk_published_at
     CHECK (published_at IS NULL OR (published_at <= registration_deadline AND published_at <= start_date::timestamptz))
+);
+
+-- =============================================
+-- TOURNAMENT CANCELLATION REQUESTS
+-- Approval workflow for cancelling a PUBLISHED tournament.
+-- An organizer files a request; the tournament stays 'published' until a
+-- platform admin approves it, at which point review_tournament_cancellation()
+-- flips tournaments.status to 'cancelled'. Refunds to registered players are
+-- initiated separately (wired up later). Reuses the shared approval_status enum.
+-- =============================================
+CREATE TABLE tournament_cancellation_requests (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id         uuid NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  requested_by          uuid REFERENCES users(id) ON DELETE SET NULL,
+  reason                text NOT NULL,                          -- organizer's reason for cancelling
+  status                approval_status NOT NULL DEFAULT 'pending',
+  reviewed_by           uuid REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at           timestamptz,
+  rejection_reason      text,                                   -- admin's reason when the request is rejected
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_cancellation_reviewed_at
+    CHECK (reviewed_at IS NULL OR reviewed_at >= created_at)
 );
 
 -- =============================================

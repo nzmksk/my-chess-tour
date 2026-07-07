@@ -23,6 +23,7 @@ interface TournamentRow {
   start_date: string;
   end_date: string;
   registration_deadline: string;
+  registration_closed_at: string | null;
   format: unknown;
   time_control: unknown;
   is_fide_rated: boolean;
@@ -49,8 +50,8 @@ export async function GET(
     .from("tournaments")
     .select(
       `id, slug, name, description, venue_name, venue_state, venue_address,
-       start_date, end_date, registration_deadline, format,
-       time_control, is_fide_rated, is_mcf_rated, entry_fees, prizes,
+       start_date, end_date, registration_deadline, registration_closed_at,
+       format, time_control, is_fide_rated, is_mcf_rated, entry_fees, prizes,
        restrictions, max_participants, status, published_at, updated_at,
        organizations(id, name, description, avatar_url, links, email, phone)`,
     )
@@ -95,6 +96,7 @@ export async function GET(
     start_date: t.start_date,
     end_date: t.end_date,
     registration_deadline: t.registration_deadline,
+    registration_closed_at: t.registration_closed_at,
     format: t.format,
     time_control: t.time_control,
     is_fide_rated: t.is_fide_rated,

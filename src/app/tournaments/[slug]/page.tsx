@@ -230,8 +230,11 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
 
   const now = new Date();
   // Registration always closes on or before the tournament starts, so a closed
-  // deadline already covers the "tournament has started" case.
-  const registrationClosed = new Date(tournament.registration_deadline) <= now;
+  // deadline already covers the "tournament has started" case. An organizer can
+  // also close registration early (registration_closed_at), which counts too.
+  const registrationClosed =
+    !!tournament.registration_closed_at ||
+    new Date(tournament.registration_deadline) <= now;
   const isAtCapacity =
     tournament.max_participants > 0 &&
     tournament.current_participants >= tournament.max_participants;
