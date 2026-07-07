@@ -8,11 +8,13 @@ import { NextRequest } from "next/server";
 const {
   mockTournamentBuilder,
   mockRegistrationsBuilder,
+  mockMembershipsBuilder,
   mockFrom,
   mockGetClaims,
   mockRpc,
   mockAdminRpc,
   mockSendCancellationEmail,
+  mockSendReviewEmail,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
     const b: Record<string, unknown> = { result: finalResult };
@@ -28,22 +30,28 @@ const {
 
   const mockTournamentBuilder = makeBuilder({ data: null, error: null });
   const mockRegistrationsBuilder = makeBuilder({ data: [], error: null });
-  const mockFrom = vi.fn((table: string) =>
-    table === "registrations" ? mockRegistrationsBuilder : mockTournamentBuilder,
-  );
+  const mockMembershipsBuilder = makeBuilder({ data: [], error: null });
+  const mockFrom = vi.fn((table: string) => {
+    if (table === "registrations") return mockRegistrationsBuilder;
+    if (table === "organization_memberships") return mockMembershipsBuilder;
+    return mockTournamentBuilder;
+  });
   const mockGetClaims = vi.fn();
   const mockRpc = vi.fn();
   const mockAdminRpc = vi.fn();
   const mockSendCancellationEmail = vi.fn();
+  const mockSendReviewEmail = vi.fn();
 
   return {
     mockTournamentBuilder,
     mockRegistrationsBuilder,
+    mockMembershipsBuilder,
     mockFrom,
     mockGetClaims,
     mockRpc,
     mockAdminRpc,
     mockSendCancellationEmail,
+    mockSendReviewEmail,
   };
 });
 
@@ -53,6 +61,7 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/email/email", () => ({
   sendTournamentCancellationEmail: mockSendCancellationEmail,
+  sendCancellationReviewEmail: mockSendReviewEmail,
 }));
 
 vi.mock("@/services/supabase/server", () => ({
@@ -82,6 +91,7 @@ import { PATCH } from "../route";
 const ADMIN_USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const REQ_ID = "bbbbbbbb-0000-0000-0000-000000000001";
 const TOUR_ID = "cccccccc-0000-0000-0000-000000000001";
+const ORG_ID = "dddddddd-0000-0000-0000-000000000001";
 
 function makeRequest(body: unknown, id = REQ_ID): NextRequest {
   return new NextRequest(
@@ -118,7 +128,11 @@ beforeEach(() => {
     error: null,
   });
   mockTournamentBuilder.result = {
-    data: { slug: "kl-open-2026", name: "KL Open 2026" },
+    data: {
+      slug: "kl-open-2026",
+      name: "KL Open 2026",
+      organization_id: ORG_ID,
+    },
     error: null,
   };
   mockRegistrationsBuilder.result = {
@@ -128,7 +142,25 @@ beforeEach(() => {
     ],
     error: null,
   };
+  mockMembershipsBuilder.result = {
+    data: [
+      {
+        user: { email: "owner@example.com", first_name: "Olivia" },
+        roles: { name: "owner" },
+      },
+      {
+        user: { email: "admin@example.com", first_name: "Adam" },
+        roles: { name: "admin" },
+      },
+      {
+        user: { email: "member@example.com", first_name: "Max" },
+        roles: { name: "member" },
+      },
+    ],
+    error: null,
+  };
   mockSendCancellationEmail.mockResolvedValue(undefined);
+  mockSendReviewEmail.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -289,5 +321,100 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     });
     expect(res.status).toBe(200);
     expect(mockSendCancellationEmail).not.toHaveBeenCalled();
+  });
+
+  // --- Review-outcome emails to the organization (owner/admin) --------------
+
+  it("emails owner/admin members the approval outcome (not plain members)", async () => {
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith("organization_memberships");
+    expect(mockMembershipsBuilder.eq).toHaveBeenCalledWith(
+      "organization_id",
+      ORG_ID,
+    );
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendReviewEmail).toHaveBeenCalledWith(
+      "owner@example.com",
+      expect.objectContaining({
+        recipientName: "Olivia",
+        tournamentName: "KL Open 2026",
+        approved: true,
+      }),
+    );
+    expect(mockSendReviewEmail).toHaveBeenCalledWith(
+      "admin@example.com",
+      expect.objectContaining({ recipientName: "Adam", approved: true }),
+    );
+    expect(mockSendReviewEmail).not.toHaveBeenCalledWith(
+      "member@example.com",
+      expect.anything(),
+    );
+  });
+
+  it("emails owner/admin members the rejection outcome with the reason", async () => {
+    mockAdminRpc.mockResolvedValue({
+      data: { id: REQ_ID, tournament_id: TOUR_ID, status: "rejected" },
+      error: null,
+    });
+    await PATCH(
+      makeRequest({ action: "reject", rejection_reason: "Event is proceeding" }),
+      { params: Promise.resolve({ id: REQ_ID }) },
+    );
+
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendReviewEmail).toHaveBeenCalledWith(
+      "owner@example.com",
+      expect.objectContaining({
+        approved: false,
+        rejectionReason: "Event is proceeding",
+        tournamentName: "KL Open 2026",
+      }),
+    );
+  });
+
+  it("skips members with no linked user or email", async () => {
+    mockMembershipsBuilder.result = {
+      data: [
+        {
+          user: { email: "owner@example.com", first_name: "Olivia" },
+          roles: { name: "owner" },
+        },
+        { user: null, roles: { name: "admin" } },
+        { user: { email: null, first_name: "Ghost" }, roles: { name: "admin" } },
+      ],
+      error: null,
+    };
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(mockSendReviewEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendReviewEmail).toHaveBeenCalledWith(
+      "owner@example.com",
+      expect.anything(),
+    );
+  });
+
+  it("still succeeds (200) when a review email fails", async () => {
+    mockSendReviewEmail.mockRejectedValueOnce(new Error("Resend down"));
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("still succeeds (200) when loading members fails", async () => {
+    mockMembershipsBuilder.result = {
+      data: null,
+      error: { message: "db down" },
+    };
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockSendReviewEmail).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ vi.mock("resend", () => ({
 }));
 
 import {
+  sendCancellationReviewEmail,
   sendPasswordResetEmail,
   sendTournamentCancellationEmail,
   sendVerificationEmail,
@@ -277,6 +278,124 @@ describe("sendTournamentCancellationEmail", () => {
       sendTournamentCancellationEmail("player@example.com", {
         playerName: "Ali",
         tournamentName: "KL Open 2026",
+      }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("sendCancellationReviewEmail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "<html>Hi {{recipientName}}, {{tournamentName}} — {{rejectionReason}} " +
+        '<a href="{{dashboardUrl}}">dashboard</a></html>',
+    );
+    mockSend.mockResolvedValue({ error: null });
+    process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
+  });
+
+  // --- Template selection ---------------------------------------------------
+
+  it("loads the approved template and subject when approved", async () => {
+    await sendCancellationReviewEmail("owner@example.com", {
+      recipientName: "Olivia",
+      tournamentName: "KL Open 2026",
+      approved: true,
+    });
+
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("tournament-cancellation-approved.html"),
+      "utf-8",
+    );
+    const { subject } = mockSend.mock.calls[0][0];
+    expect(subject).toMatch(/approved/i);
+    expect(subject).toMatch(/KL Open 2026/);
+  });
+
+  it("loads the rejected template and subject when not approved", async () => {
+    await sendCancellationReviewEmail("owner@example.com", {
+      recipientName: "Olivia",
+      tournamentName: "KL Open 2026",
+      approved: false,
+      rejectionReason: "Event is proceeding",
+    });
+
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("tournament-cancellation-rejected.html"),
+      "utf-8",
+    );
+    const { subject } = mockSend.mock.calls[0][0];
+    expect(subject).toMatch(/declined/i);
+  });
+
+  // --- Placeholder injection ------------------------------------------------
+
+  it("injects recipient, tournament, dashboard URL, and rejection reason", async () => {
+    await sendCancellationReviewEmail("owner@example.com", {
+      recipientName: "Olivia",
+      tournamentName: "KL Open 2026",
+      approved: false,
+      rejectionReason: "Event is proceeding",
+    });
+
+    const { html } = mockSend.mock.calls[0][0];
+    expect(html).toContain("Olivia");
+    expect(html).toContain("KL Open 2026");
+    expect(html).toContain("Event is proceeding");
+    expect(html).toContain("https://mychesstour.com/my/organizations");
+    expect(html).not.toContain("{{recipientName}}");
+    expect(html).not.toContain("{{rejectionReason}}");
+    expect(html).not.toContain("{{dashboardUrl}}");
+  });
+
+  it("escapes HTML in user-supplied values", async () => {
+    await sendCancellationReviewEmail("owner@example.com", {
+      recipientName: "<b>O</b>",
+      tournamentName: "Rook & Roll",
+      approved: false,
+      rejectionReason: "<script>x</script>",
+    });
+
+    const { html } = mockSend.mock.calls[0][0];
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("Rook &amp; Roll");
+  });
+
+  // --- Email fields ---------------------------------------------------------
+
+  it("sends to the correct email address", async () => {
+    await sendCancellationReviewEmail("owner@example.com", {
+      recipientName: "Olivia",
+      tournamentName: "KL Open 2026",
+      approved: true,
+    });
+
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "owner@example.com" }),
+    );
+  });
+
+  // --- Error handling -------------------------------------------------------
+
+  it("throws when Resend returns an error", async () => {
+    mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
+
+    await expect(
+      sendCancellationReviewEmail("owner@example.com", {
+        recipientName: "Olivia",
+        tournamentName: "KL Open 2026",
+        approved: true,
+      }),
+    ).rejects.toThrow(/sending failed/i);
+  });
+
+  it("resolves without a value when send succeeds", async () => {
+    await expect(
+      sendCancellationReviewEmail("owner@example.com", {
+        recipientName: "Olivia",
+        tournamentName: "KL Open 2026",
+        approved: true,
       }),
     ).resolves.toBeUndefined();
   });

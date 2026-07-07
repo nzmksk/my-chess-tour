@@ -1,7 +1,10 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
-import { sendTournamentCancellationEmail } from "@/services/email/email";
+import {
+  sendCancellationReviewEmail,
+  sendTournamentCancellationEmail,
+} from "@/services/email/email";
 import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
@@ -62,6 +65,66 @@ async function notifyRegisteredPlayers(
   if (failed > 0) {
     console.error(
       `Failed to send ${failed}/${recipients.length} cancellation email(s) for tournament ${tournamentId}`,
+    );
+  }
+}
+
+// Roles that grant access to cancel a tournament — the same owner/admin gate
+// enforced when a cancellation request is filed (see authorizeTournamentManager).
+// These members are the ones notified of the admin's review decision.
+const CANCEL_REVIEWER_ROLES = ["owner", "admin"];
+
+interface MembershipRecipient {
+  user: { email: string | null; first_name: string | null } | null;
+  roles: { name: string } | null;
+}
+
+// Emails the organization members who can cancel tournaments about the outcome
+// of their cancellation request (approved or declined). Best-effort: any failure
+// to load members or send an email is logged but never fails the review.
+async function notifyCancellationReviewers(
+  organizationId: string,
+  params: {
+    tournamentName: string;
+    approved: boolean;
+    rejectionReason?: string;
+  },
+): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("organization_memberships")
+    .select("user:users(email, first_name), roles!inner(name)")
+    .eq("organization_id", organizationId);
+
+  if (error) {
+    console.error(
+      `Failed to load members for cancellation review (org ${organizationId}):`,
+      error,
+    );
+    return;
+  }
+
+  const recipients = (data as unknown as MembershipRecipient[])
+    .filter((m) => m.roles && CANCEL_REVIEWER_ROLES.includes(m.roles.name))
+    .map((m) => m.user)
+    .filter((u): u is { email: string; first_name: string | null } =>
+      Boolean(u?.email),
+    );
+
+  const results = await Promise.allSettled(
+    recipients.map((u) =>
+      sendCancellationReviewEmail(u.email, {
+        recipientName: u.first_name ?? "there",
+        tournamentName: params.tournamentName,
+        approved: params.approved,
+        rejectionReason: params.rejectionReason,
+      }),
+    ),
+  );
+
+  const failed = results.filter((r) => r.status === "rejected").length;
+  if (failed > 0) {
+    console.error(
+      `Failed to send ${failed}/${recipients.length} cancellation review email(s) for org ${organizationId}`,
     );
   }
 }
@@ -169,8 +232,7 @@ export async function PATCH(
       p_request_id: id,
       p_reviewer_id: user.id,
       p_action: action,
-      p_rejection_reason:
-        action === "reject" ? rejection_reason!.trim() : null,
+      p_rejection_reason: action === "reject" ? rejection_reason!.trim() : null,
     },
   );
 
@@ -178,7 +240,10 @@ export async function PATCH(
     if (error.code === "P0002") {
       return NextResponse.json(
         {
-          error: { code: "NOT_FOUND", message: "Cancellation request not found" },
+          error: {
+            code: "NOT_FOUND",
+            message: "Cancellation request not found",
+          },
         },
         { status: 404 },
       );
@@ -200,20 +265,33 @@ export async function PATCH(
     );
   }
 
+  const tournamentId = (data as { tournament_id: string }).tournament_id;
+  const { data: t } = await supabaseAdmin
+    .from("tournaments")
+    .select("slug, name, organization_id")
+    .eq("id", tournamentId)
+    .single();
+  const tournamentName = t?.name ?? "your tournament";
+
   // On approval the tournament left the public 'published' listing; drop it from
   // the caches so it disappears from the browse list and its detail page, and
   // notify registered players that their tournament is off.
   if (action === "approve") {
-    const tournamentId = (data as { tournament_id: string }).tournament_id;
-    const { data: t } = await supabaseAdmin
-      .from("tournaments")
-      .select("slug, name")
-      .eq("id", tournamentId)
-      .single();
     revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
     if (t?.slug) revalidateTag(tournamentTag(t.slug), PURGE_PROFILE);
 
-    await notifyRegisteredPlayers(tournamentId, t?.name ?? "your tournament");
+    await notifyRegisteredPlayers(tournamentId, tournamentName);
+  }
+
+  // Notify the organization members who can cancel tournaments of the review
+  // outcome — for both approvals and rejections.
+  if (t?.organization_id) {
+    await notifyCancellationReviewers(t.organization_id, {
+      tournamentName,
+      approved: action === "approve",
+      rejectionReason:
+        action === "reject" ? rejection_reason!.trim() : undefined,
+    });
   }
 
   return NextResponse.json({ data }, { status: 200 });

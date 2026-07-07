@@ -82,3 +82,53 @@ export async function sendTournamentCancellationEmail(
     );
   }
 }
+
+// Notifies an organization member (owner/admin) of the outcome of the
+// cancellation request they can act on — approved (tournament cancelled) or
+// declined (tournament stays live, with the admin's reason).
+export async function sendCancellationReviewEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    approved: boolean;
+    rejectionReason?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const dashboardUrl = `${siteUrl}/my/organizations`;
+
+  const template = params.approved
+    ? "tournament-cancellation-approved.html"
+    : "tournament-cancellation-rejected.html";
+
+  let html = loadTemplate(template)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{dashboardUrl\}\}/g, dashboardUrl);
+
+  if (!params.approved) {
+    html = html.replace(
+      /\{\{rejectionReason\}\}/g,
+      escapeHtml(params.rejectionReason ?? ""),
+    );
+  }
+
+  const subject = params.approved
+    ? `Your cancellation request for ${params.tournamentName} was approved`
+    : `Your cancellation request for ${params.tournamentName} was declined`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send cancellation review email:", error);
+    throw new Error(
+      `Failed to send cancellation review email: ${error.message}`,
+    );
+  }
+}
