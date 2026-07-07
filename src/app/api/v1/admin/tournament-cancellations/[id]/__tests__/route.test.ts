@@ -5,31 +5,54 @@ import { NextRequest } from "next/server";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockTournamentBuilder, mockFrom, mockGetClaims, mockRpc, mockAdminRpc } =
-  vi.hoisted(() => {
-    function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
-      const b: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "single"]) {
-        b[m] = vi.fn(() => b);
-      }
-      b.then = (
-        onfulfilled: (v: unknown) => unknown,
-        onrejected?: (r: unknown) => unknown,
-      ) => Promise.resolve(finalResult).then(onfulfilled, onrejected);
-      return b;
+const {
+  mockTournamentBuilder,
+  mockRegistrationsBuilder,
+  mockFrom,
+  mockGetClaims,
+  mockRpc,
+  mockAdminRpc,
+  mockSendCancellationEmail,
+} = vi.hoisted(() => {
+  function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
+    const b: Record<string, unknown> = { result: finalResult };
+    for (const m of ["select", "eq", "in", "single"]) {
+      b[m] = vi.fn(() => b);
     }
+    b.then = (
+      onfulfilled: (v: unknown) => unknown,
+      onrejected?: (r: unknown) => unknown,
+    ) => Promise.resolve(b.result).then(onfulfilled, onrejected);
+    return b;
+  }
 
-    const mockTournamentBuilder = makeBuilder({ data: null, error: null });
-    const mockFrom = vi.fn((_table: string) => mockTournamentBuilder);
-    const mockGetClaims = vi.fn();
-    const mockRpc = vi.fn();
-    const mockAdminRpc = vi.fn();
+  const mockTournamentBuilder = makeBuilder({ data: null, error: null });
+  const mockRegistrationsBuilder = makeBuilder({ data: [], error: null });
+  const mockFrom = vi.fn((table: string) =>
+    table === "registrations" ? mockRegistrationsBuilder : mockTournamentBuilder,
+  );
+  const mockGetClaims = vi.fn();
+  const mockRpc = vi.fn();
+  const mockAdminRpc = vi.fn();
+  const mockSendCancellationEmail = vi.fn();
 
-    return { mockTournamentBuilder, mockFrom, mockGetClaims, mockRpc, mockAdminRpc };
-  });
+  return {
+    mockTournamentBuilder,
+    mockRegistrationsBuilder,
+    mockFrom,
+    mockGetClaims,
+    mockRpc,
+    mockAdminRpc,
+    mockSendCancellationEmail,
+  };
+});
 
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockAdminRpc },
+}));
+
+vi.mock("@/services/email/email", () => ({
+  sendTournamentCancellationEmail: mockSendCancellationEmail,
 }));
 
 vi.mock("@/services/supabase/server", () => ({
@@ -94,14 +117,18 @@ beforeEach(() => {
     data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
     error: null,
   });
-  mockTournamentBuilder.then = (
-    onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown,
-  ) =>
-    Promise.resolve({ data: { slug: "kl-open-2026" }, error: null }).then(
-      onfulfilled,
-      onrejected,
-    );
+  mockTournamentBuilder.result = {
+    data: { slug: "kl-open-2026", name: "KL Open 2026" },
+    error: null,
+  };
+  mockRegistrationsBuilder.result = {
+    data: [
+      { user: { email: "ali@example.com", first_name: "Ali" } },
+      { user: { email: "siti@example.com", first_name: "Siti" } },
+    ],
+    error: null,
+  };
+  mockSendCancellationEmail.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -188,5 +215,79 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       params: Promise.resolve({ id: REQ_ID }),
     });
     expect(res.status).toBe(409);
+  });
+
+  it("emails every registered player on approval", async () => {
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith("registrations");
+    expect(mockRegistrationsBuilder.in).toHaveBeenCalledWith("status", [
+      "confirmed",
+      "pending_payment",
+    ]);
+    expect(mockSendCancellationEmail).toHaveBeenCalledTimes(2);
+    expect(mockSendCancellationEmail).toHaveBeenCalledWith("ali@example.com", {
+      playerName: "Ali",
+      tournamentName: "KL Open 2026",
+    });
+    expect(mockSendCancellationEmail).toHaveBeenCalledWith("siti@example.com", {
+      playerName: "Siti",
+      tournamentName: "KL Open 2026",
+    });
+  });
+
+  it("does not email players when the request is rejected", async () => {
+    mockAdminRpc.mockResolvedValue({
+      data: { id: REQ_ID, tournament_id: TOUR_ID, status: "rejected" },
+      error: null,
+    });
+    await PATCH(
+      makeRequest({ action: "reject", rejection_reason: "Event is proceeding" }),
+      { params: Promise.resolve({ id: REQ_ID }) },
+    );
+
+    expect(mockSendCancellationEmail).not.toHaveBeenCalled();
+  });
+
+  it("skips registrations with no linked user or email", async () => {
+    mockRegistrationsBuilder.result = {
+      data: [
+        { user: { email: "ali@example.com", first_name: "Ali" } },
+        { user: null },
+        { user: { email: null, first_name: "Ghost" } },
+      ],
+      error: null,
+    };
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(mockSendCancellationEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendCancellationEmail).toHaveBeenCalledWith(
+      "ali@example.com",
+      expect.anything(),
+    );
+  });
+
+  it("still succeeds (200) when sending an email fails", async () => {
+    mockSendCancellationEmail.mockRejectedValueOnce(new Error("Resend down"));
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("still succeeds (200) when loading registrations fails", async () => {
+    mockRegistrationsBuilder.result = {
+      data: null,
+      error: { message: "db down" },
+    };
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockSendCancellationEmail).not.toHaveBeenCalled();
   });
 });

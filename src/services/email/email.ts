@@ -12,6 +12,17 @@ function loadTemplate(name: string): string {
   );
 }
 
+// Escapes user-supplied values before they are interpolated into an HTML email
+// template, so a player name or tournament title can't inject markup.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function sendVerificationEmail(email: string, code: string) {
   const html = loadTemplate("verification.html").replace("{{code}}", code);
 
@@ -44,5 +55,30 @@ export async function sendPasswordResetEmail(email: string, resetLink: string) {
   if (error) {
     console.error("Failed to send password reset email:", error);
     throw new Error(`Failed to send password reset email: ${error.message}`);
+  }
+}
+
+export async function sendTournamentCancellationEmail(
+  email: string,
+  params: { playerName: string; tournamentName: string },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const html = loadTemplate("tournament-cancellation.html")
+    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/tournaments`);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${params.tournamentName} has been cancelled`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send tournament cancellation email:", error);
+    throw new Error(
+      `Failed to send tournament cancellation email: ${error.message}`,
+    );
   }
 }

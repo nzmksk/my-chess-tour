@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { sendTournamentCancellationEmail } from "@/services/email/email";
 import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
@@ -11,6 +12,59 @@ import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Registration states that still represent an active spot in the tournament and
+// therefore warrant a cancellation notice. Players whose registration already
+// failed, expired, or was forfeited are intentionally excluded.
+const NOTIFIABLE_STATUSES = ["confirmed", "pending_payment"];
+
+interface RegistrationRecipient {
+  user: { email: string | null; first_name: string | null } | null;
+}
+
+// Emails every player with an active registration that the tournament has been
+// cancelled. Best-effort: a failure to load recipients or send an email is
+// logged but never fails the cancellation, which has already been committed.
+async function notifyRegisteredPlayers(
+  tournamentId: string,
+  tournamentName: string,
+): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("registrations")
+    .select("user:users(email, first_name)")
+    .eq("tournament_id", tournamentId)
+    .in("status", NOTIFIABLE_STATUSES);
+
+  if (error) {
+    console.error(
+      `Failed to load registrations for cancelled tournament ${tournamentId}:`,
+      error,
+    );
+    return;
+  }
+
+  const recipients = (data as unknown as RegistrationRecipient[])
+    .map((r) => r.user)
+    .filter((u): u is { email: string; first_name: string | null } =>
+      Boolean(u?.email),
+    );
+
+  const results = await Promise.allSettled(
+    recipients.map((u) =>
+      sendTournamentCancellationEmail(u.email, {
+        playerName: u.first_name ?? "Player",
+        tournamentName,
+      }),
+    ),
+  );
+
+  const failed = results.filter((r) => r.status === "rejected").length;
+  if (failed > 0) {
+    console.error(
+      `Failed to send ${failed}/${recipients.length} cancellation email(s) for tournament ${tournamentId}`,
+    );
+  }
+}
 
 async function checkAdminAccess(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -147,15 +201,19 @@ export async function PATCH(
   }
 
   // On approval the tournament left the public 'published' listing; drop it from
-  // the caches so it disappears from the browse list and its detail page.
+  // the caches so it disappears from the browse list and its detail page, and
+  // notify registered players that their tournament is off.
   if (action === "approve") {
+    const tournamentId = (data as { tournament_id: string }).tournament_id;
     const { data: t } = await supabaseAdmin
       .from("tournaments")
-      .select("slug")
-      .eq("id", (data as { tournament_id: string }).tournament_id)
+      .select("slug, name")
+      .eq("id", tournamentId)
       .single();
     revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
     if (t?.slug) revalidateTag(tournamentTag(t.slug), PURGE_PROFILE);
+
+    await notifyRegisteredPlayers(tournamentId, t?.name ?? "your tournament");
   }
 
   return NextResponse.json({ data }, { status: 200 });
