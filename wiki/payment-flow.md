@@ -1,6 +1,6 @@
 # Payment flow
 
-How a player pays to register for a tournament, end to end. Payments go through **CHIP** (gate.chip-in.asia). Money state is enforced authoritatively in Postgres (SECURITY DEFINER functions + row locks) so concurrent webhooks, browser returns, and resumes can't corrupt it. For webhook signing/events see [chip-webhook.md](./chip-webhook.md).
+How a player pays to register for a tournament, end to end. Payments go through **CHIP** (gate.chip-in.asia). Money state is enforced authoritatively in Postgres (SECURITY DEFINER functions + row locks) so concurrent webhooks, browser returns, and resumes can't corrupt it. For webhook signing/events see [chip-webhook.md](./chip-webhook.md). For money going back to players when a tournament is cancelled, see [refund-flow.md](./refund-flow.md).
 
 ## Data model
 
