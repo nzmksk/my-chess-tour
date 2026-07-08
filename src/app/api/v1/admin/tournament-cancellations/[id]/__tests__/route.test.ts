@@ -10,16 +10,18 @@ const {
   mockRegistrationsBuilder,
   mockMembershipsBuilder,
   mockOrganizationsBuilder,
+  mockRefundsBuilder,
   mockFrom,
   mockGetClaims,
   mockRpc,
   mockAdminRpc,
   mockSendCancellationEmail,
   mockSendReviewEmail,
+  mockRefundChipPurchase,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
     const b: Record<string, unknown> = { result: finalResult };
-    for (const m of ["select", "eq", "in", "single"]) {
+    for (const m of ["select", "eq", "in", "single", "update"]) {
       b[m] = vi.fn(() => b);
     }
     b.then = (
@@ -33,10 +35,12 @@ const {
   const mockRegistrationsBuilder = makeBuilder({ data: [], error: null });
   const mockMembershipsBuilder = makeBuilder({ data: [], error: null });
   const mockOrganizationsBuilder = makeBuilder({ data: null, error: null });
+  const mockRefundsBuilder = makeBuilder({ data: null, error: null });
   const mockFrom = vi.fn((table: string) => {
     if (table === "registrations") return mockRegistrationsBuilder;
     if (table === "organization_memberships") return mockMembershipsBuilder;
     if (table === "organizations") return mockOrganizationsBuilder;
+    if (table === "refunds") return mockRefundsBuilder;
     return mockTournamentBuilder;
   });
   const mockGetClaims = vi.fn();
@@ -44,24 +48,33 @@ const {
   const mockAdminRpc = vi.fn();
   const mockSendCancellationEmail = vi.fn();
   const mockSendReviewEmail = vi.fn();
+  const mockRefundChipPurchase = vi.fn();
 
   return {
     mockTournamentBuilder,
     mockRegistrationsBuilder,
     mockMembershipsBuilder,
     mockOrganizationsBuilder,
+    mockRefundsBuilder,
     mockFrom,
     mockGetClaims,
     mockRpc,
     mockAdminRpc,
     mockSendCancellationEmail,
     mockSendReviewEmail,
+    mockRefundChipPurchase,
   };
 });
 
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockAdminRpc },
 }));
+
+// Keep the real refund outcome/event mappers; only stub the network call.
+vi.mock("@/services/chip/chip", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/chip/chip")>();
+  return { ...actual, refundChipPurchase: mockRefundChipPurchase };
+});
 
 vi.mock("@/services/email/email", () => ({
   sendTournamentCancellationEmail: mockSendCancellationEmail,
@@ -120,6 +133,33 @@ function setNoUser() {
   mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
 }
 
+// Pending refunds returned by list_pending_cancellation_refunds; default none.
+let pendingRefunds: unknown[] = [];
+function setPendingRefunds(...refunds: unknown[]) {
+  pendingRefunds = refunds;
+}
+
+// Dispatches supabaseAdmin.rpc by name so the review RPC, the refund list, and
+// settle_refund each return sensible defaults. Individual tests can still call
+// mockAdminRpc.mockResolvedValue(...) to force the review outcome (those cases
+// short-circuit before the refund path runs).
+function setAdminRpcDispatch(
+  reviewResult: { data?: unknown; error?: unknown } = {
+    data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
+    error: null,
+  },
+) {
+  mockAdminRpc.mockImplementation((name: string) => {
+    if (name === "list_pending_cancellation_refunds") {
+      return Promise.resolve({ data: pendingRefunds, error: null });
+    }
+    if (name === "settle_refund") {
+      return Promise.resolve({ data: { settled: true }, error: null });
+    }
+    return Promise.resolve(reviewResult);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -127,9 +167,12 @@ function setNoUser() {
 beforeEach(() => {
   vi.clearAllMocks();
   setAdmin();
-  mockAdminRpc.mockResolvedValue({
-    data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
-    error: null,
+  setPendingRefunds();
+  setAdminRpcDispatch();
+  mockRefundsBuilder.result = { data: null, error: null };
+  mockRefundChipPurchase.mockResolvedValue({
+    id: "refund-pay-1",
+    status: "refunded",
   });
   mockTournamentBuilder.result = {
     data: {
@@ -482,5 +525,172 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     });
     expect(res.status).toBe(200);
     expect(mockSendReviewEmail).not.toHaveBeenCalled();
+  });
+
+  // --- Refund initiation on approval ---------------------------------------
+
+  it("fires a full CHIP refund per pending refund and settles synchronous successes", async () => {
+    setPendingRefunds(
+      {
+        refund_id: "rf-1",
+        registration_id: "reg-1",
+        amount_cents: 5500,
+        original_chip_purchase_id: "chip-1",
+      },
+      {
+        refund_id: "rf-2",
+        registration_id: "reg-2",
+        amount_cents: 4000,
+        original_chip_purchase_id: "chip-2",
+      },
+    );
+
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    // Full refund → no amount argument.
+    expect(mockRefundChipPurchase).toHaveBeenCalledTimes(2);
+    expect(mockRefundChipPurchase).toHaveBeenCalledWith("chip-1");
+    expect(mockRefundChipPurchase).toHaveBeenCalledWith("chip-2");
+    expect(mockAdminRpc).toHaveBeenCalledWith("settle_refund", {
+      p_refund_id: "rf-1",
+      p_chip_refund_id: "refund-pay-1",
+      p_paid: true,
+      p_payment_method: null,
+    });
+    expect(mockAdminRpc).toHaveBeenCalledWith("settle_refund", {
+      p_refund_id: "rf-2",
+      p_chip_refund_id: "refund-pay-1",
+      p_paid: true,
+      p_payment_method: null,
+    });
+  });
+
+  it("does not fire refunds on rejection", async () => {
+    setPendingRefunds({
+      refund_id: "rf-1",
+      registration_id: "reg-1",
+      amount_cents: 5500,
+      original_chip_purchase_id: "chip-1",
+    });
+    setAdminRpcDispatch({
+      data: { id: REQ_ID, tournament_id: TOUR_ID, status: "rejected" },
+      error: null,
+    });
+
+    await PATCH(
+      makeRequest({ action: "reject", rejection_reason: "Event is proceeding" }),
+      { params: Promise.resolve({ id: REQ_ID }) },
+    );
+
+    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
+    expect(mockAdminRpc).not.toHaveBeenCalledWith(
+      "settle_refund",
+      expect.anything(),
+    );
+  });
+
+  it("one player's CHIP failure doesn't block others or fail the request", async () => {
+    setPendingRefunds(
+      {
+        refund_id: "rf-1",
+        registration_id: "reg-1",
+        amount_cents: 5500,
+        original_chip_purchase_id: "chip-1",
+      },
+      {
+        refund_id: "rf-2",
+        registration_id: "reg-2",
+        amount_cents: 4000,
+        original_chip_purchase_id: "chip-2",
+      },
+    );
+    mockRefundChipPurchase
+      .mockRejectedValueOnce(new Error("CHIP down"))
+      .mockResolvedValueOnce({ id: "refund-pay-2", status: "refunded" });
+
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    // Only the successful one settles; the failed refund stays pending.
+    expect(mockAdminRpc).toHaveBeenCalledWith("settle_refund", {
+      p_refund_id: "rf-2",
+      p_chip_refund_id: "refund-pay-2",
+      p_paid: true,
+      p_payment_method: null,
+    });
+    expect(mockAdminRpc).not.toHaveBeenCalledWith("settle_refund", {
+      p_refund_id: "rf-1",
+      p_chip_refund_id: expect.anything(),
+      p_paid: true,
+      p_payment_method: null,
+    });
+  });
+
+  it("stamps chip_refund_id and does not settle when CHIP returns pending_refund", async () => {
+    setPendingRefunds({
+      refund_id: "rf-1",
+      registration_id: "reg-1",
+      amount_cents: 5500,
+      original_chip_purchase_id: "chip-1",
+    });
+    mockRefundChipPurchase.mockResolvedValue({
+      id: "refund-pay-1",
+      status: "pending_refund",
+    });
+
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockFrom).toHaveBeenCalledWith("refunds");
+    expect(mockRefundsBuilder.update).toHaveBeenCalledWith({
+      chip_refund_id: "refund-pay-1",
+    });
+    expect(mockRefundsBuilder.eq).toHaveBeenCalledWith("id", "rf-1");
+    expect(mockAdminRpc).not.toHaveBeenCalledWith(
+      "settle_refund",
+      expect.anything(),
+    );
+  });
+
+  it("skips a refund whose registration payment has no CHIP purchase id", async () => {
+    setPendingRefunds({
+      refund_id: "rf-1",
+      registration_id: "reg-1",
+      amount_cents: 5500,
+      original_chip_purchase_id: null,
+    });
+
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("still succeeds (200) when loading pending refunds fails", async () => {
+    mockAdminRpc.mockImplementation((name: string) => {
+      if (name === "list_pending_cancellation_refunds") {
+        return Promise.resolve({ data: null, error: { message: "db down" } });
+      }
+      return Promise.resolve({
+        data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
+        error: null,
+      });
+    });
+
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
   });
 });

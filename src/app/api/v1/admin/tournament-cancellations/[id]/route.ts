@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { chipRefundOutcome, refundChipPurchase } from "@/services/chip/chip";
 import {
   sendCancellationReviewEmail,
   sendTournamentCancellationEmail,
@@ -66,6 +67,101 @@ async function notifyRegisteredPlayers(
     console.error(
       `Failed to send ${failed}/${recipients.length} cancellation email(s) for tournament ${tournamentId}`,
     );
+  }
+}
+
+// A pending refund queued by review_tournament_cancellation, joined to the CHIP
+// purchase id the refund is issued against (list_pending_cancellation_refunds).
+interface PendingRefund {
+  refund_id: string;
+  registration_id: string;
+  amount_cents: number;
+  original_chip_purchase_id: string | null;
+}
+
+// How many CHIP refund calls to have in flight at once. Bounds the fan-out for a
+// large tournament so we don't open hundreds of concurrent connections in a
+// single request; settlement is idempotent so a re-run is always safe.
+const REFUND_CONCURRENCY = 5;
+
+// Issues the CHIP refund for one queued refund and settles it. Best-effort: any
+// failure leaves the refund row pending (durable for retry) and is logged, never
+// thrown — the tournament is already cancelled.
+async function processCancellationRefund(refund: PendingRefund): Promise<void> {
+  if (!refund.original_chip_purchase_id) {
+    console.error(
+      `Refund ${refund.refund_id}: registration payment has no CHIP purchase id; left pending`,
+    );
+    return;
+  }
+
+  let result;
+  try {
+    // No amount → full refund of what the player paid.
+    result = await refundChipPurchase(refund.original_chip_purchase_id);
+  } catch (err) {
+    console.error(
+      `Refund ${refund.refund_id}: CHIP refund call failed; left pending`,
+      err,
+    );
+    return;
+  }
+
+  const outcome = chipRefundOutcome(result.status);
+  if (outcome === "refunded") {
+    // Cleared synchronously — settle now. The later payment.refunded webhook is an
+    // idempotent no-op.
+    const { error } = await supabaseAdmin.rpc("settle_refund", {
+      p_refund_id: refund.refund_id,
+      p_chip_refund_id: result.id,
+      p_paid: true,
+      p_payment_method: null,
+    });
+    if (error) {
+      console.error(`Refund ${refund.refund_id}: settle_refund failed`, error);
+    }
+  } else if (outcome === "failed") {
+    console.error(
+      `Refund ${refund.refund_id}: CHIP reported failure synchronously; left pending`,
+    );
+  } else {
+    // pending_refund — the webhook will settle it. Stamp the CHIP refund id for
+    // traceability (webhook correlation itself goes via related_to, not this).
+    const { error } = await supabaseAdmin
+      .from("refunds")
+      .update({ chip_refund_id: result.id })
+      .eq("id", refund.refund_id);
+    if (error) {
+      console.error(
+        `Refund ${refund.refund_id}: failed to record CHIP refund id`,
+        error,
+      );
+    }
+  }
+}
+
+// Fires the CHIP refund for every pending refund queued when the cancellation was
+// approved. Best-effort and concurrency-capped: one player's failure never blocks
+// the others or fails the (already-committed) cancellation. Settlement is
+// idempotent, so re-running this is safe.
+async function initiateCancellationRefunds(tournamentId: string): Promise<void> {
+  const { data, error } = await supabaseAdmin.rpc(
+    "list_pending_cancellation_refunds",
+    { p_tournament_id: tournamentId },
+  );
+
+  if (error) {
+    console.error(
+      `Failed to load pending refunds for cancelled tournament ${tournamentId}:`,
+      error,
+    );
+    return;
+  }
+
+  const refunds = (data as PendingRefund[] | null) ?? [];
+  for (let i = 0; i < refunds.length; i += REFUND_CONCURRENCY) {
+    const batch = refunds.slice(i, i + REFUND_CONCURRENCY);
+    await Promise.allSettled(batch.map(processCancellationRefund));
   }
 }
 
@@ -170,8 +266,10 @@ async function checkAdminAccess(
 }
 
 // Admin approves/rejects an organizer's tournament cancellation request.
-// Approve flips the tournament to 'cancelled' atomically (via the RPC); refunds
-// to registered players are initiated separately (wired up later).
+// Approve flips the tournament to 'cancelled' and queues a pending refund for
+// every confirmed player atomically (via the RPC); we then fire those refunds
+// through CHIP best-effort (initiateCancellationRefunds) — the webhook and
+// settle_refund RPC finalise them.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -306,6 +404,7 @@ export async function PATCH(
     revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
     if (t?.slug) revalidateTag(tournamentTag(t.slug), PURGE_PROFILE);
 
+    await initiateCancellationRefunds(tournamentId);
     await notifyRegisteredPlayers(tournamentId, tournamentName);
   }
 
