@@ -185,8 +185,8 @@ CREATE TABLE tournaments (
 -- Approval workflow for cancelling a PUBLISHED tournament.
 -- An organizer files a request; the tournament stays 'published' until a
 -- platform admin approves it, at which point review_tournament_cancellation()
--- flips tournaments.status to 'cancelled'. Refunds to registered players are
--- initiated separately (wired up later). Reuses the shared approval_status enum.
+-- flips tournaments.status to 'cancelled' and queues a pending refund per
+-- confirmed player (settled via settle_refund). Reuses the shared approval_status enum.
 -- =============================================
 CREATE TABLE tournament_cancellation_requests (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),

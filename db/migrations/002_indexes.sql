@@ -48,3 +48,16 @@ CREATE INDEX idx_payments_payout_summary ON payments (tournament_id, organizatio
   INCLUDE (gross_amount_cents)
   WHERE status = 'paid'
   AND type IN ('registration', 'player_prize', 'refund');
+
+-- At most one paid refund per registration. Defence-in-depth alongside the
+-- unique chip_transaction_id index: even if two settlement paths (sync response
+-- + webhook) race, only one refund payment row can land.
+CREATE UNIQUE INDEX uniq_paid_refund_per_registration ON payments (registration_id)
+  WHERE type = 'refund' AND status = 'paid';
+
+-- Refunds
+-- At most one live (non-rejected) refund per registration. Refund creation on
+-- tournament cancellation (review_tournament_cancellation) relies on ON CONFLICT
+-- against this index to stay idempotent; a rejected refund may be re-created.
+CREATE UNIQUE INDEX uniq_active_refund_per_registration ON refunds (registration_id)
+  WHERE status <> 'rejected';

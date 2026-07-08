@@ -354,10 +354,15 @@ $$;
 -- =============================================
 -- REVIEW TOURNAMENT CANCELLATION
 -- Platform admin approves/rejects an organizer's request to cancel a published
--- tournament. Approve → the request is marked 'approved' AND the tournament is
--- flipped to 'cancelled' atomically. Reject → the request is marked 'rejected'
--- with a reason and the tournament stays published. Player refunds are initiated
--- separately (wired up later); this function only moves the tournament state.
+-- tournament. Approve → the request is marked 'approved', the tournament is
+-- flipped to 'cancelled', AND a pending refund row is created for every confirmed
+-- (paid) registration — all atomically, so the refund to-do list is durable the
+-- instant the cancellation commits. Reject → the request is marked 'rejected'
+-- with a reason and the tournament stays published. The refund rows are only
+-- created here; the actual CHIP refund + type='refund' ledger row are executed
+-- afterwards by the app (see initiateCancellationRefunds) and settled by
+-- settle_refund (007_payment_functions.sql) — a network call can't run in this
+-- transaction.
 -- =============================================
 CREATE OR REPLACE FUNCTION review_tournament_cancellation(
   p_request_id        uuid,
@@ -402,6 +407,24 @@ BEGIN
     UPDATE tournaments
       SET status = 'cancelled'
       WHERE id = v_request.tournament_id;
+
+    -- Queue a full refund for every confirmed (paid) player. The amount is the
+    -- gross the player actually paid, sourced from their current (paid)
+    -- registration payment. pending_payment/failed/cancelled players never paid,
+    -- and forfeited players explicitly get no refund — so they're excluded.
+    -- ON CONFLICT makes this idempotent against uniq_active_refund_per_registration
+    -- (002_indexes.sql): a live refund already exists → leave it untouched.
+    INSERT INTO refunds (
+      registration_id, refund_amount_cents, reason, status, requested_by, requested_at
+    )
+    SELECT r.id, p.gross_amount_cents, 'tournament_cancelled', 'pending', p_reviewer_id, v_reviewed_at
+    FROM registrations r
+    JOIN payments p ON p.id = r.current_payment_id
+    WHERE r.tournament_id = v_request.tournament_id
+      AND r.status = 'confirmed'
+      AND p.type = 'registration'
+      AND p.status = 'paid'
+    ON CONFLICT (registration_id) WHERE (status <> 'rejected') DO NOTHING;
   END IF;
 
   RETURN jsonb_build_object(

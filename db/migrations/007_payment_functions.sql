@@ -338,3 +338,138 @@ BEGIN
     RETURNING r.id;
 END;
 $$;
+
+-- =============================================
+-- LIST PENDING CANCELLATION REFUNDS
+-- Read helper for the refund-orchestration loop (initiateCancellationRefunds).
+-- Returns the not-yet-processed refunds for a tournament together with the CHIP
+-- purchase id of the original (paid) registration payment — the id the CHIP
+-- refund is issued against (POST /purchases/{original_chip_purchase_id}/refund/).
+-- A refund whose registration payment somehow lacks a chip id is still returned
+-- (original_chip_purchase_id NULL) so the caller can log it rather than silently
+-- skip. Encapsulates the refunds → registrations → paid-payment join.
+-- =============================================
+CREATE OR REPLACE FUNCTION list_pending_cancellation_refunds(
+  p_tournament_id uuid
+)
+RETURNS TABLE (
+  refund_id                 uuid,
+  registration_id           uuid,
+  amount_cents              integer,
+  original_chip_purchase_id varchar(255)
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT rf.id, rf.registration_id, rf.refund_amount_cents, p.chip_transaction_id
+  FROM refunds rf
+  JOIN registrations r ON r.id = rf.registration_id
+  JOIN payments p ON p.id = r.current_payment_id
+   AND p.type = 'registration'
+   AND p.status = 'paid'
+  WHERE r.tournament_id = p_tournament_id
+    AND rf.status <> 'rejected'
+    AND rf.processed_at IS NULL;
+$$;
+
+-- =============================================
+-- SETTLE REFUND (idempotent, keyed by a specific refund row)
+--   paid  → the CHIP refund cleared: append a type='refund' payment ledger row
+--           mirroring the original registration payment's positive magnitudes
+--           (so tournament_payout_summary reverses that registration's revenue),
+--           and stamp the refund approved/processed with the CHIP refund id.
+--           Idempotent: a refund already processed (processed_at set) is a no-op.
+--           The unique idx_payments_chip_transaction + uniq_paid_refund_per_
+--           registration indexes are the last line of defence if the sync
+--           response and the webhook settle the same refund concurrently.
+--   !paid → the CHIP refund failed: record the CHIP refund id (if any) but leave
+--           the refund pending and unprocessed so ops can retry; no ledger row.
+-- The refund id is used as the correlation handle; p_chip_refund_id is the CHIP
+-- refund Payment id (distinct from the original purchase id).
+-- =============================================
+CREATE OR REPLACE FUNCTION settle_refund(
+  p_refund_id      uuid,
+  p_chip_refund_id varchar(255),
+  p_paid           boolean,
+  p_payment_method varchar(50) DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_refund   refunds;
+  v_src      payments;
+  v_settled  boolean := false;
+BEGIN
+  SELECT * INTO v_refund FROM refunds WHERE id = p_refund_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'refund % not found', p_refund_id USING ERRCODE = 'P0002';
+  END IF;
+
+  -- Already processed → idempotent no-op (a late/duplicate webhook or a
+  -- sync+webhook race). Report back without touching the ledger.
+  IF v_refund.processed_at IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'refund_id', v_refund.id,
+      'registration_id', v_refund.registration_id,
+      'already_processed', true,
+      'settled', true
+    );
+  END IF;
+
+  IF p_paid THEN
+    -- Source the original paid registration payment to mirror its amounts. If it
+    -- can't be found the money model is inconsistent — fail loudly rather than
+    -- book a malformed refund row.
+    SELECT p.* INTO v_src
+    FROM registrations r
+    JOIN payments p ON p.id = r.current_payment_id
+    WHERE r.id = v_refund.registration_id
+      AND p.type = 'registration'
+      AND p.status = 'paid';
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'no paid registration payment for refund %', p_refund_id USING ERRCODE = 'P0002';
+    END IF;
+
+    INSERT INTO payments (
+      type, tournament_id, registration_id, user_id, organization_id,
+      gross_amount_cents, platform_fee_cents, organizer_commission_cents,
+      player_commission_cents, net_amount_cents, currency,
+      payment_method, chip_transaction_id, status, paid_at
+    ) VALUES (
+      'refund', v_src.tournament_id, v_src.registration_id, v_src.user_id, v_src.organization_id,
+      v_src.gross_amount_cents, v_src.platform_fee_cents, v_src.organizer_commission_cents,
+      v_src.player_commission_cents, v_src.net_amount_cents, v_src.currency,
+      p_payment_method, p_chip_refund_id, 'paid', now()
+    );
+
+    UPDATE refunds
+      SET status         = 'approved',
+          chip_refund_id = p_chip_refund_id,
+          reviewed_at    = COALESCE(reviewed_at, now()),
+          processed_at   = now()
+      WHERE id = p_refund_id;
+
+    v_settled := true;
+  ELSE
+    -- Failure: record the CHIP refund id for traceability but leave the refund
+    -- pending/unprocessed so a retry can re-fire it.
+    UPDATE refunds
+      SET chip_refund_id = COALESCE(p_chip_refund_id, chip_refund_id)
+      WHERE id = p_refund_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'refund_id', v_refund.id,
+    'registration_id', v_refund.registration_id,
+    'already_processed', false,
+    'settled', v_settled
+  );
+END;
+$$;
