@@ -466,6 +466,61 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       const body = await res.json();
       expect(body.data.status).toBe("published");
     });
+
+    it("syncs registration_closed_at to the new deadline when not closed early", async () => {
+      setUser();
+      // Published, closed_at still tracks the deadline (never closed early).
+      setTournamentFetchResult({
+        id: TOUR_ID,
+        status: "published",
+        registration_deadline: "2026-08-01T00:00:00Z",
+        registration_closed_at: "2026-08-01T00:00:00Z",
+      });
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          registration_deadline: "2026-08-25T23:59:59Z",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          registration_deadline: "2026-08-25T23:59:59Z",
+          registration_closed_at: "2026-08-25T23:59:59Z",
+        }),
+      );
+    });
+
+    it("leaves registration_closed_at untouched when already closed early", async () => {
+      setUser();
+      // Published and closed early (closed_at < deadline) → deadline edits must
+      // not resurrect/move the irreversible early-close timestamp.
+      setTournamentFetchResult({
+        id: TOUR_ID,
+        status: "published",
+        registration_deadline: "2026-08-01T00:00:00Z",
+        registration_closed_at: "2026-07-01T00:00:00Z",
+      });
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          registration_deadline: "2026-08-25T23:59:59Z",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          registration_deadline: "2026-08-25T23:59:59Z",
+        }),
+      );
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          registration_closed_at: expect.anything(),
+        }),
+      );
+    });
   });
 
   describe("database errors", () => {

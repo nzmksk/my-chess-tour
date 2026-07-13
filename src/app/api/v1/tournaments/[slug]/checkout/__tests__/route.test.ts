@@ -649,4 +649,47 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_amount_cents: 5000,
     });
   });
+
+  it("rejects checkout when the organizer closed registration early (422, closed-early message)", async () => {
+    // closed_at < deadline (deadline still in the future) => closed early.
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({ registration_closed_at: "2020-01-01T00:00:00Z" }),
+      error: null,
+    });
+    setThen(mockExistingBuilder, { data: null, error: null });
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error.code).toBe("REGISTRATION_CLOSED");
+    expect(json.error.message).toBe(
+      "Registration has been closed by the organizer",
+    );
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects checkout when the deadline has passed (422, deadline message)", async () => {
+    // closed_at defaulted to a past deadline => closed, not early.
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({
+        registration_deadline: "2020-01-01T00:00:00Z",
+        registration_closed_at: "2020-01-01T00:00:00Z",
+      }),
+      error: null,
+    });
+    setThen(mockExistingBuilder, { data: null, error: null });
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error.code).toBe("REGISTRATION_CLOSED");
+    expect(json.error.message).toBe("Registration deadline has passed");
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
 });

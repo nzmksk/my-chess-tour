@@ -9,6 +9,7 @@ import {
   normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
 import type { RegistrationRequest } from "@/app/tournaments/[slug]/register/types";
+import { registrationStatus } from "@/lib/registration-status";
 import {
   cancelChipPurchase,
   createChipPurchase,
@@ -93,24 +94,21 @@ export async function POST(
   // event date, not their registration-day age.
   const startDate = new Date(tournament.start_date);
 
-  if (tournament.registration_closed_at) {
+  // registration_closed_at is the effective close time (deadline by default,
+  // earlier if the organizer closed registration early).
+  const { isClosed, closedEarly } = registrationStatus(
+    tournament.registration_closed_at,
+    tournament.registration_deadline,
+    now,
+  );
+  if (isClosed) {
     return NextResponse.json(
       {
         error: {
           code: "REGISTRATION_CLOSED",
-          message: "Registration has been closed by the organizer",
-        },
-      },
-      { status: 422 },
-    );
-  }
-
-  if (new Date(tournament.registration_deadline) < now) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "REGISTRATION_CLOSED",
-          message: "Registration deadline has passed",
+          message: closedEarly
+            ? "Registration has been closed by the organizer"
+            : "Registration deadline has passed",
         },
       },
       { status: 422 },

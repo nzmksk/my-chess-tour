@@ -207,10 +207,24 @@ describe("POST .../tournaments/[id]/close-registration", () => {
     expect(res.status).toBe(409);
   });
 
-  it("returns 409 when registration is already closed", async () => {
+  it("returns 409 when registration was already closed early", async () => {
+    // closed_at < deadline (deadline still in the future) => closed early.
     setThen(mockTournamentFetchBuilder, {
       ...PUBLISHED_OPEN,
       registration_closed_at: "2026-05-01T00:00:00Z",
+    });
+    const res = await POST(makeRequest(), {
+      params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it("returns 409 when the deadline has already passed", async () => {
+    // closed_at defaulted to a past deadline => effectively closed, not early.
+    setThen(mockTournamentFetchBuilder, {
+      ...PUBLISHED_OPEN,
+      registration_deadline: "2020-01-01T00:00:00Z",
+      registration_closed_at: "2020-01-01T00:00:00Z",
     });
     const res = await POST(makeRequest(), {
       params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),

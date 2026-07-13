@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
 import {
   ONE_DAY_SECONDS,
   TOURNAMENTS_LIST_TAG,
@@ -229,12 +230,15 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
   const isConfirmed = registrationStatus === "confirmed";
 
   const now = new Date();
-  // Registration always closes on or before the tournament starts, so a closed
-  // deadline already covers the "tournament has started" case. An organizer can
-  // also close registration early (registration_closed_at), which counts too.
-  const registrationClosed =
-    !!tournament.registration_closed_at ||
-    new Date(tournament.registration_deadline) <= now;
+  // registration_closed_at is the effective close time (the deadline by default,
+  // earlier if the organizer closed registration early). Registration always
+  // closes on or before the tournament starts, so this also covers the
+  // "tournament has started" case.
+  const { isClosed: registrationClosed } = computeRegistrationStatus(
+    tournament.registration_closed_at,
+    tournament.registration_deadline,
+    now,
+  );
   const isAtCapacity =
     tournament.max_participants > 0 &&
     tournament.current_participants >= tournament.max_participants;

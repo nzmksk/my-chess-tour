@@ -6,6 +6,7 @@ import {
   tournamentTag,
 } from "@/lib/cache-tags";
 import { revalidateTag } from "next/cache";
+import { registrationStatus } from "@/lib/registration-status";
 import { NextRequest, NextResponse } from "next/server";
 
 // Manually closes registration for a published tournament before its deadline.
@@ -53,7 +54,16 @@ export async function POST(
     );
   }
 
-  if (tournament.registration_closed_at) {
+  // registration_closed_at is the effective close time (defaulted to the
+  // deadline at publish), so a non-null value no longer means "closed early".
+  // Early-close is only possible while registration is still open and the close
+  // time still tracks the deadline (not already moved earlier).
+  const { isClosed, closedEarly } = registrationStatus(
+    tournament.registration_closed_at,
+    tournament.registration_deadline,
+  );
+
+  if (isClosed || closedEarly) {
     return NextResponse.json(
       {
         error: {

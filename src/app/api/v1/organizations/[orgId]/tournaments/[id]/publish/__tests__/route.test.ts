@@ -467,6 +467,19 @@ describe("POST /api/v1/organizations/[orgId]/tournaments/[id]/publish", () => {
       expect(body.data.status).toBe("published");
       expect(body.data.published_at).toBeDefined();
     });
+
+    it("defaults registration_closed_at to the deadline on publish", async () => {
+      setUser();
+      await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "published",
+          registration_closed_at: VALID_DRAFT_TOURNAMENT.registration_deadline,
+        }),
+      );
+    });
   });
 
   describe("database errors", () => {
