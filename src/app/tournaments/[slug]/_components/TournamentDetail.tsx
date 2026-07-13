@@ -10,6 +10,7 @@ import {
   toTitleCase,
 } from "../../utils";
 import { resolveCountry } from "@/lib/countries";
+import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
 import TournamentTabs from "./TournamentTabs";
 import StartingRankTab from "./StartingRankTab";
 
@@ -90,9 +91,13 @@ export default function TournamentDetail({
   const spotsRatio =
     t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
   const minFee = getMinFeeCents(t.entry_fees);
-  const isDeadlinePassed = new Date(t.registration_deadline) < new Date();
-  // The organizer may have closed registration early, before the deadline.
-  const isRegistrationClosed = isDeadlinePassed || !!t.registration_closed_at;
+  // registration_closed_at is the effective close time (deadline by default,
+  // earlier if the organizer closed registration early).
+  const { isClosed: isRegistrationClosed, closedEarly } =
+    computeRegistrationStatus(
+      t.registration_closed_at,
+      t.registration_deadline,
+    );
   const lowestFeeEntry =
     t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
   const tournamentStarted = new Date(t.start_date + "T00:00:00") <= new Date();
@@ -415,9 +420,11 @@ export default function TournamentDetail({
             </p>
             {/* Deadline */}
             <p className="font-lato text-text-muted text-sm">
-              {t.registration_closed_at
+              {closedEarly
                 ? "⏰ Registration has been closed by the organizer"
-                : `⏰ Registration closes ${formatDeadline(t.registration_deadline)}`}
+                : isRegistrationClosed
+                  ? `⏰ Registration closed ${formatDeadline(t.registration_deadline)}`
+                  : `⏰ Registration closes ${formatDeadline(t.registration_deadline)}`}
             </p>
           </div>
         </div>

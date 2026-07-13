@@ -500,7 +500,7 @@ BEGIN
         is_fide_rated, is_mcf_rated,
         entry_fees, prizes, restrictions,
         max_participants, status,
-        published_at
+        published_at, registration_closed_at
       ) VALUES (
         org_profile_ids[i],
         t_names[idx],
@@ -577,7 +577,9 @@ BEGIN
         t_restrictions,
         max_parts[(idx % 5) + 1],
         t_status::tournament_status,
-        CASE WHEN t_status = 'published'::tournament_status THEN (t_start - interval '14 days')::timestamptz ELSE NULL END
+        CASE WHEN t_status = 'published'::tournament_status THEN (t_start - interval '14 days')::timestamptz ELSE NULL END,
+        -- registration_closed_at defaults to the deadline at publish; drafts NULL.
+        CASE WHEN t_status = 'published'::tournament_status THEN t_deadline ELSE NULL END
       ) RETURNING id INTO new_t_id;
 
       tourney_ids := array_append(tourney_ids, new_t_id);

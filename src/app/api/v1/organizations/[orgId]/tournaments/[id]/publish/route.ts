@@ -258,6 +258,10 @@ export async function POST(
       published_by: claims.id,
       published_at: publishedAt,
       slug,
+      // Registration closes at the deadline by default. This is the single
+      // effective close time; the organizer can later move it earlier via
+      // close-registration. (t.registration_deadline is validated above.)
+      registration_closed_at: t.registration_deadline,
     })
     .eq("id", id)
     .select("id, slug, status, published_at")

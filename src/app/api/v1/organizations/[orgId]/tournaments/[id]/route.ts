@@ -186,9 +186,9 @@ export async function PATCH(
   const permissionError = await resolvePermission(orgId, claims.id);
   if (permissionError) return permissionError;
 
-  const { error: tournamentError } = await supabaseAdmin
+  const { data: existing, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
-    .select("id")
+    .select("id, status, registration_deadline, registration_closed_at")
     .eq("id", id)
     .eq("organization_id", orgId)
     .single();
@@ -289,11 +289,28 @@ export async function PATCH(
   }
 
   if ("registration_deadline" in body) {
-    patch.registration_deadline =
+    const newDeadline =
       typeof body.registration_deadline === "string" &&
       body.registration_deadline
         ? body.registration_deadline
         : null;
+    patch.registration_deadline = newDeadline;
+
+    // registration_closed_at is the effective close time, defaulted to the
+    // deadline at publish. When a published tournament's deadline moves, keep
+    // the close time in sync — but only if it still tracks the deadline (never
+    // manually closed early). If the organizer closed early
+    // (closed_at < deadline), that timestamp is intentional and irreversible,
+    // so leave it. Drafts (closed_at IS NULL) get their default at publish.
+    if (
+      newDeadline &&
+      existing.status === "published" &&
+      existing.registration_closed_at != null &&
+      new Date(existing.registration_closed_at).getTime() ===
+        new Date(existing.registration_deadline).getTime()
+    ) {
+      patch.registration_closed_at = newDeadline;
+    }
   }
 
   if ("max_participants" in body) {

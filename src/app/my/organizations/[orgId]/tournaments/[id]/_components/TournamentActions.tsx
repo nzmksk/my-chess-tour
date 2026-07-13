@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getTournamentDateState } from "@/app/tournaments/utils";
+import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
 
 interface Props {
   orgId: string;
@@ -47,9 +48,12 @@ function PublishedActions({
   const [cancelReason, setCancelReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const deadlinePassed =
-    !!registrationDeadline && new Date(registrationDeadline) < new Date();
-  const registrationClosed = !!registrationClosedAt || deadlinePassed;
+  // registrationClosedAt is the effective close time (the deadline by default,
+  // earlier if closed early). A closed-early row is always already past, so
+  // isClosed alone gates the "Close Registration" action.
+  const { isClosed: registrationClosed, closedEarly } = registrationDeadline
+    ? computeRegistrationStatus(registrationClosedAt, registrationDeadline)
+    : { isClosed: false, closedEarly: false };
 
   // Cancellation only makes sense before a tournament starts. Once it's ongoing
   // or completed (both still `published` in the DB — those states are purely
@@ -109,9 +113,9 @@ function PublishedActions({
               Close registration early
             </h3>
             <p className="font-lato text-text-muted mt-1 text-sm">
-              {registrationClosedAt
+              {closedEarly && registrationClosedAt
                 ? `Registration was closed early on ${formatDateTime(registrationClosedAt)}.`
-                : deadlinePassed
+                : registrationClosed
                   ? "Registration has already closed at its deadline."
                   : "Stop accepting new registrations before the deadline. This cannot be undone — registration cannot be re-opened."}
             </p>

@@ -164,7 +164,7 @@ CREATE TABLE tournaments (
   status                      tournament_status NOT NULL DEFAULT 'draft',
   published_by                uuid REFERENCES users(id) ON DELETE SET NULL,
   published_at                timestamptz,
-  registration_closed_at      timestamptz,                        -- set when the organizer manually closes registration early (before the deadline). Irreversible: registration cannot be re-opened.
+  registration_closed_at      timestamptz,                        -- effective registration close time. NULL for drafts; defaults to registration_deadline at publish; moved earlier (to now()) when the organizer closes registration early. Never exceeds registration_deadline. Early close is irreversible.
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now(),
 
