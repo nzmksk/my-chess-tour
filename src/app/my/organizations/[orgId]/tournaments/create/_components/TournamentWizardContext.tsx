@@ -234,7 +234,6 @@ export function TournamentWizardProvider({
     // One-time hydration from sessionStorage on mount — sessionStorage is
     // unavailable during SSR, so restoring this state synchronously in the
     // mount effect is intentional and runs exactly once.
-    /* eslint-disable react-hooks/set-state-in-effect */
     if (saved) {
       setBasicInfoData(saved.basicInfoData ?? initialBasicInfo);
       setFormatData(saved.formatData ?? initialFormatData);
@@ -247,7 +246,6 @@ export function TournamentWizardProvider({
       }
     }
     setIsHydrated(true);
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, []); // intentionally empty — runs once on mount
 
   // Persist all wizard state to sessionStorage after every state change,

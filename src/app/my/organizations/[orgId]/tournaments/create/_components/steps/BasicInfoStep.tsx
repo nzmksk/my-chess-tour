@@ -32,6 +32,8 @@ type FieldErrors = {
   venueAddress?: string;
 };
 
+const NO_ERRORS: FieldErrors = {};
+
 async function checkNameAvailability(
   name: string,
   excludeId?: string | null,
@@ -83,20 +85,17 @@ export default function BasicInfoStep() {
     goNext,
     registerStepHandler,
     excludeId,
-    isHydrated,
   } = useTournamentWizard();
 
+  // WizardShell only mounts steps after the context has hydrated, so the
+  // context value is already the restored one here.
   const [form, setForm] = useState<BasicInfoData>(basicInfoData);
-
-  useEffect(() => {
-    if (isHydrated) setForm(basicInfoData);
-    // intentionally runs once when context finishes hydrating
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHydrated]);
   const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [showErrors, setShowErrors] = useState(false);
   const nameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Errors are derived from the form — no need to mirror them into state.
+  const errors = showErrors ? validate(form, nameStatus) : NO_ERRORS;
 
   const handleNameChange = (value: string) => {
     setForm((f) => ({ ...f, name: value }));
@@ -131,8 +130,6 @@ export default function BasicInfoStep() {
     }
 
     const fieldErrors = validate(form, currentNameStatus);
-    setErrors((e) => ({ ...e, ...fieldErrors }));
-
     if (Object.keys(fieldErrors).length > 0) return;
 
     setBasicInfoData(form);
@@ -142,12 +139,6 @@ export default function BasicInfoStep() {
   useEffect(() => {
     registerStepHandler(0, attemptNext);
   }, [registerStepHandler, attemptNext]);
-
-  useEffect(() => {
-    if (showErrors) {
-      setErrors(validate(form, nameStatus));
-    }
-  }, [form, nameStatus, showErrors]);
 
   const field = (key: keyof BasicInfoData, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
