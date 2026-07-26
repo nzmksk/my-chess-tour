@@ -1,5 +1,7 @@
 import type { PurchasesRequest } from "./interfaces/purchases-request";
 import type { PurchasesResponse } from "./interfaces/purchases-response";
+import type { RefundRequest } from "./interfaces/refund-request";
+import type { RefundResponse } from "./interfaces/refund-response";
 
 const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 
@@ -191,30 +193,28 @@ export async function cancelChipPurchase(id: string): Promise<void> {
   }
 }
 
-// The refund Payment object CHIP returns from POST /purchases/{id}/refund/. Its
-// `id` is a NEW Payment id (distinct from the original purchase id) that we store
-// as the refund payment row's chip_transaction_id and use to correlate the async
-// `payment.refunded` webhook. `status` is `refunded` when it cleared synchronously
-// or `pending_refund` when the acquirer is still processing.
-export interface ChipRefund {
-  id: string;
-  status: string;
-}
-
 /**
  * Issues a refund against an already-paid CHIP purchase (POST
  * /purchases/{id}/refund/). `purchaseId` is the ORIGINAL purchase id (stored as
- * the registration payment's chip_transaction_id). Omitting `amountCents` refunds
- * the full purchase; a value refunds that many minor units (must not exceed the
- * purchase's refundable amount). The refund may settle synchronously (`refunded`)
- * or asynchronously (`pending_refund`, finalised by the `payment.refunded`
- * webhook). Throws on a non-2xx response so the caller can leave the refund
- * pending for retry.
+ * the registration payment's chip_transaction_id). Omitting `request` refunds the
+ * full purchase; `{ amount }` refunds that many minor units (must not exceed the
+ * purchase's `refundable_amount`).
+ *
+ * The 200 body has **two shapes** — see `RefundResponse`. A refund that cleared
+ * synchronously returns the refund Payment (whose `id` is a NEW Payment id,
+ * distinct from the purchase id, and which carries no `status`); one still
+ * processing on the acquirer side returns the original Purchase with
+ * `status: "pending_refund"`, to be finalised later by the `payment.refunded`
+ * webhook. Narrow with `isPendingRefund` before reading either.
+ *
+ * Throws on a non-2xx response so the caller can leave the refund pending for
+ * retry. Note a 400 (`purchase_refund_error`) carries no detail in its body; the
+ * reason is on the Purchase at `transaction_data.attempts[0].error`.
  */
 export async function refundChipPurchase(
   purchaseId: string,
-  amountCents?: number,
-): Promise<ChipRefund> {
+  request?: RefundRequest,
+): Promise<RefundResponse> {
   const apiKey = process.env.CHIP_API_KEY;
   if (!apiKey) {
     throw new Error("CHIP_API_KEY must be configured");
@@ -228,7 +228,7 @@ export async function refundChipPurchase(
     },
     // Omit the body entirely for a full refund; CHIP treats a missing amount as
     // "refund the whole purchase".
-    body: amountCents == null ? undefined : JSON.stringify({ amount: amountCents }),
+    body: request == null ? undefined : JSON.stringify(request),
   });
 
   if (!res.ok) {
@@ -236,6 +236,5 @@ export async function refundChipPurchase(
     throw new Error(`CHIP API error ${res.status}: ${body}`);
   }
 
-  const body = (await res.json()) as { id: string; status: string };
-  return { id: body.id, status: body.status };
+  return res.json() as Promise<RefundResponse>;
 }

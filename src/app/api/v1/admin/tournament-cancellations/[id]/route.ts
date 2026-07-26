@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { chipRefundOutcome, refundChipPurchase } from "@/services/chip/chip";
+import { isPendingRefund } from "@/services/chip/interfaces/refund-response";
 import {
   sendCancellationReviewEmail,
   sendTournamentCancellationEmail,
@@ -107,10 +108,10 @@ async function processCancellationRefund(refund: PendingRefund): Promise<void> {
     return;
   }
 
-  const outcome = chipRefundOutcome(result.status);
-  if (outcome === "refunded") {
-    // Cleared synchronously — settle now. The later payment.refunded webhook is an
-    // idempotent no-op.
+  if (!isPendingRefund(result)) {
+    // A Payment object came back, which *is* the completed refund — settle now.
+    // `result.id` is the new refund Payment id. The later payment.refunded
+    // webhook is an idempotent no-op.
     const { error } = await supabaseAdmin.rpc("settle_refund", {
       p_refund_id: refund.refund_id,
       p_chip_refund_id: result.id,
@@ -120,24 +121,25 @@ async function processCancellationRefund(refund: PendingRefund): Promise<void> {
     if (error) {
       console.error(`Refund ${refund.refund_id}: settle_refund failed`, error);
     }
-  } else if (outcome === "failed") {
+    return;
+  }
+
+  // A Purchase came back instead. Normally that means `pending_refund`; classify
+  // via the shared mapper so an unexpected status is still treated as a failure.
+  if (chipRefundOutcome(result.status) === "failed") {
     console.error(
       `Refund ${refund.refund_id}: CHIP reported failure synchronously; left pending`,
     );
-  } else {
-    // pending_refund — the webhook will settle it. Stamp the CHIP refund id for
-    // traceability (webhook correlation itself goes via related_to, not this).
-    const { error } = await supabaseAdmin
-      .from("refunds")
-      .update({ chip_refund_id: result.id })
-      .eq("id", refund.refund_id);
-    if (error) {
-      console.error(
-        `Refund ${refund.refund_id}: failed to record CHIP refund id`,
-        error,
-      );
-    }
+    return;
   }
+
+  // pending_refund — the acquirer is still processing and no refund Payment
+  // exists yet, so there is no chip_refund_id to record: `result.id` here is the
+  // *purchase* id, not a refund id. The payment.refunded webhook settles the
+  // refund and stamps the real id (correlation goes via related_to regardless).
+  console.info(
+    `Refund ${refund.refund_id}: CHIP returned pending_refund; awaiting payment.refunded webhook`,
+  );
 }
 
 // Fires the CHIP refund for every pending refund queued when the cancellation was

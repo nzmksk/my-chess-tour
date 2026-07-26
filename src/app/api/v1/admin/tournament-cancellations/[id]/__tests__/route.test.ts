@@ -170,9 +170,11 @@ beforeEach(() => {
   setPendingRefunds();
   setAdminRpcDispatch();
   mockRefundsBuilder.result = { data: null, error: null };
+  // A completed refund is a Payment object — no `status` field. The in-flight
+  // case returns a Purchase instead (see the pending_refund test below).
   mockRefundChipPurchase.mockResolvedValue({
+    type: "payment",
     id: "refund-pay-1",
-    status: "refunded",
   });
   mockTournamentBuilder.result = {
     data: {
@@ -609,7 +611,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     );
     mockRefundChipPurchase
       .mockRejectedValueOnce(new Error("CHIP down"))
-      .mockResolvedValueOnce({ id: "refund-pay-2", status: "refunded" });
+      .mockResolvedValueOnce({ type: "payment", id: "refund-pay-2" });
 
     const res = await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),
@@ -631,15 +633,19 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     });
   });
 
-  it("stamps chip_refund_id and does not settle when CHIP returns pending_refund", async () => {
+  it("neither settles nor stamps an id when CHIP returns pending_refund", async () => {
     setPendingRefunds({
       refund_id: "rf-1",
       registration_id: "reg-1",
       amount_cents: 5500,
       original_chip_purchase_id: "chip-1",
     });
+    // In-flight refunds come back as the *Purchase*, so `id` is the purchase id —
+    // there is no refund Payment id yet. Writing it to chip_refund_id would put a
+    // purchase id in a refund-id column; the payment.refunded webhook supplies
+    // the real one.
     mockRefundChipPurchase.mockResolvedValue({
-      id: "refund-pay-1",
+      id: "chip-1",
       status: "pending_refund",
     });
 
@@ -648,11 +654,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(mockFrom).toHaveBeenCalledWith("refunds");
-    expect(mockRefundsBuilder.update).toHaveBeenCalledWith({
-      chip_refund_id: "refund-pay-1",
-    });
-    expect(mockRefundsBuilder.eq).toHaveBeenCalledWith("id", "rf-1");
+    expect(mockRefundsBuilder.update).not.toHaveBeenCalled();
     expect(mockAdminRpc).not.toHaveBeenCalledWith(
       "settle_refund",
       expect.anything(),

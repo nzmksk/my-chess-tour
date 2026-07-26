@@ -5,6 +5,7 @@ import {
   isChipRefundEvent,
   refundChipPurchase,
 } from "../chip";
+import { isPendingRefund } from "../interfaces/refund-response";
 
 const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 
@@ -144,15 +145,20 @@ describe("refundChipPurchase", () => {
     fetchMock.mockReset();
   });
 
-  it("issues a full refund with no body and returns id + status", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: "refund-pay-1", status: "refunded" }),
-    });
+  it("issues a full refund with no body and returns the refund Payment", async () => {
+    // Completed refund → a Payment object. Note it carries no `status`.
+    const payment = {
+      type: "payment",
+      id: "refund-pay-1",
+      payment: { payment_type: "refund", is_outgoing: true, amount: 5500 },
+      related_to: { type: "purchase", id: "chip-orig-1" },
+    };
+    fetchMock.mockResolvedValue({ ok: true, json: async () => payment });
 
     const result = await refundChipPurchase("chip-orig-1");
 
-    expect(result).toEqual({ id: "refund-pay-1", status: "refunded" });
+    expect(result).toEqual(payment);
+    expect(isPendingRefund(result)).toBe(false);
     expect(fetchMock).toHaveBeenCalledWith(
       `${CHIP_API_URL}/purchases/chip-orig-1/refund/`,
       expect.objectContaining({
@@ -168,15 +174,28 @@ describe("refundChipPurchase", () => {
   it("sends the amount for a partial refund", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ id: "refund-pay-2", status: "pending_refund" }),
+      json: async () => ({ type: "payment", id: "refund-pay-2" }),
     });
 
-    await refundChipPurchase("chip-orig-2", 4200);
+    await refundChipPurchase("chip-orig-2", { amount: 4200 });
 
     expect(fetchMock).toHaveBeenCalledWith(
       `${CHIP_API_URL}/purchases/chip-orig-2/refund/`,
       expect.objectContaining({ body: JSON.stringify({ amount: 4200 }) }),
     );
+  });
+
+  it("returns the Purchase shape when the acquirer is still processing", async () => {
+    // Slow refund → the original Purchase with status pending_refund, NOT a
+    // Payment. Its `id` is the purchase id; no refund Payment exists yet.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "chip-orig-5", status: "pending_refund" }),
+    });
+
+    const result = await refundChipPurchase("chip-orig-5");
+
+    expect(isPendingRefund(result)).toBe(true);
   });
 
   it("throws on a non-OK response", async () => {
