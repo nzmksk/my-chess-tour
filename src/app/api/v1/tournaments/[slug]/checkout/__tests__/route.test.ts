@@ -570,7 +570,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     });
   });
 
-  it("builds the CHIP success/failure redirects from the slug, not the UUID", async () => {
+  it("builds the CHIP success/failure/cancel redirects from the slug, not the UUID", async () => {
     setThen(mockExistingBuilder, { data: null, error: null });
 
     const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
@@ -585,7 +585,11 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     expect(arg.failure_redirect).toContain(
       `/tournaments/${SLUG}/register/failure`,
     );
+    // "Return to seller" — the register page, which shows PaymentInProgress
+    // while the hold is live.
+    expect(arg.cancel_redirect).toContain(`/tournaments/${SLUG}/register`);
     expect(arg.success_redirect).not.toContain(VALID_UUID);
+    expect(arg.cancel_redirect).not.toContain(VALID_UUID);
   });
 
   it("sends due_strict so the checkout link is unpayable once due passes", async () => {

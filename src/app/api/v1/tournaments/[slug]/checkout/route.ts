@@ -616,6 +616,12 @@ async function initiateChipPayment(
       reference: payment.id,
       success_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/success`,
       failure_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/failure`,
+      // Renders a "Return to seller" button on the CHIP checkout. Lands on the
+      // register page, which shows PaymentInProgress (same link, tier-lock
+      // countdown) because the registration is still pending. Note this does NOT
+      // cancel the purchase — the seat stays held and the link stays payable
+      // until `due`, by design.
+      cancel_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register`,
       send_receipt: true,
       // Expire the checkout when the seat hold lapses (see `due_strict` above).
       // `due` is a Unix timestamp in seconds.
