@@ -8,6 +8,7 @@ import type {
   SpecialPrize,
 } from "../TournamentWizardContext";
 import { useTournamentWizard } from "../TournamentWizardContext";
+import { newRowId } from "../rowId";
 
 type PrizeRowErrors = Partial<{ placement: string; amount: string }>;
 type CategoryErrors = Partial<{
@@ -21,9 +22,7 @@ type PrizesErrors = {
   specialPrizes: Record<string, SpecialPrizeErrors>;
 };
 
-function uid() {
-  return `${Date.now()}-${Math.random()}`;
-}
+const NO_ERRORS: PrizesErrors = { categories: {}, specialPrizes: {} };
 
 function validate(data: PrizesData): PrizesErrors {
   const errors: PrizesErrors = { categories: {}, specialPrizes: {} };
@@ -203,28 +202,24 @@ function PrizeCategoryBlock({
 }
 
 export default function PrizesStep() {
-  const { prizesData, setPrizesData, goNext, registerStepHandler, isHydrated } =
+  const { prizesData, setPrizesData, goNext, registerStepHandler } =
     useTournamentWizard();
 
+  // WizardShell only mounts steps after the context has hydrated, so the
+  // context value is already the restored one here.
   const [form, setForm] = useState<PrizesData>(prizesData);
-
-  useEffect(() => {
-    if (isHydrated) setForm(prizesData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHydrated]);
-  const [errors, setErrors] = useState<PrizesErrors>({
-    categories: {},
-    specialPrizes: {},
-  });
   const [showErrors, setShowErrors] = useState(false);
+
+  // Errors are derived from the form — no need to mirror them into state.
+  const errors = showErrors ? validate(form) : NO_ERRORS;
 
   // ── Category helpers ──────────────────────────────────────
 
   const addCategory = () => {
     const newCat: PrizeCategory = {
-      id: uid(),
+      id: newRowId(),
       name: "",
-      prizes: [{ id: uid(), placement: "", amount: "" }],
+      prizes: [{ id: newRowId(), placement: "", amount: "" }],
     };
     setForm((f) => ({ ...f, categories: [...f.categories, newCat] }));
   };
@@ -246,7 +241,7 @@ export default function PrizesStep() {
   };
 
   const addPrize = (catId: string) => {
-    const newRow: PrizeRow = { id: uid(), placement: "", amount: "" };
+    const newRow: PrizeRow = { id: newRowId(), placement: "", amount: "" };
     setForm((f) => ({
       ...f,
       categories: f.categories.map((c) =>
@@ -289,7 +284,7 @@ export default function PrizesStep() {
   // ── Special prize helpers ─────────────────────────────────
 
   const addSpecialPrize = () => {
-    const newSp: SpecialPrize = { id: uid(), name: "", amount: "" };
+    const newSp: SpecialPrize = { id: newRowId(), name: "", amount: "" };
     setForm((f) => ({ ...f, specialPrizes: [...f.specialPrizes, newSp] }));
   };
 
@@ -314,7 +309,6 @@ export default function PrizesStep() {
   const attemptNext = useCallback(async () => {
     setShowErrors(true);
     const fieldErrors = validate(form);
-    setErrors(fieldErrors);
     if (hasErrors(fieldErrors)) return;
     setPrizesData(form);
     goNext();
@@ -323,10 +317,6 @@ export default function PrizesStep() {
   useEffect(() => {
     registerStepHandler(3, attemptNext);
   }, [registerStepHandler, attemptNext]);
-
-  useEffect(() => {
-    if (showErrors) setErrors(validate(form));
-  }, [form, showErrors]);
 
   // ── Render ────────────────────────────────────────────────
 

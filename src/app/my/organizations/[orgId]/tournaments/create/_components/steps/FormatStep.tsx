@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import type { FormatData, Restriction } from "../TournamentWizardContext";
 import { useTournamentWizard } from "../TournamentWizardContext";
+import { newRowId } from "../rowId";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
 
@@ -29,6 +30,8 @@ type FieldErrors = Partial<
     string
   > & { restrictions: Record<string, string> }
 >;
+
+const NO_ERRORS: FieldErrors = {};
 
 function validate(data: FormatData): FieldErrors {
   const errors: FieldErrors = {};
@@ -93,18 +96,17 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function FormatStep() {
-  const { formatData, setFormatData, goNext, registerStepHandler, isHydrated } =
+  const { formatData, setFormatData, goNext, registerStepHandler } =
     useTournamentWizard();
 
+  // WizardShell only mounts steps after the context has hydrated, so the
+  // context value is already the restored one here.
   const [form, setForm] = useState<FormatData>(formatData);
-
-  useEffect(() => {
-    if (isHydrated) setForm(formatData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHydrated]);
-  const [errors, setErrors] = useState<FieldErrors>({});
   const [showErrors, setShowErrors] = useState(false);
   const uid = useId();
+
+  // Errors are derived from the form — no need to mirror them into state.
+  const errors = showErrors ? validate(form) : NO_ERRORS;
 
   const field = <K extends keyof FormatData>(key: K, value: FormatData[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -112,7 +114,7 @@ export default function FormatStep() {
 
   const addRestriction = () => {
     const newRow: Restriction = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: newRowId(),
       type: "Max Rating",
       value: "",
     };
@@ -154,7 +156,6 @@ export default function FormatStep() {
   const attemptNext = useCallback(async () => {
     setShowErrors(true);
     const fieldErrors = validate(form);
-    setErrors(fieldErrors);
     const hasErrors =
       Object.keys(fieldErrors).filter((k) => k !== "restrictions").length > 0 ||
       Object.keys(fieldErrors.restrictions ?? {}).length > 0;
@@ -166,12 +167,6 @@ export default function FormatStep() {
   useEffect(() => {
     registerStepHandler(1, attemptNext);
   }, [registerStepHandler, attemptNext]);
-
-  useEffect(() => {
-    if (showErrors) {
-      setErrors(validate(form));
-    }
-  }, [form, showErrors]);
 
   return (
     <div>

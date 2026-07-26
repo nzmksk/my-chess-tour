@@ -61,22 +61,23 @@ export function CountryDropdown({
   className,
 }: CountryDropdownProps) {
   const [open, setOpen] = React.useState(false);
-  const [selected, setSelected] = React.useState<Country | undefined>(
-    undefined,
-  );
+  const [selectedAlpha3, setSelectedAlpha3] = React.useState(defaultValue);
 
-  // Sync selection with defaultValue (alpha-3) whenever it or the options change.
-  React.useEffect(() => {
-    if (defaultValue) {
-      const match = options.find((c) => c.alpha3 === defaultValue);
-      setSelected(match);
-    } else {
-      setSelected(undefined);
-    }
-  }, [defaultValue, options]);
+  // A new defaultValue from the parent overrides whatever the user picked
+  // last. Adjusting state during render (rather than in an effect) avoids
+  // rendering one frame with the stale selection.
+  const [prevDefaultValue, setPrevDefaultValue] = React.useState(defaultValue);
+  if (defaultValue !== prevDefaultValue) {
+    setPrevDefaultValue(defaultValue);
+    setSelectedAlpha3(defaultValue);
+  }
+
+  const selected = selectedAlpha3
+    ? options.find((c) => c.alpha3 === selectedAlpha3)
+    : undefined;
 
   const handleSelect = (country: Country) => {
-    setSelected(country);
+    setSelectedAlpha3(country.alpha3);
     onChange?.(country);
     setOpen(false);
   };

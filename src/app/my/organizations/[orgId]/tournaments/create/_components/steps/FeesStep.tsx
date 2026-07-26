@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeesData, FeeTier, TierType } from "../TournamentWizardContext";
 import { useTournamentWizard } from "../TournamentWizardContext";
+import { newRowId } from "../rowId";
 
 const COMMISSION = 0.1;
 
@@ -36,6 +37,8 @@ type FeesErrors = {
   standardFee?: string;
   tiers: Record<string, TierErrors>;
 };
+
+const NO_ERRORS: FeesErrors = { tiers: {} };
 
 function numAmt(v: number | ""): number {
   return v === "" ? 0 : Number(v);
@@ -223,19 +226,18 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function FeesStep() {
-  const { feesData, setFeesData, goNext, registerStepHandler, isHydrated } =
+  const { feesData, setFeesData, goNext, registerStepHandler } =
     useTournamentWizard();
 
+  // WizardShell only mounts steps after the context has hydrated, so the
+  // context value is already the restored one here.
   const [form, setForm] = useState<FeesData>(feesData);
-
-  useEffect(() => {
-    if (isHydrated) setForm(feesData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHydrated]);
-  const [errors, setErrors] = useState<FeesErrors>({ tiers: {} });
   const [showErrors, setShowErrors] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Errors are derived from the form — no need to mirror them into state.
+  const errors = showErrors ? validate(form) : NO_ERRORS;
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -255,7 +257,7 @@ export default function FeesStep() {
 
   const addTier = (type: TierType) => {
     const newTier: FeeTier = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: newRowId(),
       type,
       amount: "",
       validUntil: "",
@@ -283,7 +285,6 @@ export default function FeesStep() {
   const attemptNext = useCallback(async () => {
     setShowErrors(true);
     const fieldErrors = validate(form);
-    setErrors(fieldErrors);
     const hasErrors =
       !!fieldErrors.standardFee || Object.keys(fieldErrors.tiers).length > 0;
     if (hasErrors) return;
@@ -294,12 +295,6 @@ export default function FeesStep() {
   useEffect(() => {
     registerStepHandler(2, attemptNext);
   }, [registerStepHandler, attemptNext]);
-
-  useEffect(() => {
-    if (showErrors) {
-      setErrors(validate(form));
-    }
-  }, [form, showErrors]);
 
   return (
     <div>

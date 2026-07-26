@@ -63,6 +63,7 @@ export default function WizardShell({
     tournamentId,
     setTournamentId,
     clearWizardStorage,
+    isHydrated,
   } = useTournamentWizard();
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -271,9 +272,9 @@ export default function WizardShell({
       <div className="card overflow-hidden">
         <WizardProgressBar />
 
-        <div className="px-6 py-7 sm:px-8">
-          <StepContent />
-        </div>
+        {/* Steps seed their local form state from the context on mount, so they
+            must not mount until the context has restored sessionStorage. */}
+        <div className="px-6 py-7 sm:px-8">{isHydrated && <StepContent />}</div>
 
         {publishError && (
           <div className="mx-6 mt-4 mb-0 rounded-md border border-red-400 bg-red-50 px-4 py-3 sm:mx-8">
