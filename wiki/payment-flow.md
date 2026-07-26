@@ -11,6 +11,11 @@ Two rows track one registration's money (`db/migrations/001_tables.sql`):
 
 There is **no `expired` status** in either enum — expiry reuses `cancelled_payment` (see [Expiry](#expiry-no-chip-event)). CHIP's *purchase* status does have `expired` (reachable because we send `due_strict`), but it never maps to a settlement outcome: `chipOutcome()` leaves it `pending` so the app-owned expiry path produces `cancelled_payment` rather than `failed_payment`.
 
+Two consequences of that three-value enum worth knowing before reading `payments.status` for anything:
+
+- **An expired attempt is derived, never stored.** It's `payments.status='pending'` AND the row is still the registration's `current_payment_id` AND `registered_at < now() - PAYMENT_TIMEOUT_INTERVAL`. The payment is deliberately left `pending` (not terminalized) so a late `paid` can still rescue it — adding an `expired` value would mark as final a row that must stay settleable.
+- **`failed` is not only genuine declines.** `start_new_payment_attempt` also marks a *superseded* attempt `failed` when the payer abandons and resumes (see [Resume & retry](#resume--retry)). So a payment-failure rate computed straight off `status='failed'` overcounts. A superseded row is distinguishable by having a newer sibling payment for the same `registration_id`.
+
 ## Pricing (commission math)
 
 `compute_registration_amounts(amount, commission_rate, organizer_commission_pct)` (`db/migrations/007_payment_functions.sql`) is the single source of truth for what a player pays. It's used by both creation and resume so the two never drift:
