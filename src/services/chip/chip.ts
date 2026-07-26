@@ -1,3 +1,6 @@
+import type { PurchasesRequest } from "./interfaces/purchases-request";
+import type { PurchasesResponse } from "./interfaces/purchases-response";
+
 const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 
 // CHIP emits no expiry webhook (see wiki/chip-webhook.md), so expiry is owned by
@@ -10,21 +13,6 @@ const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 export const PAYMENT_TIMEOUT_MINUTES = 10;
 // As a Postgres interval literal for the expire_stale_pending_payments RPC.
 export const PAYMENT_TIMEOUT_INTERVAL = `${PAYMENT_TIMEOUT_MINUTES} minutes`;
-
-interface CreatePurchaseParams {
-  amountCents: number;
-  clientEmail: string;
-  productName: string;
-  referenceId: string;
-  successRedirect: string;
-  failureRedirect: string;
-}
-
-export interface ChipPurchase {
-  id: string;
-  checkout_url: string;
-  status: string;
-}
 
 // CHIP events/statuses that mean the money cleared (purchase.captured carries
 // status "paid" too, but we list it explicitly for clarity).
@@ -105,9 +93,14 @@ export function chipRefundOutcome(
   return "pending";
 }
 
+/**
+ * Creates a CHIP purchase (POST /purchases/). The caller supplies the full CHIP
+ * request payload; `brand_id` is injected here because it comes from the
+ * environment alongside the API key.
+ */
 export async function createChipPurchase(
-  params: CreatePurchaseParams,
-): Promise<ChipPurchase> {
+  request: Omit<PurchasesRequest, "brand_id">,
+): Promise<PurchasesResponse> {
   const apiKey = process.env.CHIP_API_KEY;
   const brandId = process.env.CHIP_BRAND_ID;
 
@@ -121,27 +114,7 @@ export async function createChipPurchase(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      purchase: {
-        currency: "MYR",
-        products: [
-          {
-            name: params.productName,
-            price: params.amountCents,
-            quantity: 1,
-          },
-        ],
-      },
-      client: { email: params.clientEmail },
-      brand_id: brandId,
-      reference: params.referenceId,
-      success_redirect: params.successRedirect,
-      failure_redirect: params.failureRedirect,
-      send_receipt: true,
-      // Expire the checkout so an abandoned link can't be paid after the seat
-      // hold lapses. `due` is a Unix timestamp in seconds.
-      due: Math.floor(Date.now() / 1000) + PAYMENT_TIMEOUT_MINUTES * 60,
-    }),
+    body: JSON.stringify({ ...request, brand_id: brandId }),
   });
 
   if (!res.ok) {
@@ -149,21 +122,17 @@ export async function createChipPurchase(
     throw new Error(`CHIP API error ${res.status}: ${body}`);
   }
 
-  return res.json() as Promise<ChipPurchase>;
+  return res.json() as Promise<PurchasesResponse>;
 }
 
 /**
  * Fetches the current state of a purchase from CHIP. Used to reconcile the
- * post-payment return pages when the webhook hasn't arrived yet. `amountCents`
- * is the total CHIP actually charged (purchase.total), used to guard settlement
- * against a stale/re-priced purchase being paid.
+ * post-payment return pages when the webhook hasn't arrived yet. Callers read
+ * `status` for the outcome and `purchase.total` for the amount CHIP actually
+ * charged — the latter guards settlement against a stale/re-priced purchase
+ * being paid.
  */
-export async function getChipPurchase(id: string): Promise<{
-  id: string;
-  status: string;
-  amountCents: number | null;
-  paymentMethod: string | null;
-}> {
+export async function getChipPurchase(id: string): Promise<PurchasesResponse> {
   const apiKey = process.env.CHIP_API_KEY;
   if (!apiKey) {
     throw new Error("CHIP_API_KEY must be configured");
@@ -183,18 +152,7 @@ export async function getChipPurchase(id: string): Promise<{
     throw new Error(`CHIP API error ${res.status}: ${body}`);
   }
 
-  const body = (await res.json()) as {
-    id: string;
-    status: string;
-    purchase?: { total?: number };
-    transaction_data?: { payment_method?: string };
-  };
-  return {
-    id: body.id,
-    status: body.status,
-    amountCents: body.purchase?.total ?? null,
-    paymentMethod: body.transaction_data?.payment_method ?? null,
-  };
+  return res.json() as Promise<PurchasesResponse>;
 }
 
 /**

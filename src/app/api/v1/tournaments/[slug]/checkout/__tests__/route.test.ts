@@ -579,13 +579,13 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
 
     expect(res.status).toBe(201);
     const arg = mockCreateChipPurchase.mock.calls[0][0];
-    expect(arg.successRedirect).toContain(
+    expect(arg.success_redirect).toContain(
       `/tournaments/${SLUG}/register/success`,
     );
-    expect(arg.failureRedirect).toContain(
+    expect(arg.failure_redirect).toContain(
       `/tournaments/${SLUG}/register/failure`,
     );
-    expect(arg.successRedirect).not.toContain(VALID_UUID);
+    expect(arg.success_redirect).not.toContain(VALID_UUID);
   });
 
   it("returns 503 PAYMENT_GATEWAY_ERROR when the CHIP purchase fails to create", async () => {

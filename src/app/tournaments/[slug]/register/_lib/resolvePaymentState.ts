@@ -108,8 +108,12 @@ export async function resolvePaymentState(
   }
 
   try {
-    const purchase = await getChipPurchase(payment.chip_transaction_id);
-    const outcome = chipOutcome(purchase.status);
+    const chipPurchase = await getChipPurchase(payment.chip_transaction_id);
+    const outcome = chipOutcome(chipPurchase.status);
+    // Read defensively despite the interface marking these required — this is
+    // untrusted network JSON and settle_registration_payment accepts null for
+    // both params.
+    const amountCents = chipPurchase.purchase?.total ?? null;
 
     if (outcome !== "paid") {
       // Not cleared. A failed row stays failed; a pending row either expires
@@ -127,7 +131,7 @@ export async function resolvePaymentState(
       await supabaseAdmin.rpc("settle_registration_payment", {
         p_payment_id: payment.id,
         p_paid: false,
-        p_amount_cents: purchase.amountCents,
+        p_amount_cents: amountCents,
       });
       return {
         state: "failed",
@@ -141,8 +145,8 @@ export async function resolvePaymentState(
       {
         p_payment_id: payment.id,
         p_paid: true,
-        p_amount_cents: purchase.amountCents,
-        p_payment_method: purchase.paymentMethod,
+        p_amount_cents: amountCents,
+        p_payment_method: chipPurchase.transaction_data?.payment_method ?? null,
       },
     );
 

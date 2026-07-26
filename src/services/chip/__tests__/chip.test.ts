@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   chipRefundOutcome,
+  createChipPurchase,
   isChipRefundEvent,
   refundChipPurchase,
 } from "../chip";
@@ -43,6 +44,89 @@ describe("isChipRefundEvent", () => {
     expect(isChipRefundEvent("purchase.paid", "paid")).toBe(false);
     expect(isChipRefundEvent("purchase.payment_failure", "error")).toBe(false);
     expect(isChipRefundEvent()).toBe(false);
+  });
+});
+
+describe("createChipPurchase", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubEnv("CHIP_API_KEY", "test-key");
+    vi.stubEnv("CHIP_BRAND_ID", "test-brand");
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  it("posts the caller's payload with brand_id injected", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "chip-1", checkout_url: "https://pay/1" }),
+    });
+
+    const result = await createChipPurchase({
+      purchase: {
+        currency: "MYR",
+        products: [{ name: "Entry", price: 5500, quantity: "1" }],
+      },
+      client: { email: "player@example.com" },
+      reference: "pay-1",
+      success_redirect: "https://app/success",
+      failure_redirect: "https://app/failure",
+      send_receipt: true,
+      due: 1_700_000_000,
+    });
+
+    expect(result).toEqual({ id: "chip-1", checkout_url: "https://pay/1" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${CHIP_API_URL}/purchases/`,
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer test-key" }),
+      }),
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      purchase: {
+        currency: "MYR",
+        products: [{ name: "Entry", price: 5500, quantity: "1" }],
+      },
+      client: { email: "player@example.com" },
+      brand_id: "test-brand",
+      reference: "pay-1",
+      success_redirect: "https://app/success",
+      failure_redirect: "https://app/failure",
+      send_receipt: true,
+      due: 1_700_000_000,
+    });
+  });
+
+  it("throws on a non-OK response", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: async () => "purchase_validation_error",
+    });
+
+    await expect(
+      createChipPurchase({
+        purchase: { products: [{ name: "Entry", price: 5500 }] },
+        client: { email: "player@example.com" },
+      }),
+    ).rejects.toThrow("CHIP API error 422: purchase_validation_error");
+  });
+
+  it("throws when CHIP_BRAND_ID is not configured", async () => {
+    vi.stubEnv("CHIP_BRAND_ID", "");
+    await expect(
+      createChipPurchase({
+        purchase: { products: [{ name: "Entry", price: 5500 }] },
+        client: { email: "player@example.com" },
+      }),
+    ).rejects.toThrow("CHIP_API_KEY and CHIP_BRAND_ID must be configured");
   });
 });
 
