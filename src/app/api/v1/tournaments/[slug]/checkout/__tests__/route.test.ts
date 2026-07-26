@@ -570,7 +570,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     });
   });
 
-  it("builds the CHIP success/failure redirects from the slug, not the UUID", async () => {
+  it("builds the CHIP success/failure/cancel redirects from the slug, not the UUID", async () => {
     setThen(mockExistingBuilder, { data: null, error: null });
 
     const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
@@ -579,13 +579,35 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
 
     expect(res.status).toBe(201);
     const arg = mockCreateChipPurchase.mock.calls[0][0];
-    expect(arg.successRedirect).toContain(
+    expect(arg.success_redirect).toContain(
       `/tournaments/${SLUG}/register/success`,
     );
-    expect(arg.failureRedirect).toContain(
+    expect(arg.failure_redirect).toContain(
       `/tournaments/${SLUG}/register/failure`,
     );
-    expect(arg.successRedirect).not.toContain(VALID_UUID);
+    // "Return to seller" — the register page, which shows PaymentInProgress
+    // while the hold is live.
+    expect(arg.cancel_redirect).toContain(`/tournaments/${SLUG}/register`);
+    expect(arg.success_redirect).not.toContain(VALID_UUID);
+    expect(arg.cancel_redirect).not.toContain(VALID_UUID);
+  });
+
+  it("sends due_strict so the checkout link is unpayable once due passes", async () => {
+    setThen(mockExistingBuilder, { data: null, error: null });
+
+    const before = Math.floor(Date.now() / 1000);
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    const arg = mockCreateChipPurchase.mock.calls[0][0];
+    // Without due_strict, CHIP only marks a lapsed purchase `overdue` and keeps
+    // accepting payment on it — the seat hold would be released while the link
+    // stayed live. It belongs on `purchase`, not at the top level.
+    expect(arg.purchase.due_strict).toBe(true);
+    // 10 minutes — matches the mocked PAYMENT_TIMEOUT_MINUTES above.
+    expect(arg.due).toBeGreaterThanOrEqual(before + 10 * 60);
   });
 
   it("returns 503 PAYMENT_GATEWAY_ERROR when the CHIP purchase fails to create", async () => {

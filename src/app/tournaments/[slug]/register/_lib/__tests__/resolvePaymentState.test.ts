@@ -158,8 +158,8 @@ describe("resolvePaymentState", () => {
     mockGetChipPurchase.mockResolvedValue({
       id: "chip-1",
       status: "paid",
-      amountCents: 5500,
-      paymentMethod: "visa",
+      purchase: { total: 5500 },
+      transaction_data: { payment_method: "visa" },
     });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
@@ -186,10 +186,10 @@ describe("resolvePaymentState", () => {
         error: null,
       },
     );
+    // No `purchase` on the payload — the caller's `?? null` yields a null amount.
     mockGetChipPurchase.mockResolvedValue({
       id: "chip-1",
       status: "error",
-      amountCents: null,
     });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
@@ -214,8 +214,8 @@ describe("resolvePaymentState", () => {
     mockGetChipPurchase.mockResolvedValue({
       id: "chip-1",
       status: "paid",
-      amountCents: 5500,
-      paymentMethod: "fpx_b2c",
+      purchase: { total: 5500 },
+      transaction_data: { payment_method: "fpx_b2c" },
     });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
@@ -245,7 +245,7 @@ describe("resolvePaymentState", () => {
     mockGetChipPurchase.mockResolvedValue({
       id: "chip-1",
       status: "paid",
-      amountCents: 9999,
+      purchase: { total: 9999 },
     });
     mockRpc.mockResolvedValueOnce({
       data: { amount_mismatch: true },
@@ -269,10 +269,10 @@ describe("resolvePaymentState", () => {
         error: null,
       },
     );
+    // No `purchase` on the payload — the caller's `?? null` yields a null amount.
     mockGetChipPurchase.mockResolvedValue({
       id: "chip-1",
       status: "error",
-      amountCents: null,
     });
 
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);

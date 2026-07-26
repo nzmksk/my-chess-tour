@@ -6,41 +6,55 @@ import crypto from "node:crypto";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, setPaymentResult } = vi.hoisted(() => {
-  function makeBuilder(getResult: () => unknown) {
-    const b: Record<string, unknown> = {};
-    for (const m of ["select", "eq", "maybeSingle"]) {
-      b[m] = vi.fn(() => b);
+const { mockFrom, mockRpc, setPaymentResult, setRefundResult } = vi.hoisted(
+  () => {
+    function makeBuilder(getResult: () => unknown) {
+      const b: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "neq", "maybeSingle"]) {
+        b[m] = vi.fn(() => b);
+      }
+      b.then = (
+        onfulfilled: (v: unknown) => unknown,
+        onrejected?: (r: unknown) => unknown,
+      ) => Promise.resolve(getResult()).then(onfulfilled, onrejected);
+      return b;
     }
-    b.then = (
-      onfulfilled: (v: unknown) => unknown,
-      onrejected?: (r: unknown) => unknown,
-    ) => Promise.resolve(getResult()).then(onfulfilled, onrejected);
-    return b;
-  }
 
-  // A queue of results returned for successive `from("payments")` lookups
-  // (the handler may try chip_transaction_id then reference).
-  let paymentResults: Array<unknown> = [];
-  let idx = 0;
-  const setPaymentResult = (...results: Array<unknown>) => {
-    paymentResults = results;
-    idx = 0;
-  };
+    // A queue of results returned for successive `from("payments")` lookups
+    // (the handler may try chip_transaction_id then reference).
+    let paymentResults: Array<unknown> = [];
+    let idx = 0;
+    const setPaymentResult = (...results: Array<unknown>) => {
+      paymentResults = results;
+      idx = 0;
+    };
 
-  const mockFrom = vi.fn((table: string) => {
-    if (table === "payments")
-      return makeBuilder(
-        () => paymentResults[idx++] ?? { data: null, error: null },
-      );
-    return makeBuilder(() => ({ data: null, error: null }));
-  });
+    // A queue of results for successive `from("refunds")` lookups (refund path).
+    let refundResults: Array<unknown> = [];
+    let ridx = 0;
+    const setRefundResult = (...results: Array<unknown>) => {
+      refundResults = results;
+      ridx = 0;
+    };
 
-  const mockRpc = vi.fn<() => Promise<{ data: unknown; error: unknown }>>(() =>
-    Promise.resolve({ data: { already_processed: false }, error: null }),
-  );
-  return { mockFrom, mockRpc, setPaymentResult };
-});
+    const mockFrom = vi.fn((table: string) => {
+      if (table === "payments")
+        return makeBuilder(
+          () => paymentResults[idx++] ?? { data: null, error: null },
+        );
+      if (table === "refunds")
+        return makeBuilder(
+          () => refundResults[ridx++] ?? { data: null, error: null },
+        );
+      return makeBuilder(() => ({ data: null, error: null }));
+    });
+
+    const mockRpc = vi.fn<() => Promise<{ data: unknown; error: unknown }>>(() =>
+      Promise.resolve({ data: { already_processed: false }, error: null }),
+    );
+    return { mockFrom, mockRpc, setPaymentResult, setRefundResult };
+  },
+);
 
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
@@ -80,6 +94,7 @@ function makeRequest(payload: unknown, signature?: string) {
 beforeEach(() => {
   vi.stubEnv("CHIP_WEBHOOK_PUBLIC_KEY", publicKey);
   setPaymentResult({ data: null, error: null });
+  setRefundResult({ data: null, error: null });
   // The handler logs expected failure reasons; keep test output clean.
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -234,6 +249,139 @@ describe("POST /api/v1/webhooks/chip", () => {
         id: "chip-1",
         status: "paid",
         event_type: "purchase.paid",
+      }),
+    );
+
+    expect(res.status).toBe(500);
+  });
+
+  // ---- Refund events -------------------------------------------------------
+
+  it("settles a refund: correlates payment.refunded via related_to → registration → refund", async () => {
+    // related_to → original purchase → registration payment
+    setPaymentResult({ data: { registration_id: "reg-1" }, error: null });
+    // registration → live refund row
+    setRefundResult({ data: { id: "rf-1" }, error: null });
+
+    const res = await POST(
+      makeRequest({
+        id: "refund-pay-1", // the CHIP refund Payment id
+        status: "refunded",
+        event_type: "payment.refunded",
+        related_to: { id: "chip-orig-1" },
+        transaction_data: { payment_method: "fpx_b2c" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    // Correlated on the ORIGINAL purchase id, not the refund payment id.
+    expect(mockFrom).toHaveBeenCalledWith("payments");
+    expect(mockFrom).toHaveBeenCalledWith("refunds");
+    expect(mockRpc).toHaveBeenCalledWith("settle_refund", {
+      p_refund_id: "rf-1",
+      p_chip_refund_id: "refund-pay-1",
+      p_paid: true,
+      p_payment_method: "fpx_b2c",
+    });
+  });
+
+  it("resolves related_to given as a URL string", async () => {
+    setPaymentResult({ data: { registration_id: "reg-1" }, error: null });
+    setRefundResult({ data: { id: "rf-1" }, error: null });
+
+    const res = await POST(
+      makeRequest({
+        id: "refund-pay-1",
+        status: "refunded",
+        event_type: "payment.refunded",
+        related_to: "https://gate.chip-in.asia/api/v1/purchases/chip-orig-1/",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_refund",
+      expect.objectContaining({ p_refund_id: "rf-1", p_paid: true }),
+    );
+  });
+
+  it("acks a pending_refund without settling", async () => {
+    const res = await POST(
+      makeRequest({
+        id: "chip-orig-1",
+        status: "pending_refund",
+        event_type: "purchase.pending_refund",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("settles a refund failure with p_paid=false (no ledger row)", async () => {
+    // The failure event carries the original Purchase directly (payload.id).
+    setPaymentResult({ data: { registration_id: "reg-1" }, error: null });
+    setRefundResult({ data: { id: "rf-1" }, error: null });
+
+    const res = await POST(
+      makeRequest({
+        id: "chip-orig-1",
+        status: "error",
+        event_type: "purchase.refund_failure",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledWith("settle_refund", {
+      p_refund_id: "rf-1",
+      p_chip_refund_id: null,
+      p_paid: false,
+      p_payment_method: null,
+    });
+  });
+
+  it("acks a refund event with no matching registration payment", async () => {
+    setPaymentResult({ data: null, error: null });
+
+    const res = await POST(
+      makeRequest({
+        id: "refund-pay-1",
+        status: "refunded",
+        event_type: "payment.refunded",
+        related_to: { id: "chip-unknown" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("acks a refund event with no matching refund row (e.g. out-of-band refund)", async () => {
+    setPaymentResult({ data: { registration_id: "reg-1" }, error: null });
+    setRefundResult({ data: null, error: null });
+
+    const res = await POST(
+      makeRequest({
+        id: "refund-pay-1",
+        status: "refunded",
+        event_type: "payment.refunded",
+        related_to: { id: "chip-orig-1" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when the refund correlation lookup errors", async () => {
+    setPaymentResult({ data: null, error: { message: "db down" } });
+
+    const res = await POST(
+      makeRequest({
+        id: "refund-pay-1",
+        status: "refunded",
+        event_type: "payment.refunded",
+        related_to: { id: "chip-orig-1" },
       }),
     );
 

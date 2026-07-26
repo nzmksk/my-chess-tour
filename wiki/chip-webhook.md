@@ -10,6 +10,8 @@ On those platforms paste the **raw multi-line PEM with no surrounding quotes**. 
 
 ## Event types
 
+The registration settlement path consumes `purchase.paid` / `purchase.captured` / `purchase.payment_failure` (see [payment-flow.md](./payment-flow.md)); the refund path consumes `payment.refunded` / `purchase.refund_failure` / `purchase.pending_refund` (see [refund-flow.md](./refund-flow.md)).
+
 Available event types and when they are emitted:
 
 `purchase.created`: Emitted when a Purchase is created. This happens as a result of POST `/purchases/` request executed successfully. Purchase.status will be == `created` in the received payload.

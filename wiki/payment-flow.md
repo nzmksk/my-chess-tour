@@ -1,6 +1,6 @@
 # Payment flow
 
-How a player pays to register for a tournament, end to end. Payments go through **CHIP** (gate.chip-in.asia). Money state is enforced authoritatively in Postgres (SECURITY DEFINER functions + row locks) so concurrent webhooks, browser returns, and resumes can't corrupt it. For webhook signing/events see [chip-webhook.md](./chip-webhook.md).
+How a player pays to register for a tournament, end to end. Payments go through **CHIP** (gate.chip-in.asia). Money state is enforced authoritatively in Postgres (SECURITY DEFINER functions + row locks) so concurrent webhooks, browser returns, and resumes can't corrupt it. For webhook signing/events see [chip-webhook.md](./chip-webhook.md). For money going back to players when a tournament is cancelled, see [refund-flow.md](./refund-flow.md).
 
 ## Data model
 
@@ -9,7 +9,7 @@ Two rows track one registration's money (`db/migrations/001_tables.sql`):
 - **`registrations.status`** (`registration_status` enum): `pending_payment` → `confirmed` | `failed_payment` | `cancelled_payment`; plus `forfeited` (paid then forfeited). Key timestamps: `registered_at`, `confirmed_at`, `cancelled_at`, and `cancellation_reason` (text).
 - **`payments.status`** (`payment_status` enum): `pending` → `paid` | `failed`. The registration's money row is `type='registration'`. `chip_transaction_id` is the CHIP purchase id; a partial UNIQUE index on it (`002_indexes.sql`) guarantees one purchase maps to one payment.
 
-There is **no `expired` status** in either enum — expiry reuses `cancelled_payment` (see [Expiry](#expiry-no-chip-event)).
+There is **no `expired` status** in either enum — expiry reuses `cancelled_payment` (see [Expiry](#expiry-no-chip-event)). CHIP's *purchase* status does have `expired` (reachable because we send `due_strict`), but it never maps to a settlement outcome: `chipOutcome()` leaves it `pending` so the app-owned expiry path produces `cancelled_payment` rather than `failed_payment`.
 
 ## Pricing (commission math)
 
@@ -27,7 +27,7 @@ net    = gross - platform_fee         -- what the organizer nets
 
 1. **Checkout** — `POST /api/v1/tournaments/[slug]/checkout` (`src/app/api/v1/tournaments/[slug]/checkout/route.ts`). Auth required. Validates tournament is `published`, registration deadline, fee-tier validity (incl. `valid_until`), and profile-based restrictions/eligibility.
 2. **Create** — if the user has no existing registration, calls `create_registration_with_payment()` (`007`): atomically inserts a `registrations` row (`pending_payment`) and a `payments` row (`pending`) with the computed amounts. The `check_tournament_capacity` INSERT trigger (`003_functions_triggers.sql`) enforces capacity inside Postgres.
-3. **Initiate CHIP** — `initiateChipPayment()` calls `createChipPurchase()` (`src/services/chip/chip.ts`), passing `reference = payment.id`, success/failure redirects, and a `due` (purchase expiry, see below). Stores the returned purchase id as `chip_transaction_id` and returns the `checkout_url`. The browser is sent to CHIP.
+3. **Initiate CHIP** — `initiateChipPayment()` builds the CHIP purchase payload (typed `PurchasesRequest`, `src/services/chip/interfaces/`) — the MYR product line, `client.email`, `reference = payment.id`, success/failure redirects, a `cancel_redirect`, and a `due` (purchase expiry, see below) — and hands it to `createChipPurchase()` (`src/services/chip/chip.ts`), which injects `brand_id` from the environment. Stores the returned purchase id as `chip_transaction_id` and returns the `checkout_url`. The browser is sent to CHIP.
 4. **Settle (webhook)** — CHIP calls `POST /api/v1/webhooks/chip` (`src/app/api/v1/webhooks/chip/route.ts`). It verifies the RSA signature over the raw body, correlates the payment by `chip_transaction_id` (falling back to `reference`), maps the event to an outcome via `chipOutcome()`, and calls `settle_registration_payment()`.
 5. **Confirm** — `settle_registration_payment(payment_id, paid, amount_cents)` (`007`) locks the payment row, then:
   - `paid=true` → settles **any non-`paid` row** (idempotent: a row already `paid` is a no-op): payment `paid` (+`paid_at`), registration `confirmed` (+`confirmed_at`), pointing `current_payment_id` at the paid attempt — **but only if** `amount_cents` matches the recorded `gross_amount_cents` (guards a stale/re-priced purchase). A mismatch leaves it as-is and returns `amount_mismatch` for ops to reconcile. Honoring `paid` over a `failed` row is the **"real money wins"** guarantee: a late `paid` rescues a row that was marked `failed` by supersession or by a decline the payer then retried on the same purchase. See [Outcome mapping](#outcome-mapping).
@@ -50,6 +50,8 @@ The CHIP redirect to `…/register/success` or `…/register/failure` can land _
 - degrades to `pending` on any CHIP/network error (never claims a false result).
 
 The resolved state drives `PaymentStatusView` (confirmed / pending / failed / none).
+
+The third redirect, `cancel_redirect` ("Return to seller" on the CHIP checkout), is different: it points at `…/register` and **does not reconcile or cancel anything**. CHIP does not treat it as an abandonment — the purchase stays payable and the seat stays held for the remainder of the window. The register page only reads (`getLivePendingPayment`), so the payer simply sees `PaymentInProgress` with the same link and the tier-lock countdown; the hold is released by the normal time-based expiry below, not by returning.
 
 ## Resume & retry
 
@@ -75,7 +77,7 @@ A concurrent double-submit that hits the `UNIQUE(user_id, tournament_id)` constr
 
 The 10-minute hold frees _capacity_ but never terminalizes the row, and CHIP emits **no `purchase.expired` event** (see [chip-webhook.md](./chip-webhook.md)), so expiry is **app-owned and time-based**:
 
-- **CHIP `due`** — `createChipPurchase` sets `due = now + PAYMENT_TIMEOUT_MINUTES` (10 min), so the checkout link becomes unpayable when the hold lapses — closing the overbooking / double-charge window at the source.
+- **CHIP `due` + `due_strict`** — the checkout route sets `due = now + PAYMENT_TIMEOUT_MINUTES` (10 min) **and `purchase.due_strict: true`** on the purchase it creates, so the checkout link becomes unpayable when the hold lapses — closing the overbooking / double-charge window at the source. `due_strict` is load-bearing: without it CHIP merely flips the purchase to `overdue` and keeps accepting payment, leaving a live link against a released seat. With it the purchase reaches `expired`. Note `due` is top-level on the request while `due_strict` sits inside `purchase`.
 - **Terminalization** — `expire_stale_pending_payments(p_ttl, p_tournament_id, p_registration_id, p_user_id)` (`007`) moves `pending_payment` registrations older than the TTL to `cancelled_payment` (`cancellation_reason='payment_expired'`), using `FOR UPDATE SKIP LOCKED`. It **leaves the payment row `pending`** so a late `paid` webhook can still rescue it, and returns the affected `registration_id`s for best-effort CHIP cancel.
 - **Single window** — one `PAYMENT_TIMEOUT_MINUTES` (10 min) constant in `src/services/chip/chip.ts` governs the CHIP `due`, the seat hold, resume "is-live", and this expiry TTL. There's no separate longer expiry buffer: even if a read path expires a registration the instant the hold lapses, the payment row is left `pending`, and a late `paid` (only possible before `due`) settles it to `confirmed` anyway — **real money wins** (see [Confirm](#happy-path)).
 - **Trigger = lazy on read** (no cron). The sweep runs, scoped, before the read:
@@ -147,8 +149,9 @@ Drive a real checkout and inspect the two rows (`registrations.status`, `payment
 
 ## Files
 
-- `src/services/chip/chip.ts` — CHIP client (`createChipPurchase` with `due`, `getChipPurchase`, `cancelChipPurchase`), `chipOutcome`, expiry constants.
-- `src/app/api/v1/tournaments/[slug]/checkout/route.ts` — create / continue-live / fresh-resume / initiate (saves `checkout_url`).
+- `src/services/chip/chip.ts` — CHIP client (`createChipPurchase`, `getChipPurchase`, `cancelChipPurchase`), `chipOutcome`, expiry constants.
+- `src/services/chip/interfaces/` — CHIP API payload types (`purchases-request.ts`, `purchases-response.ts`, shared `common.ts`).
+- `src/app/api/v1/tournaments/[slug]/checkout/route.ts` — create / continue-live / fresh-resume / initiate (builds the CHIP purchase payload incl. `due`, saves `checkout_url`).
 - `src/app/api/v1/webhooks/chip/route.ts` — signature verify + settle.
 - `src/app/tournaments/[slug]/register/_lib/resolvePaymentState.ts` — return-page reconcile + lazy expiry.
 - `src/app/tournaments/[slug]/register/page.tsx` + `_components/PaymentInProgress.tsx` — Continue-payment screen for a live pending payment.

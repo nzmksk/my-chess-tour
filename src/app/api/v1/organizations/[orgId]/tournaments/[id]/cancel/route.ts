@@ -10,8 +10,8 @@ interface CancelBody {
 // Files a request to cancel a PUBLISHED tournament. This does NOT cancel the
 // tournament immediately — it creates a pending cancellation request for a
 // platform admin to review. The tournament only becomes 'cancelled' (and player
-// refunds are initiated, wired up later) once an admin approves the request via
-// review_tournament_cancellation().
+// refunds are queued, then fired through CHIP) once an admin approves the request
+// via review_tournament_cancellation() — see the admin PATCH route.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },

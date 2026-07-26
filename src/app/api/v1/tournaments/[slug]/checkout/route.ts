@@ -15,6 +15,7 @@ import {
   createChipPurchase,
   PAYMENT_TIMEOUT_MINUTES,
 } from "@/services/chip/chip";
+import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-response";
 
 // The seat hold (and the CHIP purchase `due`) lasts PAYMENT_TIMEOUT_MINUTES from
 // registered_at. While live, the pending payment is resumed by reusing its link.
@@ -592,15 +593,39 @@ async function initiateChipPayment(
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-  let chipPurchase: { id: string; checkout_url: string };
+  let chipPurchase: PurchasesResponse;
   try {
     chipPurchase = await createChipPurchase({
-      amountCents: payment.gross_amount_cents,
-      clientEmail: userEmail,
-      productName: `Tournament Registration — ${tournamentName}`,
-      referenceId: payment.id,
-      successRedirect: `${siteUrl}/tournaments/${tournamentSlug}/register/success`,
-      failureRedirect: `${siteUrl}/tournaments/${tournamentSlug}/register/failure`,
+      purchase: {
+        currency: "MYR",
+        // `due` alone only flips the purchase to `overdue` — CHIP still accepts
+        // payment on it. `due_strict` is what actually makes the lapsed link
+        // unpayable (status becomes `expired`), closing the window where an
+        // abandoned checkout could be paid after its seat hold was released.
+        // Note this lives on `purchase`, while `due` itself is top-level.
+        due_strict: true,
+        products: [
+          {
+            name: `Tournament Registration — ${tournamentName}`,
+            price: payment.gross_amount_cents,
+            quantity: "1",
+          },
+        ],
+      },
+      client: { email: userEmail },
+      reference: payment.id,
+      success_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/success`,
+      failure_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/failure`,
+      // Renders a "Return to seller" button on the CHIP checkout. Lands on the
+      // register page, which shows PaymentInProgress (same link, tier-lock
+      // countdown) because the registration is still pending. Note this does NOT
+      // cancel the purchase — the seat stays held and the link stays payable
+      // until `due`, by design.
+      cancel_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register`,
+      send_receipt: true,
+      // Expire the checkout when the seat hold lapses (see `due_strict` above).
+      // `due` is a Unix timestamp in seconds.
+      due: Math.floor(Date.now() / 1000) + PAYMENT_TIMEOUT_MINUTES * 60,
       // Payment status is delivered server-side by the CHIP account webhook
       // (subscribed to purchase.paid / payment_failure / cancelled) → /api/v1/webhooks/chip.
       // No success_callback: it's signed with a different key than the webhook
