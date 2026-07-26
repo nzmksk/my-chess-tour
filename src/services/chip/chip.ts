@@ -4,12 +4,15 @@ import type { PurchasesResponse } from "./interfaces/purchases-response";
 const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 
 // CHIP emits no expiry webhook (see wiki/chip-webhook.md), so expiry is owned by
-// us. A single window governs everything: the CHIP purchase `due` (the link
-// becomes unpayable), the reservation seat hold (db/migrations/003_functions_triggers.sql),
-// "is this pending attempt still live" on resume, and the threshold past which an
-// abandoned registration is terminalized. A late `paid` webhook can still rescue a
-// just-expired registration in settle_registration_payment (real money wins), so
-// no extra safety buffer is needed.
+// us. A single window governs everything: the CHIP purchase `due` paired with
+// `purchase.due_strict` (which is what actually makes the link unpayable — `due`
+// on its own only marks it `overdue` and CHIP keeps accepting payment), the
+// reservation seat hold (db/migrations/003_functions_triggers.sql), "is this
+// pending attempt still live" on resume, and the threshold past which an
+// abandoned registration is terminalized. A payment made just before `due` whose
+// webhook lands late can still rescue a just-expired registration in
+// settle_registration_payment (real money wins), so no extra safety buffer is
+// needed.
 export const PAYMENT_TIMEOUT_MINUTES = 10;
 // As a Postgres interval literal for the expire_stale_pending_payments RPC.
 export const PAYMENT_TIMEOUT_INTERVAL = `${PAYMENT_TIMEOUT_MINUTES} minutes`;
@@ -20,6 +23,13 @@ const SUCCESS_STATUSES = new Set(["paid"]);
 const SUCCESS_EVENTS = new Set(["purchase.paid", "purchase.captured"]);
 // Terminal failure signals. Everything else (created, pending_*, hold, viewed,
 // settled, refunds, payouts, chargebacks, …) is treated as still pending.
+//
+// `expired` and `overdue` are deliberately NOT failures. Because we send
+// `due_strict`, a lapsed purchase reaches `expired` at CHIP — but the app owns
+// expiry, and its terminal state is `cancelled_payment` (via
+// expire_stale_pending_payments), not `failed_payment`. Mapping them to "failed"
+// here would make the reconcile path settle the payment row as failed and land
+// the registration in the wrong terminal state.
 const FAILURE_STATUSES = new Set(["error", "cancelled"]);
 const FAILURE_EVENTS = new Set([
   "purchase.payment_failure",

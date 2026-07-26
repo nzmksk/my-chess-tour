@@ -9,7 +9,7 @@ Two rows track one registration's money (`db/migrations/001_tables.sql`):
 - **`registrations.status`** (`registration_status` enum): `pending_payment` → `confirmed` | `failed_payment` | `cancelled_payment`; plus `forfeited` (paid then forfeited). Key timestamps: `registered_at`, `confirmed_at`, `cancelled_at`, and `cancellation_reason` (text).
 - **`payments.status`** (`payment_status` enum): `pending` → `paid` | `failed`. The registration's money row is `type='registration'`. `chip_transaction_id` is the CHIP purchase id; a partial UNIQUE index on it (`002_indexes.sql`) guarantees one purchase maps to one payment.
 
-There is **no `expired` status** in either enum — expiry reuses `cancelled_payment` (see [Expiry](#expiry-no-chip-event)).
+There is **no `expired` status** in either enum — expiry reuses `cancelled_payment` (see [Expiry](#expiry-no-chip-event)). CHIP's *purchase* status does have `expired` (reachable because we send `due_strict`), but it never maps to a settlement outcome: `chipOutcome()` leaves it `pending` so the app-owned expiry path produces `cancelled_payment` rather than `failed_payment`.
 
 ## Pricing (commission math)
 
@@ -75,7 +75,7 @@ A concurrent double-submit that hits the `UNIQUE(user_id, tournament_id)` constr
 
 The 10-minute hold frees _capacity_ but never terminalizes the row, and CHIP emits **no `purchase.expired` event** (see [chip-webhook.md](./chip-webhook.md)), so expiry is **app-owned and time-based**:
 
-- **CHIP `due`** — the checkout route sets `due = now + PAYMENT_TIMEOUT_MINUTES` (10 min) on the purchase it creates, so the checkout link becomes unpayable when the hold lapses — closing the overbooking / double-charge window at the source.
+- **CHIP `due` + `due_strict`** — the checkout route sets `due = now + PAYMENT_TIMEOUT_MINUTES` (10 min) **and `purchase.due_strict: true`** on the purchase it creates, so the checkout link becomes unpayable when the hold lapses — closing the overbooking / double-charge window at the source. `due_strict` is load-bearing: without it CHIP merely flips the purchase to `overdue` and keeps accepting payment, leaving a live link against a released seat. With it the purchase reaches `expired`. Note `due` is top-level on the request while `due_strict` sits inside `purchase`.
 - **Terminalization** — `expire_stale_pending_payments(p_ttl, p_tournament_id, p_registration_id, p_user_id)` (`007`) moves `pending_payment` registrations older than the TTL to `cancelled_payment` (`cancellation_reason='payment_expired'`), using `FOR UPDATE SKIP LOCKED`. It **leaves the payment row `pending`** so a late `paid` webhook can still rescue it, and returns the affected `registration_id`s for best-effort CHIP cancel.
 - **Single window** — one `PAYMENT_TIMEOUT_MINUTES` (10 min) constant in `src/services/chip/chip.ts` governs the CHIP `due`, the seat hold, resume "is-live", and this expiry TTL. There's no separate longer expiry buffer: even if a read path expires a registration the instant the hold lapses, the payment row is left `pending`, and a late `paid` (only possible before `due`) settles it to `confirmed` anyway — **real money wins** (see [Confirm](#happy-path)).
 - **Trigger = lazy on read** (no cron). The sweep runs, scoped, before the read:

@@ -598,6 +598,12 @@ async function initiateChipPayment(
     chipPurchase = await createChipPurchase({
       purchase: {
         currency: "MYR",
+        // `due` alone only flips the purchase to `overdue` — CHIP still accepts
+        // payment on it. `due_strict` is what actually makes the lapsed link
+        // unpayable (status becomes `expired`), closing the window where an
+        // abandoned checkout could be paid after its seat hold was released.
+        // Note this lives on `purchase`, while `due` itself is top-level.
+        due_strict: true,
         products: [
           {
             name: `Tournament Registration — ${tournamentName}`,
@@ -611,8 +617,8 @@ async function initiateChipPayment(
       success_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/success`,
       failure_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/failure`,
       send_receipt: true,
-      // Expire the checkout so an abandoned link can't be paid after the seat
-      // hold lapses. `due` is a Unix timestamp in seconds.
+      // Expire the checkout when the seat hold lapses (see `due_strict` above).
+      // `due` is a Unix timestamp in seconds.
       due: Math.floor(Date.now() / 1000) + PAYMENT_TIMEOUT_MINUTES * 60,
       // Payment status is delivered server-side by the CHIP account webhook
       // (subscribed to purchase.paid / payment_failure / cancelled) → /api/v1/webhooks/chip.

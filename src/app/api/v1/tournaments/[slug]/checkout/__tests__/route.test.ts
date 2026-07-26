@@ -588,6 +588,24 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     expect(arg.success_redirect).not.toContain(VALID_UUID);
   });
 
+  it("sends due_strict so the checkout link is unpayable once due passes", async () => {
+    setThen(mockExistingBuilder, { data: null, error: null });
+
+    const before = Math.floor(Date.now() / 1000);
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    const arg = mockCreateChipPurchase.mock.calls[0][0];
+    // Without due_strict, CHIP only marks a lapsed purchase `overdue` and keeps
+    // accepting payment on it — the seat hold would be released while the link
+    // stayed live. It belongs on `purchase`, not at the top level.
+    expect(arg.purchase.due_strict).toBe(true);
+    // 10 minutes — matches the mocked PAYMENT_TIMEOUT_MINUTES above.
+    expect(arg.due).toBeGreaterThanOrEqual(before + 10 * 60);
+  });
+
   it("returns 503 PAYMENT_GATEWAY_ERROR when the CHIP purchase fails to create", async () => {
     // No existing registration → create path; the registration + payment rows are
     // written, then the CHIP call fails. The user can recover by resuming.
