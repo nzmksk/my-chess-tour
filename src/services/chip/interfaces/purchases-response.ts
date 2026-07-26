@@ -1,9 +1,12 @@
 import type {
   Client,
   ClientDetails,
+  Payment,
   PaymentMethod,
   Platform,
   Product,
+  RelatedObject,
+  TransactionData
 } from "./common";
 
 interface Purchase {
@@ -53,41 +56,6 @@ interface Purchase {
   metadata: object;
 }
 
-type PaymentType =
-  | "purchase"
-  | "purchase_charge"
-  | "payout"
-  | "bank_payment"
-  | "refund"
-  | "custom";
-
-interface Payment {
-  /**
-   * Denotes the direction of payment, e.g. for a paid Purchase, is granted to be `false`, `true` for payouts.
-   * @default false
-   */
-  is_outgoing: boolean;
-  payment_type: PaymentType;
-  amount: number;
-  /**
-   * Currency code in the ISO 4217 standard.
-   * @example "EUR"
-   */
-  currency: string;
-  net_amount: number;
-  fee_amount: number;
-  pending_amount: number;
-  pending_unfreeze_on: number | null;
-  description: string;
-  /** When the payment was accepted in (`is_outgoing == false`) or sent from (`is_outgoing == true`) the gateway system. */
-  paid_on: number;
-  /**
-   * If available, this field will report the date the payment was sent by the remote payer (`is_outgoing == false`)
-   * or when funds arrived to the remote beneficiary (`is_outgoing == true`).
-   */
-  remote_paid_on: number;
-}
-
 interface BankAccount {
   /** Bank account number (e.g. IBAN) */
   bank_account: string;
@@ -120,181 +88,10 @@ interface IssuerDetails {
   tax_number: string;
 }
 
-type Flow =
-  // Merchant API
-  | "api"
-  // Direct POST request
-  | "direct_post"
-  // Fluent Forms integration
-  | "fluentforms"
-  // Formidable Forms integration
-  | "formidableforms"
-  // GiveWP integration
-  | "givewp"
-  // Gravity Forms integration
-  | "gravityforms"
-  // Hostbill integration
-  | "hostbill"
-  // External system
-  | "import"
-  // Shared link
-  | "link"
-  // Magento module
-  | "magento"
-  // OpenCart module
-  | "opencart"
-  // Payform gateway
-  | "payform"
-  // Paymattic integration
-  | "paymattic"
-  // PrestaShop module
-  | "prestashop"
-  // Server to server API
-  | "server_to_server"
-  // Shopify integration
-  | "shopify"
-  // Merchant portal
-  | "web_office"
-  // WHMCS integration
-  | "whmcs"
-  // WooCommerce module
-  | "woocommerce"
-  // WPCharitable integration
-  | "wpcharitable";
 
-interface Extra {
-  masked_pan: string;
-  three_d_secure: boolean;
-  expiry_month: number;
-  expiry_year: number;
-  cardholder_name: string;
-}
 
-type AttemptType =
-  | "execute"
-  | "authorize"
-  | "release"
-  | "capture"
-  | "recurring_execute"
-  | "delete_recurring_token"
-  | "refund";
 
-type ErrorCode =
-  | "unknown_payment_method"
-  | "invalid_card_number"
-  | "invalid_expires"
-  | "no_matching_terminal"
-  | "blacklisted_tx"
-  | "timeout_3ds_enrollment_check"
-  | "timeout_acquirer_status_check"
-  | "validation_card_details_missing"
-  | "validation_cvc_not_provided"
-  | "validation_cardholder_name_not_provided"
-  | "validation_card_number_not_provided"
-  | "validation_expires_not_provided"
-  | "validation_cvc_too_long"
-  | "validation_cardholder_name_too_long"
-  | "validation_card_number_too_long"
-  | "validation_expires_too_long"
-  | "validation_cvc_invalid"
-  | "validation_cardholder_name_invalid"
-  | "validation_card_number_invalid"
-  | "validation_expires_invalid"
-  | "acquirer_connection_error"
-  | "blacklisted_tx_issuing_country"
-  | "s2s_not_supported"
-  | "timeout"
-  | "general_transaction_error"
-  | "antifraud_general"
-  | "acquirer_internal_error"
-  | "exceeds_frequency_limit"
-  | "insufficient_funds"
-  | "purchase_already_paid_for"
-  | "issuer_not_available"
-  | "3ds_authentication_failed"
-  | "do_not_honour"
-  | "exceeds_withdrawal_limit"
-  | "exceeded_account_limit"
-  | "expired_card"
-  | "blacklisted_tx_risk_score"
-  | "transaction_not_supported_or_not_valid_for_card"
-  | "exceeded_acquirer_refund_amount"
-  | "transaction_not_permitted_on_terminal"
-  | "acquirer_configuration_error"
-  | "transaction_not_permitted_to_cardholder"
-  | "invalid_issuer_number"
-  | "restricted_card"
-  | "merchant_response_timeout"
-  | "reconcile_error"
-  | "lost_card"
-  | "stolen_card"
-  | "invalid_amount"
-  | "re_enter_transaction"
-  | "security_violation"
-  | "partial_forbidden"
-  | "suspected_fraud"
-  | "acquirer_routing_error"
-  | "payment_rejected_other_reason"
-  | "authorization_failed"
-  | "acquirer_error_cs"
-  | "decline_irregular_transaction_pattern"
-  | "invalid_card_data"
-  | "exceeded_terminal_limit"
-  | "recurring_token_expired"
-  | "soft_decline_contact_support"
-  | "payment_method_details_missing";
 
-interface AttemptError {
-  code: ErrorCode;
-  message: string;
-}
-
-interface Attempt {
-  /** Type of action attempted */
-  type: AttemptType;
-  /** If this attempt was successful or not. For `false`, `error` of this attempt will be not null. */
-  successful: boolean;
-  /** Payment method used for this attempt. */
-  payment_method: string;
-  /** Extra data associated with selected payment method. Dataset depends on payment method. */
-  extra: Extra;
-  /**
-   * Country code (in the ISO 3166-1 alpha-2 format e.g. 'GB') where payment tool used originates
-   * (e.g. in case of card payments, the card issuing country).
-   *
-   * Will be blank if country could not be detected.
-   */
-  country: string;
-  /** IP the paying client made this attempt from, if available. */
-  client_ip: string;
-  /** Time (if possible, fetched from the remote processing system) this attempt happened at. */
-  processing_time: number;
-  /** Code and description of the error encountered. Not-null if `successful` parameter of this attempt is `false`. */
-  error: AttemptError;
-}
-
-interface TransactionData {
-  /** Payment method used if Purchase was paid, blank string otherwise. */
-  payment_method: string;
-  /** Flow or pathway used to initiate or execute a transaction. */
-  flow: Flow;
-  /** ID of the transaction in the processing system. */
-  processing_tx_id: string;
-  /**
-   * Extra data associated with selected payment method if Purchase was paid, empty object otherwise.
-   * Dataset depends on payment method.
-   */
-  extra: Extra;
-  /**
-   * Country code (in the ISO 3166-1 alpha-2 format e.g. 'GB') where payment tool used originates
-   * (e.g. in case of card payments, the card issuing country).
-   *
-   * Will be blank if Purchase was not paid or country could not be detected.
-   */
-  country: string;
-  /** Will contain information about all the payment attempts made and errors encountered, if any. */
-  attempts: Attempt[];
-}
 
 type PurchaseStatus =
   | "created"
@@ -318,11 +115,6 @@ type PurchaseStatus =
   | "chargeback"
   | "pending_refund"
   | "refunded";
-
-interface RelatedObject {
-  type: string;
-  id: string;
-}
 
 interface PurchaseStatusHistory {
   status: PurchaseStatus;
