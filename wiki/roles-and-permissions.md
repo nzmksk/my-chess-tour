@@ -182,6 +182,27 @@ an `auth.uid()`. The two are different identifier spaces bridged only by
 > at the policy site; `db/tests/identity_indirection.sql` scenario I5 is the
 > regression guard.
 
+### `users` is read-only to clients
+
+There is **no client UPDATE/INSERT/DELETE on `users`** — `004_rls.sql` revokes
+those grants from `anon` and `authenticated`, and no UPDATE policy exists. Every
+application write (signup, verification, profile PATCH, rollback) goes through
+the service-role client, which bypasses RLS, so nothing needs the capability.
+
+This replaced a blanket `USING (app_user_id() = id)` UPDATE policy with no column
+restriction. Postgres reuses an UPDATE policy's `USING` as its `WITH CHECK` when
+none is given, and `app_user_id()` is `STABLE` (resolved against the pre-update
+snapshot), so that check only ever pinned `id`. Every other column was writable
+through PostgREST by anyone holding that user's JWT — including `auth_user_id`
+(null it and the account is orphaned; app_user_id() returns NULL forever) and
+`is_verified` (self-verify, skipping the emailed code).
+
+`guard_users_identity_columns` (003) is the backstop: a BEFORE UPDATE trigger
+rejecting changes to `id` or `auth_user_id` whenever `auth.uid()` is non-NULL,
+i.e. whenever a user JWT is driving the statement. Service-role and SECURITY
+DEFINER writes have no `sub` and pass, so `handle_new_user` and the future claim
+flow (#505) still work. Scenario I6 covers all of it.
+
 In application code, `AuthIdentity.id` is the **`users.id`** and
 `AuthIdentity.authUserId` is the auth id. Only calls into Supabase Auth itself
 (`auth.admin.deleteUser`, `updateUserById`) take the latter.
