@@ -8,6 +8,7 @@ import { NextRequest } from "next/server";
 const {
   mockTournamentBuilder,
   mockExistingBuilder,
+  mockProfileBuilder,
   mockPaymentPriorBuilder,
   mockPaymentSelectBuilder,
   mockPaymentUpdateBuilder,
@@ -37,6 +38,9 @@ const {
 
   const mockTournamentBuilder = makeBuilder({ data: null, error: null });
   const mockExistingBuilder = makeBuilder({ data: null, error: null });
+  // Only read when the tier or restrictions need profile fields; defaults to a
+  // null profile, which every validator treats as ineligible (fails closed).
+  const mockProfileBuilder = makeBuilder({ data: null, error: null });
   // Resume reads the prior payment's chip_transaction_id before re-pricing.
   const mockPaymentPriorBuilder = makeBuilder({ data: null, error: null });
   const mockPaymentSelectBuilder = makeBuilder({ data: null, error: null });
@@ -66,6 +70,7 @@ const {
     // Only one registrations read remains (the existing-registration lookup);
     // capacity is enforced in Postgres, not via a JS pre-check.
     if (table === "registrations") return mockExistingBuilder;
+    if (table === "player_profiles") return mockProfileBuilder;
     if (table === "payments") {
       return paymentBuilders[payCallCount++] ?? mockPaymentUpdateBuilder;
     }
@@ -81,6 +86,7 @@ const {
   return {
     mockTournamentBuilder,
     mockExistingBuilder,
+    mockProfileBuilder,
     mockPaymentPriorBuilder,
     mockPaymentSelectBuilder,
     mockPaymentUpdateBuilder,
@@ -118,6 +124,11 @@ vi.mock("@/services/chip/chip", () => ({
 }));
 
 import { POST } from "../route";
+import { lookupAppUserId } from "@/services/supabase/identity";
+
+// Stubbed globally in src/test/setup.ts to return the auth id unchanged, which
+// is what makes users.id === auth id the default for every case in this file.
+const mockLookupAppUserId = vi.mocked(lookupAppUserId);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -713,5 +724,98 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     expect(json.error.code).toBe("REGISTRATION_CLOSED");
     expect(json.error.message).toBe("Registration deadline has passed");
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Identity indirection (#501)
+//
+// This route keeps getUser() for an immediate revocation check before taking
+// money (#363), and getUser() returns an AUTH id — a different identifier space
+// from public.users.id. These cases force the two apart, because with them equal
+// (the self-signup case, and what src/test/setup.ts stubs by default) a route
+// leaking the raw auth id passes every other test in this file.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/v1/tournaments/:slug/checkout — identity indirection", () => {
+  const AUTH_ID = "ffffffff-0000-0000-0000-0000000000ff";
+  const APP_ID = "11111111-2222-3333-4444-555555555555";
+
+  // A tier gated on gender, so the route actually reads player_profiles.
+  const GENDERED_TOURNAMENT = {
+    entry_fees: {
+      standard: { amount_cents: 5000 },
+      additional: [{ type: "female", amount_cents: 3000, gender: "female" }],
+    },
+  };
+
+  beforeEach(() => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: AUTH_ID, email: "p@example.com" } },
+      error: null,
+    });
+    mockLookupAppUserId.mockResolvedValue(APP_ID);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("creates the registration under the resolved users.id, not the auth id", async () => {
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(mockLookupAppUserId).toHaveBeenCalledWith(AUTH_ID);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "create_registration_with_payment",
+      expect.objectContaining({ p_user_id: APP_ID }),
+    );
+    expect(mockRpc).not.toHaveBeenCalledWith(
+      "create_registration_with_payment",
+      expect.objectContaining({ p_user_id: AUTH_ID }),
+    );
+  });
+
+  it("looks up the existing registration by the resolved users.id", async () => {
+    await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(mockExistingBuilder.eq).toHaveBeenCalledWith("user_id", APP_ID);
+    expect(mockExistingBuilder.eq).not.toHaveBeenCalledWith("user_id", AUTH_ID);
+  });
+
+  it("looks up the player profile by the resolved users.id", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament(GENDERED_TOURNAMENT),
+      error: null,
+    });
+    setThen(mockProfileBuilder, { data: { gender: "female" }, error: null });
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "female" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    // Eligibility passed against the profile the resolved id fetched. Had the
+    // auth id been used, the real query would have missed the row entirely and
+    // the null profile would have failed this closed with a 422.
+    expect(res.status).toBe(201);
+    expect(mockProfileBuilder.eq).toHaveBeenCalledWith("user_id", APP_ID);
+    expect(mockProfileBuilder.eq).not.toHaveBeenCalledWith("user_id", AUTH_ID);
+  });
+
+  it("401s without touching the ledger when the session has no users row", async () => {
+    // A half-provisioned signup: valid JWT, no public.users record. Registering
+    // would violate registrations.user_id's FK, so fail closed instead.
+    mockLookupAppUserId.mockResolvedValue(null);
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(401);
+    const json = await res.json();
+    expect(json.error.code).toBe("UNAUTHORIZED");
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
   });
 });
