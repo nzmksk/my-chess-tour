@@ -269,7 +269,7 @@ describe("POST /api/v1/auth/signup/create-account", () => {
 
     // public.users row deleted (cascades player_profiles) AND auth user deleted
     expect(mockDelete).toHaveBeenCalledOnce();
-    expect(mockDeleteEq).toHaveBeenCalledWith("id", NEW_USER_ID);
+    expect(mockDeleteEq).toHaveBeenCalledWith("auth_user_id", NEW_USER_ID);
     expect(mockDeleteUser).toHaveBeenCalledWith(NEW_USER_ID);
 
     // Don't leave a step cookie on a failed signup
@@ -286,7 +286,7 @@ describe("POST /api/v1/auth/signup/create-account", () => {
     expect(json.error.message).toMatch(/failed to send verification email/i);
 
     expect(mockDelete).toHaveBeenCalledOnce();
-    expect(mockDeleteEq).toHaveBeenCalledWith("id", NEW_USER_ID);
+    expect(mockDeleteEq).toHaveBeenCalledWith("auth_user_id", NEW_USER_ID);
     expect(mockDeleteUser).toHaveBeenCalledWith(NEW_USER_ID);
   });
 

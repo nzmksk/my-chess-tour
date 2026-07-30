@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -450,7 +451,9 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       expect(json.data.status).toBe("pending");
       expect(json.data.email).toBe("new@example.com");
       expect(json.data.role).toBe("member");
-      expect(json.data.id).toBe(NEW_USER_ID);
+      // inviteUserByEmail returns an AUTH id; the membership row and the response
+      // both carry the resolved users.id.
+      expect(json.data.id).toBe(appIdFor(NEW_USER_ID));
       expect(json.data).toHaveProperty("invited_at");
     });
 

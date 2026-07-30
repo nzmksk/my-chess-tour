@@ -32,8 +32,16 @@ CREATE TABLE role_permissions (
 -- The password itself is managed by Supabase Auth (auth.users.encrypted_password);
 -- we never store our own copy. is_verified gates login until email is confirmed.
 -- =============================================
+-- auth_user_id is the ONLY link to Supabase Auth. Never compare auth.uid() to
+-- users.id — resolve it through app_user_id() (003_functions_triggers.sql).
+-- The indirection means users.id is stable for the life of the record: a player
+-- row can exist before it has an auth account, and can later be adopted by one,
+-- without rewriting the id across registrations/payments/refunds/audit_logs.
+-- NULL = a record with no login yet. Today every row has one (written by
+-- handle_new_user), so nothing depends on the nullability yet.
 CREATE TABLE users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_user_id  uuid UNIQUE,
   email         varchar(255) NOT NULL,  -- uniqueness enforced via partial index in 002_indexes.sql
   first_name    varchar(255) NOT NULL,
   last_name     varchar(255) NOT NULL,
@@ -177,7 +185,14 @@ CREATE TABLE tournaments (
   CONSTRAINT chk_organizer_commission_pct
     CHECK (organizer_commission_pct BETWEEN 0 AND 10),
   CONSTRAINT chk_published_at
-    CHECK (published_at IS NULL OR (published_at <= registration_deadline AND published_at <= start_date::timestamptz))
+    CHECK (published_at IS NULL OR (published_at <= registration_deadline AND published_at <= start_date::timestamptz)),
+  -- The effective close time can never be after the deadline. Sync-on-edit
+  -- (application code) keeps this true when the deadline moves.
+  CONSTRAINT chk_registration_closed_at
+    CHECK (
+      registration_closed_at IS NULL
+      OR registration_closed_at <= registration_deadline
+    )
 );
 
 -- =============================================

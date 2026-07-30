@@ -7,6 +7,14 @@
 --
 -- Prerequisites: migrations 001–005 must be applied first.
 -- Password for all seed accounts: Abcd!234
+--
+-- Identity note: inserting into auth.users fires on_auth_user_created, which
+-- already writes public.users with auth_user_id = id. The public.users inserts
+-- below nonetheless set auth_user_id explicitly (and re-assert it in the
+-- ON CONFLICT branch) rather than relying on that trigger having run — a seed
+-- account whose auth_user_id ended up NULL would resolve app_user_id() to NULL
+-- on every request, so it could authenticate and then silently have no rows and
+-- no permissions. Cheap to state outright, confusing to debug otherwise.
 -- =============================================================================
 
 -- Tag all audit log entries created during seeding
@@ -276,9 +284,10 @@ BEGIN
   );
 
   -- Mark verified so the account is immediately login-ready.
-  INSERT INTO public.users (id, email, first_name, last_name, is_verified, verified_at)
-  VALUES (new_user_id, 'review@chip.com', 'CHIP', 'Review', true, now())
+  INSERT INTO public.users (id, auth_user_id, email, first_name, last_name, is_verified, verified_at)
+  VALUES (new_user_id, new_user_id, 'review@chip.com', 'CHIP', 'Review', true, now())
   ON CONFLICT (id) DO UPDATE SET
+    auth_user_id = EXCLUDED.auth_user_id,
     is_verified = true,
     verified_at = now();
 
@@ -331,9 +340,10 @@ BEGIN
 
     -- The trigger already created the row (is_verified=false); mark seed
     -- accounts verified so they're immediately login-ready.
-    INSERT INTO public.users (id, email, first_name, last_name, is_verified, verified_at)
-    VALUES (new_user_id, org_emails[i], org_first[i], org_last[i], true, now())
+    INSERT INTO public.users (id, auth_user_id, email, first_name, last_name, is_verified, verified_at)
+    VALUES (new_user_id, new_user_id, org_emails[i], org_first[i], org_last[i], true, now())
     ON CONFLICT (id) DO UPDATE SET
+      auth_user_id = EXCLUDED.auth_user_id,
       is_verified = true,
       verified_at = now();
 
@@ -424,9 +434,10 @@ BEGIN
     );
 
     -- Mark seed accounts verified so they're immediately login-ready.
-    INSERT INTO public.users (id, email, first_name, last_name, is_verified, verified_at)
-    VALUES (new_user_id, p_email, p_first, p_last, true, now())
+    INSERT INTO public.users (id, auth_user_id, email, first_name, last_name, is_verified, verified_at)
+    VALUES (new_user_id, new_user_id, p_email, p_first, p_last, true, now())
     ON CONFLICT (id) DO UPDATE SET
+      auth_user_id = EXCLUDED.auth_user_id,
       is_verified = true,
       verified_at = now();
 

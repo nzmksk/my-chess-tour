@@ -324,7 +324,7 @@ interface Attempt {
   /** If this attempt was successful or not. For `false`, `error` of this attempt will be not null. */
   successful: boolean;
   /** Payment method used for this attempt. */
-  payment_method: string;
+  payment_method: PaymentMethod;
   /** Extra data associated with selected payment method. Dataset depends on payment method. */
   extra: Extra;
   /**
@@ -344,7 +344,7 @@ interface Attempt {
 
 export interface TransactionData {
   /** Payment method used if Purchase was paid, blank string otherwise. */
-  payment_method: string;
+  payment_method: PaymentMethod;
   /** Flow or pathway used to initiate or execute a transaction. */
   flow: Flow;
   /** ID of the transaction in the processing system. */

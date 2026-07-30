@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 const { mockUpsert, mockFrom, mockGetClaims } = vi.hoisted(() => {
@@ -100,7 +101,7 @@ describe("PATCH /api/v1/profile/banking", () => {
     expect(res.status).toBe(200);
     expect(mockUpsert).toHaveBeenCalledTimes(1);
     const [payload, opts] = mockUpsert.mock.calls[0];
-    expect(payload.user_id).toBe(USER);
+    expect(payload.user_id).toBe(appIdFor(USER));
     expect(payload.bank_name).toBe("Maybank");
     expect(payload.bank_account_holder).toBe("Ahmad bin Ali");
     expect(payload.bank_account_number).toBe("1234567890");

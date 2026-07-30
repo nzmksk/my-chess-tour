@@ -2,7 +2,7 @@
 
 How registered players get their money back when a **published tournament is cancelled**. Refunds go back through **CHIP Collect** (`POST /purchases/{id}/refund/`) against the original purchase. Like the [payment flow](./payment-flow.md), money state is enforced authoritatively in Postgres (SECURITY DEFINER functions + row locks) so the synchronous refund response and the async webhook can't corrupt it. For webhook signing/events see [chip-webhook.md](./chip-webhook.md).
 
-Scope: this covers **player refunds on cancellation** (issue #477). Organizer payouts / player prizes (money-out via CHIP Send) are separate — see issue #375.
+Scope: this covers **player refunds on cancellation** (issue #477) — the only path that creates a `refunds` row today. Out of scope here, each tracked separately: player-initiated refund requests (#509), organizer refunds from the participant roster (#510), any UI showing a refund's status (#511 — there is none), refund-outcome emails (#512), and organizer payouts / player prizes via CHIP Send (#375).
 
 ## Trigger
 
@@ -34,7 +34,14 @@ A CHIP refund is a network call and can't run inside a Postgres transaction, so 
 
 ## Open risks / TODO
 
-These are known gaps carried from implementation. Track before relying on this in production.
+These are known gaps carried from implementation. Track before relying on this in production. Each
+has an issue: #495 (1), #496 (3), #497 (4), #498 (5), plus **#499** for refund monitoring/metrics —
+without it, every failure mode below is silent.
+
+**Resolved:** the async settle path's one ops dependency is satisfied — `checkout/route.ts` sets no
+`success_callback`, so refund callbacks arrive only via the **company-level** webhook, and that
+subscription includes `payment.refunded`, `purchase.refund_failure`, and `purchase.pending_refund`.
+If that subscription is ever narrowed, phase 4 dies silently.
 
 1. **`related_to` shape is unverified.** CHIP's docs only say `payment.refunded` links to the original purchase; the exact shape (`{ id }`, bare id, or URL) isn't documented. `extractRelatedPurchaseId` (`webhooks/chip/route.ts`) parses all three defensively and logs unrecognised shapes — **confirm against a real webhook sample** and tighten.
 2. ~~**Synchronous `POST /refund/` response shape.**~~ **Resolved.** The shape is now modelled from CHIP's API reference in `src/services/chip/interfaces/refund-{request,response}.ts`. The endpoint never returns a `status: "refunded"` — success is a Payment object with no `status` at all, and the in-flight case is a Purchase with `status: "pending_refund"`. Discriminate on shape (`isPendingRefund`), not on `status`. Worth confirming against a real sandbox refund, since this was previously mis-modelled.

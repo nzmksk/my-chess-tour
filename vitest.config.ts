@@ -6,6 +6,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    setupFiles: ["./src/test/setup.ts"],
     env: {
       UPSTASH_REDIS_REST_URL: "https://dummy.upstash.io",
       UPSTASH_REDIS_REST_TOKEN: "dummy",

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -284,7 +285,7 @@ describe("GET /api/v1/admin/dashboard", () => {
     it("checks the platform.manage permission with the correct user id", async () => {
       await GET(makeRequest());
       expect(mockRpc).toHaveBeenCalledWith("has_global_permission", {
-        p_user_id: ADMIN_USER_ID,
+        p_user_id: appIdFor(ADMIN_USER_ID),
         p_permission: "platform.manage",
       });
     });

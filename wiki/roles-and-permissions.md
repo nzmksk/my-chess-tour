@@ -156,6 +156,57 @@ At the app layer, only a subset of keys are actually consulted (`platform.manage
 (`tournament.view`, `tournament.delete`, `registration.view`, `payment.view`,
 `refund.manage`) are enforced primarily through **RLS**.
 
+## Whose id is being checked (#501)
+
+Every permission helper and every RLS policy takes a **`public.users.id`** — never
+an `auth.uid()`. The two are different identifier spaces bridged only by
+`users.auth_user_id`:
+
+- **`app_user_id()`** (`003_functions_triggers.sql`) resolves the caller's JWT
+  `sub` to their `users.id`. It is `STABLE`, so Postgres evaluates it once per
+  statement rather than once per row. It returns NULL for an unauthenticated or
+  unlinked session, which makes every comparison fail closed. **`auth.uid()`
+  appears nowhere else in the schema** — not in a policy, not in a storage
+  policy. The app-side twin is `lookupAppUserId`
+  (`src/services/supabase/identity.ts`).
+- **`can_act_for(p_user_id)`** answers "may the caller act on this user's
+  behalf". Today it is exactly `p_user_id = app_user_id()`, so it changes
+  nothing — it exists so that when guardianships arrive (#504) the widening is
+  one function body rather than another policy sweep. Used by the
+  `player_profiles`, `registrations`, `payments`, and `refunds` policies.
+
+> ⚠️ **Four policy groups deliberately do NOT use `can_act_for()`** and must not
+> start: `users`, `user_global_roles`, `organization_memberships`, and the
+> own-account `audit_logs` policy. Acting on someone's behalf must never confer
+> their platform-admin role or org membership. Each carries a comment saying so
+> at the policy site; `db/tests/identity_indirection.sql` scenario I5 is the
+> regression guard.
+
+### `users` is read-only to clients
+
+There is **no client UPDATE/INSERT/DELETE on `users`** — `004_rls.sql` revokes
+those grants from `anon` and `authenticated`, and no UPDATE policy exists. Every
+application write (signup, verification, profile PATCH, rollback) goes through
+the service-role client, which bypasses RLS, so nothing needs the capability.
+
+This replaced a blanket `USING (app_user_id() = id)` UPDATE policy with no column
+restriction. Postgres reuses an UPDATE policy's `USING` as its `WITH CHECK` when
+none is given, and `app_user_id()` is `STABLE` (resolved against the pre-update
+snapshot), so that check only ever pinned `id`. Every other column was writable
+through PostgREST by anyone holding that user's JWT — including `auth_user_id`
+(null it and the account is orphaned; app_user_id() returns NULL forever) and
+`is_verified` (self-verify, skipping the emailed code).
+
+`guard_users_identity_columns` (003) is the backstop: a BEFORE UPDATE trigger
+rejecting changes to `id` or `auth_user_id` whenever `auth.uid()` is non-NULL,
+i.e. whenever a user JWT is driving the statement. Service-role and SECURITY
+DEFINER writes have no `sub` and pass, so `handle_new_user` and the future claim
+flow (#505) still work. Scenario I6 covers all of it.
+
+In application code, `AuthIdentity.id` is the **`users.id`** and
+`AuthIdentity.authUserId` is the auth id. Only calls into Supabase Auth itself
+(`auth.admin.deleteUser`, `updateUserById`) take the latter.
+
 ---
 
 ## 6. How roles are assigned
@@ -184,8 +235,13 @@ is **not assignable** through the members UI (it's set only by the approval RPC)
   payments; only tournaments (incl. drafts) and rosters.
 - **One global role only.** There is no finer-grained platform staff role (e.g. a
   read-only auditor); `platform_admin` is all-or-nothing.
-- **No org-scoped `refund`/`payout` execution permission yet** — `refund.manage`
-  exists and gates refund RLS, but money-out is still schema/manual (see the
-  money-out gaps in [launch-readiness.md](./launch-readiness.md) §9).
+- **`refund.manage` is seeded but never checked by application code.** It gates the
+  refund RLS policies, yet the one path that actually moves money back —
+  cancellation refunds ([refund-flow.md](./refund-flow.md)) — is authorised as a
+  *platform* admin approving a cancellation and executes through `supabaseAdmin`
+  (service role), which bypasses RLS entirely. Its first real consumer would be an
+  organizer-initiated refund from the participant roster (#510). Payout execution
+  has no permission key at all and remains schema/manual (see the money-out gaps
+  in [launch-readiness.md](./launch-readiness.md) §9).
 - **Roles are fixed data.** The four roles and ten permissions are seeded, not
   user-editable; changing them means a migration, not a UI action.

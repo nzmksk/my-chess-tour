@@ -19,25 +19,30 @@ import { generateCode } from "@/services/auth/verification-code";
 // the user from ever retrying signup (the email already exists).
 // public.users has no FK to auth.users, so both must be removed explicitly; the
 // player_profiles row cascades from public.users via ON DELETE CASCADE.
-async function rollbackAccount(userId: string): Promise<void> {
+//
+// Takes the AUTH id (what auth.admin.createUser returns). The users row is
+// matched on auth_user_id, not id — those are equal for self-signup today, but
+// relying on that here would make the rollback silently no-op the moment they
+// diverge, leaving exactly the half-provisioned account this exists to prevent.
+async function rollbackAccount(authUserId: string): Promise<void> {
   const { error: dbDeleteError } = await supabaseAdmin
     .from("users")
     .delete()
-    .eq("id", userId);
+    .eq("auth_user_id", authUserId);
   if (dbDeleteError) {
     console.error(
-      "Failed to roll back users row for ID:",
-      userId,
+      "Failed to roll back users row for auth ID:",
+      authUserId,
       dbDeleteError,
     );
   }
 
   const { error: authDeleteError } =
-    await supabaseAdmin.auth.admin.deleteUser(userId);
+    await supabaseAdmin.auth.admin.deleteUser(authUserId);
   if (authDeleteError) {
     console.error(
       "Failed to roll back auth user for ID:",
-      userId,
+      authUserId,
       authDeleteError,
     );
   }

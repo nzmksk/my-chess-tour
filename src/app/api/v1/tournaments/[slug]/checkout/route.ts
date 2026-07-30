@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
+import { lookupAppUserId } from "@/services/supabase/identity";
 import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees } from "@/app/tournaments/types";
 import {
@@ -32,12 +33,35 @@ export async function POST(
 ): Promise<NextResponse> {
   const { slug } = await params;
 
+  // getUser() rather than getAuthClaims() is deliberate here and must stay:
+  // getClaims() verifies the JWT locally and so cannot see a mid-session
+  // revocation (ban, logout-everywhere, password change) until the token
+  // expires. This is the one path that takes money, so it pays for the
+  // auth-server round trip to catch that immediately. See #363, which converted
+  // every other getUser() site and explicitly exempted this one.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
+      { status: 401 },
+    );
+  }
+
+  // getUser() returns an AUTH id. Every table below keys off public.users.id, so
+  // it has to be resolved through users.auth_user_id first (#501). The two hold
+  // the same value for self-signup accounts, which is exactly why using the raw
+  // auth id here would keep working right up until it silently didn't.
+  const userId = await lookupAppUserId(user.id);
+
+  if (!userId) {
+    // Valid session, no linked record — a half-provisioned signup. Fail closed,
+    // the same way resolveAuthClaims does, rather than registering against an id
+    // that does not exist.
+    console.error("Checkout: authenticated session has no users row", user.id);
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
       { status: 401 },
@@ -201,7 +225,7 @@ export async function POST(
       .select(
         "date_of_birth, gender, oku_status, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
       )
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
 
     if (needsRestrictionProfile && restrictions) {
@@ -230,7 +254,7 @@ export async function POST(
   const { data: existing } = await supabaseAdmin
     .from("registrations")
     .select("id, status, fee_tier, registered_at, current_payment_id")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("tournament_id", tournamentId)
     .maybeSingle();
 
@@ -298,7 +322,7 @@ export async function POST(
   const { data: registration, error: insertErr } = await supabaseAdmin.rpc(
     "create_registration_with_payment",
     {
-      p_user_id: user.id,
+      p_user_id: userId,
       p_tournament_id: tournamentId,
       p_fee_tier: fee_tier,
       p_amount_cents: matchedTier.amount_cents,
@@ -322,7 +346,7 @@ export async function POST(
       const { data: raced } = await supabaseAdmin
         .from("registrations")
         .select("id, status, current_payment_id")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("tournament_id", tournamentId)
         .maybeSingle();
       if (

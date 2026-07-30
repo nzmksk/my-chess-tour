@@ -346,6 +346,15 @@ Financial record for each registration. One payment per registration.
 
 Refund records linked to a payment. Initiated by organizer or admin.
 
+> ⚠️ **Superseded by the as-built schema.** The table below is the original intent and is kept for
+> that record only — do not code against it. As built, `refunds` is scoped to `registration_id`
+> (not `payment_id`), the reviewer columns are `reviewed_by`/`reviewed_at` (not `approved_by`),
+> and `refund_status` is `pending | approved | rejected` (there is no `processed` — settlement is
+> recorded by `processed_at` plus a `type='refund'` row in `payments`). Authoritative:
+> `db/migrations/001_tables.sql` and [refund-flow.md](./refund-flow.md). In practice the only
+> initiator today is a platform admin approving a tournament cancellation; organizer-initiated
+> refunds are #510.
+
 | Column              | Type         | Constraints                   | Description                            |
 | ------------------- | ------------ | ----------------------------- | -------------------------------------- |
 | id                  | uuid         | PK, default gen_random_uuid() |                                        |
@@ -519,7 +528,7 @@ The wizard footer shows "Back", "Save as Draft", and "Next" buttons. Steps are s
 - **Tabs:** Participants, Registration Stats, Payout.
 - **Stats row:** Registered count, Confirmed (paid), Pending payment, Revenue collected.
 - **Participants table:** Searchable, sortable table with columns: #, Player name (with avatar initials), FIDE ID, Rating, Fee Tier, Status (Confirmed/Pending), Registration date, and an actions menu (⋯). Export buttons for CSV and Excel above the table.
-- The "⋯" action menu on each row allows the organizer to view player details, initiate a refund, or cancel a registration.
+- The "⋯" action menu on each row allows the organizer to view player details, initiate a refund, or cancel a registration. *(Not built — #510. The roster itself and the Cancel action in the header are built; the per-row menu and CSV/Excel export (#90) are not.)*
 
 #### Flow 5: Payout Tracking
 
@@ -576,6 +585,9 @@ The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visua
 - Draft tournaments are visually dimmed.
 
 #### Screen 5: Transactions
+
+*(Not built — #109 / #110. This is the only place the spec surfaces refunds to an operator, so until
+it exists a refund's status is invisible outside the database — see #511.)*
 
 - **Stats row:** Total Transactions (count), Total Volume (amount charged to players), Platform Commission (10% earned), Refunds (count + amount).
 - **Full-width search bar** on its own line, searchable by player name or CHIP reference.
