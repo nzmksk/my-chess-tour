@@ -99,6 +99,44 @@ RETURNS boolean AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
 -- =============================================
+-- IDENTITY COLUMN GUARD
+--
+-- auth_user_id is the only bridge between Supabase Auth and this schema, and id
+-- is the value every other table's FK points at. Neither may be rewritten by an
+-- end-user session: nulling auth_user_id orphans the record (app_user_id() then
+-- resolves to NULL forever), and repointing it is an account-takeover primitive
+-- the moment managed records exist (#504/#505).
+--
+-- 004_rls.sql already revokes client UPDATE on users, so this is defence in
+-- depth — it holds even if a policy or grant is re-added carelessly later. RLS
+-- and grants are the door; this is the lock on the specific thing that matters.
+--
+-- auth.uid() IS NOT NULL means a user JWT is driving the statement. The
+-- service-role client and SECURITY DEFINER functions (handle_new_user, and the
+-- future claim flow) have no `sub`, so legitimate server-side writes pass.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_users_identity_columns()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.id IS DISTINCT FROM OLD.id AND auth.uid() IS NOT NULL THEN
+    RAISE EXCEPTION 'users.id is immutable'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF NEW.auth_user_id IS DISTINCT FROM OLD.auth_user_id AND auth.uid() IS NOT NULL THEN
+    RAISE EXCEPTION 'users.auth_user_id cannot be changed by a client session'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER guard_identity_columns
+  BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION guard_users_identity_columns();
+
+-- =============================================
 -- RBAC HELPER FUNCTIONS
 -- All SECURITY DEFINER to bypass RLS when called from policies.
 -- All take a public.users.id — pass app_user_id(), never auth.uid().

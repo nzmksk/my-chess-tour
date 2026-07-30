@@ -28,6 +28,16 @@ DROP POLICY IF EXISTS "Users can upload own OKU document"     ON storage.objects
 DROP POLICY IF EXISTS "Users can delete own OKU document"     ON storage.objects;
 DROP POLICY IF EXISTS "OKU documents readable by owner or admin" ON storage.objects;
 
+-- Uploaded files, then the buckets themselves. Dropping the policies alone left
+-- both behind: avatars and OKU documents are keyed by users.id, so after the
+-- users table is recreated below they would be orphaned blobs whose paths point
+-- at ids that no longer exist — and OKU documents are scanned government IDs, so
+-- leaving them in a "full teardown" is the wrong default. Objects first: they FK
+-- to buckets. 005 recreates the buckets (ON CONFLICT DO NOTHING), so this is safe
+-- to re-apply.
+DELETE FROM storage.objects WHERE bucket_id IN ('avatars', 'oku-documents');
+DELETE FROM storage.buckets WHERE id       IN ('avatars', 'oku-documents');
+
 -- -----------------------------------------------------------------------------
 -- 2. Auth trigger this app adds to auth.users (migration 003)
 --    (Dropped explicitly because auth.users itself is not dropped below.)
@@ -62,6 +72,9 @@ DROP TABLE IF EXISTS public.waitlist                CASCADE;
 -- -----------------------------------------------------------------------------
 -- 5. Functions (migrations 003 / 007). Drops every function in `public`
 --    (all are app-owned), including any that backed the dropped trigger.
+--    This is what removes app_user_id() / can_act_for() / the identity guard
+--    (003) without needing to name them — the guard's own trigger went with
+--    public.users above, and the users grants revoked in 004 died with the table.
 -- -----------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -129,3 +142,11 @@ WHERE n.nspname = 'public';
 SELECT 'seed_auth_users' AS check, count(*)
 FROM auth.users
 WHERE email LIKE '%@mct.com' OR email = 'review@chip.com';
+
+SELECT 'app_buckets' AS check, count(*)
+FROM storage.buckets
+WHERE id IN ('avatars', 'oku-documents');
+
+SELECT 'app_storage_objects' AS check, count(*)
+FROM storage.objects
+WHERE bucket_id IN ('avatars', 'oku-documents');

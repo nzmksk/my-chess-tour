@@ -70,9 +70,26 @@ CREATE POLICY "Users can view own profile"
 ON users FOR SELECT
 USING (app_user_id() = id);
 
-CREATE POLICY "Users can update own profile"
-ON users FOR UPDATE
-USING (app_user_id() = id);
+-- DELIBERATELY NO CLIENT UPDATE POLICY.
+--
+-- There used to be a blanket "Users can update own profile" UPDATE policy here
+-- with USING (app_user_id() = id) and no column restriction. Postgres reuses the
+-- USING expression as the WITH CHECK when none is given, and app_user_id() is
+-- STABLE (so it resolves against the pre-update snapshot) — which meant the
+-- check only ever verified that `id` was unchanged. Every other column was
+-- freely writable by anyone holding that user's JWT, straight through PostgREST:
+--
+--   PATCH /rest/v1/users?id=eq.<self>  {"auth_user_id": null}   -> orphans the
+--     record; app_user_id() then returns NULL for that session forever, breaking
+--     the only bridge between Supabase Auth and this table.
+--   PATCH /rest/v1/users?id=eq.<self>  {"is_verified": true}    -> self-verify,
+--     bypassing the emailed code entirely.
+--
+-- No application code needs the policy: every write to `users` in the codebase
+-- goes through the service-role client (signup, verification, profile PATCH,
+-- rollback), which bypasses RLS. Removing the capability is therefore strictly
+-- safer than trying to constrain it column by column.
+REVOKE UPDATE, INSERT, DELETE ON users FROM anon, authenticated;
 
 CREATE POLICY "Platform admins can view all users"
 ON users FOR SELECT
