@@ -29,7 +29,9 @@ DO $$
 DECLARE
   v_org        uuid;
   v_tournament uuid;
-  v_admin_role uuid;
+  -- roles.id is `integer GENERATED ALWAYS AS IDENTITY`, not a uuid like most
+  -- other PKs in this schema.
+  v_admin_role integer;
 
   -- users.id (application identity)
   v_a_app  uuid; v_b_app  uuid;
@@ -89,11 +91,13 @@ BEGIN
   INSERT INTO refunds (registration_id, refund_amount_cents, reason, status, requested_by)
     VALUES (v_reg_b, v_gross, 'test', 'pending', v_b_app);
 
-  -- Give B a global role, so I1's self-only check has something to not-see.
+  -- Give B a global role, so I5's self-only check has something to not-see.
+  -- Seeded by 006, but this test must not depend on the seed having run: with no
+  -- role on B there is no row to leak and I5 would pass vacuously.
+  INSERT INTO roles (name, scope) VALUES ('platform_admin', 'global')
+    ON CONFLICT (name) DO NOTHING;
   SELECT id INTO v_admin_role FROM roles WHERE name = 'platform_admin';
-  IF v_admin_role IS NOT NULL THEN
-    INSERT INTO user_global_roles (user_id, role_id) VALUES (v_b_app, v_admin_role);
-  END IF;
+  INSERT INTO user_global_roles (user_id, role_id) VALUES (v_b_app, v_admin_role);
 
   -- ---- act as user A ------------------------------------------------------
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a_auth)::text, true);
