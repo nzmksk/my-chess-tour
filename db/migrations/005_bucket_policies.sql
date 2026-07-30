@@ -21,7 +21,7 @@ TO authenticated
 WITH CHECK (
   bucket_id = 'avatars'
   AND (storage.foldername(name))[1] = 'users'
-  AND (storage.foldername(name))[2] = auth.uid()::text
+  AND (storage.foldername(name))[2] = app_user_id()::text
 );
 
 -- Users can delete their own avatar
@@ -31,7 +31,7 @@ TO authenticated
 USING (
   bucket_id = 'avatars'
   AND (storage.foldername(name))[1] = 'users'
-  AND (storage.foldername(name))[2] = auth.uid()::text
+  AND (storage.foldername(name))[2] = app_user_id()::text
 );
 
 -- Org members with org.manage permission can upload org avatar
@@ -41,7 +41,7 @@ TO authenticated
 WITH CHECK (
   bucket_id = 'avatars'
   AND (storage.foldername(name))[1] = 'organizations'
-  AND has_org_permission(auth.uid(), ((storage.foldername(name))[2])::uuid, 'org.manage')
+  AND has_org_permission(app_user_id(), ((storage.foldername(name))[2])::uuid, 'org.manage')
 );
 
 -- Org members with org.manage permission can delete org avatar
@@ -51,7 +51,7 @@ TO authenticated
 USING (
   bucket_id = 'avatars'
   AND (storage.foldername(name))[1] = 'organizations'
-  AND has_org_permission(auth.uid(), ((storage.foldername(name))[2])::uuid, 'org.manage')
+  AND has_org_permission(app_user_id(), ((storage.foldername(name))[2])::uuid, 'org.manage')
 );
 
 -- =============================================
@@ -71,7 +71,7 @@ TO authenticated
 WITH CHECK (
   bucket_id = 'oku-documents'
   AND (storage.foldername(name))[1] = 'users'
-  AND (storage.foldername(name))[2] = auth.uid()::text
+  AND (storage.foldername(name))[2] = app_user_id()::text
 );
 
 -- Owner can replace/delete their own OKU document (re-upload after rejection).
@@ -81,7 +81,7 @@ TO authenticated
 USING (
   bucket_id = 'oku-documents'
   AND (storage.foldername(name))[1] = 'users'
-  AND (storage.foldername(name))[2] = auth.uid()::text
+  AND (storage.foldername(name))[2] = app_user_id()::text
 );
 
 -- Owner or a platform admin can read OKU documents.
@@ -91,7 +91,7 @@ TO authenticated
 USING (
   bucket_id = 'oku-documents'
   AND (
-    (storage.foldername(name))[2] = auth.uid()::text
-    OR has_global_permission(auth.uid(), 'platform.manage')
+    (storage.foldername(name))[2] = app_user_id()::text
+    OR has_global_permission(app_user_id(), 'platform.manage')
   )
 );

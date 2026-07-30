@@ -3,6 +3,7 @@ import {
   hasOrgPermission,
   getAuthClaims,
 } from "@/services/supabase/permission";
+import { lookupAppUserId } from "@/services/supabase/identity";
 import { NextRequest, NextResponse } from "next/server";
 import { validateInviteRequest } from "./validators";
 
@@ -209,7 +210,23 @@ export async function POST(
     );
   }
 
-  const newUserId = inviteData.user.id;
+  // inviteUserByEmail returns an AUTH id. organization_memberships.user_id is a
+  // public.users.id, so it has to be resolved through the link. The record is
+  // created synchronously by the on_auth_user_created trigger, so it exists by
+  // the time the invite call returns.
+  const newUserId = await lookupAppUserId(inviteData.user.id);
+
+  if (!newUserId) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Invited account was created without a user record",
+        },
+      },
+      { status: 500 },
+    );
+  }
 
   const { error: insertError } = await supabaseAdmin
     .from("organization_memberships")

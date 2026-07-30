@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getAppUserId,
   getCurrentUser,
   getNavUser,
   hasOrgPermission,
@@ -7,6 +8,10 @@ import {
   requireOrgPermission,
   requireGlobalPermission,
 } from "../permission";
+import { lookupAppUserId } from "@/services/supabase/identity";
+
+// Stubbed globally in src/test/setup.ts to return the auth id unchanged.
+const mockLookupAppUserId = vi.mocked(lookupAppUserId);
 
 vi.mock("next/headers", () => ({
   cookies: vi.fn(() => ({ getAll: vi.fn(() => []), set: vi.fn() })),
@@ -97,7 +102,11 @@ describe("getNavUser", () => {
 
     expect(result).toEqual({
       claims: {
+        // id is the public.users.id resolved from the JWT sub via
+        // users.auth_user_id; authUserId keeps the raw auth id. Equal here
+        // because self-signup writes id = auth_user_id.
         id: "u1",
+        authUserId: "u1",
         email: "alice@example.com",
         userMetadata: { first_name: "Alice" },
         role: "authenticated",
@@ -158,6 +167,7 @@ describe("getCurrentUser", () => {
     createClient.mockResolvedValue(makeClient({ claims }) as never);
     expect(await getCurrentUser()).toEqual({
       id: "u1",
+      authUserId: "u1",
       email: "alice@example.com",
       userMetadata: { first_name: "Alice" },
       role: "authenticated",
@@ -244,5 +254,71 @@ describe("requireGlobalPermission", () => {
     await expect(
       requireGlobalPermission("u1", "platform.manage"),
     ).rejects.toThrow("Insufficient permissions");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Identity indirection (#501)
+//
+// The JWT carries an AUTH id; every application table keys off public.users.id.
+// resolveAuthClaims is the only place that bridges the two, so these cover the
+// bridge itself rather than any one route.
+// ---------------------------------------------------------------------------
+
+describe("identity resolution", () => {
+  const claims = {
+    sub: "auth-abc",
+    email: "alice@example.com",
+    user_metadata: {},
+    role: "authenticated",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLookupAppUserId.mockImplementation(async (id: string) => id);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("exposes the resolved users.id as `id` and the JWT sub as `authUserId`", async () => {
+    mockLookupAppUserId.mockResolvedValue("app-xyz");
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+
+    const identity = await getCurrentUser();
+
+    // The two differ here on purpose — that is the whole point of the column.
+    expect(identity?.id).toBe("app-xyz");
+    expect(identity?.authUserId).toBe("auth-abc");
+    expect(mockLookupAppUserId).toHaveBeenCalledWith("auth-abc");
+  });
+
+  it("fails closed when a valid session has no linked users row", async () => {
+    // Only reachable if the handle_new_user trigger failed, leaving a signup
+    // half-provisioned. Returning an identity here would let callers write rows
+    // against an id that does not exist.
+    mockLookupAppUserId.mockResolvedValue(null);
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+
+    expect(await getCurrentUser()).toBeNull();
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it("does not attempt a lookup when there is no session", async () => {
+    createClient.mockResolvedValue(makeClient({ claims: null }) as never);
+
+    expect(await getCurrentUser()).toBeNull();
+    expect(mockLookupAppUserId).not.toHaveBeenCalled();
+  });
+
+  it("getAppUserId returns the resolved users.id", async () => {
+    mockLookupAppUserId.mockResolvedValue("app-xyz");
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+
+    expect(await getAppUserId()).toBe("app-xyz");
+  });
+
+  it("getAppUserId returns null when unauthenticated", async () => {
+    createClient.mockResolvedValue(makeClient({ claims: null }) as never);
+
+    expect(await getAppUserId()).toBeNull();
   });
 });

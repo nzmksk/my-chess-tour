@@ -237,7 +237,11 @@ export default function ProfileClient({ profile }: Props) {
         }
 
         const ext = avatarFile.name.split(".").pop();
-        const path = `users/${user.id}/${Date.now()}.${ext}`;
+        // current.id is the public.users.id, which is what the storage policy
+        // compares against via app_user_id() — NOT user.id, which is the auth
+        // id. They coincide for self-signup accounts; the getUser() call above
+        // is kept only as the session-liveness check.
+        const path = `users/${current.id}/${Date.now()}.${ext}`;
         // The path is unique per upload, so the bytes are safely immutable and
         // never need revalidating until the URL itself changes.
         const { error: uploadError } = await supabase.storage

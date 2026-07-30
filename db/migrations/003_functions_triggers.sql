@@ -33,11 +33,17 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournament_cancellation_requests
 -- Creates user + player_profile on auth signup.
 -- SECURITY DEFINER to bypass RLS.
 -- =============================================
+-- Self-signup keeps users.id = auth.users.id so no existing id changes meaning;
+-- auth_user_id is written explicitly and is what every lookup goes through.
+-- The two being equal here is an implementation detail of self-signup, NOT an
+-- invariant — a record created for someone without a login (see #504) will have
+-- a generated id and a NULL auth_user_id until it is claimed.
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, email, first_name, last_name)
+  INSERT INTO public.users (id, auth_user_id, email, first_name, last_name)
   VALUES (
+    NEW.id,
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
@@ -60,8 +66,42 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- =============================================
+-- IDENTITY RESOLUTION
+-- The single bridge between Supabase Auth and public.users. Every RLS policy
+-- and every helper below takes a public.users.id — auth.uid() must not be
+-- passed to any of them directly.
+-- =============================================
+
+-- Resolve the caller's public.users.id from their auth session.
+-- STABLE so Postgres evaluates it once per statement rather than once per row;
+-- that is what keeps the added lookup off the hot path in policies that scan
+-- registrations/payments.
+-- Returns NULL when unauthenticated or when no users row is linked yet, which
+-- makes every "= app_user_id()" comparison fail closed.
+CREATE OR REPLACE FUNCTION app_user_id()
+RETURNS uuid AS $$
+  SELECT id FROM public.users WHERE auth_user_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- Can the caller act on behalf of p_user_id?
+--
+-- Today this is exactly the self check, so it is a pure rename of
+-- "app_user_id() = user_id" with no behaviour change. It exists as a seam: when
+-- guardianships arrive (#504) this function body grows an OR and every policy
+-- using it widens at once, instead of another sweep across every policy.
+--
+-- DO NOT use this for organization_memberships, user_global_roles, or any
+-- admin-scoped policy. Those are deliberately self-only and must NOT widen when
+-- this body changes — see the comments at each of those policies in 004_rls.sql.
+CREATE OR REPLACE FUNCTION can_act_for(p_user_id uuid)
+RETURNS boolean AS $$
+  SELECT p_user_id = app_user_id();
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- =============================================
 -- RBAC HELPER FUNCTIONS
 -- All SECURITY DEFINER to bypass RLS when called from policies.
+-- All take a public.users.id — pass app_user_id(), never auth.uid().
 -- =============================================
 
 -- Check if user has a global-scope permission (e.g. platform admin)
@@ -128,6 +168,7 @@ DECLARE
   v_org_id     uuid;
   v_old        jsonb;
   v_new        jsonb;
+  v_changed_by uuid;
   v_pk_col     text := COALESCE(TG_ARGV[0], 'id');
 BEGIN
   -- Build row snapshots
@@ -157,12 +198,24 @@ BEGIN
   END IF;
   -- users, player_profiles, user_global_roles → v_org_id stays NULL
 
+  -- changed_by is a FK to users(id), but the JWT carries the AUTH id, so it has
+  -- to be resolved through users.auth_user_id. Reading the claim directly would
+  -- write an id that only coincidentally resolves while self-signup keeps the
+  -- two equal, and would violate the FK the moment they diverge.
+  -- Not app_user_id(): this trigger also fires under the service role and from
+  -- SECURITY DEFINER functions, where auth.uid() is NULL — reading the claim
+  -- keeps attribution working in those paths, and NULL means "no user acted".
+  SELECT u.id INTO v_changed_by
+  FROM public.users u
+  WHERE u.auth_user_id =
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
+
   INSERT INTO public.audit_logs (table_name, record_id, action, changed_by, organization_id, context, old_data, new_data)
   VALUES (
     TG_TABLE_NAME,
     v_record_id,
     TG_OP,
-    NULLIF(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid,
+    v_changed_by,
     v_org_id,
     COALESCE(NULLIF(current_setting('app.audit_context', true), ''), 'trigger'),
     v_old,
