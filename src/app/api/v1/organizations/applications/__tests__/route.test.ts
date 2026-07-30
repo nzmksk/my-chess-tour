@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ describe("GET /api/v1/organizations/applications", () => {
       setQueryResult([]);
       await GET(makeGetRequest());
       const eqMock = mockBuilder.eq as ReturnType<typeof vi.fn>;
-      expect(eqMock).toHaveBeenCalledWith("created_by", USER_ID);
+      expect(eqMock).toHaveBeenCalledWith("created_by", appIdFor(USER_ID));
     });
   });
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -409,7 +410,7 @@ describe("GET /api/v1/organizations/:orgId/members", () => {
       });
       const eqMock = mockMembershipCheckBuilder.eq as ReturnType<typeof vi.fn>;
       expect(eqMock).toHaveBeenCalledWith("organization_id", ORG_ID);
-      expect(eqMock).toHaveBeenCalledWith("user_id", USER_ID);
+      expect(eqMock).toHaveBeenCalledWith("user_id", appIdFor(USER_ID));
     });
 
     it("filters members list by organization_id", async () => {

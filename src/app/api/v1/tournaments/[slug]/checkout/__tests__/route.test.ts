@@ -125,9 +125,11 @@ vi.mock("@/services/chip/chip", () => ({
 
 import { POST } from "../route";
 import { lookupAppUserId } from "@/services/supabase/identity";
+import { appIdFor } from "@/test/identity";
 
-// Stubbed globally in src/test/setup.ts to return the auth id unchanged, which
-// is what makes users.id === auth id the default for every case in this file.
+// Stubbed globally in src/test/setup.ts to return appIdFor(sub), so the auth and
+// app identifier spaces differ throughout this file. Overridden per case below
+// to pin exact ids, or to model a session with no linked record.
 const mockLookupAppUserId = vi.mocked(lookupAppUserId);
 
 // ---------------------------------------------------------------------------
@@ -533,7 +535,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
 
     expect(res.status).toBe(201);
     expect(mockRpc).toHaveBeenCalledWith("create_registration_with_payment", {
-      p_user_id: USER_ID,
+      p_user_id: appIdFor(USER_ID),
       p_tournament_id: VALID_UUID,
       p_fee_tier: "standard",
       p_amount_cents: 5000,
@@ -732,9 +734,9 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
 //
 // This route keeps getUser() for an immediate revocation check before taking
 // money (#363), and getUser() returns an AUTH id — a different identifier space
-// from public.users.id. These cases force the two apart, because with them equal
-// (the self-signup case, and what src/test/setup.ts stubs by default) a route
-// leaking the raw auth id passes every other test in this file.
+// from public.users.id. These cases pin exact ids on both sides rather than
+// relying on the global stub, and cover the unlinked-session path that the
+// stub cannot express.
 // ---------------------------------------------------------------------------
 
 describe("POST /api/v1/tournaments/:slug/checkout — identity indirection", () => {

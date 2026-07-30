@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 const { mockUpsert, mockFrom, mockGetClaims } = vi.hoisted(() => {
@@ -25,6 +26,9 @@ vi.mock("next/headers", () => ({
 import { POST } from "../route";
 
 const USER = "bbbbbbbb-0000-0000-0000-000000000001";
+// The JWT sub is the AUTH id; the OKU folder and the profile row are keyed by
+// the resolved users.id, which is what the storage policy checks via app_user_id().
+const APP_USER = appIdFor(USER);
 
 function makeReq(body: object) {
   return new NextRequest("http://localhost/api/v1/profile/oku", {
@@ -48,7 +52,7 @@ describe("POST /api/v1/profile/oku", () => {
   it("401 when unauthenticated", async () => {
     mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
     const res = await POST(
-      makeReq({ document_path: `users/${USER}/oku/1.png` }),
+      makeReq({ document_path: `users/${APP_USER}/oku/1.png` }),
     );
     expect(res.status).toBe(401);
   });
@@ -68,28 +72,28 @@ describe("POST /api/v1/profile/oku", () => {
 
   it("400 when document_path contains a traversal segment", async () => {
     const res = await POST(
-      makeReq({ document_path: `users/${USER}/oku/../../secret.png` }),
+      makeReq({ document_path: `users/${APP_USER}/oku/../../secret.png` }),
     );
     expect(res.status).toBe(400);
   });
 
   it("200 and sets pending for a valid own-folder path", async () => {
     const res = await POST(
-      makeReq({ document_path: `users/${USER}/oku/12345.png` }),
+      makeReq({ document_path: `users/${APP_USER}/oku/12345.png` }),
     );
     expect(res.status).toBe(200);
     expect(mockUpsert).toHaveBeenCalledTimes(1);
     const payload = mockUpsert.mock.calls[0][0];
-    expect(payload.user_id).toBe(USER);
+    expect(payload.user_id).toBe(APP_USER);
     expect(payload.oku_status).toBe("pending");
-    expect(payload.oku_document_path).toBe(`users/${USER}/oku/12345.png`);
+    expect(payload.oku_document_path).toBe(`users/${APP_USER}/oku/12345.png`);
     expect(payload.oku_reviewed_by).toBeNull();
   });
 
   it("500 when the upsert fails", async () => {
     mockUpsert.mockResolvedValue({ error: { message: "db down" } });
     const res = await POST(
-      makeReq({ document_path: `users/${USER}/oku/1.png` }),
+      makeReq({ document_path: `users/${APP_USER}/oku/1.png` }),
     );
     expect(res.status).toBe(500);
   });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 
 // ── Mocks ─────────────────────────────────────────────────────
 
@@ -224,7 +225,7 @@ describe("AdminApplicationsPage", () => {
     await AdminApplicationsPage();
 
     expect(mockRpc).toHaveBeenCalledWith("has_global_permission", {
-      p_user_id: "admin-1",
+      p_user_id: appIdFor("admin-1"),
       p_permission: "platform.manage",
     });
   });

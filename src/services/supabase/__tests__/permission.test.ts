@@ -9,6 +9,7 @@ import {
   requireGlobalPermission,
 } from "../permission";
 import { lookupAppUserId } from "@/services/supabase/identity";
+import { appIdFor } from "@/test/identity";
 
 // Stubbed globally in src/test/setup.ts to return the auth id unchanged.
 const mockLookupAppUserId = vi.mocked(lookupAppUserId);
@@ -103,9 +104,10 @@ describe("getNavUser", () => {
     expect(result).toEqual({
       claims: {
         // id is the public.users.id resolved from the JWT sub via
-        // users.auth_user_id; authUserId keeps the raw auth id. Equal here
-        // because self-signup writes id = auth_user_id.
-        id: "u1",
+        // users.auth_user_id; authUserId keeps the raw auth id. The global test
+        // stub deliberately makes them differ so a route conflating the two
+        // fails (src/test/setup.ts).
+        id: appIdFor("u1"),
         authUserId: "u1",
         email: "alice@example.com",
         userMetadata: { first_name: "Alice" },
@@ -166,7 +168,7 @@ describe("getCurrentUser", () => {
     };
     createClient.mockResolvedValue(makeClient({ claims }) as never);
     expect(await getCurrentUser()).toEqual({
-      id: "u1",
+      id: appIdFor("u1"),
       authUserId: "u1",
       email: "alice@example.com",
       userMetadata: { first_name: "Alice" },

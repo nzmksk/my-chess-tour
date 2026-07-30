@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -260,7 +261,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       "review_tournament_cancellation",
       expect.objectContaining({
         p_request_id: REQ_ID,
-        p_reviewer_id: ADMIN_USER_ID,
+        p_reviewer_id: appIdFor(ADMIN_USER_ID),
         p_action: "approve",
         p_rejection_reason: null,
       }),

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -170,7 +171,7 @@ describe("POST .../tournaments/[id]/cancel", () => {
     expect(mockCancellationInsertBuilder.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         tournament_id: TOUR_ID,
-        requested_by: USER_ID,
+        requested_by: appIdFor(USER_ID),
         reason: "Venue fell through",
       }),
     );
