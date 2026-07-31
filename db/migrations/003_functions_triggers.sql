@@ -193,11 +193,42 @@ RETURNS boolean AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
 -- =============================================
+-- AUDIT SNAPSHOT REDACTION
+-- audit_logs stores full row snapshots, so any sensitive column is copied
+-- verbatim into a table that outlives the row it came from. This masks the
+-- listed keys down to a last-4 suffix, keeping the snapshot useful for
+-- "did this value change?" without retaining the secret itself.
+-- Keys absent from the row are ignored; NULL values stay NULL so the audit
+-- trail still distinguishes "cleared" from "set to something".
+-- =============================================
+CREATE OR REPLACE FUNCTION redact_jsonb_columns(p_data jsonb, p_cols text[])
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_data IS NULL THEN NULL
+    ELSE (
+      SELECT jsonb_object_agg(
+        e.key,
+        CASE
+          WHEN e.key = ANY(p_cols) AND jsonb_typeof(e.value) = 'string'
+            THEN to_jsonb('****' || right(e.value #>> '{}', 4))
+          ELSE e.value
+        END
+      )
+      FROM jsonb_each(p_data) AS e(key, value)
+    )
+  END;
+$$;
+
+-- =============================================
 -- AUDIT TRAIL TRIGGER
 -- Generic trigger for all audited tables.
 -- TG_ARGV[0]: column name for record_id (defaults to 'id')
 -- Resolves organization_id from source table for RLS scoping.
 -- Reads app.audit_context session var for context tagging.
+-- Sensitive columns are redacted per-table before the snapshot is written.
 -- =============================================
 CREATE OR REPLACE FUNCTION audit_trigger_func()
 RETURNS TRIGGER AS $$
@@ -219,6 +250,15 @@ BEGIN
 
   -- Extract record_id from the appropriate column
   v_record_id := COALESCE(v_new, v_old) ->> v_pk_col;
+
+  -- Redact sensitive columns before the snapshot is persisted. Done after
+  -- record_id extraction so a redacted column can never be the PK. Without this
+  -- every bank-account write is copied verbatim into audit_logs, which is
+  -- retained far longer than the row itself.
+  IF TG_TABLE_NAME = 'player_profiles' THEN
+    v_old := redact_jsonb_columns(v_old, ARRAY['bank_account_number', 'oku_document_path']);
+    v_new := redact_jsonb_columns(v_new, ARRAY['bank_account_number', 'oku_document_path']);
+  END IF;
 
   -- Resolve organization_id based on source table
   IF TG_TABLE_NAME = 'organizations' THEN

@@ -115,9 +115,11 @@ CREATE TABLE organizations (
   links                 jsonb,  -- {"website": "https://...", "facebook": "...", "twitter": "..."}
   email                 varchar(255),
   phone                 varchar(20),
-  bank_name             varchar(100),
-  bank_account_holder   varchar(255),
-  bank_account_number   varchar(50),
+  -- No bank columns here by design. The "Public can view approved organizations"
+  -- SELECT policy (004_rls.sql) has no column restriction, so anything stored on
+  -- this row is readable by anon through PostgREST. Payout bank details live in
+  -- organization_bank_accounts, which is RLS-gated on bank_account.manage and
+  -- superseded (not updated) on change so verification can't go stale.
   past_tournament_refs  text,
   approval_status       approval_status NOT NULL DEFAULT 'pending',
   reviewed_by           uuid REFERENCES users(id) ON DELETE SET NULL,

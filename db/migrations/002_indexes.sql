@@ -47,7 +47,7 @@ CREATE INDEX idx_payments_registration ON payments (registration_id);
 CREATE INDEX idx_payments_payout_summary ON payments (tournament_id, organization_id, type)
   INCLUDE (gross_amount_cents)
   WHERE status = 'paid'
-  AND type IN ('registration', 'player_prize', 'refund');
+  AND type IN ('registration', 'player_prize', 'refund', 'organizer_payout');
 
 -- At most one paid refund per registration. Defence-in-depth alongside the
 -- unique chip_transaction_id index: even if two settlement paths (sync response
