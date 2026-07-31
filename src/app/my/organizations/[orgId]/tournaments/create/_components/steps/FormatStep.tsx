@@ -7,6 +7,7 @@ import { newRowId } from "../rowId";
 import { RESTRICTION_KINDS, RESTRICTION_LABELS } from "../restrictions";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
+import { getTodayInTimeZone } from "@/lib/datetime";
 
 const FORMAT_TYPES = ["Rapid", "Blitz", "Classical"];
 const SYSTEMS = ["Swiss", "Round Robin", "Knockout"];
@@ -45,7 +46,16 @@ function validate(data: FormatData): FieldErrors {
     errors.baseTime = "Base time must be at least 1 minute.";
   }
 
-  if (!data.startDate) errors.startDate = "Start date is required.";
+  if (!data.startDate) {
+    errors.startDate = "Start date is required.";
+  } else if (data.startDate <= getTodayInTimeZone()) {
+    // Publish rejects a past start date anyway (422 from the publish route);
+    // catching it here means the organizer finds out on the step that owns the
+    // field instead of at the end of the wizard. It also matters more now that
+    // edits freeze at tournament start — a draft saved with a past date would
+    // be unpublishable and uneditable at the same time.
+    errors.startDate = "Start date must be in the future.";
+  }
   if (!data.endDate) {
     errors.endDate = "End date is required.";
   } else if (data.startDate && data.endDate < data.startDate) {

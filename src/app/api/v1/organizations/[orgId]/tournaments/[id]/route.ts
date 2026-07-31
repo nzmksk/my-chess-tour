@@ -6,8 +6,9 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/cache-tags";
-import { resolveTimeZone } from "@/lib/datetime";
+import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
 import { DEFAULT_COUNTRY_CODE, isSupportedCountry } from "@/lib/venues";
+import { getTournamentDateState } from "@/app/tournaments/utils";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -148,6 +149,103 @@ async function resolvePermission(
   return null;
 }
 
+// Columns that define what a player is paying for and what they can win. Once
+// somebody has paid, changing these rewrites the deal after the fact — and for
+// `prizes` it also moves the payout holdback under a tournament that is already
+// selling. Frozen at the first paid registration, not at publish, so an
+// organizer can still correct a typo on a listing nobody has bought into yet.
+const MONEY_FIELDS = [
+  "entry_fees",
+  "prizes",
+  "max_participants",
+  "commission_rate",
+  "organizer_commission_pct",
+] as const;
+
+interface FreezeSubject {
+  status: string;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+}
+
+/**
+ * Two-stage edit freeze.
+ *
+ * Stage 1 — money fields lock at the first paid registration.
+ * Stage 2 — everything locks once the tournament starts.
+ *
+ * Both rules are also enforced by a BEFORE UPDATE trigger in
+ * 003_functions_triggers.sql; the DB is the authority and this is the readable
+ * error. Drafts are exempt: they have placeholder dates and can't have
+ * registrations, so neither stage can apply.
+ *
+ * Returns a 409 response when the edit is refused, else null.
+ */
+async function checkEditFreeze(
+  tournamentId: string,
+  existing: FreezeSubject,
+  patch: Record<string, unknown>,
+): Promise<NextResponse | null> {
+  if (existing.status === "draft") return null;
+
+  // Stage 2 first: it's the broader rule, and it needs no query.
+  const dateState = getTournamentDateState(
+    existing.start_date,
+    existing.end_date,
+    getTodayInTimeZone(existing.timezone),
+  );
+  if (dateState !== "upcoming") {
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            dateState === "ongoing"
+              ? "This tournament has started and can no longer be edited"
+              : "This tournament has ended and can no longer be edited",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  const touchedMoneyFields = MONEY_FIELDS.filter((f) => f in patch);
+  if (touchedMoneyFields.length === 0) return null;
+
+  // `head: true` — we only need to know whether one exists.
+  const { count, error } = await supabaseAdmin
+    .from("payments")
+    .select("id", { count: "exact", head: true })
+    .eq("tournament_id", tournamentId)
+    .eq("type", "registration")
+    .eq("status", "paid")
+    .limit(1);
+
+  if (error) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 500 },
+    );
+  }
+
+  if ((count ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            "Entry fees, prizes and capacity are locked once a player has paid",
+          details: touchedMoneyFields,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  return null;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
@@ -192,7 +290,9 @@ export async function PATCH(
 
   const { data: existing, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
-    .select("id, status, registration_deadline, registration_closed_at")
+    .select(
+      "id, status, registration_deadline, registration_closed_at, start_date, end_date, timezone",
+    )
     .eq("id", id)
     .eq("organization_id", orgId)
     .single();
@@ -385,6 +485,9 @@ export async function PATCH(
       { status: 400 },
     );
   }
+
+  const freezeError = await checkEditFreeze(id, existing, patch);
+  if (freezeError) return freezeError;
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("tournaments")

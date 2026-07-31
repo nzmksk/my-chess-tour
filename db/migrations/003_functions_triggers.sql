@@ -341,6 +341,74 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancel
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 -- =============================================
+-- TOURNAMENT EDIT FREEZE (money fields)
+-- entry_fees/prizes/max_participants and the commission split define what a
+-- player is buying. Once anyone has paid, changing them rewrites a concluded
+-- transaction — and moving `prizes` also shifts the payout holdback under a
+-- tournament that is already selling.
+--
+-- The PATCH route returns the readable 409 (naming the rejected fields); this
+-- trigger is the authority, so the rule holds for any writer including the
+-- service role and the SQL editor. Same belt-and-braces posture as
+-- settle_registration_payment's amount guard.
+--
+-- The "tournament has started" half of the freeze is NOT enforced here: it
+-- depends on today-in-the-venue-timezone, and pinning that in the DB would
+-- duplicate getTodayInTimeZone() with a second, drifting definition. It lives
+-- in the route only.
+--
+-- Deliberately allows the write when the value is unchanged, so a client that
+-- re-submits the whole form without touching money fields still succeeds.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_money_fields()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_changed text[] := ARRAY[]::text[];
+BEGIN
+  IF NEW.entry_fees IS DISTINCT FROM OLD.entry_fees THEN
+    v_changed := v_changed || 'entry_fees';
+  END IF;
+  IF NEW.prizes IS DISTINCT FROM OLD.prizes THEN
+    v_changed := v_changed || 'prizes';
+  END IF;
+  IF NEW.max_participants IS DISTINCT FROM OLD.max_participants THEN
+    v_changed := v_changed || 'max_participants';
+  END IF;
+  IF NEW.commission_rate IS DISTINCT FROM OLD.commission_rate THEN
+    v_changed := v_changed || 'commission_rate';
+  END IF;
+  IF NEW.organizer_commission_pct IS DISTINCT FROM OLD.organizer_commission_pct THEN
+    v_changed := v_changed || 'organizer_commission_pct';
+  END IF;
+
+  IF array_length(v_changed, 1) IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM payments p
+    WHERE p.tournament_id = NEW.id
+      AND p.type = 'registration'
+      AND p.status = 'paid'
+  ) THEN
+    RAISE EXCEPTION
+      'tournament % has paid registrations; these fields are locked: %',
+      NEW.id, array_to_string(v_changed, ', ')
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_money_fields BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_money_fields();
+
+-- =============================================
 -- TOURNAMENT CAPACITY ENFORCEMENT
 -- Prevents over-registration via a row-level lock. A pending_payment seat is
 -- only held for a limited window (the payment timeout); after it lapses the seat
