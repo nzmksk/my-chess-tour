@@ -64,11 +64,18 @@ export default function WizardShell({
     const timeZone = resolveTimeZone(basicInfoData.timezone);
     const entryFees = toPersistedEntryFees(feesData, timeZone);
 
+    // Funding is persisted as a nested object (matching PrizesJson) rather than
+    // flat columns, and omitted entirely when the source hasn't been chosen —
+    // an absent `funding` is what publish validation reports on.
+    const funding = (source: string, funderName: string) =>
+      source ? { source, funder_name: funderName.trim() } : undefined;
+
     const prizes =
       prizesData.categories.length > 0 || prizesData.specialPrizes.length > 0
         ? {
             categories: prizesData.categories.map((cat) => ({
               name: cat.name,
+              funding: funding(cat.fundingSource, cat.funderName),
               entries: cat.prizes.map((p) => ({
                 place: p.placement,
                 amount_cents:
@@ -77,9 +84,11 @@ export default function WizardShell({
             })),
             special: prizesData.specialPrizes.map((sp) => ({
               name: sp.name,
+              funding: funding(sp.fundingSource, sp.funderName),
               amount_cents:
                 sp.amount === "" ? 0 : Math.round(Number(sp.amount) * 100),
             })),
+            distribution: prizesData.distribution,
           }
         : undefined;
 

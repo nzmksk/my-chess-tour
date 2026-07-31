@@ -9,6 +9,12 @@ import type {
 } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import { newRowId } from "../rowId";
+import {
+  PRIZE_FUNDING_LABELS,
+  PRIZE_FUNDING_SOURCES,
+  type PrizeDistribution,
+  type PrizeFundingSource,
+} from "@/lib/prize-funding";
 
 type PrizeRowErrors = Partial<{ placement: string; amount: string }>;
 type CategoryErrors = Partial<{
@@ -108,6 +114,7 @@ function PrizeCategoryBlock({
   onAddPrize,
   onUpdatePrize,
   onRemovePrize,
+  onUpdateFunding,
 }: {
   category: PrizeCategory;
   catErrors: CategoryErrors;
@@ -117,6 +124,10 @@ function PrizeCategoryBlock({
   onAddPrize: () => void;
   onUpdatePrize: (id: string, changes: Partial<PrizeRow>) => void;
   onRemovePrize: (id: string) => void;
+  onUpdateFunding: (changes: {
+    fundingSource?: PrizeFundingSource | "";
+    funderName?: string;
+  }) => void;
 }) {
   const prizeErrors = catErrors.prizes ?? {};
 
@@ -197,6 +208,71 @@ function PrizeCategoryBlock({
       </div>
 
       <AddRowButton onClick={onAddPrize}>+ Add Prize</AddRowButton>
+
+      <PrizeFundingFields
+        idPrefix={`cat-${category.id}`}
+        source={category.fundingSource}
+        funderName={category.funderName}
+        onChange={onUpdateFunding}
+      />
+    </div>
+  );
+}
+
+// Entry fees pay for running the event; prize money has to come from somewhere
+// else. Asking per category (rather than once per tournament) is deliberate —
+// a sponsored Open section alongside grant-funded age groups is the common case.
+function PrizeFundingFields({
+  idPrefix,
+  source,
+  funderName,
+  onChange,
+}: {
+  idPrefix: string;
+  source: PrizeFundingSource | "";
+  funderName: string;
+  onChange: (changes: {
+    fundingSource?: PrizeFundingSource | "";
+    funderName?: string;
+  }) => void;
+}) {
+  return (
+    <div className="border-border mt-3 grid grid-cols-1 gap-2 border-t pt-3 sm:grid-cols-2">
+      <div>
+        <label className="input-label" htmlFor={`${idPrefix}-source`}>
+          Prize funded by
+        </label>
+        <select
+          id={`${idPrefix}-source`}
+          className="input w-full"
+          value={source}
+          onChange={(e) =>
+            onChange({
+              fundingSource: e.target.value as PrizeFundingSource | "",
+            })
+          }
+        >
+          <option value="">Select source…</option>
+          {PRIZE_FUNDING_SOURCES.map((s) => (
+            <option key={s} value={s}>
+              {PRIZE_FUNDING_LABELS[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="input-label" htmlFor={`${idPrefix}-funder`}>
+          Funder name
+        </label>
+        <input
+          id={`${idPrefix}-funder`}
+          type="text"
+          className="input w-full"
+          placeholder="e.g. ACME Sdn Bhd"
+          value={funderName}
+          onChange={(e) => onChange({ funderName: e.target.value })}
+        />
+      </div>
     </div>
   );
 }
@@ -220,8 +296,22 @@ export default function PrizesStep() {
       id: newRowId(),
       name: "",
       prizes: [{ id: newRowId(), placement: "", amount: "" }],
+      fundingSource: "",
+      funderName: "",
     };
     setForm((f) => ({ ...f, categories: [...f.categories, newCat] }));
+  };
+
+  const updateCategoryFunding = (
+    catId: string,
+    changes: Partial<Pick<PrizeCategory, "fundingSource" | "funderName">>,
+  ) => {
+    setForm((f) => ({
+      ...f,
+      categories: f.categories.map((c) =>
+        c.id === catId ? { ...c, ...changes } : c,
+      ),
+    }));
   };
 
   const removeCategory = (catId: string) => {
@@ -284,7 +374,13 @@ export default function PrizesStep() {
   // ── Special prize helpers ─────────────────────────────────
 
   const addSpecialPrize = () => {
-    const newSp: SpecialPrize = { id: newRowId(), name: "", amount: "" };
+    const newSp: SpecialPrize = {
+      id: newRowId(),
+      name: "",
+      amount: "",
+      fundingSource: "",
+      funderName: "",
+    };
     setForm((f) => ({ ...f, specialPrizes: [...f.specialPrizes, newSp] }));
   };
 
@@ -346,6 +442,9 @@ export default function PrizesStep() {
               updatePrize(cat.id, rowId, changes)
             }
             onRemovePrize={(rowId) => removePrize(cat.id, rowId)}
+            onUpdateFunding={(changes) =>
+              updateCategoryFunding(cat.id, changes)
+            }
           />
         );
       })}
@@ -366,47 +465,58 @@ export default function PrizesStep() {
           {form.specialPrizes.map((sp) => {
             const se = errors.specialPrizes[sp.id] ?? {};
             return (
-              <div key={sp.id} className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <input
-                    type="text"
-                    className={`input w-full ${showErrors && se.name ? "input-error" : ""}`}
-                    placeholder="Prize name (e.g. Best Female Player)"
-                    value={sp.name}
-                    onChange={(e) =>
-                      updateSpecialPrize(sp.id, { name: e.target.value })
-                    }
-                  />
-                  {showErrors && se.name && (
-                    <p className="input-hint error mt-0.5">{se.name}</p>
-                  )}
-                </div>
-                <div style={{ width: "130px", flexShrink: 0 }}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-lato text-text-muted shrink-0 text-sm">
-                      RM
-                    </span>
+              <div
+                key={sp.id}
+                className="bg-bg-base border-border rounded-lg border p-3"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
                     <input
-                      type="number"
-                      className={`input w-full text-right tabular-nums ${showErrors && se.amount ? "input-error" : ""}`}
-                      placeholder="0"
-                      min={0}
-                      value={sp.amount === "" ? "" : String(sp.amount)}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        updateSpecialPrize(sp.id, {
-                          amount: raw === "" ? "" : Number(raw),
-                        });
-                      }}
+                      type="text"
+                      className={`input w-full ${showErrors && se.name ? "input-error" : ""}`}
+                      placeholder="Prize name (e.g. Best Female Player)"
+                      value={sp.name}
+                      onChange={(e) =>
+                        updateSpecialPrize(sp.id, { name: e.target.value })
+                      }
                     />
+                    {showErrors && se.name && (
+                      <p className="input-hint error mt-0.5">{se.name}</p>
+                    )}
                   </div>
-                  {showErrors && se.amount && (
-                    <p className="input-hint error mt-0.5">{se.amount}</p>
-                  )}
+                  <div style={{ width: "130px", flexShrink: 0 }}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-lato text-text-muted shrink-0 text-sm">
+                        RM
+                      </span>
+                      <input
+                        type="number"
+                        className={`input w-full text-right tabular-nums ${showErrors && se.amount ? "input-error" : ""}`}
+                        placeholder="0"
+                        min={0}
+                        value={sp.amount === "" ? "" : String(sp.amount)}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          updateSpecialPrize(sp.id, {
+                            amount: raw === "" ? "" : Number(raw),
+                          });
+                        }}
+                      />
+                    </div>
+                    {showErrors && se.amount && (
+                      <p className="input-hint error mt-0.5">{se.amount}</p>
+                    )}
+                  </div>
+                  <RemoveButton
+                    onClick={() => removeSpecialPrize(sp.id)}
+                    label="Remove special prize"
+                  />
                 </div>
-                <RemoveButton
-                  onClick={() => removeSpecialPrize(sp.id)}
-                  label="Remove special prize"
+                <PrizeFundingFields
+                  idPrefix={`sp-${sp.id}`}
+                  source={sp.fundingSource}
+                  funderName={sp.funderName}
+                  onChange={(changes) => updateSpecialPrize(sp.id, changes)}
                 />
               </div>
             );
@@ -415,6 +525,59 @@ export default function PrizesStep() {
       )}
 
       <AddRowButton onClick={addSpecialPrize}>+ Add Special Prize</AddRowButton>
+
+      {/* Distribution */}
+      <h3 className="font-cinzel text-gold-muted border-border mt-6 mb-3 border-t pt-4 text-xs font-bold tracking-widest uppercase">
+        Prize Distribution
+      </h3>
+      <p className="font-lato text-text-muted mb-3 text-xs">
+        Entry fees cover the cost of running your tournament and are never used
+        to pay prizes — prize money must come from a sponsor, a grant, or your
+        own funds.
+      </p>
+      <div className="flex flex-col gap-2">
+        {(
+          [
+            [
+              "organizer",
+              "I'll pay the winners myself",
+              "You collect the prize money and hand it out. Nothing extra to do here.",
+            ],
+            [
+              "platform",
+              "MY Chess Tour distributes the prizes",
+              "You or your sponsor pay the prize pool to us up front; we transfer it to the winners after the event.",
+            ],
+          ] as const
+        ).map(([value, label, hint]) => (
+          <label
+            key={value}
+            className="border-border hover:border-gold-muted flex cursor-pointer gap-3 rounded-lg border p-3 transition duration-200"
+          >
+            <input
+              type="radio"
+              name="prize-distribution"
+              className="mt-1 shrink-0"
+              value={value}
+              checked={form.distribution === value}
+              onChange={() =>
+                setForm((f) => ({
+                  ...f,
+                  distribution: value as PrizeDistribution,
+                }))
+              }
+            />
+            <span>
+              <span className="font-lato text-text-primary block text-sm">
+                {label}
+              </span>
+              <span className="font-lato text-text-muted block text-xs">
+                {hint}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }

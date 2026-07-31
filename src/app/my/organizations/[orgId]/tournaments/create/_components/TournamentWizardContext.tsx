@@ -45,6 +45,7 @@ const initialFeesData: FeesData = {
 const initialPrizesData: PrizesData = {
   categories: [],
   specialPrizes: [],
+  distribution: "organizer",
 };
 
 const initialFormatData: FormatData = {

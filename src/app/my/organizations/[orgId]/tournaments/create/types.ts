@@ -7,6 +7,8 @@
 // server component that seeds an edit session can reference them without
 // importing a "use client" module.
 
+import type { PrizeDistribution, PrizeFundingSource } from "@/lib/prize-funding";
+
 // =============================================
 // WIZARD STATE
 // =============================================
@@ -128,17 +130,26 @@ export interface PrizeCategory {
   id: string;
   name: string;
   prizes: PrizeRow[];
+  // Entry fees never fund prizes (see src/lib/prize-funding.ts), so any
+  // category carrying money must declare where that money comes from. Empty
+  // string = not chosen yet; publish rejects that.
+  fundingSource: PrizeFundingSource | "";
+  funderName: string;
 }
 
 export interface SpecialPrize {
   id: string;
   name: string;
   amount: number | "";
+  fundingSource: PrizeFundingSource | "";
+  funderName: string;
 }
 
 export interface PrizesData {
   categories: PrizeCategory[];
   specialPrizes: SpecialPrize[];
+  /** Who pays the winners — the organizer directly, or the platform. */
+  distribution: PrizeDistribution;
 }
 
 export interface PersistedState {

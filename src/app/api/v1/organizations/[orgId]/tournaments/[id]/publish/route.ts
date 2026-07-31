@@ -7,6 +7,7 @@ import {
   tournamentTag,
 } from "@/lib/cache-tags";
 import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
+import { validatePrizeFunding, type PrizesJson } from "@/lib/prize-funding";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -31,6 +32,7 @@ interface TournamentRow {
   format: { type?: string; system?: string; rounds?: number } | null;
   time_control: { base_minutes?: number } | null;
   entry_fees: { standard?: { amount_cents?: number } } | null;
+  prizes: PrizesJson | null;
   status: string;
 }
 
@@ -136,7 +138,7 @@ export async function POST(
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, organization_id, slug, name, venue_name, venue_state, venue_address, timezone, start_date, end_date, registration_deadline, format, time_control, entry_fees, status",
+      "id, organization_id, slug, name, venue_name, venue_state, venue_address, timezone, start_date, end_date, registration_deadline, format, time_control, entry_fees, prizes, status",
     )
     .eq("id", id)
     .eq("organization_id", orgId)
@@ -225,6 +227,11 @@ export async function POST(
   if (!t.entry_fees?.standard) {
     validationErrors.push("Standard entry fee is required");
   }
+
+  // Entry fees are an administration fee and never fund prizes, so any prize
+  // with money attached has to name where that money actually comes from. See
+  // src/lib/prize-funding.ts for the reasoning.
+  validationErrors.push(...validatePrizeFunding(t.prizes));
 
   if (validationErrors.length > 0) {
     return NextResponse.json(

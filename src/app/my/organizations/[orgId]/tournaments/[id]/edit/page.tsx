@@ -14,6 +14,11 @@ import { fromPersistedRestrictions } from "@/app/my/organizations/[orgId]/tourna
 import { fromPersistedEntryFees } from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
 import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/datetime";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/venues";
+import {
+  isPrizeDistribution,
+  isPrizeFundingSource,
+  type PrizesJson,
+} from "@/lib/prize-funding";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",
@@ -45,13 +50,7 @@ interface TournamentForEdit {
   is_mcf_rated: boolean;
   max_participants: number;
   entry_fees: StoredEntryFees | null;
-  prizes: {
-    categories?: Array<{
-      name: string;
-      entries: Array<{ place: string; amount_cents: number }>;
-    }>;
-    special?: Array<{ name: string; amount_cents: number }>;
-  } | null;
+  prizes: PrizesJson | null;
   restrictions: PersistedRestriction[] | null;
 }
 
@@ -119,23 +118,36 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
 
   const prizeCategories = (t.prizes?.categories ?? []).map((cat, ci) => ({
     id: `cat-${ci}`,
-    name: cat.name,
-    prizes: cat.entries.map((e, ei) => ({
+    name: cat.name ?? "",
+    prizes: (cat.entries ?? []).map((e, ei) => ({
       id: `prize-${ci}-${ei}`,
-      placement: e.place,
-      amount: e.amount_cents / 100,
+      placement: e.place ?? "",
+      amount: (e.amount_cents ?? 0) / 100,
     })),
+    // Tournaments created before funding was declarable have no `funding`;
+    // they hydrate as unselected and must pick a source before re-publishing.
+    fundingSource: isPrizeFundingSource(cat.funding?.source)
+      ? cat.funding.source
+      : ("" as const),
+    funderName: cat.funding?.funder_name ?? "",
   }));
 
   const specialPrizes = (t.prizes?.special ?? []).map((sp, si) => ({
     id: `sp-${si}`,
-    name: sp.name,
-    amount: sp.amount_cents / 100,
+    name: sp.name ?? "",
+    amount: (sp.amount_cents ?? 0) / 100,
+    fundingSource: isPrizeFundingSource(sp.funding?.source)
+      ? sp.funding.source
+      : ("" as const),
+    funderName: sp.funding?.funder_name ?? "",
   }));
 
   const prizesData = {
     categories: prizeCategories,
     specialPrizes,
+    distribution: isPrizeDistribution(t.prizes?.distribution)
+      ? t.prizes.distribution
+      : ("organizer" as const),
   };
 
   return {
