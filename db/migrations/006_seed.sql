@@ -150,6 +150,9 @@ DECLARE
   v_idx          integer;
   f_idx          integer;
   t_restrictions jsonb;
+  t_local_end    timestamp;
+  t_utc_offset   interval;
+  t_valid_until  text;
 
   -- Name pools
   malay_first  text[] := ARRAY[
@@ -548,6 +551,28 @@ BEGIN
       v_idx := ((idx - 1) % array_length(venue_names, 1)) + 1;
       f_idx := (idx % array_length(funding_srcs, 1)) + 1;
 
+      -- An early-bird tier's `valid_until` is the instant its last day ENDS at
+      -- the venue, not the deadline instant itself: consumers test it with
+      -- `new Date(valid_until) < now`, so midnight would expire the tier for
+      -- the whole of the day the UI says is still included.
+      --
+      -- Built to be byte-identical to toValidUntilTimestamp() in
+      -- src/app/my/organizations/[orgId]/tournaments/create/_components/entryFees.ts
+      -- ("YYYY-MM-DDTHH:MI:SS+HH:MM"). entry_fees is jsonb and the money-field
+      -- freeze compares it exactly, so a seed row in any other shape would look
+      -- like a fee change the moment an organizer saved an unrelated edit — and
+      -- be refused, because these tournaments have paid registrations.
+      t_local_end  := (t_deadline AT TIME ZONE venue_tz[v_idx])::date + time '23:59:59';
+      t_utc_offset := t_local_end - ((t_local_end AT TIME ZONE venue_tz[v_idx]) AT TIME ZONE 'UTC');
+      t_valid_until := to_char(t_local_end, 'YYYY-MM-DD"T"HH24:MI:SS')
+                    || CASE WHEN t_utc_offset < interval '0' THEN '-' ELSE '+' END
+                    -- No abs() for intervals, and `@` was dropped in PG 14.
+                    || to_char(
+                         CASE WHEN t_utc_offset < interval '0'
+                              THEN -t_utc_offset ELSE t_utc_offset END,
+                         'HH24:MI'
+                       );
+
       -- Vary restrictions: open, nationality, age, gender, rating, combined
       t_restrictions := CASE (idx % 6)
         WHEN 0 THEN NULL                                                                            -- open
@@ -605,7 +630,7 @@ BEGIN
             json_build_object(
               'type', 'early_bird',
               'amount_cents', (t_fee * 0.8)::integer,
-              'valid_until', t_deadline
+              'valid_until', t_valid_until
             ),
             json_build_object(
               'type', 'age_based',

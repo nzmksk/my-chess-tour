@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { getTodayInTimeZone } from "@/lib/datetime";
+// The real wizard mapping, so a round-trip test exercises what the client
+// actually sends rather than a hand-built approximation of it.
+import {
+  fromPersistedEntryFees,
+  toPersistedEntryFees,
+} from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -135,6 +141,10 @@ const EXISTING_TOURNAMENT = {
   start_date: "2099-09-01",
   end_date: "2099-09-02",
   timezone: "Asia/Kuala_Lumpur",
+  // The venue pair the timezone is derived from. A patch may carry only one of
+  // them, so the route falls back to the stored value for the other.
+  venue_country: "MY",
+  venue_state: "Selangor",
   // The money columns the freeze compares against. Shaped exactly as the PATCH
   // route writes them, because that is what a row edited through this route
   // actually holds — and an unchanged resend has to compare equal to it.
@@ -155,7 +165,9 @@ const UPDATED_TOURNAMENT = {
 const VALID_PATCH_BODY = {
   name: "Updated Tournament Name",
   venue_name: "KLCC Convention Centre",
-  venue_state: "Kuala Lumpur",
+  // A real region name — the route validates it against venue_country and
+  // derives the timezone from it, so "Kuala Lumpur" is not a state.
+  venue_state: "W.P. Kuala Lumpur",
   venue_address: "Jalan Pinang, 50088 KL",
   format: { type: "rapid", system: "swiss", rounds: 9 },
   time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
@@ -561,6 +573,94 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
     });
   });
 
+  // The venue's country and state decide its timezone; the client no longer
+  // sends one. Three fields describing one place could otherwise disagree.
+  describe("venue timezone", () => {
+    it("derives the timezone from the venue rather than the request", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_state: "Sabah",
+          // A client that still sends one is ignored, not trusted.
+          timezone: "America/New_York",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          venue_state: "Sabah",
+          timezone: "Asia/Kuala_Lumpur",
+        }),
+      );
+    });
+
+    // A patch that moves only the country still has to reconcile against the
+    // stored state, because the pair is what names the zone.
+    it("falls back to the stored half of the pair", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_country: "my" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          venue_country: "MY",
+          timezone: "Asia/Kuala_Lumpur",
+        }),
+      );
+    });
+
+    it("leaves the timezone alone when the venue is not being moved", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { name: "Renamed" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.not.objectContaining({ timezone: expect.anything() }),
+      );
+    });
+
+    // Silently coercing this used to pick a zone for a place the organizer
+    // never named.
+    it("400s on a state the country does not have", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_country: "MY",
+          venue_state: "Singapore",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    // A draft is saved from step one, before a state has been picked. Publish
+    // is what refuses an incomplete venue.
+    it("accepts an empty state on an unfinished draft", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_state: "" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+  });
+
   // Two-stage freeze: money fields lock at the first paid registration,
   // everything locks once the tournament starts.
   describe("edit freeze", () => {
@@ -658,6 +758,45 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
         }),
         { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
       );
+      expect(res.status).toBe(200);
+    });
+
+    // The regression the user hit on a seeded tournament: the wizard hydrates
+    // entry_fees, the organizer changes only the name, and the wizard writes
+    // the fees back. If that round trip is not lossless the freeze sees a fee
+    // change and refuses the whole PATCH — the name never lands either, and the
+    // client showed nothing. Built with the real helpers, so it fails if either
+    // direction of the mapping drifts.
+    it("allows a rename that resends fees hydrated from a non-canonical row", async () => {
+      const stored = {
+        standard: { amount_cents: 4000 },
+        additional: [
+          {
+            type: "early_bird",
+            amount_cents: 3200,
+            // The shape the seed used to write: the deadline instant, not the
+            // end of the day at the venue.
+            valid_until: "2099-08-01T00:00:00+00:00",
+          },
+        ],
+      };
+      setUser();
+      setTournamentFetchResult({ ...PUBLISHED, entry_fees: stored });
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          name: "Renamed Tournament",
+          entry_fees: toPersistedEntryFees(
+            fromPersistedEntryFees(stored, "Asia/Kuala_Lumpur"),
+            "Asia/Kuala_Lumpur",
+          ),
+          max_participants: PUBLISHED.max_participants,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+
       expect(res.status).toBe(200);
     });
 

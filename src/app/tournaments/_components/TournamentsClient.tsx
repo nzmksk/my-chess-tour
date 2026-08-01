@@ -29,7 +29,9 @@ function SectionBanner({ label }: { label: string }) {
 
 // Every supported country's regions, flattened — discovery filters across all
 // venues, not one country at a time.
-const ALL_REGIONS = SUPPORTED_COUNTRIES.flatMap((c) => c.regions);
+const ALL_REGIONS = SUPPORTED_COUNTRIES.flatMap((c) =>
+  c.regions.map((r) => r.name),
+);
 
 interface Props {
   tournaments: Tournament[];

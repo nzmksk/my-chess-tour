@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { FormatData, Restriction, RestrictionKind } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import { newRowId } from "../rowId";
@@ -8,6 +8,7 @@ import { RESTRICTION_KINDS, RESTRICTION_LABELS } from "../restrictions";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
 import { getTodayInTimeZone } from "@/lib/datetime";
+import { timeZoneForRegion } from "@/lib/venues";
 
 const FORMAT_TYPES = ["Rapid", "Blitz", "Classical"];
 const SYSTEMS = ["Swiss", "Round Robin", "Knockout"];
@@ -28,7 +29,7 @@ type FieldErrors = Partial<
 
 const NO_ERRORS: FieldErrors = {};
 
-function validate(data: FormatData): FieldErrors {
+function validate(data: FormatData, timeZone: string): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!data.formatType) errors.formatType = "Format type is required.";
@@ -46,9 +47,12 @@ function validate(data: FormatData): FieldErrors {
     errors.baseTime = "Base time must be at least 1 minute.";
   }
 
+  // "Today" is today at the venue, not wherever the organizer's browser is: a
+  // Bangkok tournament starting tomorrow is not in the past because the editor
+  // is an hour ahead. Same zone the publish route and the edit freeze use.
   if (!data.startDate) {
     errors.startDate = "Start date is required.";
-  } else if (data.startDate <= getTodayInTimeZone()) {
+  } else if (data.startDate <= getTodayInTimeZone(timeZone)) {
     // Publish rejects a past start date anyway (422 from the publish route);
     // catching it here means the organizer finds out on the step that owns the
     // field instead of at the end of the wizard. It also matters more now that
@@ -100,8 +104,20 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function FormatStep() {
-  const { formatData, setFormatData, goNext, registerStepHandler } =
-    useTournamentWizard();
+  const {
+    basicInfoData,
+    formatData,
+    setFormatData,
+    goNext,
+    registerStepHandler,
+  } = useTournamentWizard();
+
+  // Memoized so it is a stable dependency of attemptNext below.
+  const timeZone = useMemo(
+    () =>
+      timeZoneForRegion(basicInfoData.venueCountry, basicInfoData.venueState),
+    [basicInfoData.venueCountry, basicInfoData.venueState],
+  );
 
   // WizardShell only mounts steps after the context has hydrated, so the
   // context value is already the restored one here.
@@ -110,7 +126,7 @@ export default function FormatStep() {
   const uid = useId();
 
   // Errors are derived from the form — no need to mirror them into state.
-  const errors = showErrors ? validate(form) : NO_ERRORS;
+  const errors = showErrors ? validate(form, timeZone) : NO_ERRORS;
 
   const field = <K extends keyof FormatData>(key: K, value: FormatData[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -155,14 +171,14 @@ export default function FormatStep() {
 
   const attemptNext = useCallback(async () => {
     setShowErrors(true);
-    const fieldErrors = validate(form);
+    const fieldErrors = validate(form, timeZone);
     const hasErrors =
       Object.keys(fieldErrors).filter((k) => k !== "restrictions").length > 0 ||
       Object.keys(fieldErrors.restrictions ?? {}).length > 0;
     if (hasErrors) return;
     setFormatData(form);
     goNext();
-  }, [form, setFormatData, goNext]);
+  }, [form, timeZone, setFormatData, goNext]);
 
   useEffect(() => {
     registerStepHandler(1, attemptNext);

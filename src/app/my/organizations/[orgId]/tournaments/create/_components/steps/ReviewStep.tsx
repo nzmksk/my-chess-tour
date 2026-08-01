@@ -8,9 +8,9 @@ import { RESTRICTION_LABELS } from "../restrictions";
 import {
   VENUE_TIME_ZONES,
   formatCalendarDate,
-  resolveTimeZone,
   timeZoneAbbreviation,
 } from "@/lib/datetime";
+import { timeZoneForRegion } from "@/lib/venues";
 
 const COMMISSION = 0.1;
 
@@ -111,7 +111,10 @@ export default function ReviewStep() {
 
   // ── Basic Info ────────────────────────────────────────────
 
-  const timeZone = resolveTimeZone(basicInfoData.timezone);
+  const timeZone = timeZoneForRegion(
+    basicInfoData.venueCountry,
+    basicInfoData.venueState,
+  );
   const timeZoneLabel = `${
     VENUE_TIME_ZONES.find((z) => z.id === timeZone)?.label ?? timeZone
   } (${timeZoneAbbreviation(timeZone)})`;

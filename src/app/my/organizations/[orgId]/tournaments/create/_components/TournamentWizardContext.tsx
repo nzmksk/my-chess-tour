@@ -16,7 +16,7 @@ import type {
   PrizesData,
   WizardStep,
 } from "../types";
-import { DEFAULT_TIME_ZONE } from "@/lib/datetime";
+
 import { DEFAULT_COUNTRY_CODE } from "@/lib/venues";
 
 export const WIZARD_STEPS: WizardStep[] = [
@@ -34,12 +34,12 @@ const initialBasicInfo: BasicInfoData = {
   venueCountry: DEFAULT_COUNTRY_CODE,
   venueState: "",
   venueAddress: "",
-  timezone: DEFAULT_TIME_ZONE,
 };
 
 const initialFeesData: FeesData = {
   standardFee: "",
   tiers: [],
+  preservedTiers: [],
 };
 
 const initialPrizesData: PrizesData = {

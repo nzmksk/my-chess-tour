@@ -1,7 +1,11 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
-import { resolveTimeZone } from "@/lib/datetime";
-import { DEFAULT_COUNTRY_CODE, findCountry } from "@/lib/venues";
+import {
+  DEFAULT_COUNTRY_CODE,
+  findCountry,
+  isValidRegion,
+  timeZoneForRegion,
+} from "@/lib/venues";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -46,7 +50,7 @@ interface CreateTournamentBody {
   venue_state?: unknown;
   venue_address?: unknown;
   venue_country?: unknown;
-  timezone?: unknown;
+  // No `timezone`: it is derived from venue_country + venue_state, not accepted.
   format?: FormatInput;
   time_control?: TimeControlInput;
   start_date?: unknown;
@@ -186,14 +190,30 @@ export async function POST(
   // hand-rolled client can send — falls back to the platform default rather
   // than storing a country the payout rails can't route to. `.code` is already
   // the canonical uppercase form.
-  const venue_country = findCountry(body.venue_country)?.code ?? DEFAULT_COUNTRY_CODE;
+  const venue_country =
+    findCountry(body.venue_country)?.code ?? DEFAULT_COUNTRY_CODE;
 
-  // The venue's timezone anchors the tournament's dates and times. Anything off
-  // the supported picklist falls back to the platform default rather than
-  // storing a zone no formatter can read.
-  const timezone = resolveTimeZone(
-    typeof body.timezone === "string" ? body.timezone : null,
-  );
+  // A draft can be saved from step one, before a state has been picked, so an
+  // empty one is allowed here and caught at publish. A state that is set but
+  // does not belong to the country is a different thing — it would silently
+  // decide the wrong timezone below.
+  if (venue_state && !isValidRegion(venue_country, venue_state)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: `"${venue_state}" is not a state of the selected country`,
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  // The venue's timezone anchors the tournament's dates and times, and is
+  // derived from where the venue is rather than sent by the client — the two
+  // cannot then disagree. An unset state yields the platform default until the
+  // organizer picks one.
+  const timezone = timeZoneForRegion(venue_country, venue_state);
 
   const start_date =
     typeof body.start_date === "string" && body.start_date

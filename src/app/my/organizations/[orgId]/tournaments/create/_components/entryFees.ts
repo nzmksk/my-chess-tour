@@ -24,7 +24,9 @@ import type {
   FeeTier,
   PersistedEntryFees,
   PersistedFeeTier,
+  PreservedFeeTier,
   StoredEntryFees,
+  StoredFeeTier,
   TierType,
 } from "../types";
 
@@ -92,6 +94,52 @@ export function fromValidUntilTimestamp(
 }
 
 /**
+ * The instant to write for a tier's `valid_until`.
+ *
+ * A tier whose date the organizer did not move is written back exactly as it
+ * was stored. `entry_fees` is compared byte-for-byte — by `deepEquals` in the
+ * PATCH route and by `IS DISTINCT FROM` in guard_tournament_money_fields — so
+ * normalising an already-stored value would report a money-field edit on a save
+ * that only changed the venue, and a tournament with a paid registration would
+ * be refused outright. Only a date the organizer actually picked is normalised.
+ */
+function validUntilFor(tier: FeeTier, timeZone: string): string {
+  if (
+    tier.validUntilSource &&
+    toCalendarDateInTimeZone(tier.validUntilSource, timeZone) ===
+      tier.validUntil
+  ) {
+    return tier.validUntilSource;
+  }
+  return toValidUntilTimestamp(tier.validUntil, timeZone);
+}
+
+/**
+ * Editable tiers with the non-editable ones spliced back at the indices they
+ * were stored at, since jsonb array equality is order-sensitive.
+ */
+function mergePreserved(
+  edited: PersistedFeeTier[],
+  preserved: PreservedFeeTier[],
+): (PersistedFeeTier | StoredFeeTier)[] {
+  if (preserved.length === 0) return edited;
+
+  const byIndex = new Map(preserved.map((p) => [p.index, p.tier]));
+  const merged: (PersistedFeeTier | StoredFeeTier)[] = [];
+  const remaining = [...edited];
+
+  for (let i = 0; i < edited.length + preserved.length; i++) {
+    const held = byIndex.get(i);
+    if (held) merged.push(held);
+    else if (remaining.length > 0) merged.push(remaining.shift()!);
+  }
+
+  // An index past the end of the merged array (a tier removed from the middle)
+  // leaves entries unplaced; append them rather than lose them.
+  return [...merged, ...remaining];
+}
+
+/**
  * Wizard fee state → canonical entry_fees for persistence. `timeZone` is the
  * venue's: an early-bird tier the organizer says runs "until the 19th" ends
  * when the 19th ends at the venue.
@@ -100,44 +148,43 @@ export function toPersistedEntryFees(
   data: FeesData,
   timeZone: string = DEFAULT_TIME_ZONE,
 ): PersistedEntryFees {
+  const edited = data.tiers.map((tier) => {
+    const persisted: PersistedFeeTier = {
+      type: tier.type,
+      amount_cents: toCents(tier.amount),
+    };
+
+    switch (tier.type) {
+      case "early_bird":
+        if (tier.validUntil) {
+          persisted.valid_until = validUntilFor(tier, timeZone);
+        }
+        break;
+      case "titled_players":
+        if (tier.titles.length > 0) persisted.titles = tier.titles;
+        break;
+      case "rating_based": {
+        const min = boundOrUndefined(tier.ratingFrom);
+        const max = boundOrUndefined(tier.ratingTo);
+        if (min !== undefined) persisted.rating_min = min;
+        if (max !== undefined) persisted.rating_max = max;
+        break;
+      }
+      case "age_based": {
+        const min = boundOrUndefined(tier.ageFrom);
+        const max = boundOrUndefined(tier.ageTo);
+        if (min !== undefined) persisted.age_min = min;
+        if (max !== undefined) persisted.age_max = max;
+        break;
+      }
+    }
+
+    return persisted;
+  });
+
   return {
     standard: { amount_cents: toCents(data.standardFee) },
-    additional: data.tiers.map((tier) => {
-      const persisted: PersistedFeeTier = {
-        type: tier.type,
-        amount_cents: toCents(tier.amount),
-      };
-
-      switch (tier.type) {
-        case "early_bird":
-          if (tier.validUntil) {
-            persisted.valid_until = toValidUntilTimestamp(
-              tier.validUntil,
-              timeZone,
-            );
-          }
-          break;
-        case "titled_players":
-          if (tier.titles.length > 0) persisted.titles = tier.titles;
-          break;
-        case "rating_based": {
-          const min = boundOrUndefined(tier.ratingFrom);
-          const max = boundOrUndefined(tier.ratingTo);
-          if (min !== undefined) persisted.rating_min = min;
-          if (max !== undefined) persisted.rating_max = max;
-          break;
-        }
-        case "age_based": {
-          const min = boundOrUndefined(tier.ageFrom);
-          const max = boundOrUndefined(tier.ageTo);
-          if (min !== undefined) persisted.age_min = min;
-          if (max !== undefined) persisted.age_max = max;
-          break;
-        }
-      }
-
-      return persisted;
-    }),
+    additional: mergePreserved(edited, data.preservedTiers ?? []),
   };
 }
 
@@ -145,33 +192,42 @@ export function toPersistedEntryFees(
  * Canonical entry_fees (from the DB) → wizard fee state for editing.
  *
  * Tiers the wizard has no editor for (the canonical gender/oku tiers, or the
- * implicit "standard" entry some rows carry) are skipped rather than coerced
- * into an early-bird row — an unrecognised tier is not editable here and must
- * not be silently rewritten as a different one.
+ * implicit "standard" entry some rows carry) are not coerced into an early-bird
+ * row — an unrecognised tier is not editable here and must not be silently
+ * rewritten as a different one. They are set aside with their index instead of
+ * discarded, so saving an unrelated field does not delete them.
  */
 export function fromPersistedEntryFees(
   fees: StoredEntryFees | null | undefined,
   timeZone: string = DEFAULT_TIME_ZONE,
 ): FeesData {
   const tiers: FeeTier[] = [];
+  const preservedTiers: PreservedFeeTier[] = [];
 
-  for (const stored of fees?.additional ?? []) {
-    if (!EDITABLE_TIER_TYPES.has(stored.type)) continue;
+  const stored = fees?.additional ?? [];
+  for (let index = 0; index < stored.length; index++) {
+    const tier = stored[index];
+    if (!EDITABLE_TIER_TYPES.has(tier.type)) {
+      preservedTiers.push({ index, tier });
+      continue;
+    }
 
     tiers.push({
-      type: stored.type as TierType,
-      amount: fromCents(stored.amount_cents),
-      validUntil: fromValidUntilTimestamp(stored.valid_until, timeZone),
-      titles: stored.titles ?? [],
-      ratingFrom: boundOrEmpty(stored.rating_min),
-      ratingTo: boundOrEmpty(stored.rating_max),
-      ageFrom: boundOrEmpty(stored.age_min),
-      ageTo: boundOrEmpty(stored.age_max),
+      type: tier.type as TierType,
+      amount: fromCents(tier.amount_cents),
+      validUntil: fromValidUntilTimestamp(tier.valid_until, timeZone),
+      validUntilSource: tier.valid_until ?? undefined,
+      titles: tier.titles ?? [],
+      ratingFrom: boundOrEmpty(tier.rating_min),
+      ratingTo: boundOrEmpty(tier.rating_max),
+      ageFrom: boundOrEmpty(tier.age_min),
+      ageTo: boundOrEmpty(tier.age_max),
     });
   }
 
   return {
     standardFee: fromCents(fees?.standard?.amount_cents),
     tiers,
+    preservedTiers,
   };
 }

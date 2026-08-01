@@ -6,8 +6,13 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/cache-tags";
-import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
-import { DEFAULT_COUNTRY_CODE, findCountry } from "@/lib/venues";
+import { getTodayInTimeZone } from "@/lib/datetime";
+import {
+  DEFAULT_COUNTRY_CODE,
+  findCountry,
+  isValidRegion,
+  timeZoneForRegion,
+} from "@/lib/venues";
 import { getTournamentDateState } from "@/app/tournaments/utils";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
@@ -68,7 +73,7 @@ interface UpdateTournamentBody {
   venue_state?: unknown;
   venue_address?: unknown;
   venue_country?: unknown;
-  timezone?: unknown;
+  // No `timezone`: it is derived from venue_country + venue_state, not accepted.
   format?: FormatInput;
   time_control?: TimeControlInput;
   start_date?: unknown;
@@ -342,7 +347,9 @@ export async function PATCH(
     .select(
       // The money columns are here for checkEditFreeze, which refuses an edit
       // only when a value actually changes and so needs the current one.
-      "id, status, registration_deadline, registration_closed_at, start_date, end_date, timezone, entry_fees, prizes, max_participants, commission_rate, organizer_commission_pct",
+      // venue_country/venue_state are here because the timezone is derived from
+      // the pair, and a patch may only carry one half of it.
+      "id, status, registration_deadline, registration_closed_at, start_date, end_date, timezone, venue_country, venue_state, entry_fees, prizes, max_participants, commission_rate, organizer_commission_pct",
     )
     .eq("id", id)
     .eq("organization_id", orgId)
@@ -419,13 +426,34 @@ export async function PATCH(
       findCountry(body.venue_country)?.code ?? DEFAULT_COUNTRY_CODE;
   }
 
-  // Moving the venue can move the timezone with it. Anything off the supported
-  // picklist falls back to the platform default rather than storing a zone no
-  // formatter can read.
-  if ("timezone" in body) {
-    patch.timezone = resolveTimeZone(
-      typeof body.timezone === "string" ? body.timezone : null,
-    );
+  // Moving the venue moves the timezone with it, so the two are resolved
+  // together. A patch may carry only one of them — the stored value stands in
+  // for the other, because the row's zone has to stay consistent with wherever
+  // the venue ends up, not with whichever half the client happened to send.
+  if ("venue_country" in body || "venue_state" in body) {
+    const country =
+      (patch.venue_country as string | undefined) ??
+      existing.venue_country ??
+      DEFAULT_COUNTRY_CODE;
+    const state =
+      (patch.venue_state as string | undefined) ?? existing.venue_state ?? "";
+
+    // An empty state is a draft the organizer hasn't finished; publish catches
+    // that. A state set to something the country doesn't have would silently
+    // pick the wrong zone, so it is refused.
+    if (state && !isValidRegion(country, state)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: `"${state}" is not a state of the selected country`,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    patch.timezone = timeZoneForRegion(country, state);
   }
 
   if ("format" in body && body.format && typeof body.format === "object") {

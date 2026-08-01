@@ -20,22 +20,28 @@ function tier(overrides: Partial<FeeTier> & Pick<FeeTier, "type">): FeeTier {
   };
 }
 
+function feesData(overrides: Partial<FeesData> = {}): FeesData {
+  return { standardFee: "", tiers: [], preservedTiers: [], ...overrides };
+}
+
 describe("toPersistedEntryFees", () => {
   it("writes the canonical key names every consumer reads", () => {
-    const persisted = toPersistedEntryFees({
-      standardFee: 50,
-      tiers: [
-        tier({ type: "early_bird", amount: 40, validUntil: "2026-02-19" }),
-        tier({ type: "titled_players", amount: 0, titles: ["GM", "IM"] }),
-        tier({
-          type: "rating_based",
-          amount: 35,
-          ratingFrom: 0,
-          ratingTo: 1800,
-        }),
-        tier({ type: "age_based", amount: 30, ageFrom: 0, ageTo: 12 }),
-      ],
-    });
+    const persisted = toPersistedEntryFees(
+      feesData({
+        standardFee: 50,
+        tiers: [
+          tier({ type: "early_bird", amount: 40, validUntil: "2026-02-19" }),
+          tier({ type: "titled_players", amount: 0, titles: ["GM", "IM"] }),
+          tier({
+            type: "rating_based",
+            amount: 35,
+            ratingFrom: 0,
+            ratingTo: 1800,
+          }),
+          tier({ type: "age_based", amount: 30, ageFrom: 0, ageTo: 12 }),
+        ],
+      }),
+    );
 
     expect(persisted).toEqual({
       standard: { amount_cents: 5000 },
@@ -58,13 +64,14 @@ describe("toPersistedEntryFees", () => {
   });
 
   it("omits criteria that were left blank", () => {
-    const persisted = toPersistedEntryFees({
-      standardFee: "",
-      tiers: [
-        tier({ type: "early_bird", amount: "" }),
-        tier({ type: "age_based", amount: 20, ageFrom: 8, ageTo: "" }),
-      ],
-    });
+    const persisted = toPersistedEntryFees(
+      feesData({
+        tiers: [
+          tier({ type: "early_bird", amount: "" }),
+          tier({ type: "age_based", amount: 20, ageFrom: 8, ageTo: "" }),
+        ],
+      }),
+    );
 
     expect(persisted).toEqual({
       standard: { amount_cents: 0 },
@@ -94,11 +101,13 @@ describe("fromPersistedEntryFees", () => {
 
     expect(fromPersistedEntryFees(stored)).toEqual({
       standardFee: 50,
+      preservedTiers: [],
       tiers: [
         {
           type: "early_bird",
           amount: 40,
           validUntil: "2026-02-19",
+          validUntilSource: "2026-02-19T23:59:59+08:00",
           titles: [],
           ratingFrom: "",
           ratingTo: "",
@@ -109,6 +118,7 @@ describe("fromPersistedEntryFees", () => {
           type: "age_based",
           amount: 30,
           validUntil: "",
+          validUntilSource: undefined,
           titles: [],
           ratingFrom: "",
           ratingTo: "",
@@ -119,7 +129,7 @@ describe("fromPersistedEntryFees", () => {
     });
   });
 
-  it("skips tiers the wizard cannot edit instead of coercing them", () => {
+  it("sets aside tiers the wizard cannot edit instead of coercing them", () => {
     const fees = fromPersistedEntryFees({
       standard: { amount_cents: 5000 },
       additional: [
@@ -130,19 +140,24 @@ describe("fromPersistedEntryFees", () => {
     });
 
     expect(fees.tiers.map((t) => t.type)).toEqual(["age_based"]);
+    expect(fees.preservedTiers).toEqual([
+      { index: 0, tier: { type: "standard", amount_cents: 5000 } },
+      { index: 1, tier: { type: "gender", amount_cents: 2500 } },
+    ]);
   });
 
   it("falls back to an empty form for a tournament with no fees", () => {
     expect(fromPersistedEntryFees(null)).toEqual({
       standardFee: "",
       tiers: [],
+      preservedTiers: [],
     });
   });
 });
 
 describe("entry fee round trip", () => {
   it("survives save → resume unchanged", () => {
-    const original: FeesData = {
+    const original = feesData({
       standardFee: 50,
       tiers: [
         tier({ type: "early_bird", amount: 40, validUntil: "2026-02-19" }),
@@ -155,11 +170,85 @@ describe("entry fee round trip", () => {
         }),
         tier({ type: "age_based", amount: 30, ageFrom: 0, ageTo: 12 }),
       ],
+    });
+
+    const restored = fromPersistedEntryFees(toPersistedEntryFees(original));
+
+    // Resuming a draft picks up the instant that was just written, so the next
+    // save can reproduce it exactly. Nothing else about the form changes.
+    expect(restored.tiers[0].validUntilSource).toBe(
+      "2026-02-19T23:59:59+08:00",
+    );
+    expect(restored).toEqual({
+      ...original,
+      tiers: original.tiers.map((t, i) => ({
+        ...t,
+        validUntilSource: restored.tiers[i].validUntilSource,
+      })),
+    });
+  });
+
+  // The regression this suite exists to hold. `entry_fees` is jsonb, and both
+  // the PATCH route's deepEquals and guard_tournament_money_fields' IS DISTINCT
+  // FROM read any difference at all as a fee change — which is refused outright
+  // on a tournament that has taken payment. So hydrating a row and saving it
+  // back untouched has to reproduce it byte for byte, whatever shape it is in.
+  it.each([
+    ["canonical end-of-day", "2026-02-19T23:59:59+08:00"],
+    ["a midnight instant, as the seed wrote", "2026-02-19T00:00:00+00:00"],
+    ["a bare calendar date, as the wizard once wrote", "2026-02-19"],
+  ])("re-saves an untouched tier holding %s verbatim", (_label, stamp) => {
+    const stored: StoredEntryFees = {
+      standard: { amount_cents: 5000 },
+      additional: [
+        { type: "early_bird", amount_cents: 4000, valid_until: stamp },
+        { type: "age_based", amount_cents: 3000, age_min: 0, age_max: 12 },
+      ],
     };
 
-    expect(fromPersistedEntryFees(toPersistedEntryFees(original))).toEqual(
-      original,
+    expect(toPersistedEntryFees(fromPersistedEntryFees(stored))).toEqual(
+      stored,
     );
+  });
+
+  it("carries a non-editable tier through at its original index", () => {
+    const stored: StoredEntryFees = {
+      standard: { amount_cents: 5000 },
+      additional: [
+        { type: "gender", amount_cents: 2500 },
+        {
+          type: "early_bird",
+          amount_cents: 4000,
+          valid_until: "2026-02-19T23:59:59+08:00",
+        },
+        { type: "oku", amount_cents: 1000 },
+      ],
+    };
+
+    expect(toPersistedEntryFees(fromPersistedEntryFees(stored))).toEqual(
+      stored,
+    );
+  });
+
+  it("normalises a date the organizer actually moved", () => {
+    const hydrated = fromPersistedEntryFees({
+      standard: { amount_cents: 5000 },
+      additional: [
+        {
+          type: "early_bird",
+          amount_cents: 4000,
+          valid_until: "2026-02-19T00:00:00+00:00",
+        },
+      ],
+    });
+
+    hydrated.tiers[0].validUntil = "2026-02-25";
+
+    expect(toPersistedEntryFees(hydrated).additional[0]).toEqual({
+      type: "early_bird",
+      amount_cents: 4000,
+      valid_until: "2026-02-25T23:59:59+08:00",
+    });
   });
 });
 
@@ -198,13 +287,15 @@ describe("valid_until", () => {
   });
 
   it("round-trips a tier's valid_until through the venue timezone", () => {
-    const fees: FeesData = {
-      standardFee: 50,
-      tiers: [
-        tier({ type: "early_bird", amount: 40, validUntil: "2026-02-19" }),
-      ],
-    };
-    const persisted = toPersistedEntryFees(fees, "Asia/Manila");
+    const persisted = toPersistedEntryFees(
+      feesData({
+        standardFee: 50,
+        tiers: [
+          tier({ type: "early_bird", amount: 40, validUntil: "2026-02-19" }),
+        ],
+      }),
+      "Asia/Manila",
+    );
     expect(persisted.additional[0].valid_until).toBe(
       "2026-02-19T23:59:59+08:00",
     );

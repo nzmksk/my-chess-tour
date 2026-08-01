@@ -7,7 +7,10 @@
 // server component that seeds an edit session can reference them without
 // importing a "use client" module.
 
-import type { PrizeDistribution, PrizeFundingSource } from "@/lib/prize-funding";
+import type {
+  PrizeDistribution,
+  PrizeFundingSource,
+} from "@/lib/prize-funding";
 
 // =============================================
 // WIZARD STATE
@@ -31,18 +34,17 @@ export interface BasicInfoData {
   venueName: string;
   /**
    * ISO 3166-1 alpha-2 of the venue's country. Decides which regions the state
-   * dropdown offers, and which payout rails the tournament's money will move
-   * on. Independent of `timezone` — a country can span several zones.
+   * dropdown offers, and which payout rails the tournament's money will move on.
    */
   venueCountry: string;
+  /**
+   * The venue's state / province. Together with `venueCountry` this also decides
+   * the timezone every date in the wizard is entered in — see timeZoneForRegion
+   * in src/lib/venues.ts. There is deliberately no separate `timezone` field:
+   * the organizer states where the venue is, once.
+   */
   venueState: string;
   venueAddress: string;
-  /**
-   * IANA timezone of the venue. Every date and time in the wizard is entered in
-   * this zone — it is what the organizer means by "6pm" — and it is what the
-   * tournament is later displayed and bucketed in.
-   */
-  timezone: string;
 }
 
 /**
@@ -108,6 +110,14 @@ export interface FeeTier {
   type: TierType;
   amount: number | "";
   validUntil: string;
+  /**
+   * The `valid_until` instant this tier hydrated from, kept so an untouched
+   * tier can be written back byte-for-byte. `validUntil` above is only its
+   * calendar date, so re-deriving an instant from it would rewrite any value
+   * not already anchored to end-of-day — and `entry_fees` is compared exactly
+   * by the money-field freeze. Absent on tiers the organizer just added.
+   */
+  validUntilSource?: string;
   titles: string[];
   ratingFrom: number | "";
   ratingTo: number | "";
@@ -118,6 +128,19 @@ export interface FeeTier {
 export interface FeesData {
   standardFee: number | "";
   tiers: FeeTier[];
+  /**
+   * Tiers the wizard has no editor for (the canonical gender/oku tiers), held
+   * at their original index so they can be spliced back on save. Dropping them
+   * silently deleted a tournament's pricing and, because `entry_fees` is
+   * compared exactly, made every save look like a money-field edit.
+   */
+  preservedTiers: PreservedFeeTier[];
+}
+
+export interface PreservedFeeTier {
+  /** Index in the stored `additional` array. jsonb arrays compare in order. */
+  index: number;
+  tier: StoredFeeTier;
 }
 
 export interface PrizeRow {
@@ -197,7 +220,11 @@ export interface PersistedFeeTier {
 
 export interface PersistedEntryFees {
   standard: { amount_cents: number };
-  additional: PersistedFeeTier[];
+  /**
+   * `StoredFeeTier` is in the union because tiers the wizard cannot edit are
+   * carried through untouched rather than rewritten — see FeesData.preservedTiers.
+   */
+  additional: (PersistedFeeTier | StoredFeeTier)[];
 }
 
 /**

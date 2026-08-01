@@ -77,6 +77,10 @@ async function fetchTournamentForEdit(
 function buildInitialData(t: TournamentForEdit): PersistedState {
   // Times come back as instants; the organizer edits them at the venue's wall
   // clock, which is the one they entered — not the clock of whoever is editing.
+  //
+  // Hydrated from the stored column rather than re-derived from country/state,
+  // so a row whose venue predates the current picklist still reads back in the
+  // zone it was actually entered in. Saving re-derives it.
   const timeZone = resolveTimeZone(t.timezone);
 
   const basicInfoData = {
@@ -86,7 +90,6 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     venueState: t.venue.state,
     venueAddress: t.venue.address ?? "",
     venueCountry: t.venue.country ?? DEFAULT_COUNTRY_CODE,
-    timezone: timeZone,
   };
 
   const restrictions = fromPersistedRestrictions(t.restrictions ?? []);
