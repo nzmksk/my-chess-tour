@@ -206,16 +206,27 @@ DECLARE
     'KL Open Chess Championship',        'Selangor Rapid Chess Tournament',
     'Penang International Chess Festival','Johor Chess Open',
     'Perak State Championship',          'National Age Group Championship',
-    'MSSM Chess Championship',           'MCF National Rapid Championship',
-    'Malaysia Blitz Chess Open',         'Sabah Chess Open',
+    -- Names 7–9 pair with the non-Malaysian venues at the same indices below.
+    'Bangkok Open Chess Championship',   'Jakarta Rapid Chess Open',
+    'Singapore Blitz Chess Open',        'Sabah Chess Open',
     'Sarawak Heritage Chess Festival',   'Kedah Open Chess Tournament',
     'Pahang Chess Classic',              'Negeri Sembilan Chess Open',
     'KL Junior Chess Championship'
   ];
+  -- Venues carry their own state/region and timezone: a tournament's dates are
+  -- calendar dates at its venue, so the two have to agree (tournaments.timezone;
+  -- picklist in VENUE_TIME_ZONES, src/lib/datetime.ts).
+  --
+  -- Positions 7–9 are outside Malaysia. Venue index is (idx - 1) % 11 and
+  -- tournaments 1–9 are the published ones, so those three are exactly the
+  -- non-Malaysian venues that reach discovery — two at UTC+7, which is what
+  -- makes a seeded database disagree with Malaysia about what day it is.
   venue_names text[] := ARRAY[
     'KL Convention Centre',           'Sunway Pyramid Convention Centre',
     'Penang Chess Academy',           'Johor Bahru Chess Club',
     'Ipoh Chess Centre',              'Alor Setar Municipal Hall',
+    'Bangkok Chess Club',             'Jakarta Chess Arena',
+    'Singapore Chess Centre',
     'Kota Kinabalu Convention Centre','Kuching Chess Federation Hall'
   ];
   venue_addrs text[] := ARRAY[
@@ -225,8 +236,23 @@ DECLARE
     '15 Jalan Abdul Samad, 80100 Johor Bahru, Johor',
     '5 Jalan Sultan Idris Shah, 30000 Ipoh, Perak',
     'Jalan Badlishah, 05000 Alor Setar, Kedah',
+    '88 Sukhumvit Road, Khlong Toei, Bangkok 10110',
+    'Jalan Jenderal Sudirman 52, Jakarta 12190',
+    '1 Marina Boulevard, Singapore 018989',
     'Jalan Tun Razak, 88000 Kota Kinabalu, Sabah',
     '22 Jalan Padungan, 93100 Kuching, Sarawak'
+  ];
+  venue_states text[] := ARRAY[
+    'W.P. Kuala Lumpur','Selangor','Pulau Pinang','Johor',
+    'Perak','Kedah',
+    'Bangkok','Jakarta','Singapore',
+    'Sabah','Sarawak'
+  ];
+  venue_tz text[] := ARRAY[
+    'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur','Asia/Kuala_Lumpur','Asia/Kuala_Lumpur',
+    'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur',
+    'Asia/Bangkok','Asia/Jakarta','Asia/Singapore',
+    'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur'
   ];
   t_types   text[]    := ARRAY['rapid','blitz','classical','rapid','blitz'];
   t_rounds  integer[] := ARRAY[7, 9, 9, 7, 11];
@@ -491,7 +517,7 @@ BEGIN
       END;
 
       t_fee := fee_opts[((idx - 1) % 5) + 1];
-      v_idx := ((idx - 1) % 8) + 1;
+      v_idx := ((idx - 1) % array_length(venue_names, 1)) + 1;
 
       -- Vary restrictions: open, nationality, age, gender, rating, combined
       t_restrictions := CASE (idx % 6)
@@ -505,7 +531,7 @@ BEGIN
 
       INSERT INTO public.tournaments (
         organization_id, name, slug, description,
-        venue_name, venue_state, venue_address,
+        venue_name, venue_state, venue_address, timezone,
         start_date, end_date, registration_deadline,
         format, time_control,
         is_fide_rated, is_mcf_rated,
@@ -525,10 +551,11 @@ BEGIN
                )
           ELSE NULL
         END,
-        t_names[idx] || ' — a competitive chess event open to all Malaysian-rated players.',
+        t_names[idx] || ' — a competitive chess event open to all rated players.',
         venue_names[v_idx],
-        states[((idx - 1) % array_length(states, 1)) + 1],
+        venue_states[v_idx],
         venue_addrs[v_idx],
+        venue_tz[v_idx],
         t_start, t_end, t_deadline,
         json_build_object(
           'type',   t_types  [(idx % 5) + 1],
@@ -597,7 +624,7 @@ BEGIN
     END LOOP;
   END LOOP;
 
-  RAISE NOTICE '  > 15 tournaments created';
+  RAISE NOTICE '  > 15 tournaments created (12 in Malaysia, 3 in other ASEAN timezones)';
 
   -- ===========================================================================
   -- 4. REGISTRATIONS & PAYMENTS
