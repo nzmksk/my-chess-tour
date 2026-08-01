@@ -1,28 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SUPPORTED_COUNTRIES, regionsForCountry } from "@/lib/venues";
 import type { BasicInfoData } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import { VENUE_TIME_ZONES } from "@/lib/datetime";
-
-const MALAYSIAN_STATES = [
-  "Johor",
-  "Kedah",
-  "Kelantan",
-  "Melaka",
-  "Negeri Sembilan",
-  "Pahang",
-  "Perak",
-  "Perlis",
-  "Pulau Pinang",
-  "Sabah",
-  "Sarawak",
-  "Selangor",
-  "Terengganu",
-  "W.P. Kuala Lumpur",
-  "W.P. Labuan",
-  "W.P. Putrajaya",
-];
 
 type NameStatus = "idle" | "checking" | "available" | "taken" | "error";
 
@@ -145,6 +127,15 @@ export default function BasicInfoStep() {
     setForm((f) => ({ ...f, [key]: value }));
   };
 
+  const regions = regionsForCountry(form.venueCountry);
+
+  // Changing country invalidates the selected state — the two lists don't
+  // overlap, so keeping the old value would submit a region the new country
+  // doesn't have and fail server-side validation.
+  const handleCountryChange = (code: string) => {
+    setForm((f) => ({ ...f, venueCountry: code, venueState: "" }));
+  };
+
   return (
     <div>
       <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
@@ -241,6 +232,32 @@ export default function BasicInfoStep() {
 
         <div className="form-group">
           <div className="label-row">
+            <label htmlFor="venue-country" className="input-label">
+              Country
+            </label>
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+              *
+            </span>
+          </div>
+          <select
+            id="venue-country"
+            className="input"
+            value={form.venueCountry}
+            onChange={(e) => handleCountryChange(e.target.value)}
+          >
+            {SUPPORTED_COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <p className="input-hint">
+            Sets the timezone your tournament dates are read in.
+          </p>
+        </div>
+
+        <div className="form-group">
+          <div className="label-row">
             <label htmlFor="venue-state" className="input-label">
               State
             </label>
@@ -255,7 +272,7 @@ export default function BasicInfoStep() {
             onChange={(e) => field("venueState", e.target.value)}
           >
             <option value="">Select state…</option>
-            {MALAYSIAN_STATES.map((s) => (
+            {regions.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>

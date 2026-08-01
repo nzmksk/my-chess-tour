@@ -13,6 +13,7 @@ import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_comp
 import { fromPersistedRestrictions } from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
 import { fromPersistedEntryFees } from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
 import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/datetime";
+import { DEFAULT_COUNTRY_CODE } from "@/lib/venues";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",
@@ -27,7 +28,12 @@ interface TournamentForEdit {
   start_date: string;
   end_date: string;
   registration_deadline: string;
-  venue: { name: string; state: string; address?: string | null };
+  venue: {
+    name: string;
+    state: string;
+    address?: string | null;
+    country?: string | null;
+  };
   timezone: string;
   format: { type?: string; system?: string; rounds?: number } | null;
   time_control: {
@@ -80,6 +86,7 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     venueName: t.venue.name,
     venueState: t.venue.state,
     venueAddress: t.venue.address ?? "",
+    venueCountry: t.venue.country ?? DEFAULT_COUNTRY_CODE,
     timezone: timeZone,
   };
 

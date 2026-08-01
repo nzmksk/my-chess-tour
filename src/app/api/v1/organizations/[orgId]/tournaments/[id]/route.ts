@@ -7,6 +7,7 @@ import {
   tournamentTag,
 } from "@/lib/cache-tags";
 import { resolveTimeZone } from "@/lib/datetime";
+import { DEFAULT_COUNTRY_CODE, isSupportedCountry } from "@/lib/venues";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -65,6 +66,7 @@ interface UpdateTournamentBody {
   venue_name?: unknown;
   venue_state?: unknown;
   venue_address?: unknown;
+  venue_country?: unknown;
   timezone?: unknown;
   format?: FormatInput;
   time_control?: TimeControlInput;
@@ -256,6 +258,14 @@ export async function PATCH(
   if ("venue_address" in body) {
     patch.venue_address =
       typeof body.venue_address === "string" ? body.venue_address.trim() : "";
+  }
+
+  // An unrecognised country falls back to the platform default rather than
+  // erroring, matching create-route behaviour and the column default.
+  if ("venue_country" in body) {
+    patch.venue_country = isSupportedCountry(body.venue_country as string)
+      ? (body.venue_country as string).toUpperCase()
+      : DEFAULT_COUNTRY_CODE;
   }
 
   // Moving the venue can move the timezone with it. Anything off the supported

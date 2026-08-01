@@ -158,6 +158,13 @@ CREATE TABLE tournaments (
   venue_name                  varchar(255) NOT NULL,
   venue_state                 varchar(50) NOT NULL,
   venue_address               text NOT NULL,
+  -- ISO 3166-1 alpha-2 of the venue. Deliberately separate from `timezone`
+  -- below: the country decides which payout rails and currency a tournament's
+  -- money moves on, the timezone decides how its dates read. A country can span
+  -- several zones, so neither derives from the other.
+  -- The set an organizer may pick from is enforced in the app
+  -- (SUPPORTED_COUNTRIES in src/lib/venues.ts), which also owns venue_state.
+  venue_country               varchar(2)  NOT NULL DEFAULT 'MY',
   -- IANA timezone of the venue: a tournament's times belong to where it is played, not to whoever is reading them.
   -- start_date/end_date are calendar dates in this zone, timestamptz columns are instants displayed in it,
   -- and ongoing/upcoming/past is judged against "now" here.

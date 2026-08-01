@@ -89,6 +89,7 @@ export default function WizardShell({
       venue_name: basicInfoData.venueName || undefined,
       venue_state: basicInfoData.venueState || undefined,
       venue_address: basicInfoData.venueAddress || undefined,
+      venue_country: basicInfoData.venueCountry || undefined,
       timezone: timeZone,
     };
 

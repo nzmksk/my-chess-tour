@@ -29,7 +29,13 @@ interface TournamentManageData {
     end_date: string;
     registration_deadline: string | null;
     registration_closed_at: string | null;
-    venue: { name: string; state: string; address?: string | null };
+    venue: {
+      name: string;
+      state: string;
+      address?: string | null;
+      /** ISO 3166-1 alpha-2 — decides the payout rails, not the clock. */
+      country: string;
+    };
     /** IANA timezone of the venue — the zone its dates and times are read in. */
     timezone: string;
     format: { type?: string; system?: string; rounds?: number } | null;
@@ -165,7 +171,7 @@ export const getTournamentManageData = cache(
     const { data: tournament, error: tErr } = await supabaseAdmin
       .from("tournaments")
       .select(
-        "id, name, description, status, start_date, end_date, registration_deadline, registration_closed_at, venue_name, venue_state, venue_address, timezone, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
+        "id, name, description, status, start_date, end_date, registration_deadline, registration_closed_at, venue_name, venue_state, venue_address, venue_country, timezone, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
       )
       .eq("id", id)
       .eq("organization_id", orgId)
@@ -322,6 +328,7 @@ export const getTournamentManageData = cache(
             name: tournament.venue_name,
             state: tournament.venue_state,
             address: tournament.venue_address,
+            country: tournament.venue_country,
           },
           timezone: resolveTimeZone(tournament.timezone),
           format: tournament.format,

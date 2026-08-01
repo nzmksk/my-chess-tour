@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { resolveTimeZone } from "@/lib/datetime";
+import { DEFAULT_COUNTRY_CODE, isSupportedCountry } from "@/lib/venues";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -44,6 +45,7 @@ interface CreateTournamentBody {
   venue_name?: unknown;
   venue_state?: unknown;
   venue_address?: unknown;
+  venue_country?: unknown;
   timezone?: unknown;
   format?: FormatInput;
   time_control?: TimeControlInput;
@@ -180,6 +182,12 @@ export async function POST(
   const venue_address =
     typeof body.venue_address === "string" ? body.venue_address.trim() : "";
 
+  // Anything off the supported picklist falls back to the platform default
+  // rather than storing a country the payout rails can't route to.
+  const venue_country = isSupportedCountry(body.venue_country as string)
+    ? (body.venue_country as string).toUpperCase()
+    : DEFAULT_COUNTRY_CODE;
+
   // The venue's timezone anchors the tournament's dates and times. Anything off
   // the supported picklist falls back to the platform default rather than
   // storing a zone no formatter can read.
@@ -253,6 +261,7 @@ export async function POST(
       venue_name,
       venue_state,
       venue_address,
+      venue_country,
       timezone,
       start_date,
       end_date,

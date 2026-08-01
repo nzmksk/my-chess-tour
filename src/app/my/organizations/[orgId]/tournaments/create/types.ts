@@ -27,6 +27,12 @@ export interface BasicInfoData {
   name: string;
   description: string;
   venueName: string;
+  /**
+   * ISO 3166-1 alpha-2 of the venue's country. Decides which regions the state
+   * dropdown offers, and which payout rails the tournament's money will move
+   * on. Independent of `timezone` — a country can span several zones.
+   */
+  venueCountry: string;
   venueState: string;
   venueAddress: string;
   /**
