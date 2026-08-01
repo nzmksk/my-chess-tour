@@ -135,6 +135,14 @@ const EXISTING_TOURNAMENT = {
   start_date: "2099-09-01",
   end_date: "2099-09-02",
   timezone: "Asia/Kuala_Lumpur",
+  // The money columns the freeze compares against. Shaped exactly as the PATCH
+  // route writes them, because that is what a row edited through this route
+  // actually holds — and an unchanged resend has to compare equal to it.
+  entry_fees: { standard: { amount_cents: 4000 }, additional: [] },
+  prizes: null,
+  max_participants: 32,
+  commission_rate: 10,
+  organizer_commission_pct: 0,
 };
 
 const UPDATED_TOURNAMENT = {
@@ -614,6 +622,59 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
         { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
       );
       expect(res.status).toBe(200);
+    });
+
+    // The edit wizard rebuilds the entire draft body on every save, so it always
+    // resends entry_fees and max_participants even when the organizer only
+    // touched the venue. Refusing that is a false 409: the trigger compares
+    // OLD/NEW and would have let it through. This is the payload the client
+    // actually sends, not a hand-trimmed one.
+    it("allows a venue edit that resends money fields unchanged", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_address: "2 New Road",
+          entry_fees: PUBLISHED.entry_fees,
+          max_participants: PUBLISHED.max_participants,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    // jsonb equality ignores key order, so the freeze must too — otherwise the
+    // check would depend on how the client happened to serialise the object.
+    it("ignores key order when deciding a money field is unchanged", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          entry_fees: { additional: [], standard: { amount_cents: 4000 } },
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("409s when a resent money field differs by even one cent", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_address: "2 New Road",
+          entry_fees: { standard: { amount_cents: 4001 }, additional: [] },
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.details).toEqual(["entry_fees"]);
     });
 
     it("409s on any edit once the tournament has started", async () => {

@@ -167,6 +167,47 @@ interface FreezeSubject {
   start_date: string;
   end_date: string;
   timezone: string;
+  entry_fees: unknown;
+  prizes: unknown;
+  max_participants: unknown;
+  commission_rate: unknown;
+  organizer_commission_pct: unknown;
+}
+
+/**
+ * Deep structural equality, used to answer "is this money field actually
+ * changing?" the same way the database does.
+ *
+ * The trigger compares with `IS DISTINCT FROM`, which on jsonb is semantic:
+ * key order doesn't matter, but a key being present-vs-absent does. This walks
+ * objects and arrays to match that, rather than comparing JSON.stringify output
+ * — two equal jsonb values can serialise to different strings purely by key
+ * order, and that would resurrect the false 409 this exists to prevent.
+ */
+function deepEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  // Postgres has one null; a column read back as null and a patch that omits a
+  // value to `undefined` mean the same thing here.
+  if (a == null || b == null) return a == null && b == null;
+  if (typeof a !== "object" || typeof b !== "object") return false;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+    return a.every((item, i) => deepEquals(item, b[i]));
+  }
+
+  const aObj = a as Record<string, unknown>;
+  const bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(
+    (k) =>
+      Object.prototype.hasOwnProperty.call(bObj, k) &&
+      deepEquals(aObj[k], bObj[k]),
+  );
 }
 
 /**
@@ -210,7 +251,15 @@ async function checkEditFreeze(
     );
   }
 
-  const touchedMoneyFields = MONEY_FIELDS.filter((f) => f in patch);
+  // Changed, not merely present. The edit wizard rebuilds the whole draft body
+  // on every save, so an organizer fixing a typo in the venue address still
+  // sends entry_fees and max_participants at their current values. Gating on
+  // presence would refuse that edit, while the trigger — which compares
+  // OLD/NEW — would have allowed it. Presence is the client's business; what
+  // the row ends up holding is the rule.
+  const touchedMoneyFields = MONEY_FIELDS.filter(
+    (f) => f in patch && !deepEquals(patch[f], existing[f]),
+  );
   if (touchedMoneyFields.length === 0) return null;
 
   // `head: true` — we only need to know whether one exists.
@@ -291,7 +340,9 @@ export async function PATCH(
   const { data: existing, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, status, registration_deadline, registration_closed_at, start_date, end_date, timezone",
+      // The money columns are here for checkEditFreeze, which refuses an edit
+      // only when a value actually changes and so needs the current one.
+      "id, status, registration_deadline, registration_closed_at, start_date, end_date, timezone, entry_fees, prizes, max_participants, commission_rate, organizer_commission_pct",
     )
     .eq("id", id)
     .eq("organization_id", orgId)
