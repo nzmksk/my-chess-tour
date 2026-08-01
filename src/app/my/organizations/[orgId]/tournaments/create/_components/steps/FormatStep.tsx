@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
-import type { FormatData, Restriction } from "../TournamentWizardContext";
+import type { FormatData, Restriction } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import { newRowId } from "../rowId";
 import { CountryDropdown } from "@/components/ui/country-dropdown";

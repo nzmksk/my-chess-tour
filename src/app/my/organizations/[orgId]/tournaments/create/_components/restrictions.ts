@@ -6,17 +6,7 @@
 // Persisting the normalized shape is what makes wizard-created restrictions
 // actually enforce — the UI labels are never stored.
 
-export type PersistedRestriction =
-  | { type: "age"; min?: number | null; max?: number | null }
-  | { type: "rating"; min?: number | null; max?: number | null }
-  | { type: "gender"; value: string }
-  | { type: "nationality"; value: string };
-
-interface RestrictionRow {
-  id: string;
-  type: string;
-  value: string;
-}
+import type { PersistedRestriction, Restriction } from "../types";
 
 function toNumberOrNull(value: string): number | null {
   if (value.trim() === "") return null;
@@ -26,7 +16,7 @@ function toNumberOrNull(value: string): number | null {
 
 /** Wizard rows → normalized restrictions for persistence. */
 export function toPersistedRestrictions(
-  rows: ReadonlyArray<{ type: string; value: string }>,
+  rows: ReadonlyArray<Pick<Restriction, "type" | "value">>,
 ): PersistedRestriction[] {
   return rows.map((r) => {
     const value = r.value.trim();
@@ -51,8 +41,8 @@ export function toPersistedRestrictions(
 /** Normalized restrictions (from the DB) → wizard rows for editing. */
 export function fromPersistedRestrictions(
   items: ReadonlyArray<PersistedRestriction>,
-): RestrictionRow[] {
-  const rows: RestrictionRow[] = [];
+): Restriction[] {
+  const rows: Restriction[] = [];
   let idx = 0;
   const push = (type: string, value: string) =>
     rows.push({ id: `r-${idx++}`, type, value });

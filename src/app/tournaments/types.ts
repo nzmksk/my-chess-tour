@@ -28,6 +28,10 @@ export interface EntryFees {
     valid_until?: string;
     age_min?: number;
     age_max?: number;
+    // Rating bounds are written by the create/edit wizard but not yet checked
+    // by the tier eligibility validator or shown on the public tier list.
+    rating_min?: number;
+    rating_max?: number;
     gender?: "female";
     oku?: boolean;
     titles?: ChessTitle[];

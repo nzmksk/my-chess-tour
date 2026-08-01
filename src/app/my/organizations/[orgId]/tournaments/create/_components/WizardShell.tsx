@@ -2,13 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  WIZARD_STEPS,
-  useTournamentWizard,
-  type FeeTier,
-} from "./TournamentWizardContext";
+import { WIZARD_STEPS, useTournamentWizard } from "./TournamentWizardContext";
 import WizardProgressBar from "./WizardProgressBar";
 import { toPersistedRestrictions } from "./restrictions";
+import { toPersistedEntryFees } from "./entryFees";
 import BasicInfoStep from "./steps/BasicInfoStep";
 import FormatStep from "./steps/FormatStep";
 import FeesStep from "./steps/FeesStep";
@@ -29,19 +26,6 @@ interface WizardShellProps {
   title?: string;
   redirectPath?: string;
   mode?: "create" | "edit";
-}
-
-function mapTierType(t: FeeTier["type"]): string {
-  switch (t) {
-    case "early-bird":
-      return "early_bird";
-    case "titled":
-      return "titled_players";
-    case "rating-based":
-      return "rating_based";
-    case "age-based":
-      return "age_based";
-  }
 }
 
 export default function WizardShell({
@@ -74,33 +58,7 @@ export default function WizardShell({
   const StepContent = STEP_COMPONENTS[currentStepIndex];
 
   function buildDraftBody(): Record<string, unknown> {
-    const entryFees = {
-      standard: {
-        amount_cents:
-          feesData.standardFee === ""
-            ? 0
-            : Math.round(Number(feesData.standardFee) * 100),
-      },
-      additional: feesData.tiers.map((tier) => {
-        const base: Record<string, unknown> = {
-          type: mapTierType(tier.type),
-          amount_cents:
-            tier.amount === "" ? 0 : Math.round(Number(tier.amount) * 100),
-        };
-        if (tier.type === "early-bird" && tier.validUntil) {
-          base.valid_until = tier.validUntil;
-        } else if (tier.type === "titled" && tier.titles.length > 0) {
-          base.titles = tier.titles;
-        } else if (tier.type === "rating-based") {
-          if (tier.ratingFrom !== "") base.rating_from = tier.ratingFrom;
-          if (tier.ratingTo !== "") base.rating_to = tier.ratingTo;
-        } else if (tier.type === "age-based") {
-          if (tier.ageFrom !== "") base.age_from = tier.ageFrom;
-          if (tier.ageTo !== "") base.age_to = tier.ageTo;
-        }
-        return base;
-      }),
-    };
+    const entryFees = toPersistedEntryFees(feesData);
 
     const prizes =
       prizesData.categories.length > 0 || prizesData.specialPrizes.length > 0

@@ -97,7 +97,7 @@ export function getMinFeeCents(fees: EntryFees | null | undefined): number {
 // Tournament dates/times are anchored to the venue's timezone. The platform is
 // Malaysia-only today, so this defaults to KL; the `timeZone` param lets a
 // per-tournament timezone drop in for the planned ASEAN expansion.
-const PLATFORM_TIME_ZONE = "Asia/Kuala_Lumpur";
+export const PLATFORM_TIME_ZONE = "Asia/Kuala_Lumpur";
 
 // Returns the calendar date ("YYYY-MM-DD") for `now` in the given timezone.
 // Used so the discovery ongoing/upcoming/past buckets are judged against the

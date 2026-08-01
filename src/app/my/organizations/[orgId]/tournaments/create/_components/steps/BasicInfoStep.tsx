@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BasicInfoData } from "../TournamentWizardContext";
+import type { BasicInfoData } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
 
 const MALAYSIAN_STATES = [
