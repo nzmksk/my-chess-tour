@@ -733,6 +733,209 @@ describe("RegisterForm", () => {
     });
   });
 
+  // --- Rating ---------------------------------------------------------------
+
+  describe("eligibility — rating", () => {
+    // makeTournament's format type is "swiss" and it is rated by neither
+    // federation, so ratings resolve to the FIDE standard list, then the
+    // national one (see resolvePlayerRating).
+    const RATED_1600: PlayerProfile = {
+      ...MALE_PROFILE,
+      fide_rating: { standard: 1600 },
+    };
+    const UNRATED = MALE_PROFILE;
+    const NATIONAL_1600: PlayerProfile = {
+      ...MALE_PROFILE,
+      national_rating: 1600,
+    };
+
+    it("shows an error when the player's rating is below the tier minimum", async () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "masters", amount_cents: 2000, rating_min: 1800 },
+          ])}
+          userId="u1"
+          playerProfile={RATED_1600}
+        />,
+      );
+      await act(async () => {
+        fireEvent.change(selectEl(container), { target: { value: "masters" } });
+      });
+      expect(
+        screen.getByText("This fee requires a minimum rating of 1800."),
+      ).toBeDefined();
+    });
+
+    it("shows an error when the player's rating exceeds the tier maximum", async () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "amateur", amount_cents: 2000, rating_max: 1500 },
+          ])}
+          userId="u1"
+          playerProfile={RATED_1600}
+        />,
+      );
+      await act(async () => {
+        fireEvent.change(selectEl(container), { target: { value: "amateur" } });
+      });
+      expect(
+        screen.getByText(
+          "Your rating exceeds the maximum for this fee (1500).",
+        ),
+      ).toBeDefined();
+    });
+
+    it("marks a rating-based tier the player misses as (Ineligible)", () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "masters", amount_cents: 2000, rating_min: 1800 },
+          ])}
+          userId="u1"
+          playerProfile={RATED_1600}
+        />,
+      );
+      const option = Array.from(selectEl(container).options).find(
+        (o) => o.value === "masters",
+      );
+      expect(option?.text).toContain("(Ineligible)");
+      expect(option?.disabled).toBe(true);
+    });
+
+    it("keeps a tier the player's rating falls inside selectable", () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            {
+              type: "amateur",
+              amount_cents: 2000,
+              rating_min: 1500,
+              rating_max: 1800,
+            },
+          ])}
+          userId="u1"
+          playerProfile={RATED_1600}
+        />,
+      );
+      // Cheaper and eligible, so it sorts first and is selected by default.
+      expect(selectEl(container).value).toBe("amateur");
+      expect(screen.queryByText(/rating/i)).not.toBeNull();
+      expect(screen.queryByText(/minimum rating/)).toBeNull();
+    });
+
+    it("blocks an unrated player from a tier with a rating floor", async () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "masters", amount_cents: 2000, rating_min: 1800 },
+          ])}
+          userId="u1"
+          playerProfile={UNRATED}
+        />,
+      );
+      await act(async () => {
+        fireEvent.change(selectEl(container), { target: { value: "masters" } });
+      });
+      expect(
+        screen.getByText(/no FIDE standard or national rating/),
+      ).toBeDefined();
+    });
+
+    it("admits an unrated player to a tier that only caps the rating", () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "amateur", amount_cents: 2000, rating_max: 1500 },
+          ])}
+          userId="u1"
+          playerProfile={UNRATED}
+        />,
+      );
+      expect(selectEl(container).value).toBe("amateur");
+      expect(screen.queryByText(/exceeds the maximum/)).toBeNull();
+    });
+
+    it("describes the tier's rating range under the selector", () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            {
+              type: "amateur",
+              amount_cents: 2000,
+              rating_min: 1500,
+              rating_max: 1800,
+            },
+          ])}
+          userId="u1"
+          playerProfile={RATED_1600}
+        />,
+      );
+      expect(selectEl(container).value).toBe("amateur");
+      expect(screen.getByText("rating 1500–1800")).toBeDefined();
+    });
+
+    it("ignores a national rating on a FIDE-rated tournament", async () => {
+      // Nationally 1600 but no FIDE standard rating → unrated for a FIDE-rated
+      // event, so a tier with a floor is out of reach.
+      const { container } = render(
+        <RegisterForm
+          tournament={{
+            ...makeTournament([
+              { type: "masters", amount_cents: 2000, rating_min: 1500 },
+            ]),
+            is_fide_rated: true,
+          }}
+          userId="u1"
+          playerProfile={NATIONAL_1600}
+        />,
+      );
+      await act(async () => {
+        fireEvent.change(selectEl(container), { target: { value: "masters" } });
+      });
+      expect(screen.getByText(/no FIDE standard rating/)).toBeDefined();
+    });
+
+    it("accepts a national rating when neither federation rates the event", () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament([
+            { type: "masters", amount_cents: 2000, rating_min: 1500 },
+          ])}
+          userId="u1"
+          playerProfile={NATIONAL_1600}
+        />,
+      );
+      expect(selectEl(container).value).toBe("masters");
+      expect(screen.queryByText(/rating/i)).not.toBeNull();
+      expect(screen.queryByText(/no FIDE/)).toBeNull();
+    });
+
+    it("judges an MCF-rated tournament on the national rating", async () => {
+      const { container } = render(
+        <RegisterForm
+          tournament={{
+            ...makeTournament([
+              { type: "amateur", amount_cents: 2000, rating_max: 1500 },
+            ]),
+            is_mcf_rated: true,
+          }}
+          userId="u1"
+          playerProfile={NATIONAL_1600}
+        />,
+      );
+      await act(async () => {
+        fireEvent.change(selectEl(container), { target: { value: "amateur" } });
+      });
+      expect(
+        screen.getByText(
+          "Your rating exceeds the maximum for this fee (1500).",
+        ),
+      ).toBeDefined();
+    });
+  });
+
   // --- Submit behaviour -----------------------------------------------------
 
   describe("submit behaviour", () => {

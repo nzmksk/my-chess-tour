@@ -5,6 +5,9 @@ import {
   formatDeadline,
   calculateAge,
   checkAgeEligibility,
+  checkRatingEligibility,
+  describeRatingList,
+  resolvePlayerRating,
   getTodayInTimeZone,
   getMinFeeCents,
 } from "../utils";
@@ -222,6 +225,182 @@ describe("checkAgeEligibility", () => {
     expect(checkAgeEligibility(new Date("2000-01-01"), start, null, null)).toBe(
       null,
     );
+  });
+});
+
+describe("resolvePlayerRating", () => {
+  const fide = (formatType: string) => ({
+    formatType,
+    isFideRated: true,
+    isMcfRated: false,
+  });
+  const mcf = (formatType: string) => ({
+    formatType,
+    isFideRated: false,
+    isMcfRated: true,
+  });
+  const unratedEvent = (formatType: string) => ({
+    formatType,
+    isFideRated: false,
+    isMcfRated: false,
+  });
+
+  const profile = {
+    fide_rating: { standard: 2000, rapid: 1900, blitz: 1800 },
+    national_rating: 1500,
+  };
+
+  it("uses the blitz list for a blitz tournament", () => {
+    expect(resolvePlayerRating(profile, fide("blitz"))).toBe(1800);
+  });
+
+  it("uses the rapid list for a rapid tournament", () => {
+    expect(resolvePlayerRating(profile, fide("rapid"))).toBe(1900);
+  });
+
+  it("uses the standard list for a classical tournament", () => {
+    expect(resolvePlayerRating(profile, fide("classical"))).toBe(2000);
+  });
+
+  it("treats an unknown format as standard", () => {
+    expect(resolvePlayerRating(profile, fide("swiss"))).toBe(2000);
+  });
+
+  it("does not substitute another FIDE list when the format's own is missing", () => {
+    expect(
+      resolvePlayerRating(
+        { fide_rating: { standard: 2000 }, national_rating: 1500 },
+        fide("blitz"),
+      ),
+    ).toBeNull();
+  });
+
+  it("does not substitute the national rating on a FIDE-rated tournament", () => {
+    expect(
+      resolvePlayerRating(
+        { fide_rating: null, national_rating: 1500 },
+        fide("classical"),
+      ),
+    ).toBeNull();
+  });
+
+  it("reads only the national rating on an MCF-rated tournament", () => {
+    expect(resolvePlayerRating(profile, mcf("classical"))).toBe(1500);
+    expect(
+      resolvePlayerRating(
+        { fide_rating: { standard: 2000 }, national_rating: null },
+        mcf("classical"),
+      ),
+    ).toBeNull();
+  });
+
+  it("takes whichever rating exists when neither federation rates the event", () => {
+    expect(resolvePlayerRating(profile, unratedEvent("classical"))).toBe(2000);
+    expect(
+      resolvePlayerRating(
+        { fide_rating: null, national_rating: 1500 },
+        unratedEvent("classical"),
+      ),
+    ).toBe(1500);
+  });
+
+  it("returns null for a player with no ratings at all", () => {
+    expect(
+      resolvePlayerRating(
+        { fide_rating: null, national_rating: null },
+        fide("classical"),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null for a null profile", () => {
+    expect(resolvePlayerRating(null, fide("classical"))).toBeNull();
+  });
+
+  it("ignores a non-numeric jsonb rating rather than comparing it as a string", () => {
+    expect(
+      resolvePlayerRating(
+        {
+          fide_rating: { standard: "1800" } as unknown as Record<
+            string,
+            number
+          >,
+          national_rating: 1500,
+        },
+        fide("classical"),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("describeRatingList", () => {
+  it("names the FIDE list for a FIDE-rated tournament", () => {
+    expect(
+      describeRatingList({
+        formatType: "classical",
+        isFideRated: true,
+        isMcfRated: false,
+      }),
+    ).toBe("FIDE standard");
+    expect(
+      describeRatingList({
+        formatType: "blitz",
+        isFideRated: true,
+        isMcfRated: false,
+      }),
+    ).toBe("FIDE blitz");
+  });
+
+  it("names the national list for an MCF-rated tournament", () => {
+    expect(
+      describeRatingList({
+        formatType: "rapid",
+        isFideRated: false,
+        isMcfRated: true,
+      }),
+    ).toBe("national (MCF)");
+  });
+
+  it("names both when neither federation rates the event", () => {
+    expect(
+      describeRatingList({
+        formatType: "rapid",
+        isFideRated: false,
+        isMcfRated: false,
+      }),
+    ).toBe("FIDE rapid or national");
+  });
+});
+
+describe("checkRatingEligibility", () => {
+  it("returns null when the rating is inside the range", () => {
+    expect(checkRatingEligibility(1700, 1500, 1800)).toBeNull();
+  });
+
+  it("treats both bounds as inclusive", () => {
+    expect(checkRatingEligibility(1500, 1500, 1800)).toBeNull();
+    expect(checkRatingEligibility(1800, 1500, 1800)).toBeNull();
+  });
+
+  it("flags a rating below the floor", () => {
+    expect(checkRatingEligibility(1499, 1500, null)).toBe("below_min");
+  });
+
+  it("flags a rating above the cap", () => {
+    expect(checkRatingEligibility(1801, null, 1800)).toBe("above_max");
+  });
+
+  it("blocks an unrated player from a floor", () => {
+    expect(checkRatingEligibility(null, 1500, null)).toBe("below_min");
+  });
+
+  it("admits an unrated player under a cap", () => {
+    expect(checkRatingEligibility(null, null, 1800)).toBeNull();
+  });
+
+  it("returns null when no bounds are set", () => {
+    expect(checkRatingEligibility(null, null, null)).toBeNull();
+    expect(checkRatingEligibility(2400, null, null)).toBeNull();
   });
 });
 

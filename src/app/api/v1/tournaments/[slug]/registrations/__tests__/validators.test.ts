@@ -6,12 +6,33 @@ import {
   normalizeRestrictions,
 } from "../validators";
 import type { EligibilityProfile, FeeTier } from "../validators";
+import type { RatingContext } from "@/app/tournaments/utils";
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
 const NOW = new Date("2026-05-12T00:00:00Z");
+
+// Which rating list a check reads. A FIDE-rated event is judged on the FIDE
+// list for its format and an MCF-rated one on the national rating, with no
+// substitution between them; an event rated by neither takes whichever the
+// player has.
+const FIDE = (formatType: string): RatingContext => ({
+  formatType,
+  isFideRated: true,
+  isMcfRated: false,
+});
+const MCF = (formatType: string): RatingContext => ({
+  formatType,
+  isFideRated: false,
+  isMcfRated: true,
+});
+const UNRATED_EVENT = (formatType: string): RatingContext => ({
+  formatType,
+  isFideRated: false,
+  isMcfRated: false,
+});
 
 // At NOW, DOB_18 yields age 18, DOB_17 yields age 17
 const DOB_18 = "2008-05-12";
@@ -145,7 +166,7 @@ describe("checkRestrictions", () => {
         checkRestrictions(
           { nationality: "Malaysia" },
           makeProfile({ nationality: "Malaysia" }),
-          "rapid",
+          FIDE("rapid"),
           NOW,
         ),
       ).toBeNull();
@@ -156,7 +177,7 @@ describe("checkRestrictions", () => {
         checkRestrictions(
           { nationality: "MY" },
           makeProfile({ nationality: "Malaysia" }),
-          "rapid",
+          FIDE("rapid"),
           NOW,
         ),
       ).toBeNull();
@@ -166,7 +187,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { nationality: "Malaysia" },
         makeProfile({ nationality: "Singapore" }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result?.status).toBe(422);
@@ -179,7 +200,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { nationality: "Malaysia" },
         makeProfile({ nationality: null }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result?.status).toBe(422);
@@ -193,7 +214,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { gender: "female" },
         makeProfile({ gender: "male" }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -206,7 +227,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { gender: "female" },
         makeProfile({ gender: "female" }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result).toBeNull();
@@ -216,7 +237,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { gender: "female" },
         null,
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -228,14 +249,16 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_rating: null, max_rating: null, min_age: null, max_age: null },
         makeProfile(),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result).toBeNull();
     });
 
     it("returns null for empty restrictions object", () => {
-      expect(checkRestrictions({}, makeProfile(), "rapid", NOW)).toBeNull();
+      expect(
+        checkRestrictions({}, makeProfile(), FIDE("rapid"), NOW),
+      ).toBeNull();
     });
   });
 
@@ -248,7 +271,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { titles: ["GM", "IM"] },
         makeProfile({ title: "GM" }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result).toBeNull();
@@ -258,7 +281,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { titles: ["GM", "IM"] },
         makeProfile({ title: null }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result).not.toBeNull();
@@ -271,7 +294,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { titles: ["GM", "IM"] },
         makeProfile({ title: "FM" }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -289,7 +312,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_rating: 1000, max_rating: 1800 },
         makeProfile({ fide_rating: { rapid: 1500 } }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result).toBeNull();
@@ -299,7 +322,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_rating: 1800 },
         makeProfile({ fide_rating: { rapid: 1600 } }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -312,7 +335,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_rating: 1800 },
         makeProfile({ fide_rating: null, national_rating: null }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -322,7 +345,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { max_rating: 1500 },
         makeProfile({ fide_rating: { rapid: 1800 } }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -335,20 +358,60 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { max_rating: 1500 },
         makeProfile({ fide_rating: null, national_rating: null }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result).toBeNull();
     });
 
-    it("falls back to national_rating when no FIDE rating for the format", () => {
+    it("does not substitute national_rating on a FIDE-rated tournament", async () => {
       const result = checkRestrictions(
         { min_rating: 1800 },
         makeProfile({ fide_rating: null, national_rating: 1900 }),
-        "rapid",
+        FIDE("rapid"),
+        NOW,
+      );
+      expect(result!.status).toBe(422);
+    });
+
+    it("does not substitute another FIDE list for the format's own", async () => {
+      const result = checkRestrictions(
+        { min_rating: 1800 },
+        makeProfile({ fide_rating: { standard: 1900 } }),
+        FIDE("rapid"),
+        NOW,
+      );
+      expect(result!.status).toBe(422);
+    });
+
+    it("reads the national rating on an MCF-rated tournament", () => {
+      const result = checkRestrictions(
+        { min_rating: 1800 },
+        makeProfile({ fide_rating: { rapid: 1500 }, national_rating: 1900 }),
+        MCF("rapid"),
         NOW,
       );
       expect(result).toBeNull();
+    });
+
+    it("accepts either rating when the tournament is rated by neither federation", () => {
+      expect(
+        checkRestrictions(
+          { min_rating: 1800 },
+          makeProfile({ fide_rating: null, national_rating: 1900 }),
+          UNRATED_EVENT("rapid"),
+          NOW,
+        ),
+      ).toBeNull();
+
+      expect(
+        checkRestrictions(
+          { min_rating: 1800 },
+          makeProfile({ fide_rating: { rapid: 1900 }, national_rating: null }),
+          UNRATED_EVENT("rapid"),
+          NOW,
+        ),
+      ).toBeNull();
     });
 
     it("uses the blitz key for blitz format tournaments", async () => {
@@ -357,7 +420,7 @@ describe("checkRestrictions", () => {
         makeProfile({
           fide_rating: { standard: 2000, rapid: 2000, blitz: 1600 },
         }),
-        "blitz",
+        FIDE("blitz"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -367,7 +430,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_rating: 1800 },
         makeProfile({ fide_rating: { standard: 2000, rapid: 1600 } }),
-        "classical",
+        FIDE("classical"),
         NOW,
       );
       expect(result).toBeNull();
@@ -383,7 +446,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_age: 16, max_age: 20 },
         makeProfile({ date_of_birth: DOB_18 }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result).toBeNull();
@@ -393,7 +456,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_age: 18 },
         makeProfile({ date_of_birth: null }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -405,7 +468,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { min_age: 18 },
         makeProfile({ date_of_birth: DOB_17 }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -418,7 +481,7 @@ describe("checkRestrictions", () => {
       const result = checkRestrictions(
         { max_age: 17 },
         makeProfile({ date_of_birth: DOB_18 }),
-        "rapid",
+        FIDE("rapid"),
         NOW,
       );
       expect(result!.status).toBe(422);
@@ -432,7 +495,7 @@ describe("checkRestrictions", () => {
         checkRestrictions(
           { min_age: 18 },
           makeProfile({ date_of_birth: DOB_18 }),
-          "rapid",
+          FIDE("rapid"),
           NOW,
         ),
       ).toBeNull();
@@ -441,7 +504,7 @@ describe("checkRestrictions", () => {
         checkRestrictions(
           { max_age: 18 },
           makeProfile({ date_of_birth: DOB_18 }),
-          "rapid",
+          FIDE("rapid"),
           NOW,
         ),
       ).toBeNull();
@@ -457,7 +520,9 @@ describe("checkFeeTierEligibility", () => {
   describe("no tier restrictions", () => {
     it("returns null for a standard tier with no restrictions", () => {
       const tier: FeeTier = {};
-      expect(checkFeeTierEligibility(tier, makeProfile(), NOW)).toBeNull();
+      expect(
+        checkFeeTierEligibility(tier, makeProfile(), NOW, FIDE("classical")),
+      ).toBeNull();
     });
   });
 
@@ -472,6 +537,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ gender: "male" }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(400);
       const json = await result!.json();
@@ -485,6 +551,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ gender: "female" }),
         NOW,
+        FIDE("classical"),
       );
       expect(result).toBeNull();
     });
@@ -501,6 +568,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ oku_status: "none" }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(400);
       const json = await result!.json();
@@ -513,6 +581,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ oku_status: "pending" }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(400);
     });
@@ -523,6 +592,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ oku_status: "verified" }),
         NOW,
+        FIDE("classical"),
       );
       expect(result).toBeNull();
     });
@@ -539,6 +609,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ title: null }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(400);
       const json = await result!.json();
@@ -551,6 +622,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ title: "FM" }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(400);
     });
@@ -561,8 +633,166 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ title: "FM" }),
         NOW,
+        FIDE("classical"),
       );
       expect(result).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Age
+  // -------------------------------------------------------------------------
+
+  describe("rating restriction", () => {
+    it("returns null when the player's rating is inside the tier range", () => {
+      const tier: FeeTier = { rating_min: 1500, rating_max: 1800 };
+      expect(
+        checkFeeTierEligibility(
+          tier,
+          makeProfile({ fide_rating: { standard: 1700 } }),
+          NOW,
+          FIDE("classical"),
+        ),
+      ).toBeNull();
+    });
+
+    it("returns 400 when the player's rating is below the tier's rating_min", async () => {
+      const tier: FeeTier = { rating_min: 1800 };
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ fide_rating: { standard: 1600 } }),
+        NOW,
+        FIDE("classical"),
+      );
+      expect(result!.status).toBe(400);
+      const json = await result!.json();
+      expect(json.error.code).toBe("INVALID_FEE_TIER");
+      expect(json.error.message).toContain("1800");
+    });
+
+    it("returns 400 when the player's rating exceeds the tier's rating_max", async () => {
+      const tier: FeeTier = { rating_max: 1799 };
+      const result = checkFeeTierEligibility(
+        tier,
+        makeProfile({ fide_rating: { standard: 2000 } }),
+        NOW,
+        FIDE("classical"),
+      );
+      expect(result!.status).toBe(400);
+      const json = await result!.json();
+      expect(json.error.code).toBe("INVALID_FEE_TIER");
+      expect(json.error.message).toContain("1799");
+    });
+
+    it("treats the tier bounds as inclusive", () => {
+      expect(
+        checkFeeTierEligibility(
+          { rating_min: 1500, rating_max: 1800 },
+          makeProfile({ fide_rating: { standard: 1500 } }),
+          NOW,
+          FIDE("classical"),
+        ),
+      ).toBeNull();
+
+      expect(
+        checkFeeTierEligibility(
+          { rating_min: 1500, rating_max: 1800 },
+          makeProfile({ fide_rating: { standard: 1800 } }),
+          NOW,
+          FIDE("classical"),
+        ),
+      ).toBeNull();
+    });
+
+    it("blocks an unrated player from a tier with a floor", async () => {
+      const result = checkFeeTierEligibility(
+        { rating_min: 1500 },
+        makeProfile({ fide_rating: null, national_rating: null }),
+        NOW,
+        FIDE("classical"),
+      );
+      expect(result!.status).toBe(400);
+      const json = await result!.json();
+      expect(json.error.code).toBe("INVALID_FEE_TIER");
+      expect(json.error.message).toMatch(/no FIDE standard rating/);
+    });
+
+    it("admits an unrated player to a tier that only caps the rating", () => {
+      expect(
+        checkFeeTierEligibility(
+          { rating_max: 1500 },
+          makeProfile({ fide_rating: null, national_rating: null }),
+          NOW,
+          FIDE("classical"),
+        ),
+      ).toBeNull();
+    });
+
+    it("ignores the national rating on a FIDE-rated tournament", async () => {
+      // Nationally 1600, but no FIDE standard rating → unrated here, so the
+      // cap admits them and the floor doesn't.
+      const profile = makeProfile({
+        fide_rating: null,
+        national_rating: 1600,
+      });
+
+      expect(
+        checkFeeTierEligibility(
+          { rating_max: 1500 },
+          profile,
+          NOW,
+          FIDE("classical"),
+        ),
+      ).toBeNull();
+
+      const result = checkFeeTierEligibility(
+        { rating_min: 1500 },
+        profile,
+        NOW,
+        FIDE("classical"),
+      );
+      expect(result!.status).toBe(400);
+      expect((await result!.json()).error.message).toContain("FIDE standard");
+    });
+
+    it("judges an MCF-rated tournament on the national rating", async () => {
+      const profile = makeProfile({
+        fide_rating: { standard: 1400 },
+        national_rating: 1600,
+      });
+
+      const result = checkFeeTierEligibility(
+        { rating_max: 1500 },
+        profile,
+        NOW,
+        MCF("classical"),
+      );
+      expect(result!.status).toBe(400);
+    });
+
+    it("takes whichever rating exists when neither federation rates the event", () => {
+      expect(
+        checkFeeTierEligibility(
+          { rating_min: 1500 },
+          makeProfile({ fide_rating: null, national_rating: 1600 }),
+          NOW,
+          UNRATED_EVENT("classical"),
+        ),
+      ).toBeNull();
+    });
+
+    it("judges a blitz tournament on the blitz rating, not the standard one", () => {
+      const tier: FeeTier = { rating_max: 1500 };
+      const profile = makeProfile({
+        fide_rating: { standard: 2000, blitz: 1400 },
+      });
+
+      expect(
+        checkFeeTierEligibility(tier, profile, NOW, FIDE("blitz")),
+      ).toBeNull();
+      expect(
+        checkFeeTierEligibility(tier, profile, NOW, FIDE("classical"))!.status,
+      ).toBe(400);
     });
   });
 
@@ -577,6 +807,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ date_of_birth: null }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(422);
       const json = await result!.json();
@@ -589,6 +820,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ date_of_birth: DOB_17 }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(400);
       const json = await result!.json();
@@ -601,6 +833,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ date_of_birth: DOB_18 }),
         NOW,
+        FIDE("classical"),
       );
       expect(result!.status).toBe(400);
       const json = await result!.json();
@@ -613,6 +846,7 @@ describe("checkFeeTierEligibility", () => {
           { age_min: 18 },
           makeProfile({ date_of_birth: DOB_18 }),
           NOW,
+          FIDE("classical"),
         ),
       ).toBeNull();
 
@@ -621,6 +855,7 @@ describe("checkFeeTierEligibility", () => {
           { age_max: 18 },
           makeProfile({ date_of_birth: DOB_18 }),
           NOW,
+          FIDE("classical"),
         ),
       ).toBeNull();
     });
@@ -631,6 +866,7 @@ describe("checkFeeTierEligibility", () => {
         tier,
         makeProfile({ date_of_birth: DOB_18 }),
         NOW,
+        FIDE("classical"),
       );
       expect(result).toBeNull();
     });
