@@ -4,6 +4,7 @@ import React from "react";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import type { FeeTier } from "../../types";
 import { TIER_LABELS } from "../entryFees";
+import { RESTRICTION_LABELS } from "../restrictions";
 
 const COMMISSION = 0.1;
 
@@ -159,7 +160,9 @@ export default function ReviewStep() {
 
   const restrictionsSummary =
     formatData.restrictions.length > 0
-      ? formatData.restrictions.map((r) => `${r.type} ${r.value}`).join(", ")
+      ? formatData.restrictions
+          .map((r) => `${RESTRICTION_LABELS[r.kind]} ${r.value}`)
+          .join(", ")
       : null;
 
   const formatRows: [string, React.ReactNode][] = [

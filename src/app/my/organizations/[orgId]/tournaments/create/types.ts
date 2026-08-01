@@ -31,10 +31,28 @@ export interface BasicInfoData {
   venueAddress: string;
 }
 
-/** One eligibility restriction row: a UI label plus a free-text value. */
+/**
+ * What a single restriction row constrains. One kind per row, so the two ends
+ * of a rating range are two rows — which is why this is finer-grained than the
+ * stored PersistedRestriction, whose "rating" item can carry both a min and a
+ * max. See RESTRICTION_LABELS in restrictions.ts for the UI copy.
+ */
+export type RestrictionKind =
+  | "max_age"
+  | "min_rating"
+  | "max_rating"
+  | "gender"
+  | "nationality";
+
+/**
+ * One eligibility restriction row. Rows carry an id because, unlike fee tiers,
+ * the same kind may legitimately appear more than once while being edited.
+ * `value` is the raw field text for every kind — a rating, a gender, or a
+ * country name — and is normalized on the way out by restrictions.ts.
+ */
 export interface Restriction {
   id: string;
-  type: string;
+  kind: RestrictionKind;
   value: string;
 }
 
