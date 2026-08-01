@@ -185,4 +185,32 @@ describe("valid_until", () => {
     expect(fromValidUntilTimestamp("")).toBe("");
     expect(fromValidUntilTimestamp("not a date")).toBe("");
   });
+
+  it("ends the tier when the day ends at the venue, not in Malaysia", () => {
+    // A Bangkok tournament's early-bird day ends an hour after a KL one's.
+    expect(toValidUntilTimestamp("2026-02-19", "Asia/Bangkok")).toBe(
+      "2026-02-19T23:59:59+07:00",
+    );
+    // And reads back as the same calendar day at that venue.
+    expect(
+      fromValidUntilTimestamp("2026-02-19T23:59:59+07:00", "Asia/Bangkok"),
+    ).toBe("2026-02-19");
+  });
+
+  it("round-trips a tier's valid_until through the venue timezone", () => {
+    const fees: FeesData = {
+      standardFee: 50,
+      tiers: [
+        tier({ type: "early_bird", amount: 40, validUntil: "2026-02-19" }),
+      ],
+    };
+    const persisted = toPersistedEntryFees(fees, "Asia/Manila");
+    expect(persisted.additional[0].valid_until).toBe(
+      "2026-02-19T23:59:59+08:00",
+    );
+    expect(
+      fromPersistedEntryFees(persisted as StoredEntryFees, "Asia/Manila")
+        .tiers[0].validUntil,
+    ).toBe("2026-02-19");
+  });
 });

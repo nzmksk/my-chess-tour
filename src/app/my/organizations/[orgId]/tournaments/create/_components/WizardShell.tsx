@@ -6,6 +6,7 @@ import { WIZARD_STEPS, useTournamentWizard } from "./TournamentWizardContext";
 import WizardProgressBar from "./WizardProgressBar";
 import { toPersistedRestrictions } from "./restrictions";
 import { toPersistedEntryFees } from "./entryFees";
+import { resolveTimeZone, toInstantInTimeZone } from "@/lib/datetime";
 import BasicInfoStep from "./steps/BasicInfoStep";
 import FormatStep from "./steps/FormatStep";
 import FeesStep from "./steps/FeesStep";
@@ -58,7 +59,10 @@ export default function WizardShell({
   const StepContent = STEP_COMPONENTS[currentStepIndex];
 
   function buildDraftBody(): Record<string, unknown> {
-    const entryFees = toPersistedEntryFees(feesData);
+    // Everything dated in the wizard is dated at the venue, so the venue's
+    // timezone is what turns the organizer's wall-clock entries into instants.
+    const timeZone = resolveTimeZone(basicInfoData.timezone);
+    const entryFees = toPersistedEntryFees(feesData, timeZone);
 
     const prizes =
       prizesData.categories.length > 0 || prizesData.specialPrizes.length > 0
@@ -85,6 +89,7 @@ export default function WizardShell({
       venue_name: basicInfoData.venueName || undefined,
       venue_state: basicInfoData.venueState || undefined,
       venue_address: basicInfoData.venueAddress || undefined,
+      timezone: timeZone,
     };
 
     if (
@@ -111,7 +116,12 @@ export default function WizardShell({
     if (formatData.startDate) body.start_date = formatData.startDate;
     if (formatData.endDate) body.end_date = formatData.endDate;
     if (formatData.registrationDeadline)
-      body.registration_deadline = formatData.registrationDeadline;
+      // The deadline input is a wall-clock time with no zone; sent bare it
+      // would be read in the database's zone rather than the venue's.
+      body.registration_deadline = toInstantInTimeZone(
+        formatData.registrationDeadline,
+        timeZone,
+      );
     if (formatData.maxParticipants !== "")
       body.max_participants = formatData.maxParticipants;
 

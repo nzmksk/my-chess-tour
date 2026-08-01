@@ -29,6 +29,12 @@ export interface BasicInfoData {
   venueName: string;
   venueState: string;
   venueAddress: string;
+  /**
+   * IANA timezone of the venue. Every date and time in the wizard is entered in
+   * this zone — it is what the organizer means by "6pm" — and it is what the
+   * tournament is later displayed and bucketed in.
+   */
+  timezone: string;
 }
 
 /**

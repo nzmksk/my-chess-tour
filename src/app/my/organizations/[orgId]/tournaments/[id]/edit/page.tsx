@@ -12,6 +12,7 @@ import type {
 import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell";
 import { fromPersistedRestrictions } from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
 import { fromPersistedEntryFees } from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
+import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/datetime";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",
@@ -27,6 +28,7 @@ interface TournamentForEdit {
   end_date: string;
   registration_deadline: string;
   venue: { name: string; state: string; address?: string | null };
+  timezone: string;
   format: { type?: string; system?: string; rounds?: number } | null;
   time_control: {
     base_minutes?: number;
@@ -67,19 +69,18 @@ async function fetchTournamentForEdit(
   }
 }
 
-function toLocalDatetimeString(isoString: string): string {
-  const d = new Date(isoString);
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function buildInitialData(t: TournamentForEdit): PersistedState {
+  // Times come back as instants; the organizer edits them at the venue's wall
+  // clock, which is the one they entered — not the clock of whoever is editing.
+  const timeZone = resolveTimeZone(t.timezone);
+
   const basicInfoData = {
     name: t.name,
     description: t.description ?? "",
     venueName: t.venue.name,
     venueState: t.venue.state,
     venueAddress: t.venue.address ?? "",
+    timezone: timeZone,
   };
 
   const restrictions = fromPersistedRestrictions(t.restrictions ?? []);
@@ -97,14 +98,17 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     delay: t.time_control?.delay_seconds ?? 0,
     startDate: t.start_date,
     endDate: t.end_date,
-    registrationDeadline: toLocalDatetimeString(t.registration_deadline),
+    registrationDeadline: toLocalDateTimeInput(
+      t.registration_deadline,
+      timeZone,
+    ),
     maxParticipants: t.max_participants,
     fideRated: t.is_fide_rated,
     mcfRated: t.is_mcf_rated,
     restrictions,
   };
 
-  const feesData = fromPersistedEntryFees(t.entry_fees);
+  const feesData = fromPersistedEntryFees(t.entry_fees, timeZone);
 
   const prizeCategories = (t.prizes?.categories ?? []).map((cat, ci) => ({
     id: `cat-${ci}`,
