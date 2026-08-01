@@ -2,8 +2,18 @@
 
 import { useState, useMemo } from "react";
 import type { Tournament } from "../types";
+import { getTournamentDateState } from "../utils";
+import {
+  addCalendarDays,
+  endOfMonth,
+  getTodayInTimeZone,
+  resolveTimeZone,
+  startOfMonth,
+} from "@/lib/datetime";
 import FilterBar from "./FilterBar";
 import TournamentCard from "./TournamentCard";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function SectionBanner({ label }: { label: string }) {
   return (
@@ -37,20 +47,33 @@ const MALAYSIAN_STATES = [
 
 interface Props {
   tournaments: Tournament[];
-  today: string; // "YYYY-MM-DD" from server — keeps SSR and hydration in sync
+  now: string; // ISO instant from the server — keeps SSR and hydration in sync
 }
 
-export default function TournamentsClient({ tournaments, today }: Props) {
+export default function TournamentsClient({ tournaments, now }: Props) {
   const [search, setSearch] = useState("");
   const [formats, setFormats] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [ratings, setRatings] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState("any");
 
-  const filtered = useMemo(() => {
-    const now = new Date(today + "T00:00:00");
+  // A tournament's dates are calendar dates at its venue, so every date
+  // question — is it on this week, is it over — is asked against the day it is
+  // at that venue right now. Two tournaments can therefore answer differently
+  // at the same instant. Resolved once per distinct zone rather than per
+  // tournament: Intl formatting isn't free and most of the list shares a
+  // handful of zones.
+  const todayByZone = useMemo(() => {
+    const instant = new Date(now);
+    const zones = new Set(tournaments.map((t) => resolveTimeZone(t.timezone)));
+    return new Map(
+      [...zones].map((zone) => [zone, getTodayInTimeZone(zone, instant)]),
+    );
+  }, [now, tournaments]);
 
+  const filtered = useMemo(() => {
     return tournaments.filter((t) => {
+      const today = todayByZone.get(resolveTimeZone(t.timezone)) ?? "";
       // Search
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -81,72 +104,63 @@ export default function TournamentsClient({ tournaments, today }: Props) {
         if (!matchFide && !matchMcf && !matchUnrated) return false;
       }
 
-      // Date — append T00:00:00 (no Z) so strings parse as local midnight,
-      // matching how windowStart/windowEnd are constructed via `new Date(y,m,d)`.
-      // Without this, date-only strings parse as UTC midnight, which in UTC+
-      // timezones (e.g. Malaysia UTC+08) falls after local midnight and causes
-      // boundary-day tournaments to be incorrectly excluded.
-      const start = new Date(t.start_date + "T00:00:00");
-      const end = new Date(t.end_date + "T00:00:00");
+      // Date — "YYYY-MM-DD" strings compare chronologically as strings, so the
+      // windows are built from the venue's today without ever constructing a
+      // Date (which would re-introduce a runtime-timezone day shift).
       if (dateFilter === "this-week") {
-        const windowStart = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-        );
-        const windowEnd = new Date(windowStart);
-        windowEnd.setDate(windowEnd.getDate() + 7);
-        if (start > windowEnd || end < windowStart) return false;
+        if (t.start_date > addCalendarDays(today, 7) || t.end_date < today)
+          return false;
       } else if (dateFilter === "this-month") {
-        const windowStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const windowEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        if (start > windowEnd || end < windowStart) return false;
+        if (
+          t.start_date > endOfMonth(today) ||
+          t.end_date < startOfMonth(today)
+        )
+          return false;
       } else if (dateFilter === "next-month") {
-        const windowStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const windowEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-        if (start > windowEnd || end < windowStart) return false;
+        if (
+          t.start_date > endOfMonth(today, 1) ||
+          t.end_date < startOfMonth(today, 1)
+        )
+          return false;
       }
 
       return true;
     });
-  }, [tournaments, search, formats, states, ratings, dateFilter, today]);
+  }, [tournaments, search, formats, states, ratings, dateFilter, todayByZone]);
 
   const { ongoing, upcoming, past } = useMemo(() => {
-    const todayStart = new Date(today + "T00:00:00");
     // Past section shows tournaments that ended within the last 30 days; older
     // ones will be reachable via a future archive search.
     const PAST_WINDOW_DAYS = 30;
-    const cutoff = new Date(todayStart);
-    cutoff.setDate(cutoff.getDate() - PAST_WINDOW_DAYS);
 
     const ongoing: Tournament[] = [];
     const upcoming: Tournament[] = [];
     const past: Tournament[] = [];
 
     for (const t of filtered) {
-      const start = new Date(t.start_date + "T00:00:00");
-      const end = new Date(t.end_date + "T00:00:00");
-
       // Defensive: malformed dates would otherwise be silently dropped.
-      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      if (!DATE_RE.test(t.start_date) || !DATE_RE.test(t.end_date)) {
         console.warn(
           `Tournament ${t.id} has an invalid start/end date; excluded from listing`,
         );
         continue;
       }
 
-      if (start <= todayStart && end >= todayStart) {
+      const today = todayByZone.get(resolveTimeZone(t.timezone)) ?? "";
+      const state = getTournamentDateState(t.start_date, t.end_date, today);
+
+      if (state === "ongoing") {
         ongoing.push(t);
-      } else if (start > todayStart) {
+      } else if (state === "upcoming") {
         upcoming.push(t);
-      } else if (end >= cutoff) {
+      } else if (t.end_date >= addCalendarDays(today, -PAST_WINDOW_DAYS)) {
         past.push(t);
       }
       // else: ended more than 30 days ago — hidden (use archive search)
     }
 
     return { ongoing, upcoming, past };
-  }, [filtered, today]);
+  }, [filtered, todayByZone]);
 
   const totalVisible = ongoing.length + upcoming.length + past.length;
 

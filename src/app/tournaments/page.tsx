@@ -5,7 +5,6 @@ import NavBar from "@/components/NavBar";
 import TournamentsClient from "./_components/TournamentsClient";
 import TournamentsGridSkeleton from "./_components/TournamentsGridSkeleton";
 import ProfileNudge from "./_components/ProfileNudge";
-import { getTodayInTimeZone } from "./utils";
 import type { Tournament } from "./types";
 import { ONE_DAY_SECONDS, TOURNAMENTS_LIST_TAG } from "@/lib/cache-tags";
 import { getAuthClaims } from "@/services/supabase/permission";
@@ -56,10 +55,12 @@ async function TournamentsData() {
     // Network error — render page with empty list rather than crashing
   }
 
-  // Compute "today" in the venue timezone (Malaysia for now) so the
-  // ongoing/upcoming/past buckets don't shift a day on a UTC server.
-  const today = getTodayInTimeZone();
-  return <TournamentsClient tournaments={tournaments} today={today} />;
+  // The instant the page rendered, from which the client derives each
+  // tournament's own "today" in its venue's timezone. Sent as an instant rather
+  // than one shared date so SSR and hydration agree on it, and so venues in
+  // different zones can bucket differently at the same moment.
+  const now = new Date().toISOString();
+  return <TournamentsClient tournaments={tournaments} now={now} />;
 }
 
 // Signed-in players with a half-empty profile get a dismissible nudge above the

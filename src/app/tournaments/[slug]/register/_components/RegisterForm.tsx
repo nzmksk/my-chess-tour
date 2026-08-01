@@ -7,7 +7,6 @@ import {
   formatRm,
   formatRmExact,
   toTitleCase,
-  formatDeadline,
   checkAgeEligibility,
   checkRatingEligibility,
   describeRatingList,
@@ -16,6 +15,7 @@ import {
 import type { RatingContext } from "@/app/tournaments/utils";
 import type { EntryFeeBreakdown } from "@/services/payments/fees";
 import { nationalityMatches, resolveCountry } from "@/lib/countries";
+import { formatInstantDate, resolveTimeZone } from "@/lib/datetime";
 import type { RegistrationRow, PlayerProfile } from "../types";
 import RegistrationPending from "./RegistrationPending";
 import CompleteProfilePrompt, {
@@ -213,7 +213,10 @@ export default function RegisterForm({
       ...additional.map((t) => {
         const expired = !!t.valid_until && new Date(t.valid_until) < now;
         const parts: string[] = [];
-        if (t.valid_until) parts.push(`until ${formatDeadline(t.valid_until)}`);
+        if (t.valid_until)
+          parts.push(
+            `until ${formatInstantDate(t.valid_until, resolveTimeZone(tournament.timezone))}`,
+          );
         if (t.age_min != null && t.age_max != null)
           parts.push(`age ${t.age_min}–${t.age_max}`);
         else if (t.age_min != null) parts.push(`age ${t.age_min}+`);

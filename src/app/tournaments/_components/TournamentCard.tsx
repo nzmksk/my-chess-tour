@@ -1,25 +1,7 @@
 import Link from "next/link";
 import type { Tournament } from "../types";
 import { formatRm, getMinFeeCents } from "../utils";
-
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start);
-  const e = new Date(end);
-  const opts: Intl.DateTimeFormatOptions = {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  };
-  if (s.toDateString() === e.toDateString()) {
-    return s.toLocaleDateString("en-MY", opts);
-  }
-  const sStr = s.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-  });
-  const eStr = e.toLocaleDateString("en-MY", opts);
-  return `${sStr} – ${eStr}`;
-}
+import { formatCalendarDateRange, resolveTimeZone } from "@/lib/datetime";
 
 function capitalise(s: string): string {
   if (!s) return "";
@@ -57,7 +39,7 @@ export default function TournamentCard({
   }
 
   return (
-    <article className={`card tournament-card${dimmed ? " opacity-50" : ""}`}>
+    <article className={`card tournament-card ${dimmed ? "opacity-50" : ""}`}>
       {/* Body */}
       <div className="flex h-full flex-col p-4">
         {/* Format + rating + spots badges */}
@@ -80,7 +62,13 @@ export default function TournamentCard({
         <div className="text-text-secondary font-lato mb-3 flex flex-col gap-1 text-sm">
           <span className="flex items-baseline gap-1.5">
             <span className="w-4 shrink-0 text-center">📅</span>
-            <span>{formatDateRange(t.start_date, t.end_date)}</span>
+            <span>
+              {formatCalendarDateRange(
+                t.start_date,
+                t.end_date,
+                resolveTimeZone(t.timezone),
+              )}
+            </span>
           </span>
           <span className="flex items-baseline gap-1.5">
             <span className="w-4 shrink-0 text-center">📍</span>

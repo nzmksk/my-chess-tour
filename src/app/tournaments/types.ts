@@ -46,6 +46,8 @@ export interface Tournament {
     name: string;
     state: string;
   };
+  /** IANA timezone of the venue — the zone the dates below are read in. */
+  timezone: string;
   start_date: string;
   end_date: string;
   registration_deadline: string;

@@ -228,16 +228,17 @@ const DAY_MONTH_YEAR: Intl.DateTimeFormatOptions = {
 };
 
 /**
- * A calendar date → "10 Aug 2026". Formatted at UTC from the date's own parts,
- * so it reads the same on a server in UTC and a browser in São Paulo.
+ * A calendar date → "10 Aug 2026", or "10 August 2026" with `month: "long"`.
+ * Formatted at UTC from the date's own parts, so it reads the same on a server
+ * in UTC and a browser in São Paulo.
  */
-export function formatCalendarDate(date: string): string {
+export function formatCalendarDate(
+  date: string,
+  options: Intl.DateTimeFormatOptions = DAY_MONTH_YEAR,
+): string {
   const parsed = calendarDateAsUtc(date);
   if (!parsed) return date;
-  return parsed.toLocaleDateString("en-MY", {
-    ...DAY_MONTH_YEAR,
-    timeZone: "UTC",
-  });
+  return parsed.toLocaleDateString("en-MY", { ...options, timeZone: "UTC" });
 }
 
 /**
