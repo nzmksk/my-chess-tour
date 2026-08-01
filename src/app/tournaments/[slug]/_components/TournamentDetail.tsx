@@ -193,6 +193,15 @@ export default function TournamentDetail({
                             : `Age up to ${fee.age_max}`}
                       </span>
                     )}
+                    {(fee.rating_min != null || fee.rating_max != null) && (
+                      <span className="text-text-muted block text-xs">
+                        {fee.rating_min != null && fee.rating_max != null
+                          ? `Rating ${fee.rating_min}–${fee.rating_max}`
+                          : fee.rating_min != null
+                            ? `Rating ${fee.rating_min}+`
+                            : `Rating up to ${fee.rating_max}`}
+                      </span>
+                    )}
                   </td>
                   <td className="font-cinzel text-text-primary text-right font-semibold">
                     {formatRm(fee.amount_cents)}

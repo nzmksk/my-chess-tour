@@ -9,7 +9,11 @@ import {
   toTitleCase,
   formatDeadline,
   checkAgeEligibility,
+  checkRatingEligibility,
+  describeRatingList,
+  resolvePlayerRating,
 } from "@/app/tournaments/utils";
+import type { RatingContext } from "@/app/tournaments/utils";
 import type { EntryFeeBreakdown } from "@/services/payments/fees";
 import { nationalityMatches, resolveCountry } from "@/lib/countries";
 import type { RegistrationRow, PlayerProfile } from "../types";
@@ -27,6 +31,8 @@ interface TierRestrictions {
   titles?: string[];
   age_min?: number;
   age_max?: number;
+  rating_min?: number;
+  rating_max?: number;
 }
 
 /**
@@ -40,6 +46,7 @@ function checkHardEligibility(
   restrictions: Restrictions | null,
   profile: PlayerProfile | null,
   startDate: Date,
+  rating: RatingContext,
 ): string | null {
   // Gender mismatch only blocks when gender is actually set; a null gender is
   // "missing" (collectable), not ineligible.
@@ -79,6 +86,26 @@ function checkHardEligibility(
     (!profile?.title || !restrictions.titles.includes(profile.title))
   )
     return `This tournament is for titled players only (${restrictions.titles.join(", ")}).`;
+
+  // Ratings are synced from FIDE/MCF rather than typed in, so a shortfall — or
+  // holding no rating on the list this tournament is rated under — is a hard
+  // block. Which list that is: see resolvePlayerRating.
+  const ratingMin = tier.rating_min ?? restrictions?.min_rating ?? null;
+  const ratingMax = tier.rating_max ?? restrictions?.max_rating ?? null;
+  if (ratingMin != null || ratingMax != null) {
+    const playerRating = resolvePlayerRating(profile, rating);
+    const ratingResult = checkRatingEligibility(
+      playerRating,
+      ratingMin,
+      ratingMax,
+    );
+    if (ratingResult === "below_min")
+      return playerRating == null
+        ? `This fee requires a rating of at least ${ratingMin}, and your profile has no ${describeRatingList(rating)} rating.`
+        : `This fee requires a minimum rating of ${ratingMin}.`;
+    if (ratingResult === "above_max")
+      return `Your rating exceeds the maximum for this fee (${ratingMax}).`;
+  }
 
   // Age only resolves once the date of birth is known; a null DOB is collectable.
   // Judged as of the tournament start date (see checkAgeEligibility), not today.
@@ -159,6 +186,14 @@ export default function RegisterForm({
 
   const additional = tournament.entry_fees.additional ?? [];
 
+  // Which rating list rating-based tiers/restrictions are judged against — the
+  // same context the checkout route applies server-side.
+  const ratingContext: RatingContext = {
+    formatType: tournament.format.type,
+    isFideRated: tournament.is_fide_rated,
+    isMcfRated: tournament.is_mcf_rated,
+  };
+
   const tiers = useMemo(() => {
     const raw = [
       {
@@ -172,6 +207,8 @@ export default function RegisterForm({
         titles: undefined as string[] | undefined,
         age_min: undefined as number | undefined,
         age_max: undefined as number | undefined,
+        rating_min: undefined as number | undefined,
+        rating_max: undefined as number | undefined,
       },
       ...additional.map((t) => {
         const expired = !!t.valid_until && new Date(t.valid_until) < now;
@@ -181,6 +218,11 @@ export default function RegisterForm({
           parts.push(`age ${t.age_min}–${t.age_max}`);
         else if (t.age_min != null) parts.push(`age ${t.age_min}+`);
         else if (t.age_max != null) parts.push(`up to age ${t.age_max}`);
+        if (t.rating_min != null && t.rating_max != null)
+          parts.push(`rating ${t.rating_min}–${t.rating_max}`);
+        else if (t.rating_min != null) parts.push(`rating ${t.rating_min}+`);
+        else if (t.rating_max != null)
+          parts.push(`rating up to ${t.rating_max}`);
         if (t.gender === "female") parts.push("female only");
         if (t.oku) parts.push("OKU");
         if (t.titles?.length) parts.push(t.titles.join(", "));
@@ -195,6 +237,8 @@ export default function RegisterForm({
           titles: t.titles,
           age_min: t.age_min,
           age_max: t.age_max,
+          rating_min: t.rating_min,
+          rating_max: t.rating_max,
         };
       }),
     ];
@@ -206,7 +250,13 @@ export default function RegisterForm({
         // missing self-serviceable field keeps it selectable — the prompt collects it.
         eligible:
           !t.expired &&
-          checkHardEligibility(t, restrictions, profile, startDate) === null,
+          checkHardEligibility(
+            t,
+            restrictions,
+            profile,
+            startDate,
+            ratingContext,
+          ) === null,
       }))
       .sort((a, b) => {
         if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
@@ -234,7 +284,15 @@ export default function RegisterForm({
 
   const eligibilityError = useMemo<string | null>(() => {
     if (selected.expired) return "This fee tier has expired.";
-    return checkHardEligibility(selected, restrictions, profile, now);
+    // startDate, not `now` — the same anchor the dropdown's eligible flag uses,
+    // so the message can't disagree with which options are selectable.
+    return checkHardEligibility(
+      selected,
+      restrictions,
+      profile,
+      startDate,
+      ratingContext,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, restrictions, profile]);
 

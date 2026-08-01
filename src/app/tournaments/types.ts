@@ -28,6 +28,10 @@ export interface EntryFees {
     valid_until?: string;
     age_min?: number;
     age_max?: number;
+    // Judged against the rating list matching the tournament's format — see
+    // resolvePlayerRating / checkRatingEligibility in ../utils.
+    rating_min?: number;
+    rating_max?: number;
     gender?: "female";
     oku?: boolean;
     titles?: ChessTitle[];

@@ -8,13 +8,14 @@ import {
   useRef,
   useState,
 } from "react";
-
-type WizardStepId = "basic-info" | "format" | "fees" | "prizes" | "review";
-
-export interface WizardStep {
-  id: WizardStepId;
-  label: string;
-}
+import type {
+  BasicInfoData,
+  FeesData,
+  FormatData,
+  PersistedState,
+  PrizesData,
+  WizardStep,
+} from "../types";
 
 export const WIZARD_STEPS: WizardStep[] = [
   { id: "basic-info", label: "Basic Info" },
@@ -24,14 +25,6 @@ export const WIZARD_STEPS: WizardStep[] = [
   { id: "review", label: "Review" },
 ];
 
-export interface BasicInfoData {
-  name: string;
-  description: string;
-  venueName: string;
-  venueState: string;
-  venueAddress: string;
-}
-
 const initialBasicInfo: BasicInfoData = {
   name: "",
   description: "",
@@ -40,79 +33,15 @@ const initialBasicInfo: BasicInfoData = {
   venueAddress: "",
 };
 
-export interface Restriction {
-  id: string;
-  type: string;
-  value: string;
-}
-
-export type TierType = "early-bird" | "titled" | "rating-based" | "age-based";
-
-export interface FeeTier {
-  id: string;
-  type: TierType;
-  amount: number | "";
-  validUntil: string;
-  titles: string[];
-  ratingFrom: number | "";
-  ratingTo: number | "";
-  ageFrom: number | "";
-  ageTo: number | "";
-}
-
-export interface FeesData {
-  standardFee: number | "";
-  tiers: FeeTier[];
-}
-
 const initialFeesData: FeesData = {
   standardFee: "",
   tiers: [],
 };
 
-export interface PrizeRow {
-  id: string;
-  placement: string;
-  amount: number | "";
-}
-
-export interface PrizeCategory {
-  id: string;
-  name: string;
-  prizes: PrizeRow[];
-}
-
-export interface SpecialPrize {
-  id: string;
-  name: string;
-  amount: number | "";
-}
-
-export interface PrizesData {
-  categories: PrizeCategory[];
-  specialPrizes: SpecialPrize[];
-}
-
 const initialPrizesData: PrizesData = {
   categories: [],
   specialPrizes: [],
 };
-
-export interface FormatData {
-  formatType: string;
-  system: string;
-  rounds: number | "";
-  baseTime: number | "";
-  increment: number | "";
-  delay: number | "";
-  startDate: string;
-  endDate: string;
-  registrationDeadline: string;
-  maxParticipants: number | "";
-  fideRated: boolean;
-  mcfRated: boolean;
-  restrictions: Restriction[];
-}
 
 const initialFormatData: FormatData = {
   formatType: "",
@@ -129,16 +58,6 @@ const initialFormatData: FormatData = {
   mcfRated: false,
   restrictions: [],
 };
-
-export interface PersistedState {
-  basicInfoData: BasicInfoData;
-  formatData: FormatData;
-  feesData: FeesData;
-  prizesData: PrizesData;
-  tournamentId: string | null;
-  currentStepIndex: number;
-  completedSteps: number[];
-}
 
 function storageKey(orgId: string, suffix?: string) {
   return `tournament-wizard-${orgId}${suffix ? `-${suffix}` : ""}`;

@@ -1,27 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FeesData, FeeTier, TierType } from "../TournamentWizardContext";
+import type { FeesData, FeeTier, TierType } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
-import { newRowId } from "../rowId";
+import { TIER_LABELS, TIER_TYPES } from "../entryFees";
 
 const COMMISSION = 0.1;
 
 const CHESS_TITLES = ["GM", "IM", "FM", "WGM", "WIM", "WFM", "CM", "WCM", "NM"];
-
-const TIER_TYPES: TierType[] = [
-  "early-bird",
-  "titled",
-  "rating-based",
-  "age-based",
-];
-
-const TIER_LABELS: Record<TierType, string> = {
-  "early-bird": "Early Bird",
-  titled: "Titled Players",
-  "rating-based": "Rating-Based",
-  "age-based": "Age-Based",
-};
 
 type TierErrors = Partial<{
   amount: string;
@@ -33,9 +19,10 @@ type TierErrors = Partial<{
   ageTo: string;
 }>;
 
+// Keyed by tier type — a tournament can hold at most one tier of each.
 type FeesErrors = {
   standardFee?: string;
-  tiers: Record<string, TierErrors>;
+  tiers: Partial<Record<TierType, TierErrors>>;
 };
 
 const NO_ERRORS: FeesErrors = { tiers: {} };
@@ -66,11 +53,11 @@ function validate(data: FeesData): FeesErrors {
       te.amount = "Fee cannot be negative.";
     }
 
-    if (tier.type === "early-bird") {
+    if (tier.type === "early_bird") {
       if (!tier.validUntil) te.validUntil = "Valid-until date is required.";
-    } else if (tier.type === "titled") {
+    } else if (tier.type === "titled_players") {
       if (tier.titles.length === 0) te.titles = "Select at least one title.";
-    } else if (tier.type === "rating-based") {
+    } else if (tier.type === "rating_based") {
       if (tier.ratingFrom === "") {
         te.ratingFrom = "Rating from is required.";
       } else if (Number(tier.ratingFrom) < 0) {
@@ -85,7 +72,7 @@ function validate(data: FeesData): FeesErrors {
       ) {
         te.ratingTo = "Must be ≥ rating from.";
       }
-    } else if (tier.type === "age-based") {
+    } else if (tier.type === "age_based") {
       if (tier.ageFrom === "") {
         te.ageFrom = "Age from is required.";
       } else if (Number(tier.ageFrom) < 0) {
@@ -103,7 +90,7 @@ function validate(data: FeesData): FeesErrors {
     }
 
     if (Object.keys(te).length > 0) {
-      errors.tiers[tier.id] = te;
+      errors.tiers[tier.type] = te;
     }
   }
 
@@ -257,7 +244,6 @@ export default function FeesStep() {
 
   const addTier = (type: TierType) => {
     const newTier: FeeTier = {
-      id: newRowId(),
       type,
       amount: "",
       validUntil: "",
@@ -271,14 +257,14 @@ export default function FeesStep() {
     setDropdownOpen(false);
   };
 
-  const removeTier = (id: string) => {
-    setForm((f) => ({ ...f, tiers: f.tiers.filter((t) => t.id !== id) }));
+  const removeTier = (type: TierType) => {
+    setForm((f) => ({ ...f, tiers: f.tiers.filter((t) => t.type !== type) }));
   };
 
-  const updateTier = (id: string, changes: Partial<FeeTier>) => {
+  const updateTier = (type: TierType, changes: Partial<FeeTier>) => {
     setForm((f) => ({
       ...f,
-      tiers: f.tiers.map((t) => (t.id === id ? { ...t, ...changes } : t)),
+      tiers: f.tiers.map((t) => (t.type === type ? { ...t, ...changes } : t)),
     }));
   };
 
@@ -355,20 +341,20 @@ export default function FeesStep() {
       {form.tiers.length > 0 && (
         <div className="mb-4 flex flex-col gap-3">
           {form.tiers.map((tier) => {
-            const te = errors.tiers[tier.id] ?? {};
+            const te = errors.tiers[tier.type] ?? {};
 
-            if (tier.type === "early-bird") {
+            if (tier.type === "early_bird") {
               return (
                 <TierCard
-                  key={tier.id}
+                  key={tier.type}
                   label={TIER_LABELS[tier.type]}
-                  onRemove={() => removeTier(tier.id)}
+                  onRemove={() => removeTier(tier.type)}
                 >
                   <div className="mb-1.5 flex flex-wrap items-start gap-3">
                     <AmountField
-                      id={`${tier.id}-amount`}
+                      id={`${tier.type}-amount`}
                       value={tier.amount}
-                      onChange={(v) => updateTier(tier.id, { amount: v })}
+                      onChange={(v) => updateTier(tier.type, { amount: v })}
                       error={showErrors ? te.amount : undefined}
                     />
                     <div>
@@ -381,7 +367,9 @@ export default function FeesStep() {
                           className={`input ${showErrors && te.validUntil ? "input-error" : ""}`}
                           value={tier.validUntil}
                           onChange={(e) =>
-                            updateTier(tier.id, { validUntil: e.target.value })
+                            updateTier(tier.type, {
+                              validUntil: e.target.value,
+                            })
                           }
                         />
                       </div>
@@ -399,18 +387,18 @@ export default function FeesStep() {
               );
             }
 
-            if (tier.type === "titled") {
+            if (tier.type === "titled_players") {
               return (
                 <TierCard
-                  key={tier.id}
+                  key={tier.type}
                   label={TIER_LABELS[tier.type]}
-                  onRemove={() => removeTier(tier.id)}
+                  onRemove={() => removeTier(tier.type)}
                 >
                   <div className="mb-3 flex flex-wrap items-start gap-3">
                     <AmountField
-                      id={`${tier.id}-amount`}
+                      id={`${tier.type}-amount`}
                       value={tier.amount}
-                      onChange={(v) => updateTier(tier.id, { amount: v })}
+                      onChange={(v) => updateTier(tier.type, { amount: v })}
                       error={showErrors ? te.amount : undefined}
                     />
                     <div className="min-w-55 flex-1">
@@ -431,7 +419,7 @@ export default function FeesStep() {
                                 const next = e.target.checked
                                   ? [...tier.titles, title]
                                   : tier.titles.filter((t) => t !== title);
-                                updateTier(tier.id, { titles: next });
+                                updateTier(tier.type, { titles: next });
                               }}
                             />
                             <span className="font-cinzel text-text-secondary text-xs font-semibold">
@@ -450,18 +438,18 @@ export default function FeesStep() {
               );
             }
 
-            if (tier.type === "rating-based") {
+            if (tier.type === "rating_based") {
               return (
                 <TierCard
-                  key={tier.id}
+                  key={tier.type}
                   label={TIER_LABELS[tier.type]}
-                  onRemove={() => removeTier(tier.id)}
+                  onRemove={() => removeTier(tier.type)}
                 >
                   <div className="mb-1.5 flex flex-wrap items-start gap-3">
                     <AmountField
-                      id={`${tier.id}-amount`}
+                      id={`${tier.type}-amount`}
                       value={tier.amount}
-                      onChange={(v) => updateTier(tier.id, { amount: v })}
+                      onChange={(v) => updateTier(tier.type, { amount: v })}
                       error={showErrors ? te.amount : undefined}
                     />
                     <div>
@@ -481,7 +469,7 @@ export default function FeesStep() {
                           min={0}
                           onChange={(e) => {
                             const raw = e.target.value;
-                            updateTier(tier.id, {
+                            updateTier(tier.type, {
                               ratingFrom: raw === "" ? "" : Number(raw),
                             });
                           }}
@@ -499,7 +487,7 @@ export default function FeesStep() {
                           min={0}
                           onChange={(e) => {
                             const raw = e.target.value;
-                            updateTier(tier.id, {
+                            updateTier(tier.type, {
                               ratingTo: raw === "" ? "" : Number(raw),
                             });
                           }}
@@ -521,18 +509,18 @@ export default function FeesStep() {
               );
             }
 
-            if (tier.type === "age-based") {
+            if (tier.type === "age_based") {
               return (
                 <TierCard
-                  key={tier.id}
+                  key={tier.type}
                   label={TIER_LABELS[tier.type]}
-                  onRemove={() => removeTier(tier.id)}
+                  onRemove={() => removeTier(tier.type)}
                 >
                   <div className="mb-1.5 flex flex-wrap items-start gap-3">
                     <AmountField
-                      id={`${tier.id}-amount`}
+                      id={`${tier.type}-amount`}
                       value={tier.amount}
-                      onChange={(v) => updateTier(tier.id, { amount: v })}
+                      onChange={(v) => updateTier(tier.type, { amount: v })}
                       error={showErrors ? te.amount : undefined}
                     />
                     <div>
@@ -550,7 +538,7 @@ export default function FeesStep() {
                           min={0}
                           onChange={(e) => {
                             const raw = e.target.value;
-                            updateTier(tier.id, {
+                            updateTier(tier.type, {
                               ageFrom: raw === "" ? "" : Number(raw),
                             });
                           }}
@@ -566,7 +554,7 @@ export default function FeesStep() {
                           min={0}
                           onChange={(e) => {
                             const raw = e.target.value;
-                            updateTier(tier.id, {
+                            updateTier(tier.type, {
                               ageTo: raw === "" ? "" : Number(raw),
                             });
                           }}

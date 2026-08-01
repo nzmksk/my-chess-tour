@@ -6,7 +6,7 @@ import type {
   PrizeRow,
   PrizesData,
   SpecialPrize,
-} from "../TournamentWizardContext";
+} from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import { newRowId } from "../rowId";
 

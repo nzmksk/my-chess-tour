@@ -2,7 +2,9 @@
 
 import React from "react";
 import { useTournamentWizard } from "../TournamentWizardContext";
-import type { FeeTier, TierType } from "../TournamentWizardContext";
+import type { FeeTier } from "../../types";
+import { TIER_LABELS } from "../entryFees";
+import { RESTRICTION_LABELS } from "../restrictions";
 
 const COMMISSION = 0.1;
 
@@ -30,25 +32,18 @@ function fmtDateTime(iso: string): string {
   });
 }
 
-const TIER_LABELS: Record<TierType, string> = {
-  "early-bird": "Early Bird",
-  titled: "Titled Players",
-  "rating-based": "Rating-Based",
-  "age-based": "Age-Based",
-};
-
 function tierSubLabel(tier: FeeTier): string {
   switch (tier.type) {
-    case "early-bird":
+    case "early_bird":
       return tier.validUntil ? `until ${fmtDate(tier.validUntil)}` : "";
-    case "titled":
+    case "titled_players":
       return tier.titles.length > 0 ? tier.titles.join(", ") : "";
-    case "rating-based":
+    case "rating_based":
       if (tier.ratingFrom !== "" && tier.ratingTo !== "") {
         return `${tier.ratingFrom}–${tier.ratingTo}`;
       }
       return "";
-    case "age-based":
+    case "age_based":
       if (tier.ageFrom !== "" && tier.ageTo !== "") {
         return `${tier.ageFrom}–${tier.ageTo} yrs`;
       }
@@ -165,7 +160,9 @@ export default function ReviewStep() {
 
   const restrictionsSummary =
     formatData.restrictions.length > 0
-      ? formatData.restrictions.map((r) => `${r.type} ${r.value}`).join(", ")
+      ? formatData.restrictions
+          .map((r) => `${RESTRICTION_LABELS[r.kind]} ${r.value}`)
+          .join(", ")
       : null;
 
   const formatRows: [string, React.ReactNode][] = [
@@ -191,7 +188,7 @@ export default function ReviewStep() {
   const allTiers = [
     { id: "standard", label: "Standard", subLabel: "", organiserFee: stdFee },
     ...feesData.tiers.map((t) => ({
-      id: t.id,
+      id: t.type,
       label: TIER_LABELS[t.type],
       subLabel: tierSubLabel(t),
       organiserFee: Number(t.amount) || 0,

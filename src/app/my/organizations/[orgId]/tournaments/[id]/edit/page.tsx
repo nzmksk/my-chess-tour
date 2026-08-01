@@ -4,35 +4,19 @@ import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
-import type { PersistedState } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
+import type {
+  PersistedRestriction,
+  PersistedState,
+  StoredEntryFees,
+} from "@/app/my/organizations/[orgId]/tournaments/create/types";
 import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell";
-import {
-  fromPersistedRestrictions,
-  type PersistedRestriction,
-} from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
+import { fromPersistedRestrictions } from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
+import { fromPersistedEntryFees } from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",
   description: "Edit your tournament details.",
 };
-
-type ApiTierType =
-  | "early_bird"
-  | "titled_players"
-  | "rating_based"
-  | "age_based"
-  | "standard";
-
-interface AdditionalTier {
-  type: ApiTierType;
-  amount_cents: number;
-  valid_until?: string;
-  titles?: string[];
-  rating_from?: number;
-  rating_to?: number;
-  age_from?: number;
-  age_to?: number;
-}
 
 interface TournamentForEdit {
   id: string;
@@ -52,10 +36,7 @@ interface TournamentForEdit {
   is_fide_rated: boolean;
   is_mcf_rated: boolean;
   max_participants: number;
-  entry_fees: {
-    standard: { amount_cents: number };
-    additional?: AdditionalTier[];
-  } | null;
+  entry_fees: StoredEntryFees | null;
   prizes: {
     categories?: Array<{
       name: string;
@@ -92,23 +73,6 @@ function toLocalDatetimeString(isoString: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function mapApiTierType(
-  type: ApiTierType,
-): "early-bird" | "titled" | "rating-based" | "age-based" {
-  switch (type) {
-    case "early_bird":
-      return "early-bird";
-    case "titled_players":
-      return "titled";
-    case "rating_based":
-      return "rating-based";
-    case "age_based":
-      return "age-based";
-    default:
-      return "early-bird";
-  }
-}
-
 function buildInitialData(t: TournamentForEdit): PersistedState {
   const basicInfoData = {
     name: t.name,
@@ -140,26 +104,7 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     restrictions,
   };
 
-  const additionalTiers = (t.entry_fees?.additional ?? [])
-    .filter((tier) => tier.type !== "standard")
-    .map((tier, idx) => ({
-      id: `tier-${idx}`,
-      type: mapApiTierType(tier.type),
-      amount: tier.amount_cents / 100,
-      validUntil: tier.valid_until ?? "",
-      titles: tier.titles ?? [],
-      ratingFrom: tier.rating_from ?? ("" as const),
-      ratingTo: tier.rating_to ?? ("" as const),
-      ageFrom: tier.age_from ?? ("" as const),
-      ageTo: tier.age_to ?? ("" as const),
-    }));
-
-  const feesData = {
-    standardFee: t.entry_fees?.standard
-      ? t.entry_fees.standard.amount_cents / 100
-      : ("" as const),
-    tiers: additionalTiers,
-  };
+  const feesData = fromPersistedEntryFees(t.entry_fees);
 
   const prizeCategories = (t.prizes?.categories ?? []).map((cat, ci) => ({
     id: `cat-${ci}`,

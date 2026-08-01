@@ -11,7 +11,11 @@ export function calculateAge(dob: Date, now: Date): number {
 
 function subtractYearsUTC(date: Date, years: number): Date {
   return new Date(
-    Date.UTC(date.getUTCFullYear() - years, date.getUTCMonth(), date.getUTCDate()),
+    Date.UTC(
+      date.getUTCFullYear() - years,
+      date.getUTCMonth(),
+      date.getUTCDate(),
+    ),
   );
 }
 
@@ -42,12 +46,106 @@ export function checkAgeEligibility(
     dob.getUTCMonth(),
     dob.getUTCDate(),
   );
-  if (ageMax != null && dobDay < subtractYearsUTC(startDate, ageMax).getTime()) {
+  if (
+    ageMax != null &&
+    dobDay < subtractYearsUTC(startDate, ageMax).getTime()
+  ) {
     return "too_old";
   }
-  if (ageMin != null && dobDay > subtractYearsUTC(startDate, ageMin).getTime()) {
+  if (
+    ageMin != null &&
+    dobDay > subtractYearsUTC(startDate, ageMin).getTime()
+  ) {
     return "too_young";
   }
+  return null;
+}
+
+/** The subset of a player profile eligibility checks judge a rating from. */
+export interface RatedProfile {
+  fide_rating?: Record<string, number> | null;
+  national_rating?: number | null;
+}
+
+/** Which rating list an eligibility check judges a player against. */
+export interface RatingContext {
+  /** The tournament's format type — "classical" | "rapid" | "blitz". */
+  formatType: string;
+  isFideRated: boolean;
+  isMcfRated: boolean;
+}
+
+/** The FIDE rating list a tournament format is played under. */
+function ratingListForFormat(
+  formatType: string,
+): "standard" | "rapid" | "blitz" {
+  return formatType === "blitz"
+    ? "blitz"
+    : formatType === "rapid"
+      ? "rapid"
+      : "standard";
+}
+
+/**
+ * Names the rating a check reads, for messages telling a player which rating
+ * they're missing — e.g. "FIDE standard", "national (MCF)".
+ */
+export function describeRatingList({
+  formatType,
+  isFideRated,
+  isMcfRated,
+}: RatingContext): string {
+  if (isFideRated) return `FIDE ${ratingListForFormat(formatType)}`;
+  if (isMcfRated) return "national (MCF)";
+  return `FIDE ${ratingListForFormat(formatType)} or national`;
+}
+
+function numericOrNull(value: unknown): number | null {
+  // Both sources are jsonb-backed, so a non-numeric value is treated as absent
+  // rather than compared as a string.
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+// The rating a player is judged on, taken from the list the tournament is
+// actually rated under — never substituted from another one:
+//
+//   FIDE-rated → the FIDE list matching the format (classical → standard).
+//   MCF-rated  → the national rating.
+//
+// A player without a rating on that list is unrated for this tournament, even if
+// they hold one elsewhere: a classical FIDE event can't rank a player by their
+// blitz or national rating. An event rated by neither federation has no list of
+// its own to insist on, so it accepts whichever rating the player has (FIDE for
+// the format first, then national) — that's the only case where both are read.
+export function resolvePlayerRating(
+  profile: RatedProfile | null | undefined,
+  { formatType, isFideRated, isMcfRated }: RatingContext,
+): number | null {
+  const fide = numericOrNull(
+    profile?.fide_rating?.[ratingListForFormat(formatType)],
+  );
+  const national = numericOrNull(profile?.national_rating);
+
+  if (isFideRated) return fide;
+  if (isMcfRated) return national;
+  return fide ?? national;
+}
+
+export type RatingEligibility = "below_min" | "above_max" | null;
+
+// Rating eligibility for a fee tier or a tournament restriction. An unrated
+// player cannot show they clear a floor, so a `min` blocks them; a `max` (an
+// "under 1800" tier) still admits them — unrated players are exactly who those
+// categories are for.
+export function checkRatingEligibility(
+  rating: number | null,
+  ratingMin: number | null,
+  ratingMax: number | null,
+): RatingEligibility {
+  if (ratingMin != null && (rating == null || rating < ratingMin))
+    return "below_min";
+  if (ratingMax != null && rating != null && rating > ratingMax)
+    return "above_max";
   return null;
 }
 
@@ -97,7 +195,7 @@ export function getMinFeeCents(fees: EntryFees | null | undefined): number {
 // Tournament dates/times are anchored to the venue's timezone. The platform is
 // Malaysia-only today, so this defaults to KL; the `timeZone` param lets a
 // per-tournament timezone drop in for the planned ASEAN expansion.
-const PLATFORM_TIME_ZONE = "Asia/Kuala_Lumpur";
+export const PLATFORM_TIME_ZONE = "Asia/Kuala_Lumpur";
 
 // Returns the calendar date ("YYYY-MM-DD") for `now` in the given timezone.
 // Used so the discovery ongoing/upcoming/past buckets are judged against the

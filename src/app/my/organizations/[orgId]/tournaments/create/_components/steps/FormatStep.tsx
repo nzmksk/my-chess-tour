@@ -1,21 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useId, useState } from "react";
-import type { FormatData, Restriction } from "../TournamentWizardContext";
+import type { FormatData, Restriction, RestrictionKind } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
 import { newRowId } from "../rowId";
+import { RESTRICTION_KINDS, RESTRICTION_LABELS } from "../restrictions";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
 
 const FORMAT_TYPES = ["Rapid", "Blitz", "Classical"];
 const SYSTEMS = ["Swiss", "Round Robin", "Knockout"];
-const RESTRICTION_TYPES = [
-  "Max Age",
-  "Max Rating",
-  "Min Rating",
-  "Gender",
-  "Nationality",
-];
 
 type FieldErrors = Partial<
   Record<
@@ -115,7 +109,7 @@ export default function FormatStep() {
   const addRestriction = () => {
     const newRow: Restriction = {
       id: newRowId(),
-      type: "Max Rating",
+      kind: "max_rating",
       value: "",
     };
     setForm((f) => ({ ...f, restrictions: [...f.restrictions, newRow] }));
@@ -128,27 +122,23 @@ export default function FormatStep() {
     }));
   };
 
-  const updateRestriction = (
-    id: string,
-    key: "type" | "value",
-    val: string,
-  ) => {
+  const updateRestrictionValue = (id: string, value: string) => {
     setForm((f) => ({
       ...f,
       restrictions: f.restrictions.map((r) =>
-        r.id === id ? { ...r, [key]: val } : r,
+        r.id === id ? { ...r, value } : r,
       ),
     }));
   };
 
-  // Changing the type clears the value — a value entered for one type (e.g. a
+  // Changing the kind clears the value — a value entered for one kind (e.g. a
   // rating number) is meaningless for another (e.g. a country), and the
   // Nationality dropdown needs a clean slate rather than stale free text.
-  const changeRestrictionType = (id: string, newType: string) => {
+  const changeRestrictionKind = (id: string, kind: RestrictionKind) => {
     setForm((f) => ({
       ...f,
       restrictions: f.restrictions.map((r) =>
-        r.id === id ? { ...r, type: newType, value: "" } : r,
+        r.id === id ? { ...r, kind, value: "" } : r,
       ),
     }));
   };
@@ -463,24 +453,26 @@ export default function FormatStep() {
               <select
                 className="input"
                 style={{ width: "175px", flexShrink: 0 }}
-                value={r.type}
-                onChange={(e) => changeRestrictionType(r.id, e.target.value)}
+                value={r.kind}
+                onChange={(e) =>
+                  changeRestrictionKind(r.id, e.target.value as RestrictionKind)
+                }
                 aria-label="Restriction type"
               >
-                {RESTRICTION_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
+                {RESTRICTION_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {RESTRICTION_LABELS[k]}
                   </option>
                 ))}
               </select>
               <div className="min-w-0 flex-1">
-                {r.type === "Nationality" ? (
+                {r.kind === "nationality" ? (
                   <CountryDropdown
                     placeholder="Select country"
                     defaultValue={nameToAlpha3(r.value)}
-                    onChange={(c) => updateRestriction(r.id, "value", c.name)}
+                    onChange={(c) => updateRestrictionValue(r.id, c.name)}
                   />
-                ) : r.type === "Gender" ? (
+                ) : r.kind === "gender" ? (
                   <select
                     className={`input ${
                       showErrors && errors.restrictions?.[r.id]
@@ -490,7 +482,7 @@ export default function FormatStep() {
                     value={r.value}
                     aria-label="Restriction value"
                     onChange={(e) =>
-                      updateRestriction(r.id, "value", e.target.value)
+                      updateRestrictionValue(r.id, e.target.value)
                     }
                   >
                     <option value="">Select…</option>
@@ -509,7 +501,7 @@ export default function FormatStep() {
                     value={r.value}
                     aria-label="Restriction value"
                     onChange={(e) =>
-                      updateRestriction(r.id, "value", e.target.value)
+                      updateRestrictionValue(r.id, e.target.value)
                     }
                   />
                 )}

@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import type { ChessTitle } from "@/app/tournaments/types";
 import type { Restrictions } from "@/app/tournaments/[slug]/types";
 import type { OkuStatus } from "@/app/profile/types";
-import { checkAgeEligibility } from "@/app/tournaments/utils";
+import {
+  checkAgeEligibility,
+  checkRatingEligibility,
+  describeRatingList,
+  resolvePlayerRating,
+} from "@/app/tournaments/utils";
+import type { RatingContext } from "@/app/tournaments/utils";
 import { nationalityMatches, resolveCountry } from "@/lib/countries";
 
 export interface EligibilityProfile {
@@ -20,6 +26,8 @@ export interface EligibilityProfile {
 export interface FeeTier {
   age_min?: number | null;
   age_max?: number | null;
+  rating_min?: number | null;
+  rating_max?: number | null;
   gender?: string | null;
   oku?: boolean | null;
   titles?: ChessTitle[] | null;
@@ -75,7 +83,7 @@ export function normalizeRestrictions(raw: unknown): Restrictions | null {
 export function checkRestrictions(
   restrictions: Restrictions,
   profile: EligibilityProfile | null,
-  formatType: string,
+  rating: RatingContext,
   startDate: Date,
 ): NextResponse | null {
   if (restrictions.gender != null && profile?.gender !== restrictions.gender) {
@@ -139,19 +147,13 @@ export function checkRestrictions(
   }
 
   if (restrictions.min_rating != null || restrictions.max_rating != null) {
-    const ratingKey =
-      formatType === "blitz"
-        ? "blitz"
-        : formatType === "rapid"
-          ? "rapid"
-          : "standard";
-    const playerRating =
-      profile?.fide_rating?.[ratingKey] ?? profile?.national_rating ?? null;
+    const ratingResult = checkRatingEligibility(
+      resolvePlayerRating(profile, rating),
+      restrictions.min_rating ?? null,
+      restrictions.max_rating ?? null,
+    );
 
-    if (
-      restrictions.min_rating != null &&
-      (playerRating == null || playerRating < restrictions.min_rating)
-    ) {
+    if (ratingResult === "below_min") {
       return NextResponse.json(
         {
           error: {
@@ -163,11 +165,7 @@ export function checkRestrictions(
       );
     }
 
-    if (
-      restrictions.max_rating != null &&
-      playerRating != null &&
-      playerRating > restrictions.max_rating
-    ) {
+    if (ratingResult === "above_max") {
       return NextResponse.json(
         {
           error: {
@@ -229,10 +227,17 @@ export function checkRestrictions(
   return null;
 }
 
+/**
+ * Whether the player may claim `tier`'s price. `rating` names the list a
+ * rating-based tier is judged against — the tournament's format plus which
+ * federation rates it (see resolvePlayerRating), the same way checkRestrictions
+ * does.
+ */
 export function checkFeeTierEligibility(
   tier: FeeTier,
   profile: EligibilityProfile | null,
   startDate: Date,
+  rating: RatingContext,
 ): NextResponse | null {
   if (tier.gender === "female" && profile?.gender !== "female") {
     return NextResponse.json(
@@ -271,6 +276,45 @@ export function checkFeeTierEligibility(
       },
       { status: 400 },
     );
+  }
+
+  if (tier.rating_min != null || tier.rating_max != null) {
+    const playerRating = resolvePlayerRating(profile, rating);
+    const ratingResult = checkRatingEligibility(
+      playerRating,
+      tier.rating_min ?? null,
+      tier.rating_max ?? null,
+    );
+
+    // A rating isn't self-serviceable (FIDE ratings are synced, national ones
+    // come from the federation), so a missing one is a hard block for a tier
+    // with a floor rather than a fixable VALIDATION_ERROR.
+    if (ratingResult === "below_min") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "INVALID_FEE_TIER",
+            message:
+              playerRating == null
+                ? `This fee tier requires a rating of at least ${tier.rating_min}, and your profile has no ${describeRatingList(rating)} rating`
+                : `This fee tier requires a minimum rating of ${tier.rating_min}`,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (ratingResult === "above_max") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "INVALID_FEE_TIER",
+            message: `Your rating exceeds this fee tier's maximum (${tier.rating_max})`,
+          },
+        },
+        { status: 400 },
+      );
+    }
   }
 
   if (tier.age_min != null || tier.age_max != null) {

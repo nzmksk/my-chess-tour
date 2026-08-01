@@ -154,6 +154,8 @@ export async function POST(
     valid_until?: undefined;
     age_min?: undefined;
     age_max?: undefined;
+    rating_min?: undefined;
+    rating_max?: undefined;
     gender?: undefined;
     oku?: undefined;
     titles?: undefined;
@@ -198,10 +200,18 @@ export async function POST(
   }
 
   const restrictions = normalizeRestrictions(tournament.restrictions);
+  // Which rating list rating-based restrictions/tiers are judged against.
+  const ratingContext = {
+    formatType: (tournament.format as { type: string }).type,
+    isFideRated: tournament.is_fide_rated === true,
+    isMcfRated: tournament.is_mcf_rated === true,
+  };
 
   const needsTierProfile =
     matchedTier.age_min != null ||
     matchedTier.age_max != null ||
+    matchedTier.rating_min != null ||
+    matchedTier.rating_max != null ||
     matchedTier.gender != null ||
     matchedTier.oku === true ||
     (matchedTier.titles?.length ?? 0) > 0;
@@ -232,13 +242,18 @@ export async function POST(
       const restrictionError = checkRestrictions(
         restrictions,
         profile,
-        (tournament.format as { type: string }).type,
+        ratingContext,
         startDate,
       );
       if (restrictionError) return restrictionError;
     }
 
-    const tierError = checkFeeTierEligibility(matchedTier, profile, startDate);
+    const tierError = checkFeeTierEligibility(
+      matchedTier,
+      profile,
+      startDate,
+      ratingContext,
+    );
     if (tierError) return tierError;
 
     const ratedError = checkRatedRequirements(
