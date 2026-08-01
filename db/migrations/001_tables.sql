@@ -178,7 +178,17 @@ CREATE TABLE tournaments (
   is_fide_rated               boolean NOT NULL DEFAULT false,
   is_mcf_rated                boolean NOT NULL DEFAULT false,
   entry_fees                  jsonb NOT NULL, -- {"standard": {"amount_cents": 4000},"additional": [{"type": "early_bird","valid_until": "2026-02-19T00:00:00+00:00","valid_for":20,"amount_cents": 3200},{"type": "age_based","age_max": 12,"age_min": 0,"amount_cents": 2400}]}
-  prizes                      jsonb,          -- {"categories": [{"name": "Open","entries": [{"place": "1st","amount_cents": 80000},{"place": "2nd","amount_cents": 48000},{"place": "3rd","amount_cents": 32000}]}],"subcategories": [{"name": "Best Under-1500","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"max_rating": 1499}},{"name": "Best Female Player","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"gender": "female"}}]}
+  -- Canonical shape is PrizesJson in src/lib/prize-funding.ts. Two lists:
+  -- `categories` are placed (1st/2nd/3rd) and hold `entries`; `special` prizes
+  -- are flat, one name and one amount, with the eligibility rule carried in the
+  -- name. `distribution` is who hands the money over — "organizer" (default) or
+  -- "platform".
+  -- Every category or special prize carrying money must declare `funding`:
+  -- entry fees never fund prizes, so there is no "entry_fees" funding source and
+  -- publish validation refuses money with no external source named. An empty
+  -- category is a structural placeholder and is exempt.
+  -- {"categories": [{"name": "Open","funding": {"source": "sponsor","funder_name": "Maybank Foundation"},"entries": [{"place": "1st","amount_cents": 80000},{"place": "2nd","amount_cents": 48000},{"place": "3rd","amount_cents": 32000}]}],"special": [{"name": "Best Under-1500","funding": {"source": "grant","funder_name": "Ministry of Youth and Sports"},"amount_cents": 20000}],"distribution": "organizer"}
+  prizes                      jsonb,
   restrictions                jsonb,          -- {"age": {"max": 18}} or {"gender": "female"}
   max_participants            integer NOT NULL,
   commission_rate             smallint NOT NULL DEFAULT 10, -- platform's cut (%)
