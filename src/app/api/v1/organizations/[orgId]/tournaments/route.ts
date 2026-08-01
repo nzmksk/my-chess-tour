@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { resolveTimeZone } from "@/lib/datetime";
-import { DEFAULT_COUNTRY_CODE, isSupportedCountry } from "@/lib/venues";
+import { DEFAULT_COUNTRY_CODE, findCountry } from "@/lib/venues";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -182,11 +182,11 @@ export async function POST(
   const venue_address =
     typeof body.venue_address === "string" ? body.venue_address.trim() : "";
 
-  // Anything off the supported picklist falls back to the platform default
-  // rather than storing a country the payout rails can't route to.
-  const venue_country = isSupportedCountry(body.venue_country as string)
-    ? (body.venue_country as string).toUpperCase()
-    : DEFAULT_COUNTRY_CODE;
+  // Anything off the supported picklist — including a non-string, which a
+  // hand-rolled client can send — falls back to the platform default rather
+  // than storing a country the payout rails can't route to. `.code` is already
+  // the canonical uppercase form.
+  const venue_country = findCountry(body.venue_country)?.code ?? DEFAULT_COUNTRY_CODE;
 
   // The venue's timezone anchors the tournament's dates and times. Anything off
   // the supported picklist falls back to the platform default rather than

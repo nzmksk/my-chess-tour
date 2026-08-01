@@ -7,7 +7,7 @@ import {
   tournamentTag,
 } from "@/lib/cache-tags";
 import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
-import { DEFAULT_COUNTRY_CODE, isSupportedCountry } from "@/lib/venues";
+import { DEFAULT_COUNTRY_CODE, findCountry } from "@/lib/venues";
 import { getTournamentDateState } from "@/app/tournaments/utils";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
@@ -360,12 +360,12 @@ export async function PATCH(
       typeof body.venue_address === "string" ? body.venue_address.trim() : "";
   }
 
-  // An unrecognised country falls back to the platform default rather than
-  // erroring, matching create-route behaviour and the column default.
+  // An unrecognised country — or a non-string one — falls back to the platform
+  // default rather than erroring, matching create-route behaviour and the
+  // column default. `.code` is already the canonical uppercase form.
   if ("venue_country" in body) {
-    patch.venue_country = isSupportedCountry(body.venue_country as string)
-      ? (body.venue_country as string).toUpperCase()
-      : DEFAULT_COUNTRY_CODE;
+    patch.venue_country =
+      findCountry(body.venue_country)?.code ?? DEFAULT_COUNTRY_CODE;
   }
 
   // Moving the venue can move the timezone with it. Anything off the supported

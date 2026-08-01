@@ -56,28 +56,31 @@ export const SUPPORTED_COUNTRIES: readonly SupportedCountry[] = [
 /** The platform's home country. Matches the tournaments.venue_country default. */
 export const DEFAULT_COUNTRY_CODE = "MY";
 
-export function findCountry(code: string | null | undefined) {
-  if (!code) return undefined;
+// These take `unknown` on purpose. Their callers are request handlers holding a
+// parsed JSON body, where a field typed `string` in an interface is only a claim
+// about what a well-behaved client sends — `{"venue_country": 123}` parses fine
+// and would otherwise reach `.toUpperCase()` and throw. Validating the type here
+// rather than at each call site means a caller cannot forget, and none of them
+// need a cast to compile.
+
+/** The supported country `code` names, or undefined for anything else. */
+export function findCountry(code: unknown): SupportedCountry | undefined {
+  if (typeof code !== "string" || !code) return undefined;
   const upper = code.toUpperCase();
   return SUPPORTED_COUNTRIES.find((c) => c.code === upper);
 }
 
-export function isSupportedCountry(code: string | null | undefined): boolean {
+export function isSupportedCountry(code: unknown): boolean {
   return findCountry(code) !== undefined;
 }
 
 /** Regions for a country; empty when the code is unknown. */
-export function regionsForCountry(
-  code: string | null | undefined,
-): readonly string[] {
+export function regionsForCountry(code: unknown): readonly string[] {
   return findCountry(code)?.regions ?? [];
 }
 
 /** True when `region` is a known region of `code`. Used by write-path validation. */
-export function isValidRegion(
-  code: string | null | undefined,
-  region: string | null | undefined,
-): boolean {
-  if (!region) return false;
+export function isValidRegion(code: unknown, region: unknown): boolean {
+  if (typeof region !== "string" || !region) return false;
   return regionsForCountry(code).includes(region);
 }

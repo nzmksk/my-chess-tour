@@ -44,6 +44,19 @@ describe("findCountry / isSupportedCountry", () => {
     expect(isSupportedCountry(null)).toBe(false);
     expect(isSupportedCountry(undefined)).toBe(false);
   });
+
+  // These arrive from `await request.json()`, where the declared field type is
+  // a claim about well-behaved clients and nothing more. Guarding only
+  // falsiness would let every truthy non-string reach .toUpperCase() and throw,
+  // turning a bad request body into a 500.
+  it("rejects non-string codes instead of throwing", () => {
+    for (const bad of [123, true, {}, ["MY"], () => "MY"]) {
+      expect(() => findCountry(bad)).not.toThrow();
+      expect(findCountry(bad)).toBeUndefined();
+      expect(isSupportedCountry(bad)).toBe(false);
+      expect(regionsForCountry(bad)).toEqual([]);
+    }
+  });
 });
 
 describe("regionsForCountry / isValidRegion", () => {
@@ -61,5 +74,11 @@ describe("regionsForCountry / isValidRegion", () => {
   it("treats empty and nullish regions as invalid", () => {
     expect(isValidRegion("MY", "")).toBe(false);
     expect(isValidRegion("MY", null)).toBe(false);
+  });
+
+  it("treats non-string regions as invalid instead of throwing", () => {
+    expect(() => isValidRegion("MY", 123)).not.toThrow();
+    expect(isValidRegion("MY", 123)).toBe(false);
+    expect(isValidRegion(123, "Selangor")).toBe(false);
   });
 });
