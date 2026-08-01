@@ -148,7 +148,11 @@ DECLARE
   t_status     tournament_status;
   t_fee          integer;
   v_idx          integer;
+  f_idx          integer;
   t_restrictions jsonb;
+  t_local_end    timestamp;
+  t_utc_offset   interval;
+  t_valid_until  text;
 
   -- Name pools
   malay_first  text[] := ARRAY[
@@ -253,6 +257,33 @@ DECLARE
     'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur',
     'Asia/Bangkok','Asia/Jakarta','Asia/Singapore',
     'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur'
+  ];
+  -- ISO 3166-1 alpha-2 of each venue (tournaments.venue_country). Deliberately
+  -- separate from the timezone above: the country decides which payout rails and
+  -- currency the money moves on, the timezone decides how the dates read. A
+  -- country can span several zones, so neither derives from the other.
+  --
+  -- Positions 7–9 are TH/ID/SG, which are NOT in SUPPORTED_COUNTRIES
+  -- (src/lib/venues.ts is MY-only today) — exactly as their venue_states above
+  -- already sit outside the Malaysian region list. They exist to exercise
+  -- cross-country reads; editing one through the creation wizard would fall back
+  -- to MY, which is the accepted cost of seeding venues the picklist cannot yet
+  -- express. Widening SUPPORTED_COUNTRIES is what makes them round-trip.
+  venue_countries text[] := ARRAY[
+    'MY','MY','MY','MY',
+    'MY','MY',
+    'TH','ID','SG',
+    'MY','MY'
+  ];
+  -- Prize funding. Entry fees never fund prizes (src/lib/prize-funding.ts), so
+  -- every category carrying money must name an external source and the party
+  -- putting it up. Publish validation rejects one that doesn't, so seeded
+  -- tournaments have to declare it or they could not be re-published.
+  funding_srcs text[] := ARRAY['sponsor','grant','organizer'];
+  funder_names text[] := ARRAY[
+    'Maybank Foundation',
+    'Ministry of Youth and Sports',
+    NULL  -- 'organizer' names the organizing body itself; filled in per row
   ];
   t_types   text[]    := ARRAY['rapid','blitz','classical','rapid','blitz'];
   t_rounds  integer[] := ARRAY[7, 9, 9, 7, 11];
@@ -518,6 +549,29 @@ BEGIN
 
       t_fee := fee_opts[((idx - 1) % 5) + 1];
       v_idx := ((idx - 1) % array_length(venue_names, 1)) + 1;
+      f_idx := (idx % array_length(funding_srcs, 1)) + 1;
+
+      -- An early-bird tier's `valid_until` is the instant its last day ENDS at
+      -- the venue, not the deadline instant itself: consumers test it with
+      -- `new Date(valid_until) < now`, so midnight would expire the tier for
+      -- the whole of the day the UI says is still included.
+      --
+      -- Built to be byte-identical to toValidUntilTimestamp() in
+      -- src/app/my/organizations/[orgId]/tournaments/create/_components/entryFees.ts
+      -- ("YYYY-MM-DDTHH:MI:SS+HH:MM"). entry_fees is jsonb and the money-field
+      -- freeze compares it exactly, so a seed row in any other shape would look
+      -- like a fee change the moment an organizer saved an unrelated edit — and
+      -- be refused, because these tournaments have paid registrations.
+      t_local_end  := (t_deadline AT TIME ZONE venue_tz[v_idx])::date + time '23:59:59';
+      t_utc_offset := t_local_end - ((t_local_end AT TIME ZONE venue_tz[v_idx]) AT TIME ZONE 'UTC');
+      t_valid_until := to_char(t_local_end, 'YYYY-MM-DD"T"HH24:MI:SS')
+                    || CASE WHEN t_utc_offset < interval '0' THEN '-' ELSE '+' END
+                    -- No abs() for intervals, and `@` was dropped in PG 14.
+                    || to_char(
+                         CASE WHEN t_utc_offset < interval '0'
+                              THEN -t_utc_offset ELSE t_utc_offset END,
+                         'HH24:MI'
+                       );
 
       -- Vary restrictions: open, nationality, age, gender, rating, combined
       t_restrictions := CASE (idx % 6)
@@ -531,7 +585,7 @@ BEGIN
 
       INSERT INTO public.tournaments (
         organization_id, name, slug, description,
-        venue_name, venue_state, venue_address, timezone,
+        venue_name, venue_state, venue_address, venue_country, timezone,
         start_date, end_date, registration_deadline,
         format, time_control,
         is_fide_rated, is_mcf_rated,
@@ -555,6 +609,7 @@ BEGIN
         venue_names[v_idx],
         venue_states[v_idx],
         venue_addrs[v_idx],
+        venue_countries[v_idx],
         venue_tz[v_idx],
         t_start, t_end, t_deadline,
         json_build_object(
@@ -575,7 +630,7 @@ BEGIN
             json_build_object(
               'type', 'early_bird',
               'amount_cents', (t_fee * 0.8)::integer,
-              'valid_until', t_deadline
+              'valid_until', t_valid_until
             ),
             json_build_object(
               'type', 'age_based',
@@ -588,6 +643,12 @@ BEGIN
           'categories', json_build_array(
             json_build_object(
               'name', 'Open',
+              -- Every category carrying money names its source and funder;
+              -- publish validation refuses one that doesn't.
+              'funding', json_build_object(
+                'source', funding_srcs[f_idx],
+                'funder_name', COALESCE(funder_names[f_idx], org_names[i])
+              ),
               'entries', json_build_array(
                 json_build_object('place', '1st', 'amount_cents', t_fee * 20),
                 json_build_object('place', '2nd', 'amount_cents', t_fee * 12),
@@ -595,22 +656,32 @@ BEGIN
               )
             )
           ),
-          'subcategories', json_build_array(
+          -- Special prizes are flat — one name, one amount, its own funding —
+          -- not category-shaped (SpecialPrizeJson, src/lib/prize-funding.ts).
+          -- The eligibility rule lives in the name because nothing reads a
+          -- structured condition: the wizard's SpecialPrize has no field for one.
+          'special', json_build_array(
             json_build_object(
               'name', 'Best Under-1500',
-              'entries', json_build_array(
-                json_build_object('place', '1st', 'amount_cents', t_fee * 5)
+              'funding', json_build_object(
+                'source', funding_srcs[f_idx],
+                'funder_name', COALESCE(funder_names[f_idx], org_names[i])
               ),
-              'conditions', json_build_object('max_rating', 1499)
+              'amount_cents', t_fee * 5
             ),
             json_build_object(
               'name', 'Best Female Player',
-              'entries', json_build_array(
-                json_build_object('place', '1st', 'amount_cents', t_fee * 5)
+              'funding', json_build_object(
+                'source', funding_srcs[f_idx],
+                'funder_name', COALESCE(funder_names[f_idx], org_names[i])
               ),
-              'conditions', json_build_object('gender', 'female')
+              'amount_cents', t_fee * 5
             )
-          )
+          ),
+          -- Who hands the money to the winners. Mostly the organizer directly;
+          -- every 5th tournament appoints the platform, so the ring-fenced
+          -- prize balance Phase 8 needs has seed data to work against.
+          'distribution', CASE WHEN idx % 5 = 0 THEN 'platform' ELSE 'organizer' END
         ),
         t_restrictions,
         max_parts[(idx % 5) + 1],

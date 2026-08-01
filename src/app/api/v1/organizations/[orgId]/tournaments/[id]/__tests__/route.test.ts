@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { getTodayInTimeZone } from "@/lib/datetime";
+// The real wizard mapping, so a round-trip test exercises what the client
+// actually sends rather than a hand-built approximation of it.
+import {
+  fromPersistedEntryFees,
+  toPersistedEntryFees,
+} from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -10,6 +17,7 @@ const {
   mockMembershipBuilder,
   mockTournamentFetchBuilder,
   mockTournamentUpdateBuilder,
+  mockPaymentsBuilder,
   mockFrom,
   mockGetClaims,
 } = vi.hoisted(() => {
@@ -44,6 +52,9 @@ const {
   const mockMembershipBuilder = makeBuilder({ data: null, error: null });
   const mockTournamentFetchBuilder = makeBuilder({ data: null, error: null });
   const mockTournamentUpdateBuilder = makeBuilder({ data: null, error: null });
+  // Paid-registration probe for the money-field freeze. count 0 = nobody has
+  // paid yet, so money fields stay editable.
+  const mockPaymentsBuilder = makeBuilder({ count: 0, error: null });
 
   // Track tournament table calls: first is fetch, second is update
   let tournamentCallIndex = 0;
@@ -51,6 +62,7 @@ const {
   const mockFrom = vi.fn((table: string) => {
     if (table === "organizations") return mockOrgBuilder;
     if (table === "organization_memberships") return mockMembershipBuilder;
+    if (table === "payments") return mockPaymentsBuilder;
     if (table === "tournaments") {
       const builder =
         tournamentCallIndex === 0
@@ -75,6 +87,7 @@ const {
     mockMembershipBuilder,
     mockTournamentFetchBuilder,
     mockTournamentUpdateBuilder,
+    mockPaymentsBuilder,
     mockFrom,
     mockGetClaims,
   };
@@ -118,7 +131,29 @@ const APPROVED_ORG = {
   created_by: USER_ID,
 };
 
-const EXISTING_TOURNAMENT = { id: TOUR_ID };
+// A far-future draft: exempt from both freeze stages, so it exercises the
+// pre-freeze behaviour every other test relied on before the freeze existed.
+const EXISTING_TOURNAMENT = {
+  id: TOUR_ID,
+  status: "draft",
+  registration_deadline: "2099-08-01T00:00:00Z",
+  registration_closed_at: null,
+  start_date: "2099-09-01",
+  end_date: "2099-09-02",
+  timezone: "Asia/Kuala_Lumpur",
+  // The venue pair the timezone is derived from. A patch may carry only one of
+  // them, so the route falls back to the stored value for the other.
+  venue_country: "MY",
+  venue_state: "Selangor",
+  // The money columns the freeze compares against. Shaped exactly as the PATCH
+  // route writes them, because that is what a row edited through this route
+  // actually holds — and an unchanged resend has to compare equal to it.
+  entry_fees: { standard: { amount_cents: 4000 }, additional: [] },
+  prizes: null,
+  max_participants: 32,
+  commission_rate: 10,
+  organizer_commission_pct: 0,
+};
 
 const UPDATED_TOURNAMENT = {
   id: TOUR_ID,
@@ -130,7 +165,9 @@ const UPDATED_TOURNAMENT = {
 const VALID_PATCH_BODY = {
   name: "Updated Tournament Name",
   venue_name: "KLCC Convention Centre",
-  venue_state: "Kuala Lumpur",
+  // A real region name — the route validates it against venue_country and
+  // derives the timezone from it, so "Kuala Lumpur" is not a state.
+  venue_state: "W.P. Kuala Lumpur",
   venue_address: "Jalan Pinang, 50088 KL",
   format: { type: "rapid", system: "swiss", rounds: 9 },
   time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
@@ -204,6 +241,14 @@ function setTournamentUpdateResult(data: unknown, error: unknown = null) {
   ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
 }
 
+/** How many paid registration payments the money-field freeze should see. */
+function setPaidRegistrationCount(count: number, error: unknown = null) {
+  (mockPaymentsBuilder as Record<string, unknown>).then = (
+    onfulfilled: (v: unknown) => unknown,
+    onrejected?: (r: unknown) => unknown,
+  ) => Promise.resolve({ count, error }).then(onfulfilled, onrejected);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -217,6 +262,7 @@ beforeEach(() => {
   setMembershipResult({ roles: { name: "owner" } });
   setTournamentFetchResult(EXISTING_TOURNAMENT);
   setTournamentUpdateResult(UPDATED_TOURNAMENT);
+  setPaidRegistrationCount(0);
 });
 
 afterEach(() => {
@@ -456,8 +502,12 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       expect(body.data.updated_at).toBeDefined();
     });
 
-    it("works for a published tournament (post-publish edit)", async () => {
+    it("works for a published tournament that has not started yet", async () => {
       setUser();
+      setTournamentFetchResult({
+        ...EXISTING_TOURNAMENT,
+        status: "published",
+      });
       setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
       const res = await PATCH(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
@@ -471,7 +521,7 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       setUser();
       // Published, closed_at still tracks the deadline (never closed early).
       setTournamentFetchResult({
-        id: TOUR_ID,
+        ...EXISTING_TOURNAMENT,
         status: "published",
         registration_deadline: "2026-08-01T00:00:00Z",
         registration_closed_at: "2026-08-01T00:00:00Z",
@@ -497,7 +547,7 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       // Published and closed early (closed_at < deadline) → deadline edits must
       // not resurrect/move the irreversible early-close timestamp.
       setTournamentFetchResult({
-        id: TOUR_ID,
+        ...EXISTING_TOURNAMENT,
         status: "published",
         registration_deadline: "2026-08-01T00:00:00Z",
         registration_closed_at: "2026-07-01T00:00:00Z",
@@ -520,6 +570,295 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
           registration_closed_at: expect.anything(),
         }),
       );
+    });
+  });
+
+  // The venue's country and state decide its timezone; the client no longer
+  // sends one. Three fields describing one place could otherwise disagree.
+  describe("venue timezone", () => {
+    it("derives the timezone from the venue rather than the request", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_state: "Sabah",
+          // A client that still sends one is ignored, not trusted.
+          timezone: "America/New_York",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          venue_state: "Sabah",
+          timezone: "Asia/Kuala_Lumpur",
+        }),
+      );
+    });
+
+    // A patch that moves only the country still has to reconcile against the
+    // stored state, because the pair is what names the zone.
+    it("falls back to the stored half of the pair", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_country: "my" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          venue_country: "MY",
+          timezone: "Asia/Kuala_Lumpur",
+        }),
+      );
+    });
+
+    it("leaves the timezone alone when the venue is not being moved", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { name: "Renamed" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.not.objectContaining({ timezone: expect.anything() }),
+      );
+    });
+
+    // Silently coercing this used to pick a zone for a place the organizer
+    // never named.
+    it("400s on a state the country does not have", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_country: "MY",
+          venue_state: "Singapore",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    // A draft is saved from step one, before a state has been picked. Publish
+    // is what refuses an incomplete venue.
+    it("accepts an empty state on an unfinished draft", async () => {
+      setUser();
+      setTournamentFetchResult(EXISTING_TOURNAMENT);
+      setTournamentUpdateResult(UPDATED_TOURNAMENT);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_state: "" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // Two-stage freeze: money fields lock at the first paid registration,
+  // everything locks once the tournament starts.
+  describe("edit freeze", () => {
+    const PUBLISHED = { ...EXISTING_TOURNAMENT, status: "published" };
+    // Deliberately in the past so the date-derived state is "completed"
+    // regardless of when the suite runs.
+    const STARTED = {
+      ...PUBLISHED,
+      start_date: "2020-01-01",
+      end_date: "2020-01-02",
+    };
+    // "Today" must be resolved in the SAME timezone the route uses. Building it
+    // from toISOString() (UTC) makes this test fail for the eight hours a day
+    // when the UTC date is a day behind Kuala Lumpur's — the exact class of bug
+    // the timezone column exists to prevent.
+    const ONGOING_TODAY = (() => {
+      const today = getTodayInTimeZone(PUBLISHED.timezone);
+      return { ...PUBLISHED, start_date: today, end_date: today };
+    })();
+
+    it("allows money-field edits before anyone has paid", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(0);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          entry_fees: { standard: { amount_cents: 5000 } },
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("409s on a money-field edit once a registration is paid", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          prizes: { categories: [] },
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.code).toBe("CONFLICT");
+      // The organizer needs to know WHICH field was refused.
+      expect(body.error.details).toContain("prizes");
+    });
+
+    it("still allows non-money edits after a registration is paid", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_address: "2 New Road" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    // The edit wizard rebuilds the entire draft body on every save, so it always
+    // resends entry_fees and max_participants even when the organizer only
+    // touched the venue. Refusing that is a false 409: the trigger compares
+    // OLD/NEW and would have let it through. This is the payload the client
+    // actually sends, not a hand-trimmed one.
+    it("allows a venue edit that resends money fields unchanged", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_address: "2 New Road",
+          entry_fees: PUBLISHED.entry_fees,
+          max_participants: PUBLISHED.max_participants,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    // jsonb equality ignores key order, so the freeze must too — otherwise the
+    // check would depend on how the client happened to serialise the object.
+    it("ignores key order when deciding a money field is unchanged", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          entry_fees: { additional: [], standard: { amount_cents: 4000 } },
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    // The regression the user hit on a seeded tournament: the wizard hydrates
+    // entry_fees, the organizer changes only the name, and the wizard writes
+    // the fees back. If that round trip is not lossless the freeze sees a fee
+    // change and refuses the whole PATCH — the name never lands either, and the
+    // client showed nothing. Built with the real helpers, so it fails if either
+    // direction of the mapping drifts.
+    it("allows a rename that resends fees hydrated from a non-canonical row", async () => {
+      const stored = {
+        standard: { amount_cents: 4000 },
+        additional: [
+          {
+            type: "early_bird",
+            amount_cents: 3200,
+            // The shape the seed used to write: the deadline instant, not the
+            // end of the day at the venue.
+            valid_until: "2099-08-01T00:00:00+00:00",
+          },
+        ],
+      };
+      setUser();
+      setTournamentFetchResult({ ...PUBLISHED, entry_fees: stored });
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          name: "Renamed Tournament",
+          entry_fees: toPersistedEntryFees(
+            fromPersistedEntryFees(stored, "Asia/Kuala_Lumpur"),
+            "Asia/Kuala_Lumpur",
+          ),
+          max_participants: PUBLISHED.max_participants,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+
+      expect(res.status).toBe(200);
+    });
+
+    it("409s when a resent money field differs by even one cent", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_address: "2 New Road",
+          entry_fees: { standard: { amount_cents: 4001 }, additional: [] },
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.details).toEqual(["entry_fees"]);
+    });
+
+    it("409s on any edit once the tournament has started", async () => {
+      setUser();
+      setTournamentFetchResult(ONGOING_TODAY);
+      setPaidRegistrationCount(0);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_address: "2 New Road" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.message).toMatch(/started/i);
+    });
+
+    it("409s on any edit once the tournament has ended", async () => {
+      setUser();
+      setTournamentFetchResult(STARTED);
+      setPaidRegistrationCount(0);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_address: "2 New Road" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.message).toMatch(/ended/i);
+    });
+
+    it("exempts drafts from both stages", async () => {
+      setUser();
+      // A draft carries placeholder dates that are already "past" by the
+      // date-derived rule; freezing on that would make drafts uneditable.
+      setTournamentFetchResult({
+        ...EXISTING_TOURNAMENT,
+        start_date: "2020-01-01",
+        end_date: "2020-01-02",
+      });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          entry_fees: { standard: { amount_cents: 5000 } },
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
     });
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { SUPPORTED_COUNTRIES } from "@/lib/venues";
 import type { Tournament } from "../types";
 import { getTournamentDateState } from "../utils";
 import {
@@ -26,24 +27,11 @@ function SectionBanner({ label }: { label: string }) {
   );
 }
 
-const MALAYSIAN_STATES = [
-  "Johor",
-  "Kedah",
-  "Kelantan",
-  "Melaka",
-  "Negeri Sembilan",
-  "Pahang",
-  "Perak",
-  "Perlis",
-  "Pulau Pinang",
-  "Sabah",
-  "Sarawak",
-  "Selangor",
-  "Terengganu",
-  "W.P. Kuala Lumpur",
-  "W.P. Labuan",
-  "W.P. Putrajaya",
-];
+// Every supported country's regions, flattened — discovery filters across all
+// venues, not one country at a time.
+const ALL_REGIONS = SUPPORTED_COUNTRIES.flatMap((c) =>
+  c.regions.map((r) => r.name),
+);
 
 interface Props {
   tournaments: Tournament[];
@@ -178,7 +166,7 @@ export default function TournamentsClient({ tournaments, now }: Props) {
         onRatingsChange={setRatings}
         dateFilter={dateFilter}
         onDateFilterChange={setDateFilter}
-        allStates={MALAYSIAN_STATES}
+        allStates={ALL_REGIONS}
       />
 
       {/* Tournament sections */}

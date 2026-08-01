@@ -104,7 +104,9 @@ const CREATED_TOURNAMENT = {
 const VALID_BODY = {
   name: "KL Open Rapid 2026",
   venue_name: "KLCC",
-  venue_state: "Kuala Lumpur",
+  // A real region name — the route validates it against venue_country and
+  // derives the timezone from it, so "Kuala Lumpur" is not a state.
+  venue_state: "W.P. Kuala Lumpur",
   venue_address: "Jalan Pinang, 50088 KL",
   format: { type: "rapid", system: "swiss", rounds: 7 },
   time_control: { base_minutes: 10, increment_seconds: 5, delay_seconds: 0 },
@@ -139,7 +141,10 @@ function makeRequest(
 // ---------------------------------------------------------------------------
 
 function setUser(id = USER_ID) {
-  mockGetClaims.mockResolvedValue({ data: { claims: { sub: id } }, error: null });
+  mockGetClaims.mockResolvedValue({
+    data: { claims: { sub: id } },
+    error: null,
+  });
 }
 
 function setNoUser() {
@@ -320,6 +325,41 @@ describe("POST /api/v1/organizations/[orgId]/tournaments", () => {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
       expect(res.status).toBe(201);
+    });
+  });
+
+  // The venue's country and state decide its timezone; the client no longer
+  // sends one.
+  describe("venue timezone", () => {
+    it("derives the timezone from the venue rather than the request", async () => {
+      setUser();
+      const res = await POST(
+        makeRequest(ORG_ID, {
+          ...VALID_BODY,
+          venue_state: "Sarawak",
+          // A client that still sends one is ignored, not trusted.
+          timezone: "America/New_York",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID }) },
+      );
+      expect(res.status).toBe(201);
+      expect(mockInsertBuilder.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          venue_state: "Sarawak",
+          timezone: "Asia/Kuala_Lumpur",
+        }),
+      );
+    });
+
+    it("400s on a state the country does not have", async () => {
+      setUser();
+      const res = await POST(
+        makeRequest(ORG_ID, { ...VALID_BODY, venue_state: "Singapore" }),
+        { params: Promise.resolve({ orgId: ORG_ID }) },
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error.code).toBe("VALIDATION_ERROR");
     });
   });
 

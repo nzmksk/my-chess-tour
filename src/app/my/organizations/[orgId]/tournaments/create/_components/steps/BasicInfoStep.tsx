@@ -1,28 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  SUPPORTED_COUNTRIES,
+  regionsForCountry,
+  timeZoneForRegion,
+} from "@/lib/venues";
 import type { BasicInfoData } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
-import { VENUE_TIME_ZONES } from "@/lib/datetime";
-
-const MALAYSIAN_STATES = [
-  "Johor",
-  "Kedah",
-  "Kelantan",
-  "Melaka",
-  "Negeri Sembilan",
-  "Pahang",
-  "Perak",
-  "Perlis",
-  "Pulau Pinang",
-  "Sabah",
-  "Sarawak",
-  "Selangor",
-  "Terengganu",
-  "W.P. Kuala Lumpur",
-  "W.P. Labuan",
-  "W.P. Putrajaya",
-];
+import { timeZoneAbbreviation } from "@/lib/datetime";
 
 type NameStatus = "idle" | "checking" | "available" | "taken" | "error";
 
@@ -145,6 +131,19 @@ export default function BasicInfoStep() {
     setForm((f) => ({ ...f, [key]: value }));
   };
 
+  const regions = regionsForCountry(form.venueCountry);
+
+  // Derived, never picked. Shown so the organizer can see which clock the dates
+  // they are about to enter will be read in.
+  const timeZone = timeZoneForRegion(form.venueCountry, form.venueState);
+
+  // Changing country invalidates the selected state — the two lists don't
+  // overlap, so keeping the old value would submit a region the new country
+  // doesn't have and fail server-side validation.
+  const handleCountryChange = (code: string) => {
+    setForm((f) => ({ ...f, venueCountry: code, venueState: "" }));
+  };
+
   return (
     <div>
       <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
@@ -241,6 +240,32 @@ export default function BasicInfoStep() {
 
         <div className="form-group">
           <div className="label-row">
+            <label htmlFor="venue-country" className="input-label">
+              Country
+            </label>
+            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+              *
+            </span>
+          </div>
+          <select
+            id="venue-country"
+            className="input"
+            value={form.venueCountry}
+            onChange={(e) => handleCountryChange(e.target.value)}
+          >
+            {SUPPORTED_COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <p className="input-hint">
+            Decides how players pay and are paid out.
+          </p>
+        </div>
+
+        <div className="form-group">
+          <div className="label-row">
             <label htmlFor="venue-state" className="input-label">
               State
             </label>
@@ -255,44 +280,22 @@ export default function BasicInfoStep() {
             onChange={(e) => field("venueState", e.target.value)}
           >
             <option value="">Select state…</option>
-            {MALAYSIAN_STATES.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {regions.map((r) => (
+              <option key={r.name} value={r.name}>
+                {r.name}
               </option>
             ))}
           </select>
-          {showErrors && errors.venueState && (
+          {showErrors && errors.venueState ? (
             <p className="input-hint error">{errors.venueState}</p>
+          ) : (
+            form.venueState && (
+              <p className="input-hint">
+                Times are {timeZoneAbbreviation(timeZone)} ({timeZone}).
+              </p>
+            )
           )}
         </div>
-      </div>
-
-      {/* Venue Timezone */}
-      <div className="form-group">
-        <div className="label-row">
-          <label htmlFor="venue-timezone" className="input-label">
-            Venue Timezone
-          </label>
-          <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
-            *
-          </span>
-        </div>
-        <select
-          id="venue-timezone"
-          className="input"
-          value={form.timezone}
-          onChange={(e) => field("timezone", e.target.value)}
-        >
-          {VENUE_TIME_ZONES.map((z) => (
-            <option key={z.id} value={z.id}>
-              {z.label} ({z.abbreviation})
-            </option>
-          ))}
-        </select>
-        <p className="input-hint">
-          Every date and time you enter is in this timezone, and that is how
-          players see them wherever they are.
-        </p>
       </div>
 
       {/* Venue Address */}

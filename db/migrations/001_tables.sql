@@ -115,9 +115,11 @@ CREATE TABLE organizations (
   links                 jsonb,  -- {"website": "https://...", "facebook": "...", "twitter": "..."}
   email                 varchar(255),
   phone                 varchar(20),
-  bank_name             varchar(100),
-  bank_account_holder   varchar(255),
-  bank_account_number   varchar(50),
+  -- No bank columns here by design. The "Public can view approved organizations"
+  -- SELECT policy (004_rls.sql) has no column restriction, so anything stored on
+  -- this row is readable by anon through PostgREST. Payout bank details live in
+  -- organization_bank_accounts, which is RLS-gated on bank_account.manage and
+  -- superseded (not updated) on change so verification can't go stale.
   past_tournament_refs  text,
   approval_status       approval_status NOT NULL DEFAULT 'pending',
   reviewed_by           uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -156,6 +158,13 @@ CREATE TABLE tournaments (
   venue_name                  varchar(255) NOT NULL,
   venue_state                 varchar(50) NOT NULL,
   venue_address               text NOT NULL,
+  -- ISO 3166-1 alpha-2 of the venue. Deliberately separate from `timezone`
+  -- below: the country decides which payout rails and currency a tournament's
+  -- money moves on, the timezone decides how its dates read. A country can span
+  -- several zones, so neither derives from the other.
+  -- The set an organizer may pick from is enforced in the app
+  -- (SUPPORTED_COUNTRIES in src/lib/venues.ts), which also owns venue_state.
+  venue_country               varchar(2)  NOT NULL DEFAULT 'MY',
   -- IANA timezone of the venue: a tournament's times belong to where it is played, not to whoever is reading them.
   -- start_date/end_date are calendar dates in this zone, timestamptz columns are instants displayed in it,
   -- and ongoing/upcoming/past is judged against "now" here.
@@ -169,7 +178,17 @@ CREATE TABLE tournaments (
   is_fide_rated               boolean NOT NULL DEFAULT false,
   is_mcf_rated                boolean NOT NULL DEFAULT false,
   entry_fees                  jsonb NOT NULL, -- {"standard": {"amount_cents": 4000},"additional": [{"type": "early_bird","valid_until": "2026-02-19T00:00:00+00:00","valid_for":20,"amount_cents": 3200},{"type": "age_based","age_max": 12,"age_min": 0,"amount_cents": 2400}]}
-  prizes                      jsonb,          -- {"categories": [{"name": "Open","entries": [{"place": "1st","amount_cents": 80000},{"place": "2nd","amount_cents": 48000},{"place": "3rd","amount_cents": 32000}]}],"subcategories": [{"name": "Best Under-1500","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"max_rating": 1499}},{"name": "Best Female Player","entries": [{"place": "1st","amount_cents": 20000}],"conditions": {"gender": "female"}}]}
+  -- Canonical shape is PrizesJson in src/lib/prize-funding.ts. Two lists:
+  -- `categories` are placed (1st/2nd/3rd) and hold `entries`; `special` prizes
+  -- are flat, one name and one amount, with the eligibility rule carried in the
+  -- name. `distribution` is who hands the money over — "organizer" (default) or
+  -- "platform".
+  -- Every category or special prize carrying money must declare `funding`:
+  -- entry fees never fund prizes, so there is no "entry_fees" funding source and
+  -- publish validation refuses money with no external source named. An empty
+  -- category is a structural placeholder and is exempt.
+  -- {"categories": [{"name": "Open","funding": {"source": "sponsor","funder_name": "Maybank Foundation"},"entries": [{"place": "1st","amount_cents": 80000},{"place": "2nd","amount_cents": 48000},{"place": "3rd","amount_cents": 32000}]}],"special": [{"name": "Best Under-1500","funding": {"source": "grant","funder_name": "Ministry of Youth and Sports"},"amount_cents": 20000}],"distribution": "organizer"}
+  prizes                      jsonb,
   restrictions                jsonb,          -- {"age": {"max": 18}} or {"gender": "female"}
   max_participants            integer NOT NULL,
   commission_rate             smallint NOT NULL DEFAULT 10, -- platform's cut (%)

@@ -6,7 +6,8 @@ import { WIZARD_STEPS, useTournamentWizard } from "./TournamentWizardContext";
 import WizardProgressBar from "./WizardProgressBar";
 import { toPersistedRestrictions } from "./restrictions";
 import { toPersistedEntryFees } from "./entryFees";
-import { resolveTimeZone, toInstantInTimeZone } from "@/lib/datetime";
+import { toInstantInTimeZone } from "@/lib/datetime";
+import { timeZoneForRegion } from "@/lib/venues";
 import BasicInfoStep from "./steps/BasicInfoStep";
 import FormatStep from "./steps/FormatStep";
 import FeesStep from "./steps/FeesStep";
@@ -52,7 +53,9 @@ export default function WizardShell({
   } = useTournamentWizard();
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
+  // One banner for both buttons: a save and a publish fail the same way, and the
+  // organizer only ever has one of them in flight.
+  const [formError, setFormError] = useState<string | null>(null);
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
@@ -61,14 +64,27 @@ export default function WizardShell({
   function buildDraftBody(): Record<string, unknown> {
     // Everything dated in the wizard is dated at the venue, so the venue's
     // timezone is what turns the organizer's wall-clock entries into instants.
-    const timeZone = resolveTimeZone(basicInfoData.timezone);
+    // It is derived from where the venue is, not asked for separately, and the
+    // API derives it again from the same two fields — sending it would only
+    // create a value the server has to decide whether to trust.
+    const timeZone = timeZoneForRegion(
+      basicInfoData.venueCountry,
+      basicInfoData.venueState,
+    );
     const entryFees = toPersistedEntryFees(feesData, timeZone);
+
+    // Funding is persisted as a nested object (matching PrizesJson) rather than
+    // flat columns, and omitted entirely when the source hasn't been chosen —
+    // an absent `funding` is what publish validation reports on.
+    const funding = (source: string, funderName: string) =>
+      source ? { source, funder_name: funderName.trim() } : undefined;
 
     const prizes =
       prizesData.categories.length > 0 || prizesData.specialPrizes.length > 0
         ? {
             categories: prizesData.categories.map((cat) => ({
               name: cat.name,
+              funding: funding(cat.fundingSource, cat.funderName),
               entries: cat.prizes.map((p) => ({
                 place: p.placement,
                 amount_cents:
@@ -77,9 +93,11 @@ export default function WizardShell({
             })),
             special: prizesData.specialPrizes.map((sp) => ({
               name: sp.name,
+              funding: funding(sp.fundingSource, sp.funderName),
               amount_cents:
                 sp.amount === "" ? 0 : Math.round(Number(sp.amount) * 100),
             })),
+            distribution: prizesData.distribution,
           }
         : undefined;
 
@@ -89,7 +107,7 @@ export default function WizardShell({
       venue_name: basicInfoData.venueName || undefined,
       venue_state: basicInfoData.venueState || undefined,
       venue_address: basicInfoData.venueAddress || undefined,
-      timezone: timeZone,
+      venue_country: basicInfoData.venueCountry || undefined,
     };
 
     if (
@@ -138,7 +156,30 @@ export default function WizardShell({
     return body;
   }
 
-  async function saveDraftToApi(): Promise<string | null> {
+  /**
+   * The readable message behind a failed response. The API answers with
+   * `{ error: { message, details? } }`; `details` is the per-field list the
+   * publish validator and the edit freeze return, and is worth showing whole.
+   */
+  async function errorMessageFrom(
+    res: Response,
+    fallback: string,
+  ): Promise<string> {
+    try {
+      const json = (await res.json()) as {
+        error?: { message?: string; details?: string[] };
+      };
+      const details = json.error?.details;
+      if (details && details.length > 1) return details.join(" · ");
+      return json.error?.message ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  type SaveResult = { ok: true; id: string } | { ok: false; message: string };
+
+  async function saveDraftToApi(): Promise<SaveResult> {
     const body = buildDraftBody();
 
     if (tournamentId) {
@@ -150,7 +191,16 @@ export default function WizardShell({
           body: JSON.stringify(body),
         },
       );
-      return res.ok ? tournamentId : null;
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: await errorMessageFrom(
+            res,
+            "Failed to save your changes. Please try again.",
+          ),
+        };
+      }
+      return { ok: true, id: tournamentId };
     }
 
     const res = await fetch(`/api/v1/organizations/${orgId}/tournaments`, {
@@ -159,14 +209,26 @@ export default function WizardShell({
       body: JSON.stringify(body),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: await errorMessageFrom(
+          res,
+          "Failed to save this tournament. Please try again.",
+        ),
+      };
+    }
     const json = (await res.json()) as { data: { id: string } };
-    return json.data.id;
+    return { ok: true, id: json.data.id };
   }
 
   const afterSaveRedirect = redirectPath ?? `/my/organizations/${orgId}`;
 
+  // A rejected save must leave the organizer on the wizard with their edits
+  // intact: clearing storage and redirecting anyway is what made a 409 from the
+  // edit freeze indistinguishable from success.
   async function handleSaveDraft() {
+    setFormError(null);
     if (!basicInfoData.name.trim()) {
       clearWizardStorage();
       router.push(afterSaveRedirect);
@@ -174,44 +236,40 @@ export default function WizardShell({
     }
     setIsSaving(true);
     try {
-      const id = await saveDraftToApi();
-      if (id) setTournamentId(id);
-    } finally {
-      setIsSaving(false);
+      const result = await saveDraftToApi();
+      if (!result.ok) {
+        setFormError(result.message);
+        return;
+      }
+      setTournamentId(result.id);
       clearWizardStorage();
       router.push(afterSaveRedirect);
+    } finally {
+      setIsSaving(false);
     }
   }
 
   async function handlePublish() {
-    setPublishError(null);
+    setFormError(null);
     setIsPublishing(true);
     try {
       if (!basicInfoData.name.trim()) {
         router.push(afterSaveRedirect);
         return;
       }
-      const draftId = await saveDraftToApi();
-      if (draftId) setTournamentId(draftId);
-      if (!draftId) {
-        setPublishError(
-          "Failed to save tournament before publishing. Please try again.",
-        );
+      const saved = await saveDraftToApi();
+      if (!saved.ok) {
+        setFormError(saved.message);
         return;
       }
+      setTournamentId(saved.id);
       const res = await fetch(
-        `/api/v1/organizations/${orgId}/tournaments/${draftId}/publish`,
+        `/api/v1/organizations/${orgId}/tournaments/${saved.id}/publish`,
         { method: "POST" },
       );
       if (!res.ok) {
-        const json = (await res.json()) as {
-          error?: { message?: string; details?: string[] };
-        };
-        const details = json.error?.details;
-        setPublishError(
-          details && details.length > 1
-            ? details.join(" · ")
-            : (json.error?.message ?? "Failed to publish tournament."),
+        setFormError(
+          await errorMessageFrom(res, "Failed to publish tournament."),
         );
         return;
       }
@@ -244,9 +302,12 @@ export default function WizardShell({
             must not mount until the context has restored sessionStorage. */}
         <div className="px-6 py-7 sm:px-8">{isHydrated && <StepContent />}</div>
 
-        {publishError && (
-          <div className="mx-6 mt-4 mb-0 rounded-md border border-red-400 bg-red-50 px-4 py-3 sm:mx-8">
-            <p className="font-lato text-xs text-red-700">{publishError}</p>
+        {formError && (
+          <div
+            role="alert"
+            className="mx-6 mt-4 mb-0 rounded-md border border-red-400 bg-red-50 px-4 py-3 sm:mx-8"
+          >
+            <p className="font-lato text-xs text-red-700">{formError}</p>
           </div>
         )}
 

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { getTournamentDateState } from "@/app/tournaments/utils";
 import TournamentActions from "./TournamentActions";
 import {
   formatCalendarDateRange,
   formatInstantDate,
+  getTodayInTimeZone,
   resolveTimeZone,
 } from "@/lib/datetime";
 
@@ -141,10 +143,20 @@ export default function TournamentManageClient({
 }: Props) {
   const [search, setSearch] = useState("");
   const statusConfig = STATUS_CONFIG[tournament.status] ?? STATUS_CONFIG.draft;
+  // Drafts are always editable. A published tournament stays editable only
+  // until it starts — after that the PATCH route refuses every field, so
+  // offering the button would just walk the organizer into a 409. "ongoing" and
+  // "completed" are date-derived and never stored, so the status column alone
+  // can't answer this; resolve today in the venue's own timezone, exactly as
+  // the server does.
   const isEditable =
     tournament.status === "draft" ||
-    tournament.status === "published" ||
-    tournament.status === "ongoing";
+    (tournament.status === "published" &&
+      getTournamentDateState(
+        tournament.start_date,
+        tournament.end_date,
+        getTodayInTimeZone(tournament.timezone),
+      ) === "upcoming");
 
   const filtered = participants.filter(
     (p) =>

@@ -22,14 +22,19 @@ interface PrizeCategory {
   entries: PrizeEntry[];
 }
 
-interface PrizeSubCategory {
+interface SpecialPrize {
   name: string;
-  entries: PrizeEntry[];
-  conditions: unknown;
+  amount_cents?: number;
 }
+
 interface PrizesData {
   categories: PrizeCategory[];
-  subcategories?: PrizeSubCategory[] | null;
+  /**
+   * Flat one-off prizes, the counterpart of `categories`. Named `special` to
+   * match PrizesJson (src/lib/prize-funding.ts) — the key the wizard writes and
+   * publish validation reads. Not rendered on this page yet.
+   */
+  special?: SpecialPrize[] | null;
 }
 
 export interface Restrictions {

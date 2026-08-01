@@ -6,7 +6,14 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/cache-tags";
-import { resolveTimeZone } from "@/lib/datetime";
+import { getTodayInTimeZone } from "@/lib/datetime";
+import {
+  DEFAULT_COUNTRY_CODE,
+  findCountry,
+  isValidRegion,
+  timeZoneForRegion,
+} from "@/lib/venues";
+import { getTournamentDateState } from "@/app/tournaments/utils";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -65,7 +72,8 @@ interface UpdateTournamentBody {
   venue_name?: unknown;
   venue_state?: unknown;
   venue_address?: unknown;
-  timezone?: unknown;
+  venue_country?: unknown;
+  // No `timezone`: it is derived from venue_country + venue_state, not accepted.
   format?: FormatInput;
   time_control?: TimeControlInput;
   start_date?: unknown;
@@ -146,6 +154,152 @@ async function resolvePermission(
   return null;
 }
 
+// Columns that define what a player is paying for and what they can win. Once
+// somebody has paid, changing these rewrites the deal after the fact — and for
+// `prizes` it also moves the payout holdback under a tournament that is already
+// selling. Frozen at the first paid registration, not at publish, so an
+// organizer can still correct a typo on a listing nobody has bought into yet.
+const MONEY_FIELDS = [
+  "entry_fees",
+  "prizes",
+  "max_participants",
+  "commission_rate",
+  "organizer_commission_pct",
+] as const;
+
+interface FreezeSubject {
+  status: string;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  entry_fees: unknown;
+  prizes: unknown;
+  max_participants: unknown;
+  commission_rate: unknown;
+  organizer_commission_pct: unknown;
+}
+
+/**
+ * Deep structural equality, used to answer "is this money field actually
+ * changing?" the same way the database does.
+ *
+ * The trigger compares with `IS DISTINCT FROM`, which on jsonb is semantic:
+ * key order doesn't matter, but a key being present-vs-absent does. This walks
+ * objects and arrays to match that, rather than comparing JSON.stringify output
+ * — two equal jsonb values can serialise to different strings purely by key
+ * order, and that would resurrect the false 409 this exists to prevent.
+ */
+function deepEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  // Postgres has one null; a column read back as null and a patch that omits a
+  // value to `undefined` mean the same thing here.
+  if (a == null || b == null) return a == null && b == null;
+  if (typeof a !== "object" || typeof b !== "object") return false;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+    return a.every((item, i) => deepEquals(item, b[i]));
+  }
+
+  const aObj = a as Record<string, unknown>;
+  const bObj = b as Record<string, unknown>;
+  const aKeys = Object.keys(aObj);
+  const bKeys = Object.keys(bObj);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(
+    (k) =>
+      Object.prototype.hasOwnProperty.call(bObj, k) &&
+      deepEquals(aObj[k], bObj[k]),
+  );
+}
+
+/**
+ * Two-stage edit freeze.
+ *
+ * Stage 1 — money fields lock at the first paid registration.
+ * Stage 2 — everything locks once the tournament starts.
+ *
+ * Both rules are also enforced by a BEFORE UPDATE trigger in
+ * 003_functions_triggers.sql; the DB is the authority and this is the readable
+ * error. Drafts are exempt: they have placeholder dates and can't have
+ * registrations, so neither stage can apply.
+ *
+ * Returns a 409 response when the edit is refused, else null.
+ */
+async function checkEditFreeze(
+  tournamentId: string,
+  existing: FreezeSubject,
+  patch: Record<string, unknown>,
+): Promise<NextResponse | null> {
+  if (existing.status === "draft") return null;
+
+  // Stage 2 first: it's the broader rule, and it needs no query.
+  const dateState = getTournamentDateState(
+    existing.start_date,
+    existing.end_date,
+    getTodayInTimeZone(existing.timezone),
+  );
+  if (dateState !== "upcoming") {
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            dateState === "ongoing"
+              ? "This tournament has started and can no longer be edited"
+              : "This tournament has ended and can no longer be edited",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  // Changed, not merely present. The edit wizard rebuilds the whole draft body
+  // on every save, so an organizer fixing a typo in the venue address still
+  // sends entry_fees and max_participants at their current values. Gating on
+  // presence would refuse that edit, while the trigger — which compares
+  // OLD/NEW — would have allowed it. Presence is the client's business; what
+  // the row ends up holding is the rule.
+  const touchedMoneyFields = MONEY_FIELDS.filter(
+    (f) => f in patch && !deepEquals(patch[f], existing[f]),
+  );
+  if (touchedMoneyFields.length === 0) return null;
+
+  // `head: true` — we only need to know whether one exists.
+  const { count, error } = await supabaseAdmin
+    .from("payments")
+    .select("id", { count: "exact", head: true })
+    .eq("tournament_id", tournamentId)
+    .eq("type", "registration")
+    .eq("status", "paid")
+    .limit(1);
+
+  if (error) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: error.message } },
+      { status: 500 },
+    );
+  }
+
+  if ((count ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            "Entry fees, prizes and capacity are locked once a player has paid",
+          details: touchedMoneyFields,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  return null;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
@@ -190,7 +344,13 @@ export async function PATCH(
 
   const { data: existing, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
-    .select("id, status, registration_deadline, registration_closed_at")
+    .select(
+      // The money columns are here for checkEditFreeze, which refuses an edit
+      // only when a value actually changes and so needs the current one.
+      // venue_country/venue_state are here because the timezone is derived from
+      // the pair, and a patch may only carry one half of it.
+      "id, status, registration_deadline, registration_closed_at, start_date, end_date, timezone, venue_country, venue_state, entry_fees, prizes, max_participants, commission_rate, organizer_commission_pct",
+    )
     .eq("id", id)
     .eq("organization_id", orgId)
     .single();
@@ -258,13 +418,42 @@ export async function PATCH(
       typeof body.venue_address === "string" ? body.venue_address.trim() : "";
   }
 
-  // Moving the venue can move the timezone with it. Anything off the supported
-  // picklist falls back to the platform default rather than storing a zone no
-  // formatter can read.
-  if ("timezone" in body) {
-    patch.timezone = resolveTimeZone(
-      typeof body.timezone === "string" ? body.timezone : null,
-    );
+  // An unrecognised country — or a non-string one — falls back to the platform
+  // default rather than erroring, matching create-route behaviour and the
+  // column default. `.code` is already the canonical uppercase form.
+  if ("venue_country" in body) {
+    patch.venue_country =
+      findCountry(body.venue_country)?.code ?? DEFAULT_COUNTRY_CODE;
+  }
+
+  // Moving the venue moves the timezone with it, so the two are resolved
+  // together. A patch may carry only one of them — the stored value stands in
+  // for the other, because the row's zone has to stay consistent with wherever
+  // the venue ends up, not with whichever half the client happened to send.
+  if ("venue_country" in body || "venue_state" in body) {
+    const country =
+      (patch.venue_country as string | undefined) ??
+      existing.venue_country ??
+      DEFAULT_COUNTRY_CODE;
+    const state =
+      (patch.venue_state as string | undefined) ?? existing.venue_state ?? "";
+
+    // An empty state is a draft the organizer hasn't finished; publish catches
+    // that. A state set to something the country doesn't have would silently
+    // pick the wrong zone, so it is refused.
+    if (state && !isValidRegion(country, state)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: `"${state}" is not a state of the selected country`,
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    patch.timezone = timeZoneForRegion(country, state);
   }
 
   if ("format" in body && body.format && typeof body.format === "object") {
@@ -375,6 +564,9 @@ export async function PATCH(
       { status: 400 },
     );
   }
+
+  const freezeError = await checkEditFreeze(id, existing, patch);
+  if (freezeError) return freezeError;
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("tournaments")

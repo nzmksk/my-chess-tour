@@ -193,11 +193,42 @@ RETURNS boolean AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
 -- =============================================
+-- AUDIT SNAPSHOT REDACTION
+-- audit_logs stores full row snapshots, so any sensitive column is copied
+-- verbatim into a table that outlives the row it came from. This masks the
+-- listed keys down to a last-4 suffix, keeping the snapshot useful for
+-- "did this value change?" without retaining the secret itself.
+-- Keys absent from the row are ignored; NULL values stay NULL so the audit
+-- trail still distinguishes "cleared" from "set to something".
+-- =============================================
+CREATE OR REPLACE FUNCTION redact_jsonb_columns(p_data jsonb, p_cols text[])
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_data IS NULL THEN NULL
+    ELSE (
+      SELECT jsonb_object_agg(
+        e.key,
+        CASE
+          WHEN e.key = ANY(p_cols) AND jsonb_typeof(e.value) = 'string'
+            THEN to_jsonb('****' || right(e.value #>> '{}', 4))
+          ELSE e.value
+        END
+      )
+      FROM jsonb_each(p_data) AS e(key, value)
+    )
+  END;
+$$;
+
+-- =============================================
 -- AUDIT TRAIL TRIGGER
 -- Generic trigger for all audited tables.
 -- TG_ARGV[0]: column name for record_id (defaults to 'id')
 -- Resolves organization_id from source table for RLS scoping.
 -- Reads app.audit_context session var for context tagging.
+-- Sensitive columns are redacted per-table before the snapshot is written.
 -- =============================================
 CREATE OR REPLACE FUNCTION audit_trigger_func()
 RETURNS TRIGGER AS $$
@@ -219,6 +250,15 @@ BEGIN
 
   -- Extract record_id from the appropriate column
   v_record_id := COALESCE(v_new, v_old) ->> v_pk_col;
+
+  -- Redact sensitive columns before the snapshot is persisted. Done after
+  -- record_id extraction so a redacted column can never be the PK. Without this
+  -- every bank-account write is copied verbatim into audit_logs, which is
+  -- retained far longer than the row itself.
+  IF TG_TABLE_NAME = 'player_profiles' THEN
+    v_old := redact_jsonb_columns(v_old, ARRAY['bank_account_number', 'oku_document_path']);
+    v_new := redact_jsonb_columns(v_new, ARRAY['bank_account_number', 'oku_document_path']);
+  END IF;
 
   -- Resolve organization_id based on source table
   IF TG_TABLE_NAME = 'organizations' THEN
@@ -299,6 +339,74 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON registrations
 
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancellation_requests
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+-- =============================================
+-- TOURNAMENT EDIT FREEZE (money fields)
+-- entry_fees/prizes/max_participants and the commission split define what a
+-- player is buying. Once anyone has paid, changing them rewrites a concluded
+-- transaction — and moving `prizes` also shifts the payout holdback under a
+-- tournament that is already selling.
+--
+-- The PATCH route returns the readable 409 (naming the rejected fields); this
+-- trigger is the authority, so the rule holds for any writer including the
+-- service role and the SQL editor. Same belt-and-braces posture as
+-- settle_registration_payment's amount guard.
+--
+-- The "tournament has started" half of the freeze is NOT enforced here: it
+-- depends on today-in-the-venue-timezone, and pinning that in the DB would
+-- duplicate getTodayInTimeZone() with a second, drifting definition. It lives
+-- in the route only.
+--
+-- Deliberately allows the write when the value is unchanged, so a client that
+-- re-submits the whole form without touching money fields still succeeds.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_money_fields()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_changed text[] := ARRAY[]::text[];
+BEGIN
+  IF NEW.entry_fees IS DISTINCT FROM OLD.entry_fees THEN
+    v_changed := v_changed || 'entry_fees';
+  END IF;
+  IF NEW.prizes IS DISTINCT FROM OLD.prizes THEN
+    v_changed := v_changed || 'prizes';
+  END IF;
+  IF NEW.max_participants IS DISTINCT FROM OLD.max_participants THEN
+    v_changed := v_changed || 'max_participants';
+  END IF;
+  IF NEW.commission_rate IS DISTINCT FROM OLD.commission_rate THEN
+    v_changed := v_changed || 'commission_rate';
+  END IF;
+  IF NEW.organizer_commission_pct IS DISTINCT FROM OLD.organizer_commission_pct THEN
+    v_changed := v_changed || 'organizer_commission_pct';
+  END IF;
+
+  IF array_length(v_changed, 1) IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM payments p
+    WHERE p.tournament_id = NEW.id
+      AND p.type = 'registration'
+      AND p.status = 'paid'
+  ) THEN
+    RAISE EXCEPTION
+      'tournament % has paid registrations; these fields are locked: %',
+      NEW.id, array_to_string(v_changed, ', ')
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_money_fields BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_money_fields();
 
 -- =============================================
 -- TOURNAMENT CAPACITY ENFORCEMENT
