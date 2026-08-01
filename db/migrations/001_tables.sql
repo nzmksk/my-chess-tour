@@ -156,6 +156,7 @@ CREATE TABLE tournaments (
   venue_name                  varchar(255) NOT NULL,
   venue_state                 varchar(50) NOT NULL,
   venue_address               text NOT NULL,
+  timezone                    varchar(64) NOT NULL DEFAULT 'Asia/Kuala_Lumpur', -- IANA timezone of the venue. start_date/end_date are calendar dates in this zone; timestamptz columns are instants displayed in it. Picklist enforced in the app (VENUE_TIME_ZONES in src/lib/datetime.ts).
   start_date                  date NOT NULL,
   end_date                    date NOT NULL,
   registration_deadline       timestamptz NOT NULL,
