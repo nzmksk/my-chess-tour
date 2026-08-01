@@ -12,6 +12,7 @@ import type {
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
+import { formatCalendarDate } from "@/lib/datetime";
 import {
   ONE_DAY_SECONDS,
   TOURNAMENTS_LIST_TAG,
@@ -172,15 +173,16 @@ export async function generateMetadata({
     };
   }
 
-  const startDate = new Date(tournament.start_date).toLocaleDateString(
-    "en-MY",
-    { day: "numeric", month: "long", year: "numeric" },
-  );
-  const endDate = new Date(tournament.end_date).toLocaleDateString("en-MY", {
+  // Calendar dates, formatted from their own parts: new Date("2026-08-10") is
+  // UTC midnight, which renders as the 9th wherever the build runs west of
+  // Greenwich — and this string is what search engines and link previews cache.
+  const LONG_DATE: Intl.DateTimeFormatOptions = {
     day: "numeric",
     month: "long",
     year: "numeric",
-  });
+  };
+  const startDate = formatCalendarDate(tournament.start_date, LONG_DATE);
+  const endDate = formatCalendarDate(tournament.end_date, LONG_DATE);
 
   const description =
     tournament.description?.trim() ||

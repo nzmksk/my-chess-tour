@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeRestrictions } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
+import { resolveTimeZone } from "@/lib/datetime";
 
 interface Organization {
   id: string;
@@ -20,6 +21,7 @@ interface TournamentRow {
   venue_name: string;
   venue_state: string;
   venue_address: string;
+  timezone: string;
   start_date: string;
   end_date: string;
   registration_deadline: string;
@@ -50,7 +52,7 @@ export async function GET(
     .from("tournaments")
     .select(
       `id, slug, name, description, venue_name, venue_state, venue_address,
-       start_date, end_date, registration_deadline, registration_closed_at,
+       timezone, start_date, end_date, registration_deadline, registration_closed_at,
        format, time_control, is_fide_rated, is_mcf_rated, entry_fees, prizes,
        restrictions, max_participants, status, published_at, updated_at,
        organizations(id, name, description, avatar_url, links, email, phone)`,
@@ -93,6 +95,7 @@ export async function GET(
       state: t.venue_state,
       address: t.venue_address,
     },
+    timezone: resolveTimeZone(t.timezone),
     start_date: t.start_date,
     end_date: t.end_date,
     registration_deadline: t.registration_deadline,

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { resolveTimeZone } from "@/lib/datetime";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -43,6 +44,7 @@ interface CreateTournamentBody {
   venue_name?: unknown;
   venue_state?: unknown;
   venue_address?: unknown;
+  timezone?: unknown;
   format?: FormatInput;
   time_control?: TimeControlInput;
   start_date?: unknown;
@@ -178,6 +180,13 @@ export async function POST(
   const venue_address =
     typeof body.venue_address === "string" ? body.venue_address.trim() : "";
 
+  // The venue's timezone anchors the tournament's dates and times. Anything off
+  // the supported picklist falls back to the platform default rather than
+  // storing a zone no formatter can read.
+  const timezone = resolveTimeZone(
+    typeof body.timezone === "string" ? body.timezone : null,
+  );
+
   const start_date =
     typeof body.start_date === "string" && body.start_date
       ? body.start_date
@@ -244,6 +253,7 @@ export async function POST(
       venue_name,
       venue_state,
       venue_address,
+      timezone,
       start_date,
       end_date,
       registration_deadline,

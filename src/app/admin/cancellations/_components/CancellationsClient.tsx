@@ -8,6 +8,7 @@ import type {
   CancellationCounts,
   RequestStatus,
 } from "../page";
+import { formatCalendarDate } from "@/lib/datetime";
 
 type TabKey = "all" | RequestStatus;
 
@@ -47,8 +48,10 @@ function StatusBadge({ status }: { status: RequestStatus }) {
   );
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-MY", {
+// For instants (a request's created_at). Calendar dates go through
+// formatCalendarDate, which reads them from their own parts.
+function formatInstant(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-MY", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -124,13 +127,13 @@ function RequestCard({ req }: { req: CancellationRequest }) {
           <p className="font-lato text-text-muted mt-0.5 text-xs">
             {req.tournament?.organization?.name ?? "Unknown organizer"}
             {req.tournament && (
-              <> · starts {formatDate(req.tournament.start_date)}</>
+              <> · starts {formatCalendarDate(req.tournament.start_date)}</>
             )}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span className="font-lato text-text-muted text-xs">
-            {formatDate(req.created_at)}
+            {formatInstant(req.created_at)}
           </span>
           <StatusBadge status={req.status} />
         </div>

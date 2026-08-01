@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { resolveTimeZone } from "@/lib/datetime";
 import { NextResponse } from "next/server";
 
 interface TournamentRow {
@@ -8,6 +9,7 @@ interface TournamentRow {
   name: string;
   venue_name: string;
   venue_state: string;
+  timezone: string;
   start_date: string;
   end_date: string;
   format: unknown;
@@ -29,8 +31,8 @@ export async function GET() {
   const { data: rows, error } = await supabaseAdmin
     .from("tournaments")
     .select(
-      `id, slug, organization_id, name, venue_name, venue_state, start_date,
-      end_date, format, time_control, is_fide_rated, is_mcf_rated, entry_fees,
+      `id, slug, organization_id, name, venue_name, venue_state, timezone,
+      start_date, end_date, format, time_control, is_fide_rated, is_mcf_rated, entry_fees,
       restrictions, max_participants, status`,
     )
     .eq("status", "published")
@@ -68,6 +70,7 @@ export async function GET() {
         name: t.venue_name,
         state: t.venue_state,
       },
+      timezone: resolveTimeZone(t.timezone),
       start_date: t.start_date,
       end_date: t.end_date,
       format: t.format,

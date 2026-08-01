@@ -5,6 +5,12 @@ import { useTournamentWizard } from "../TournamentWizardContext";
 import type { FeeTier } from "../../types";
 import { TIER_LABELS } from "../entryFees";
 import { RESTRICTION_LABELS } from "../restrictions";
+import {
+  VENUE_TIME_ZONES,
+  formatCalendarDate,
+  resolveTimeZone,
+  timeZoneAbbreviation,
+} from "@/lib/datetime";
 
 const COMMISSION = 0.1;
 
@@ -12,24 +18,20 @@ function fmtRM(val: number): string {
   return `RM ${val.toFixed(2)}`;
 }
 
-function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+// Wizard dates are calendar dates at the venue ("2026-08-10"), formatted from
+// their own parts so the preview shows the day the organizer picked rather than
+// what new Date() makes of it in the browser's timezone.
+function fmtDate(date: string): string {
+  if (!date) return "—";
+  return formatCalendarDate(date);
 }
 
-function fmtDateTime(iso: string): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// The deadline input is a wall-clock time at the venue, so it is echoed back
+// verbatim and labelled with the zone it belongs to.
+function fmtDateTime(local: string, timeZone: string): string {
+  if (!local) return "—";
+  const [date, time = ""] = local.split("T");
+  return `${formatCalendarDate(date)}${time ? `, ${time}` : ""} (${timeZoneAbbreviation(timeZone)})`;
 }
 
 function tierSubLabel(tier: FeeTier): string {
@@ -109,6 +111,11 @@ export default function ReviewStep() {
 
   // ── Basic Info ────────────────────────────────────────────
 
+  const timeZone = resolveTimeZone(basicInfoData.timezone);
+  const timeZoneLabel = `${
+    VENUE_TIME_ZONES.find((z) => z.id === timeZone)?.label ?? timeZone
+  } (${timeZoneAbbreviation(timeZone)})`;
+
   const basicRows: [string, React.ReactNode][] = [
     ["Name", basicInfoData.name || "—"],
     ...(basicInfoData.description
@@ -120,6 +127,7 @@ export default function ReviewStep() {
     ["Venue", basicInfoData.venueName || "—"],
     ["State", basicInfoData.venueState || "—"],
     ["Address", basicInfoData.venueAddress || "—"],
+    ["Timezone", timeZoneLabel],
   ];
 
   // ── Format & Schedule ─────────────────────────────────────
@@ -169,7 +177,7 @@ export default function ReviewStep() {
     ["Format", formatSummary || "—"],
     ["Time Control", timeControl],
     ["Dates", dates],
-    ["Deadline", fmtDateTime(formatData.registrationDeadline)],
+    ["Deadline", fmtDateTime(formatData.registrationDeadline, timeZone)],
     [
       "Capacity",
       formatData.maxParticipants

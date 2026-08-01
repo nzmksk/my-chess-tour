@@ -21,6 +21,7 @@ const base: TournamentDetailType = {
     state: "W.P. Kuala Lumpur",
     address: "Jalan Raja Laut, 50350 Kuala Lumpur",
   },
+  timezone: "Asia/Kuala_Lumpur",
   start_date: "2026-06-01",
   end_date: "2026-06-02",
   registration_deadline: "2026-12-28T08:00:00Z",

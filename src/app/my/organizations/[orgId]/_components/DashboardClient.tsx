@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatCalendarDate } from "@/lib/datetime";
 
 type TournamentStatus =
   | "draft"
@@ -61,15 +62,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function formatCents(cents: number): string {
   return `MYR ${(cents / 100).toLocaleString("en-MY", {
     minimumFractionDigits: 2,
@@ -129,7 +121,7 @@ function TournamentRow({ tournament: t, orgId }: TournamentRowProps) {
       </td>
       <td className="px-5 py-3.5 whitespace-nowrap">
         <span className="font-lato text-text-secondary text-sm">
-          {formatDate(t.start_date)}
+          {formatCalendarDate(t.start_date)}
         </span>
       </td>
       <td className="px-5 py-3.5 whitespace-nowrap">

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getTournamentDateState } from "@/app/tournaments/utils";
+import { formatInstantDate, getTodayInTimeZone } from "@/lib/datetime";
 import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
 
 interface Props {
@@ -11,17 +12,11 @@ interface Props {
   status: string;
   startDate: string;
   endDate: string;
+  /** The venue's timezone — the zone the tournament's dates are read in. */
+  timeZone: string;
   registrationClosedAt: string | null;
   registrationDeadline: string | null;
   cancellationPending: boolean;
-}
-
-function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 // These actions only make sense for a live, published tournament. Guard here,
@@ -37,6 +32,7 @@ function PublishedActions({
   tournamentId,
   startDate,
   endDate,
+  timeZone,
   registrationClosedAt,
   registrationDeadline,
   cancellationPending,
@@ -58,7 +54,9 @@ function PublishedActions({
   // Cancellation only makes sense before a tournament starts. Once it's ongoing
   // or completed (both still `published` in the DB — those states are purely
   // date-derived), hide the action. The server enforces the same rule.
-  const cancellable = getTournamentDateState(startDate, endDate) === "upcoming";
+  const cancellable =
+    getTournamentDateState(startDate, endDate, getTodayInTimeZone(timeZone)) ===
+    "upcoming";
 
   const base = `/api/v1/organizations/${orgId}/tournaments/${tournamentId}`;
 
@@ -90,7 +88,9 @@ function PublishedActions({
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setError(json.error?.message ?? "Failed to submit cancellation request.");
+        setError(
+          json.error?.message ?? "Failed to submit cancellation request.",
+        );
         return;
       }
       setShowCancelForm(false);
@@ -114,7 +114,7 @@ function PublishedActions({
             </h3>
             <p className="font-lato text-text-muted mt-1 text-sm">
               {closedEarly && registrationClosedAt
-                ? `Registration was closed early on ${formatDateTime(registrationClosedAt)}.`
+                ? `Registration was closed early on ${formatInstantDate(registrationClosedAt, timeZone)}.`
                 : registrationClosed
                   ? "Registration has already closed at its deadline."
                   : "Stop accepting new registrations before the deadline. This cannot be undone — registration cannot be re-opened."}
@@ -139,8 +139,8 @@ function PublishedActions({
         {confirmClose && !registrationClosed && (
           <div className="bg-warning/10 border-warning/20 rounded-lg border p-4">
             <p className="font-lato text-text-primary text-sm">
-              Close registration now? Players will no longer be able to register,
-              and <strong>this cannot be reversed</strong>.
+              Close registration now? Players will no longer be able to
+              register, and <strong>this cannot be reversed</strong>.
             </p>
             <div className="mt-3 flex justify-end gap-2">
               <button
@@ -213,8 +213,8 @@ function PublishedActions({
             </p>
             <p className="font-lato text-text-muted mb-3 text-xs">
               This request goes to platform admins for approval. Once approved,
-              the tournament is cancelled and refunds are initiated for registered
-              players.
+              the tournament is cancelled and refunds are initiated for
+              registered players.
             </p>
             <textarea
               value={cancelReason}

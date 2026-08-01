@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getTournamentDateState } from "@/app/tournaments/utils";
+import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
 import { authorizeTournamentManager } from "../_lib/authorize";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -18,7 +19,11 @@ export async function POST(
 ): Promise<NextResponse> {
   const { orgId, id } = await params;
 
-  const auth = await authorizeTournamentManager(orgId, id, "cancel tournaments");
+  const auth = await authorizeTournamentManager(
+    orgId,
+    id,
+    "cancel tournaments",
+  );
   if (!auth.ok) return auth.response;
 
   let body: CancelBody;
@@ -46,7 +51,7 @@ export async function POST(
 
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
-    .select("id, status, start_date, end_date")
+    .select("id, status, start_date, end_date, timezone")
     .eq("id", id)
     .eq("organization_id", orgId)
     .single();
@@ -80,8 +85,11 @@ export async function POST(
   // in-progress or past tournament is still `published`. Cancellation only makes
   // sense before it starts, so reject anything that isn't still upcoming.
   if (
-    getTournamentDateState(tournament.start_date, tournament.end_date) !==
-    "upcoming"
+    getTournamentDateState(
+      tournament.start_date,
+      tournament.end_date,
+      getTodayInTimeZone(resolveTimeZone(tournament.timezone)),
+    ) !== "upcoming"
   ) {
     return NextResponse.json(
       {

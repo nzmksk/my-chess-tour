@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BasicInfoData } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
+import { VENUE_TIME_ZONES } from "@/lib/datetime";
 
 const MALAYSIAN_STATES = [
   "Johor",
@@ -264,6 +265,34 @@ export default function BasicInfoStep() {
             <p className="input-hint error">{errors.venueState}</p>
           )}
         </div>
+      </div>
+
+      {/* Venue Timezone */}
+      <div className="form-group">
+        <div className="label-row">
+          <label htmlFor="venue-timezone" className="input-label">
+            Venue Timezone
+          </label>
+          <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+            *
+          </span>
+        </div>
+        <select
+          id="venue-timezone"
+          className="input"
+          value={form.timezone}
+          onChange={(e) => field("timezone", e.target.value)}
+        >
+          {VENUE_TIME_ZONES.map((z) => (
+            <option key={z.id} value={z.id}>
+              {z.label} ({z.abbreviation})
+            </option>
+          ))}
+        </select>
+        <p className="input-hint">
+          Every date and time you enter is in this timezone, and that is how
+          players see them wherever they are.
+        </p>
       </div>
 
       {/* Venue Address */}

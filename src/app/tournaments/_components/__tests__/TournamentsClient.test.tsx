@@ -3,6 +3,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import TournamentsClient from "../TournamentsClient";
 import type { Tournament } from "../../types";
+import {
+  addCalendarDays,
+  endOfMonth,
+  getTodayInTimeZone,
+  startOfMonth,
+} from "@/lib/datetime";
 
 // ── React useState interception for component-level date filter tests ──
 //
@@ -97,6 +103,7 @@ function makeTournament(overrides: Partial<Tournament> = {}): Tournament {
     id: "1",
     name: "Default Tournament",
     venue: { name: "Test Venue", state: "Selangor" },
+    timezone: "Asia/Kuala_Lumpur",
     start_date: "2026-08-10",
     end_date: "2026-08-10",
     registration_deadline: "2026-08-09",
@@ -116,7 +123,8 @@ function makeTournament(overrides: Partial<Tournament> = {}): Tournament {
 /**
  * Mirrors the filter logic in TournamentsClient so the filtering behaviour
  * can be tested as a pure function without needing jsdom to drive state.
- * Keep in sync with the useMemo block in TournamentsClient.tsx.
+ * Keep in sync with the useMemo block in TournamentsClient.tsx — including its
+ * `today`, which the component derives per tournament from its venue timezone.
  */
 function filterTournaments(
   tournaments: Tournament[],
@@ -126,7 +134,7 @@ function filterTournaments(
     states = [] as string[],
     ratings = [] as string[],
     dateFilter = "any",
-    now = new Date(),
+    today = getTodayInTimeZone(),
   } = {},
 ) {
   return tournaments.filter((t) => {
@@ -152,33 +160,26 @@ function filterTournaments(
       if (!matchFide && !matchMcf && !matchUnrated) return false;
     }
 
-    const start = new Date(t.start_date + "T00:00:00");
-    const end = new Date(t.end_date + "T00:00:00");
     if (dateFilter === "this-week") {
-      const windowStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      );
-      const windowEnd = new Date(windowStart);
-      windowEnd.setDate(windowEnd.getDate() + 7);
-      if (start > windowEnd || end < windowStart) return false;
+      if (t.start_date > addCalendarDays(today, 7) || t.end_date < today)
+        return false;
     } else if (dateFilter === "this-month") {
-      const windowStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const windowEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      if (start > windowEnd || end < windowStart) return false;
+      if (t.start_date > endOfMonth(today) || t.end_date < startOfMonth(today))
+        return false;
     } else if (dateFilter === "next-month") {
-      const windowStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const windowEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-      if (start > windowEnd || end < windowStart) return false;
+      if (
+        t.start_date > endOfMonth(today, 1) ||
+        t.end_date < startOfMonth(today, 1)
+      )
+        return false;
     }
 
     return true;
   });
 }
 
-// Fixed "now" used across all date-filter tests: 2026-03-10
-const NOW = new Date(2026, 2, 10); // month is 0-indexed
+// Fixed "today" used across all date-filter tests
+const TODAY = "2026-03-10";
 
 // ── Initial render (smoke test) ───────────────────────────────
 
@@ -189,7 +190,10 @@ describe("initial render", () => {
       makeTournament({ id: "2", name: "Beta" }),
     ];
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={tournaments} today="2026-01-01" />,
+      <TournamentsClient
+        tournaments={tournaments}
+        now={"2026-01-01T04:00:00Z"}
+      />,
     );
     expect(html).toContain("Alpha");
     expect(html).toContain("Beta");
@@ -197,7 +201,7 @@ describe("initial render", () => {
 
   it("renders empty-state message when no tournaments are provided", () => {
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[]} today="2026-01-01" />,
+      <TournamentsClient tournaments={[]} now={"2026-01-01T04:00:00Z"} />,
     );
     expect(html).toContain("No tournaments are currently published.");
   });
@@ -384,7 +388,7 @@ describe("date filter — this-week (now = 2026-03-10)", () => {
       end_date: "2026-03-10",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-week", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -394,7 +398,7 @@ describe("date filter — this-week (now = 2026-03-10)", () => {
       end_date: "2026-03-14",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-week", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -404,7 +408,7 @@ describe("date filter — this-week (now = 2026-03-10)", () => {
       end_date: "2026-03-11",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-week", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -415,7 +419,7 @@ describe("date filter — this-week (now = 2026-03-10)", () => {
       end_date: "2026-03-20",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-week", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -425,7 +429,7 @@ describe("date filter — this-week (now = 2026-03-10)", () => {
       end_date: "2026-03-09",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-week", today: TODAY }),
     ).toHaveLength(0);
   });
 
@@ -435,7 +439,7 @@ describe("date filter — this-week (now = 2026-03-10)", () => {
       end_date: "2026-03-20",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-week", today: TODAY }),
     ).toHaveLength(0);
   });
 
@@ -446,7 +450,7 @@ describe("date filter — this-week (now = 2026-03-10)", () => {
       end_date: "2026-03-17",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-week", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-week", today: TODAY }),
     ).toHaveLength(1);
   });
 });
@@ -458,7 +462,7 @@ describe("date filter — this-month (now = 2026-03-10, month = March)", () => {
       end_date: "2026-03-20",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-month", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -468,7 +472,7 @@ describe("date filter — this-month (now = 2026-03-10, month = March)", () => {
       end_date: "2026-03-05",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-month", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -478,7 +482,7 @@ describe("date filter — this-month (now = 2026-03-10, month = March)", () => {
       end_date: "2026-04-05",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-month", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -488,7 +492,7 @@ describe("date filter — this-month (now = 2026-03-10, month = March)", () => {
       end_date: "2026-02-28",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-month", today: TODAY }),
     ).toHaveLength(0);
   });
 
@@ -498,7 +502,7 @@ describe("date filter — this-month (now = 2026-03-10, month = March)", () => {
       end_date: "2026-04-10",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-month", today: TODAY }),
     ).toHaveLength(0);
   });
 
@@ -509,7 +513,7 @@ describe("date filter — this-month (now = 2026-03-10, month = March)", () => {
       end_date: "2026-03-31",
     });
     expect(
-      filterTournaments([t], { dateFilter: "this-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "this-month", today: TODAY }),
     ).toHaveLength(1);
   });
 });
@@ -521,7 +525,7 @@ describe("date filter — next-month (now = 2026-03-10, next month = April)", ()
       end_date: "2026-04-15",
     });
     expect(
-      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "next-month", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -531,7 +535,7 @@ describe("date filter — next-month (now = 2026-03-10, next month = April)", ()
       end_date: "2026-04-05",
     });
     expect(
-      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "next-month", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -541,7 +545,7 @@ describe("date filter — next-month (now = 2026-03-10, next month = April)", ()
       end_date: "2026-05-03",
     });
     expect(
-      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "next-month", today: TODAY }),
     ).toHaveLength(1);
   });
 
@@ -551,7 +555,7 @@ describe("date filter — next-month (now = 2026-03-10, next month = April)", ()
       end_date: "2026-03-31",
     });
     expect(
-      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "next-month", today: TODAY }),
     ).toHaveLength(0);
   });
 
@@ -561,7 +565,7 @@ describe("date filter — next-month (now = 2026-03-10, next month = April)", ()
       end_date: "2026-05-10",
     });
     expect(
-      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "next-month", today: TODAY }),
     ).toHaveLength(0);
   });
 
@@ -572,7 +576,7 @@ describe("date filter — next-month (now = 2026-03-10, next month = April)", ()
       end_date: "2026-04-30",
     });
     expect(
-      filterTournaments([t], { dateFilter: "next-month", now: NOW }),
+      filterTournaments([t], { dateFilter: "next-month", today: TODAY }),
     ).toHaveLength(1);
   });
 });
@@ -586,7 +590,7 @@ describe("date filter — any", () => {
     ];
     const result = filterTournaments(tournaments, {
       dateFilter: "any",
-      now: NOW,
+      today: TODAY,
     });
     expect(result).toHaveLength(3);
   });
@@ -621,7 +625,10 @@ function renderWithFilters(
   (globalThis as TestGlobal).__setReactUseStateOverrides(map);
   try {
     return renderToStaticMarkup(
-      <TournamentsClient tournaments={tournaments} today="2026-01-01" />,
+      <TournamentsClient
+        tournaments={tournaments}
+        now={"2026-01-01T04:00:00Z"}
+      />,
     );
   } finally {
     (globalThis as TestGlobal).__setReactUseStateOverrides({});
@@ -668,7 +675,10 @@ describe("date filter branches — component level", () => {
     (globalThis as TestGlobal).__setReactUseStateOverride(dateFilter);
     try {
       return renderToStaticMarkup(
-        <TournamentsClient tournaments={tournaments} today="2026-03-10" />,
+        <TournamentsClient
+          tournaments={tournaments}
+          now={"2026-03-10T04:00:00Z"}
+        />,
       );
     } finally {
       // Disarm for subsequent tests
@@ -783,7 +793,7 @@ describe("combined filters", () => {
       formats: ["rapid"],
       ratings: ["mcf"],
       dateFilter: "this-month",
-      now: NOW,
+      today: TODAY,
     });
     expect(result.map((t) => t.name)).toEqual(["Selangor Rapid"]);
   });
@@ -953,7 +963,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-05-25",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[t]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).toContain("Ongoing");
     expect(html).toContain("Live Open");
@@ -968,7 +978,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-06-12",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[t]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).toContain("Upcoming");
     expect(html).toContain("Future Open");
@@ -984,7 +994,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-05-10",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[t]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).toContain("Past Tournaments");
     expect(html).toContain("Recent Past");
@@ -1001,7 +1011,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-05-03",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[t]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).toContain("Past Tournaments");
     expect(html).toContain("Recently Ended");
@@ -1016,7 +1026,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-04-13",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[t]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).not.toContain("Old Tournament");
   });
@@ -1030,7 +1040,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "also-bad",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[t]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).not.toContain("Broken Date");
     expect(warn).toHaveBeenCalled();
@@ -1059,7 +1069,7 @@ describe("tournament categorisation — component level", () => {
     const html = renderToStaticMarkup(
       <TournamentsClient
         tournaments={[live, future, recent]}
-        today="2026-05-23"
+        now={"2026-05-23T04:00:00Z"}
       />,
     );
     expect(html).toContain("Ongoing");
@@ -1077,10 +1087,61 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-03-31",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[old]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[old]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).not.toContain("Very Old");
     expect(html).toContain("No tournaments match your current filters.");
+  });
+
+  it("buckets each tournament against its own venue's day", () => {
+    // 2026-05-23 17:00 UTC: already the 24th in Manila (UTC+8), still the 23rd
+    // in Yangon (UTC+6:30). A one-day event on the 23rd is therefore over at
+    // one venue and running at the other, at the very same instant.
+    const manila = makeTournament({
+      id: "mnl",
+      name: "Manila One Day",
+      timezone: "Asia/Manila",
+      start_date: "2026-05-23",
+      end_date: "2026-05-23",
+    });
+    const yangon = makeTournament({
+      id: "rgn",
+      name: "Yangon One Day",
+      timezone: "Asia/Yangon",
+      start_date: "2026-05-23",
+      end_date: "2026-05-23",
+    });
+    const html = renderToStaticMarkup(
+      <TournamentsClient
+        tournaments={[manila, yangon]}
+        now={"2026-05-23T17:00:00Z"}
+      />,
+    );
+    const ongoingIndex = html.indexOf("Ongoing");
+    const pastIndex = html.indexOf("Past Tournaments");
+    expect(ongoingIndex).toBeGreaterThan(-1);
+    expect(pastIndex).toBeGreaterThan(-1);
+    // Yangon is still running (Ongoing section), Manila has finished (Past).
+    expect(html.indexOf("Yangon One Day")).toBeGreaterThan(ongoingIndex);
+    expect(html.indexOf("Yangon One Day")).toBeLessThan(pastIndex);
+    expect(html.indexOf("Manila One Day")).toBeGreaterThan(pastIndex);
+  });
+
+  it("shows each tournament's dates in its own venue timezone", () => {
+    const bangkok = makeTournament({
+      id: "bkk",
+      name: "Bangkok Open",
+      timezone: "Asia/Bangkok",
+      start_date: "2026-05-24",
+      end_date: "2026-05-24",
+    });
+    const html = renderToStaticMarkup(
+      <TournamentsClient
+        tournaments={[bangkok]}
+        now={"2026-05-23T04:00:00Z"}
+      />,
+    );
+    expect(html).toContain("24 May 2026 (ICT)");
   });
 
   it("ongoing cards do not carry the dimmed class", () => {
@@ -1090,7 +1151,7 @@ describe("tournament categorisation — component level", () => {
       end_date: "2026-05-25",
     });
     const html = renderToStaticMarkup(
-      <TournamentsClient tournaments={[t]} today="2026-05-23" />,
+      <TournamentsClient tournaments={[t]} now={"2026-05-23T04:00:00Z"} />,
     );
     expect(html).not.toContain("opacity-50");
   });

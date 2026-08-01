@@ -149,15 +149,6 @@ export function checkRatingEligibility(
   return null;
 }
 
-export function formatDeadline(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 // Display RM formatting for tournament listings: renders a zero fee as "Free"
 // and otherwise always shows two decimal places so cents are never truncated
 // (e.g. RM0.10 stays "RM0.10", not "RM0"). See #359.
@@ -192,26 +183,6 @@ export function getMinFeeCents(fees: EntryFees | null | undefined): number {
   return amounts.length > 0 ? Math.min(...amounts) : 0;
 }
 
-// Tournament dates/times are anchored to the venue's timezone. The platform is
-// Malaysia-only today, so this defaults to KL; the `timeZone` param lets a
-// per-tournament timezone drop in for the planned ASEAN expansion.
-export const PLATFORM_TIME_ZONE = "Asia/Kuala_Lumpur";
-
-// Returns the calendar date ("YYYY-MM-DD") for `now` in the given timezone.
-// Used so the discovery ongoing/upcoming/past buckets are judged against the
-// tournament's local "today" regardless of the server's runtime timezone.
-export function getTodayInTimeZone(
-  timeZone: string = PLATFORM_TIME_ZONE,
-  now: Date = new Date(),
-): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-}
-
 export type TournamentDateState = "upcoming" | "ongoing" | "completed";
 
 // Derives a tournament's temporal state from its calendar dates. The status
@@ -219,10 +190,14 @@ export type TournamentDateState = "upcoming" | "ongoing" | "completed";
 // stored — they're purely date-derived. `start_date`/`end_date` are Postgres
 // `date` columns ("YYYY-MM-DD"), so lexicographic string comparison against
 // `today` is chronological and timezone-safe.
+//
+// `today` must be the venue's today (getTodayInTimeZone(tournament.timezone)):
+// a tournament is ongoing when it is ongoing where it is being played, not
+// where the server or the reader happens to be.
 export function getTournamentDateState(
   startDate: string,
   endDate: string,
-  today: string = getTodayInTimeZone(),
+  today: string,
 ): TournamentDateState {
   if (startDate > today) return "upcoming";
   if (endDate >= today) return "ongoing";

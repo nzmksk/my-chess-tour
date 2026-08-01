@@ -3,37 +3,19 @@ import type {
   TournamentDetail as TournamentDetailType,
   StartingRankPlayer,
 } from "../types";
+import { formatRm, getMinFeeCents, toTitleCase } from "../../utils";
 import {
-  formatDeadline,
-  formatRm,
-  getMinFeeCents,
-  toTitleCase,
-} from "../../utils";
+  formatCalendarDateRange,
+  formatInstantDate,
+  getTodayInTimeZone,
+  resolveTimeZone,
+} from "@/lib/datetime";
 import { resolveCountry } from "@/lib/countries";
 import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
 import TournamentTabs from "./TournamentTabs";
 import StartingRankTab from "./StartingRankTab";
 
 // ── Formatting helpers ────────────────────────────────────────
-
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start + "T00:00:00");
-  const e = new Date(end + "T00:00:00");
-  const opts: Intl.DateTimeFormatOptions = {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  };
-  if (s.toDateString() === e.toDateString()) {
-    return s.toLocaleDateString("en-MY", opts);
-  }
-  const sStr = s.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-  });
-  const eStr = e.toLocaleDateString("en-MY", opts);
-  return `${sStr} – ${eStr}`;
-}
 
 function capitalise(s: string): string {
   if (!s) return "";
@@ -87,6 +69,9 @@ export default function TournamentDetail({
   canViewStartingRank,
   startingRank,
 }: Props) {
+  // Every date on this page is the venue's, shown in the venue's zone to every
+  // viewer — a Bangkok event reads in ICT whether you open it from KL or Lisbon.
+  const timeZone = resolveTimeZone(t.timezone);
   const spotsLeft = t.max_participants - t.current_participants;
   const spotsRatio =
     t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
@@ -100,7 +85,9 @@ export default function TournamentDetail({
     );
   const lowestFeeEntry =
     t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
-  const tournamentStarted = new Date(t.start_date + "T00:00:00") <= new Date();
+  // "Started" is a calendar question at the venue: the starting rank opens when
+  // the start date has arrived there, not when it arrives for the reader.
+  const tournamentStarted = t.start_date <= getTodayInTimeZone(timeZone);
 
   let spotsClass = "text-gold-bright";
   if (spotsLeft === 0) spotsClass = "text-red-500";
@@ -120,7 +107,11 @@ export default function TournamentDetail({
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <InfoRow
               label="Date"
-              value={formatDateRange(t.start_date, t.end_date)}
+              value={formatCalendarDateRange(
+                t.start_date,
+                t.end_date,
+                timeZone,
+              )}
             />
             <InfoRow
               label="Venue"
@@ -149,7 +140,7 @@ export default function TournamentDetail({
             />
             <InfoRow
               label="Registration Deadline"
-              value={formatDeadline(t.registration_deadline)}
+              value={formatInstantDate(t.registration_deadline, timeZone)}
             />
             <InfoRow
               label="Capacity"
@@ -181,7 +172,7 @@ export default function TournamentDetail({
                     {toTitleCase(fee.type)}
                     {fee.valid_until && (
                       <span className="text-text-muted block text-xs">
-                        before {formatDeadline(fee.valid_until)}
+                        before {formatInstantDate(fee.valid_until, timeZone)}
                       </span>
                     )}
                     {(fee.age_min != null || fee.age_max != null) && (
@@ -369,7 +360,7 @@ export default function TournamentDetail({
               <p className="font-lato text-text-muted text-sm">
                 {toTitleCase(lowestFeeEntry.type)} price
                 {lowestFeeEntry.valid_until &&
-                  ` (ends ${formatDeadline(lowestFeeEntry.valid_until)})`}
+                  ` (ends ${formatInstantDate(lowestFeeEntry.valid_until, timeZone)})`}
               </p>
             )}
           </div>
@@ -432,8 +423,8 @@ export default function TournamentDetail({
               {closedEarly
                 ? "⏰ Registration has been closed by the organizer"
                 : isRegistrationClosed
-                  ? `⏰ Registration closed ${formatDeadline(t.registration_deadline)}`
-                  : `⏰ Registration closes ${formatDeadline(t.registration_deadline)}`}
+                  ? `⏰ Registration closed ${formatInstantDate(t.registration_deadline, timeZone)}`
+                  : `⏰ Registration closes ${formatInstantDate(t.registration_deadline, timeZone)}`}
             </p>
           </div>
         </div>

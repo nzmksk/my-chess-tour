@@ -25,6 +25,7 @@ const base: Tournament = {
   id: "1",
   name: "Test Tournament",
   venue: { name: "Test Venue", state: "Selangor" },
+  timezone: "Asia/Kuala_Lumpur",
   start_date: "2026-06-01",
   end_date: "2026-06-02",
   registration_deadline: "2026-05-31",

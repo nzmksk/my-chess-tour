@@ -6,6 +6,7 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/cache-tags";
+import { resolveTimeZone } from "@/lib/datetime";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -64,6 +65,7 @@ interface UpdateTournamentBody {
   venue_name?: unknown;
   venue_state?: unknown;
   venue_address?: unknown;
+  timezone?: unknown;
   format?: FormatInput;
   time_control?: TimeControlInput;
   start_date?: unknown;
@@ -254,6 +256,15 @@ export async function PATCH(
   if ("venue_address" in body) {
     patch.venue_address =
       typeof body.venue_address === "string" ? body.venue_address.trim() : "";
+  }
+
+  // Moving the venue can move the timezone with it. Anything off the supported
+  // picklist falls back to the platform default rather than storing a zone no
+  // formatter can read.
+  if ("timezone" in body) {
+    patch.timezone = resolveTimeZone(
+      typeof body.timezone === "string" ? body.timezone : null,
+    );
   }
 
   if ("format" in body && body.format && typeof body.format === "object") {

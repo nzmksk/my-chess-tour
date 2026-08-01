@@ -70,6 +70,7 @@ const tournament = {
   registration_deadline: "2026-07-25T00:00:00Z",
   registration_closed_at: null,
   venue: { name: "City Hall", state: "Selangor", address: "1 Main St" },
+  timezone: "Asia/Kuala_Lumpur",
   format: null,
   max_participants: 16,
 };
