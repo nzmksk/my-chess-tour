@@ -2,40 +2,48 @@ import { describe, expect, it } from "vitest";
 import {
   formatRm,
   toTitleCase,
-  formatDeadline,
   calculateAge,
   checkAgeEligibility,
   checkRatingEligibility,
   describeRatingList,
   resolvePlayerRating,
-  getTodayInTimeZone,
+  getTournamentDateState,
   getMinFeeCents,
 } from "../utils";
+import { getTodayInTimeZone } from "@/lib/datetime";
 import type { EntryFees } from "../types";
 
-describe("getTodayInTimeZone", () => {
-  it("rolls to the next day for an instant past midnight in Malaysia (UTC+8)", () => {
-    // 2026-03-09 17:00 UTC = 2026-03-10 01:00 in Kuala Lumpur
+describe("getTournamentDateState", () => {
+  it("buckets against the day it is given", () => {
     expect(
-      getTodayInTimeZone("Asia/Kuala_Lumpur", new Date("2026-03-09T17:00:00Z")),
-    ).toBe("2026-03-10");
-  });
-
-  it("stays on the same day for an instant still before midnight in Malaysia", () => {
-    // 2026-03-09 15:00 UTC = 2026-03-09 23:00 in Kuala Lumpur
+      getTournamentDateState("2026-08-10", "2026-08-12", "2026-08-09"),
+    ).toBe("upcoming");
     expect(
-      getTodayInTimeZone("Asia/Kuala_Lumpur", new Date("2026-03-09T15:00:00Z")),
-    ).toBe("2026-03-09");
+      getTournamentDateState("2026-08-10", "2026-08-12", "2026-08-12"),
+    ).toBe("ongoing");
+    expect(
+      getTournamentDateState("2026-08-10", "2026-08-12", "2026-08-13"),
+    ).toBe("completed");
   });
 
-  it("honours the timezone argument (UTC vs KL differ at the boundary)", () => {
-    expect(getTodayInTimeZone("UTC", new Date("2026-03-09T17:00:00Z"))).toBe(
-      "2026-03-09",
-    );
-  });
-
-  it("returns an ISO YYYY-MM-DD string", () => {
-    expect(getTodayInTimeZone()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  it("can differ between two venues at the same instant", () => {
+    // 2026-08-09 17:00 UTC: already the 10th in Manila, still the 9th in Yangon,
+    // so the same one-day event is ongoing at one venue and upcoming at the other.
+    const instant = new Date("2026-08-09T17:00:00Z");
+    expect(
+      getTournamentDateState(
+        "2026-08-10",
+        "2026-08-10",
+        getTodayInTimeZone("Asia/Manila", instant),
+      ),
+    ).toBe("ongoing");
+    expect(
+      getTournamentDateState(
+        "2026-08-10",
+        "2026-08-10",
+        getTodayInTimeZone("Asia/Yangon", instant),
+      ),
+    ).toBe("upcoming");
   });
 });
 
@@ -401,27 +409,5 @@ describe("checkRatingEligibility", () => {
   it("returns null when no bounds are set", () => {
     expect(checkRatingEligibility(null, null, null)).toBeNull();
     expect(checkRatingEligibility(2400, null, null)).toBeNull();
-  });
-});
-
-describe("formatDeadline", () => {
-  it("returns a non-empty string", () => {
-    expect(formatDeadline("2025-12-15T12:00:00.000Z")).toBeTruthy();
-  });
-
-  it("includes the year in the output", () => {
-    expect(formatDeadline("2025-12-15T12:00:00.000Z")).toContain("2025");
-  });
-
-  it("includes a recognisable month abbreviation for January", () => {
-    expect(formatDeadline("2026-01-15T12:00:00.000Z")).toMatch(/Jan/);
-  });
-
-  it("includes a recognisable month abbreviation for June", () => {
-    expect(formatDeadline("2026-06-15T12:00:00.000Z")).toMatch(/Jun/);
-  });
-
-  it("includes the day number in the output", () => {
-    expect(formatDeadline("2026-03-20T12:00:00.000Z")).toContain("20");
   });
 });

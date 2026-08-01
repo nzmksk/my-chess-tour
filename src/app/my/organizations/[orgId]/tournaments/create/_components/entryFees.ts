@@ -14,7 +14,11 @@
 // at registration time. Going through this module is what keeps the two
 // directions from drifting apart again.
 
-import { PLATFORM_TIME_ZONE } from "@/app/tournaments/utils";
+import {
+  DEFAULT_TIME_ZONE,
+  toCalendarDateInTimeZone,
+  utcOffsetInTimeZone,
+} from "@/lib/datetime";
 import type {
   FeesData,
   FeeTier,
@@ -57,19 +61,6 @@ function boundOrEmpty(value: number | null | undefined): number | "" {
   return typeof value === "number" && Number.isFinite(value) ? value : "";
 }
 
-// The UTC offset ("+08:00") of `timeZone` on `date`, so a calendar date picked
-// in the wizard can be anchored to the venue's day rather than the server's.
-function utcOffset(timeZone: string, date: Date): string {
-  const name =
-    new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
-      .formatToParts(date)
-      .find((p) => p.type === "timeZoneName")?.value ?? "";
-  const match = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(name);
-  if (!match) return "+00:00";
-  const [, sign, hours, minutes = "00"] = match;
-  return `${sign}${hours.padStart(2, "0")}:${minutes}`;
-}
-
 /**
  * A wizard date ("2026-02-19") → the instant that day ends in the venue's
  * timezone ("2026-02-19T23:59:59+08:00").
@@ -80,11 +71,11 @@ function utcOffset(timeZone: string, date: Date): string {
  */
 export function toValidUntilTimestamp(
   date: string,
-  timeZone: string = PLATFORM_TIME_ZONE,
+  timeZone: string = DEFAULT_TIME_ZONE,
 ): string {
   // Midday UTC is inside `date` in every real timezone, so the offset looked up
   // for it is the offset that applies to that calendar day.
-  const offset = utcOffset(timeZone, new Date(`${date}T12:00:00Z`));
+  const offset = utcOffsetInTimeZone(timeZone, new Date(`${date}T12:00:00Z`));
   return `${date}T23:59:59${offset}`;
 }
 
@@ -95,21 +86,20 @@ export function toValidUntilTimestamp(
  */
 export function fromValidUntilTimestamp(
   value: string | null | undefined,
-  timeZone: string = PLATFORM_TIME_ZONE,
+  timeZone: string = DEFAULT_TIME_ZONE,
 ): string {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(parsed);
+  return toCalendarDateInTimeZone(value, timeZone);
 }
 
-/** Wizard fee state → canonical entry_fees for persistence. */
-export function toPersistedEntryFees(data: FeesData): PersistedEntryFees {
+/**
+ * Wizard fee state → canonical entry_fees for persistence. `timeZone` is the
+ * venue's: an early-bird tier the organizer says runs "until the 19th" ends
+ * when the 19th ends at the venue.
+ */
+export function toPersistedEntryFees(
+  data: FeesData,
+  timeZone: string = DEFAULT_TIME_ZONE,
+): PersistedEntryFees {
   return {
     standard: { amount_cents: toCents(data.standardFee) },
     additional: data.tiers.map((tier) => {
@@ -121,7 +111,10 @@ export function toPersistedEntryFees(data: FeesData): PersistedEntryFees {
       switch (tier.type) {
         case "early_bird":
           if (tier.validUntil) {
-            persisted.valid_until = toValidUntilTimestamp(tier.validUntil);
+            persisted.valid_until = toValidUntilTimestamp(
+              tier.validUntil,
+              timeZone,
+            );
           }
           break;
         case "titled_players":
@@ -158,6 +151,7 @@ export function toPersistedEntryFees(data: FeesData): PersistedEntryFees {
  */
 export function fromPersistedEntryFees(
   fees: StoredEntryFees | null | undefined,
+  timeZone: string = DEFAULT_TIME_ZONE,
 ): FeesData {
   const tiers: FeeTier[] = [];
 
@@ -167,7 +161,7 @@ export function fromPersistedEntryFees(
     tiers.push({
       type: stored.type as TierType,
       amount: fromCents(stored.amount_cents),
-      validUntil: fromValidUntilTimestamp(stored.valid_until),
+      validUntil: fromValidUntilTimestamp(stored.valid_until, timeZone),
       titles: stored.titles ?? [],
       ratingFrom: boundOrEmpty(stored.rating_min),
       ratingTo: boundOrEmpty(stored.rating_max),
