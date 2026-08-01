@@ -65,6 +65,7 @@ function makeTournament(
     id: TOURNAMENT_ID,
     name: "Test Open 2026",
     venue: { name: "Chess Club", state: "Selangor" },
+    timezone: "Asia/Kuala_Lumpur",
     start_date: "2026-07-01",
     end_date: "2026-07-02",
     registration_deadline: "2026-06-30",

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getTournamentDateState } from "@/app/tournaments/utils";
-import { getTodayInTimeZone } from "@/lib/datetime";
+import { formatInstantDate, getTodayInTimeZone } from "@/lib/datetime";
 import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
 
 interface Props {
@@ -17,14 +17,6 @@ interface Props {
   registrationClosedAt: string | null;
   registrationDeadline: string | null;
   cancellationPending: boolean;
-}
-
-function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 // These actions only make sense for a live, published tournament. Guard here,
@@ -122,7 +114,7 @@ function PublishedActions({
             </h3>
             <p className="font-lato text-text-muted mt-1 text-sm">
               {closedEarly && registrationClosedAt
-                ? `Registration was closed early on ${formatDateTime(registrationClosedAt)}.`
+                ? `Registration was closed early on ${formatInstantDate(registrationClosedAt, timeZone)}.`
                 : registrationClosed
                   ? "Registration has already closed at its deadline."
                   : "Stop accepting new registrations before the deadline. This cannot be undone — registration cannot be re-opened."}

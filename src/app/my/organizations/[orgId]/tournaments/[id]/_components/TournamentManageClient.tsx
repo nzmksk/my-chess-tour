@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import TournamentActions from "./TournamentActions";
+import {
+  formatCalendarDateRange,
+  formatInstantDate,
+  resolveTimeZone,
+} from "@/lib/datetime";
 
 type TournamentStatus =
   | "draft"
@@ -101,24 +106,6 @@ const REG_STATUS_CONFIG: Record<string, { label: string; className: string }> =
     },
   };
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatDateTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function toTitleCase(str: string): string {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -184,9 +171,11 @@ export default function TournamentManageClient({
             {tournament.name}
           </h1>
           <p className="font-lato text-text-muted mt-1 text-sm">
-            {formatDate(tournament.start_date)}
-            {tournament.start_date !== tournament.end_date &&
-              ` – ${formatDate(tournament.end_date)}`}
+            {formatCalendarDateRange(
+              tournament.start_date,
+              tournament.end_date,
+              tournament.timezone,
+            )}
             {" · "}
             {tournament.venue.name}, {tournament.venue.state}
             {" · "}
@@ -329,7 +318,11 @@ export default function TournamentManageClient({
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="font-lato text-text-secondary text-sm">
-                            {formatDateTime(p.registered_at)}
+                            {formatInstantDate(
+                              p.registered_at,
+                              resolveTimeZone(tournament.timezone),
+                              { withZone: false },
+                            )}
                           </span>
                         </td>
                       </tr>
