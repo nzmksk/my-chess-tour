@@ -29,6 +29,7 @@ interface Tournament {
   status: TournamentStatus;
   start_date: string;
   end_date: string;
+  timezone: string;
   registration_deadline: string | null;
   registration_closed_at: string | null;
   venue: Venue;
@@ -348,6 +349,7 @@ export default function TournamentManageClient({
         status={tournament.status}
         startDate={tournament.start_date}
         endDate={tournament.end_date}
+        timeZone={tournament.timezone}
         registrationClosedAt={tournament.registration_closed_at}
         registrationDeadline={tournament.registration_deadline}
         cancellationPending={cancellationPending}

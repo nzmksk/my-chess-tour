@@ -2,6 +2,7 @@ import { cache } from "react";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
+import { resolveTimeZone } from "@/lib/datetime";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,6 +30,8 @@ interface TournamentManageData {
     registration_deadline: string | null;
     registration_closed_at: string | null;
     venue: { name: string; state: string; address?: string | null };
+    /** IANA timezone of the venue — the zone its dates and times are read in. */
+    timezone: string;
     format: { type?: string; system?: string; rounds?: number } | null;
     time_control: unknown;
     is_fide_rated: boolean;
@@ -162,7 +165,7 @@ export const getTournamentManageData = cache(
     const { data: tournament, error: tErr } = await supabaseAdmin
       .from("tournaments")
       .select(
-        "id, name, description, status, start_date, end_date, registration_deadline, registration_closed_at, venue_name, venue_state, venue_address, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
+        "id, name, description, status, start_date, end_date, registration_deadline, registration_closed_at, venue_name, venue_state, venue_address, timezone, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
       )
       .eq("id", id)
       .eq("organization_id", orgId)
@@ -194,7 +197,10 @@ export const getTournamentManageData = cache(
       { p_ttl: PAYMENT_TIMEOUT_INTERVAL, p_tournament_id: id },
     );
     if (expireErr) {
-      console.warn("expire_stale_pending_payments failed (continuing):", expireErr);
+      console.warn(
+        "expire_stale_pending_payments failed (continuing):",
+        expireErr,
+      );
     }
 
     const { data: regs, error: regErr } = await supabaseAdmin
@@ -317,6 +323,7 @@ export const getTournamentManageData = cache(
             state: tournament.venue_state,
             address: tournament.venue_address,
           },
+          timezone: resolveTimeZone(tournament.timezone),
           format: tournament.format,
           time_control: tournament.time_control,
           is_fide_rated: tournament.is_fide_rated,

@@ -6,6 +6,7 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/cache-tags";
+import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -23,6 +24,7 @@ interface TournamentRow {
   venue_name: string;
   venue_state: string;
   venue_address: string;
+  timezone: string;
   start_date: string;
   end_date: string;
   registration_deadline: string;
@@ -134,7 +136,7 @@ export async function POST(
   const { data: tournament, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, organization_id, slug, name, venue_name, venue_state, venue_address, start_date, end_date, registration_deadline, format, time_control, entry_fees, status",
+      "id, organization_id, slug, name, venue_name, venue_state, venue_address, timezone, start_date, end_date, registration_deadline, format, time_control, entry_fees, status",
     )
     .eq("id", id)
     .eq("organization_id", orgId)
@@ -168,7 +170,9 @@ export async function POST(
   }
 
   const validationErrors: string[] = [];
-  const today = new Date().toISOString().split("T")[0];
+  // A start date is a calendar date at the venue, so "still in the future" is
+  // judged against the venue's today rather than the server's.
+  const today = getTodayInTimeZone(resolveTimeZone(t.timezone));
   const now = new Date().toISOString();
 
   if (!t.name?.trim()) {
