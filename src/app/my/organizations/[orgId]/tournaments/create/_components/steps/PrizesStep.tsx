@@ -26,6 +26,8 @@ type SpecialPrizeErrors = Partial<{ name: string; amount: string }>;
 type PrizesErrors = {
   categories: Record<string, CategoryErrors>;
   specialPrizes: Record<string, SpecialPrizeErrors>;
+  /** Step-level error: special prizes declared with no category to attach to. */
+  structure?: string;
 };
 
 const NO_ERRORS: PrizesErrors = { categories: {}, specialPrizes: {} };
@@ -57,13 +59,25 @@ function validate(data: PrizesData): PrizesErrors {
     if (Object.keys(se).length > 0) errors.specialPrizes[sp.id] = se;
   }
 
+  // A special prize qualifies a placed result, so it cannot be a tournament's
+  // only prize. Mirrors validatePrizeStructure (src/lib/prize-funding.ts),
+  // which blocks publish on the same rule.
+  if (
+    data.specialPrizes.length > 0 &&
+    !data.categories.some((cat) => cat.prizes.length > 0)
+  ) {
+    errors.structure =
+      "Add at least one prize category with a placing — special prizes cannot be the only prizes you award.";
+  }
+
   return errors;
 }
 
 function hasErrors(errors: PrizesErrors): boolean {
   return (
     Object.keys(errors.categories).length > 0 ||
-    Object.keys(errors.specialPrizes).length > 0
+    Object.keys(errors.specialPrizes).length > 0 ||
+    errors.structure !== undefined
   );
 }
 
@@ -459,6 +473,10 @@ export default function PrizesStep() {
         Optional. Awards for specific achievements (e.g. Best Female Player,
         Best Veteran).
       </p>
+
+      {showErrors && errors.structure && (
+        <p className="input-hint error mb-4">{errors.structure}</p>
+      )}
 
       {form.specialPrizes.length > 0 && (
         <div className="mb-4 flex flex-col gap-2">

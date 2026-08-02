@@ -103,6 +103,32 @@ export function totalDeclaredPrizeCents(
   return cats + special;
 }
 
+/**
+ * Special prizes qualify a placed result — "Best Female Player" means the best
+ * female among the ranked finishers — so they cannot be the only prizes a
+ * tournament awards. An organizer who wants to give special prizes must still
+ * declare the category they attach to.
+ *
+ * "Declared" means a category carrying at least one prize entry. A named
+ * category with no entries is a structural placeholder (the same reading
+ * validatePrizeFunding takes) and does not satisfy the rule.
+ */
+export function validatePrizeStructure(
+  prizes: PrizesJson | null | undefined,
+): string[] {
+  if (!prizes) return [];
+  if ((prizes.special ?? []).length === 0) return [];
+
+  const hasFilledCategory = (prizes.categories ?? []).some(
+    (cat) => (cat.entries ?? []).length > 0,
+  );
+  if (hasFilledCategory) return [];
+
+  return [
+    "Add at least one prize category with a placing — special prizes cannot be the only prizes a tournament awards",
+  ];
+}
+
 function fundingErrorsFor(
   label: string,
   funding: PrizeFunding | null | undefined,

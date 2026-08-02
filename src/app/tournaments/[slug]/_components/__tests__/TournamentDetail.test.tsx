@@ -286,6 +286,79 @@ describe("prizes section", () => {
     expect(html).toContain("Open");
     expect(html).toContain("Under-12");
   });
+
+  it("renders special prizes alongside categories", () => {
+    const html = render({
+      prizes: {
+        categories: [
+          {
+            name: "Open",
+            entries: [{ place: "1st Place", amount_cents: 300000 }],
+          },
+        ],
+        special: [
+          { name: "Best Under-1500", amount_cents: 20000 },
+          { name: "Best Female Player", amount_cents: 25000 },
+        ],
+      },
+    });
+    expect(html).toContain("Special");
+    expect(html).toContain("Best Under-1500");
+    expect(html).toContain("RM200");
+    expect(html).toContain("Best Female Player");
+    expect(html).toContain("RM250");
+  });
+
+  it("renders the prizes section when there are special prizes but no categories", () => {
+    const html = render({
+      prizes: {
+        categories: [],
+        special: [{ name: "Best Veteran", amount_cents: 15000 }],
+      },
+    });
+    expect(html).toContain("Prizes");
+    expect(html).toContain("Best Veteran");
+    expect(html).toContain("RM150");
+  });
+
+  it("omits special prizes carrying no money", () => {
+    const html = render({
+      prizes: {
+        categories: [],
+        special: [
+          { name: "Best Female Player", amount_cents: 25000 },
+          { name: "Best Veteran", amount_cents: 0 },
+          { name: "Best Junior" },
+        ],
+      },
+    });
+    expect(html).toContain("Best Female Player");
+    expect(html).not.toContain("Best Veteran");
+    expect(html).not.toContain("Best Junior");
+    // formatRm(0) reads "Free" — no prize row should ever say that.
+    expect(html).not.toContain("Free");
+  });
+
+  it("omits the Special heading when every special prize is zero-amount", () => {
+    const html = render({
+      prizes: {
+        categories: [
+          {
+            name: "Open",
+            entries: [{ place: "1st Place", amount_cents: 300000 }],
+          },
+        ],
+        special: [{ name: "Best Veteran", amount_cents: 0 }],
+      },
+    });
+    expect(html).toContain("Open");
+    expect(html).not.toContain("Special");
+  });
+
+  it("hides the prizes section when categories and special prizes are both empty", () => {
+    const html = render({ prizes: { categories: [], special: [] } });
+    expect(html).not.toContain("1st Place");
+  });
 });
 
 // ── Restrictions section ──────────────────────────────────────

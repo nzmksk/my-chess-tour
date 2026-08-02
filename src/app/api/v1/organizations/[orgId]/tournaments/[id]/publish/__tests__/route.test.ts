@@ -378,6 +378,54 @@ describe("POST /api/v1/organizations/[orgId]/tournaments/[id]/publish", () => {
       expect(body.error.code).toBe("VALIDATION_ERROR");
     });
 
+    // Special prizes attach to a placed result, so they cannot stand alone.
+    it("returns 422 when special prizes are the only prizes declared", async () => {
+      setUser();
+      setTournamentFetchResult({
+        ...VALID_DRAFT_TOURNAMENT,
+        prizes: {
+          categories: [],
+          special: [
+            {
+              name: "Best Female Player",
+              funding: { source: "sponsor", funder_name: "ACME Sdn Bhd" },
+              amount_cents: 20000,
+            },
+          ],
+        },
+      });
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.error.code).toBe("VALIDATION_ERROR");
+      expect(body.error.details).toContain(
+        "Add at least one prize category with a placing — special prizes cannot be the only prizes a tournament awards",
+      );
+    });
+
+    it("publishes when special prizes sit alongside a filled category", async () => {
+      setUser();
+      const funding = { source: "sponsor", funder_name: "ACME Sdn Bhd" };
+      setTournamentFetchResult({
+        ...VALID_DRAFT_TOURNAMENT,
+        prizes: {
+          categories: [
+            { name: "Open", funding, entries: [{ amount_cents: 50000 }] },
+          ],
+          special: [
+            { name: "Best Female Player", funding, amount_cents: 20000 },
+          ],
+        },
+      });
+      setTournamentUpdateResult(PUBLISHED_RESULT);
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(200);
+    });
+
     it("returns 422 when start_date is the placeholder date", async () => {
       setUser();
       setTournamentFetchResult({

@@ -7,7 +7,11 @@ import {
   tournamentTag,
 } from "@/lib/cache-tags";
 import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
-import { validatePrizeFunding, type PrizesJson } from "@/lib/prize-funding";
+import {
+  validatePrizeFunding,
+  validatePrizeStructure,
+  type PrizesJson,
+} from "@/lib/prize-funding";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -232,6 +236,8 @@ export async function POST(
   // with money attached has to name where that money actually comes from. See
   // src/lib/prize-funding.ts for the reasoning.
   validationErrors.push(...validatePrizeFunding(t.prizes));
+  // Special prizes attach to a placed result, so they cannot stand alone.
+  validationErrors.push(...validatePrizeStructure(t.prizes));
 
   if (validationErrors.length > 0) {
     return NextResponse.json(

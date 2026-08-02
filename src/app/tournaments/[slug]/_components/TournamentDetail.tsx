@@ -89,6 +89,14 @@ export default function TournamentDetail({
   // the start date has arrived there, not when it arrives for the reader.
   const tournamentStarted = t.start_date <= getTodayInTimeZone(timeZone);
 
+  const prizeCategories = t.prizes?.categories ?? [];
+  // A special prize with no money attached is a placeholder the organizer never
+  // finished; it also has nothing to show, since formatRm(0) reads "Free".
+  const specialPrizes = (t.prizes?.special ?? []).filter(
+    (sp): sp is { name: string; amount_cents: number } =>
+      typeof sp.amount_cents === "number" && sp.amount_cents > 0,
+  );
+
   let spotsClass = "text-gold-bright";
   if (spotsLeft === 0) spotsClass = "text-red-500";
   else if (spotsRatio <= 0.2) spotsClass = "text-amber-400";
@@ -210,10 +218,10 @@ export default function TournamentDetail({
         </Section>
 
         {/* Prizes */}
-        {t.prizes && t.prizes.categories.length > 0 && (
+        {(prizeCategories.length > 0 || specialPrizes.length > 0) && (
           <Section title="Prizes">
             <ul className="flex flex-col gap-3">
-              {t.prizes.categories.map((cat, ci) => (
+              {prizeCategories.map((cat, ci) => (
                 <li key={ci}>
                   <p className="font-cinzel text-gold-muted mb-2 text-xs font-semibold tracking-widest uppercase">
                     {cat.name}
@@ -233,6 +241,29 @@ export default function TournamentDetail({
                   </ul>
                 </li>
               ))}
+              {/* Special prizes are flat — the eligibility rule lives in the
+                  name ("Best Female Player"), so each is one row. They read as
+                  a category of their own. */}
+              {specialPrizes.length > 0 && (
+                <li>
+                  <p className="font-cinzel text-gold-muted mb-2 text-xs font-semibold tracking-widest uppercase">
+                    Special
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {specialPrizes.map((sp, si) => (
+                      <li
+                        key={si}
+                        className="font-lato text-text-body flex justify-between text-sm"
+                      >
+                        <span>{sp.name}</span>
+                        <span className="font-cinzel text-text-primary font-semibold">
+                          {formatRm(sp.amount_cents)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              )}
             </ul>
           </Section>
         )}
