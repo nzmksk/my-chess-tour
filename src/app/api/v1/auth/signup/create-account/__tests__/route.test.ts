@@ -62,6 +62,7 @@ vi.mock("@/services/email/email", () => ({
 }));
 
 import { POST } from "../route";
+import { TERMS_VERSION } from "@/lib/legal";
 
 // ---------------------------------------------------------------------------
 // Fixtures & helpers
@@ -72,6 +73,7 @@ const validBody = {
   password: "Password1!",
   firstName: "Ahmad",
   lastName: "Razif",
+  termsAccepted: true,
 };
 
 const NEW_USER_ID = "new-user-id";
@@ -140,6 +142,49 @@ describe("POST /api/v1/auth/signup/create-account", () => {
         }),
       }),
     );
+  });
+
+  // --- Terms acceptance -----------------------------------------------------
+
+  it("records the accepted terms version from the server constant", async () => {
+    await POST(makeRequest(validBody));
+
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_metadata: expect.objectContaining({
+          terms_version: TERMS_VERSION,
+        }),
+      }),
+    );
+  });
+
+  it("ignores a terms version supplied in the request body", async () => {
+    // A client-supplied version is not evidence of anything — whatever the body
+    // claims, the recorded version must be the server's own constant.
+    await POST(
+      makeRequest({
+        ...validBody,
+        terms_version: "1999-01-01",
+        termsVersion: "1999-01-01",
+      }),
+    );
+
+    const metadata = mockCreateUser.mock.calls[0][0].user_metadata;
+    expect(metadata.terms_version).toBe(TERMS_VERSION);
+    expect(JSON.stringify(metadata)).not.toContain("1999-01-01");
+  });
+
+  it("rejects a signup that does not accept the terms", async () => {
+    for (const termsAccepted of [undefined, false, "true", 1]) {
+      vi.clearAllMocks();
+      const res = await POST(makeRequest({ ...validBody, termsAccepted }));
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe("VALIDATION_ERROR");
+      expect(json.error.message).toMatch(/must accept the terms/i);
+      expect(mockCreateUser).not.toHaveBeenCalled();
+    }
   });
 
   // --- Per-IP rate limiting (anti-enumeration) ------------------------------

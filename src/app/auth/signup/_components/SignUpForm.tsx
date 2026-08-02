@@ -52,6 +52,9 @@ export default function SignUpForm() {
           password: form.password,
           firstName: form.firstName,
           lastName: form.lastName,
+          // The consent itself has to reach the server — the version it is
+          // recorded against comes from the server's own constant, not from here.
+          termsAccepted: form.termsAccepted,
         }),
       });
       const data = await res.json();
@@ -93,7 +96,7 @@ export default function SignUpForm() {
 
           {hasErrors && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px">&#9888;</span>
+              <span className="mt-px shrink-0 text-sm">&#9888;</span>
               <p className="error-text">
                 Please correct the errors below before continuing.
               </p>
@@ -102,7 +105,7 @@ export default function SignUpForm() {
 
           {submitError && (
             <div className="error-banner" role="alert">
-              <span className="text-sm shrink-0 mt-px">&#9888;</span>
+              <span className="mt-px shrink-0 text-sm">&#9888;</span>
               <p className="error-text">{submitError}</p>
             </div>
           )}
