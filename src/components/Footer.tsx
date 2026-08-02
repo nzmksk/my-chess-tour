@@ -28,6 +28,9 @@ export default function Footer() {
               <Link href="/privacy" className="footer-link">
                 Privacy Policy
               </Link>
+              <Link href="/organizer-agreement" className="footer-link">
+                Organizer Agreement
+              </Link>
             </nav>
           </div>
 
