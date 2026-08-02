@@ -5,6 +5,7 @@ import {
   isPrizeFundingSource,
   totalDeclaredPrizeCents,
   validatePrizeFunding,
+  validatePrizeStructure,
   type PrizesJson,
 } from "../prize-funding";
 
@@ -139,5 +140,60 @@ describe("validatePrizeFunding", () => {
       distribution: "sponsor",
     } as unknown as PrizesJson;
     expect(validatePrizeFunding(prizes)[0]).toMatch(/organizer or platform/);
+  });
+});
+
+describe("validatePrizeStructure", () => {
+  const SPECIAL = [
+    { name: "Best Female Player", funding: SPONSORED, amount_cents: 20000 },
+  ];
+
+  it("accepts special prizes alongside a filled category", () => {
+    const prizes: PrizesJson = {
+      categories: [
+        { name: "Open", funding: SPONSORED, entries: [{ amount_cents: 50000 }] },
+      ],
+      special: SPECIAL,
+    };
+    expect(validatePrizeStructure(prizes)).toEqual([]);
+  });
+
+  it("rejects special prizes with no categories at all", () => {
+    expect(validatePrizeStructure({ categories: [], special: SPECIAL })).toEqual(
+      [
+        "Add at least one prize category with a placing — special prizes cannot be the only prizes a tournament awards",
+      ],
+    );
+  });
+
+  it("rejects special prizes when the categories key is absent", () => {
+    expect(validatePrizeStructure({ special: SPECIAL })).toHaveLength(1);
+  });
+
+  // A named category with no entries is a placeholder, not a prize.
+  it("rejects special prizes when every category is empty", () => {
+    const prizes: PrizesJson = {
+      categories: [{ name: "Open", entries: [] }, { name: "Under-12" }],
+      special: SPECIAL,
+    };
+    expect(validatePrizeStructure(prizes)).toHaveLength(1);
+  });
+
+  it("accepts a non-monetary category as filled", () => {
+    const prizes: PrizesJson = {
+      categories: [{ name: "Open", entries: [{ place: "1st" }] }],
+      special: SPECIAL,
+    };
+    expect(validatePrizeStructure(prizes)).toEqual([]);
+  });
+
+  it("ignores tournaments with no special prizes", () => {
+    expect(validatePrizeStructure({ categories: [], special: [] })).toEqual([]);
+    expect(validatePrizeStructure({ categories: [] })).toEqual([]);
+  });
+
+  it("ignores a tournament with no prizes declared", () => {
+    expect(validatePrizeStructure(null)).toEqual([]);
+    expect(validatePrizeStructure(undefined)).toEqual([]);
   });
 });
