@@ -38,16 +38,30 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournament_cancellation_requests
 -- The two being equal here is an implementation detail of self-signup, NOT an
 -- invariant — a record created for someone without a login (see #504) will have
 -- a generated id and a NULL auth_user_id until it is claimed.
+-- terms_version comes through raw_user_meta_data the same way the names do, but
+-- the signup route puts it there from a server constant (src/lib/legal.ts), not
+-- from the request body. Writing it here rather than in a follow-up UPDATE keeps
+-- the acceptance in the same statement that creates the account, so there is no
+-- window in which a user exists with no record of what they agreed to.
+-- The timestamp is derived, never taken from metadata, and stays NULL when no
+-- version was supplied so chk_terms_shape holds for rows created outside signup.
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_terms_version varchar(20) := NULLIF(NEW.raw_user_meta_data->>'terms_version', '');
 BEGIN
-  INSERT INTO public.users (id, auth_user_id, email, first_name, last_name)
+  INSERT INTO public.users (
+    id, auth_user_id, email, first_name, last_name,
+    terms_version, terms_accepted_at
+  )
   VALUES (
     NEW.id,
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'last_name', '')
+    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
+    v_terms_version,
+    CASE WHEN v_terms_version IS NULL THEN NULL ELSE now() END
   );
 
   INSERT INTO public.player_profiles (user_id)

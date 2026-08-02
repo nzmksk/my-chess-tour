@@ -39,18 +39,29 @@ CREATE TABLE role_permissions (
 -- without rewriting the id across registrations/payments/refunds/audit_logs.
 -- NULL = a record with no login yet. Today every row has one (written by
 -- handle_new_user), so nothing depends on the nullability yet.
+-- terms_version records WHICH Terms of Service the user agreed to, not merely
+-- that they ticked a box. The version is written by the signup route from
+-- src/lib/legal.ts (TERMS_VERSION) via handle_new_user — never from the request
+-- body, since a client-supplied version is not evidence of anything. NULL on
+-- rows created outside signup (seeds, admin-created players).
 CREATE TABLE users (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_user_id  uuid UNIQUE,
-  email         varchar(255) NOT NULL,  -- uniqueness enforced via partial index in 002_indexes.sql
-  first_name    varchar(255) NOT NULL,
-  last_name     varchar(255) NOT NULL,
-  avatar_url    varchar(255),
-  is_verified   boolean NOT NULL DEFAULT false,
-  verified_at   timestamptz,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now(),
-  deleted_at    timestamptz
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  auth_user_id      uuid UNIQUE,
+  email             varchar(255) NOT NULL,  -- uniqueness enforced via partial index in 002_indexes.sql
+  first_name        varchar(255) NOT NULL,
+  last_name         varchar(255) NOT NULL,
+  avatar_url        varchar(255),
+  is_verified       boolean NOT NULL DEFAULT false,
+  verified_at       timestamptz,
+  terms_version     varchar(20),
+  terms_accepted_at timestamptz,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  deleted_at        timestamptz,
+  -- A version with no timestamp (or the reverse) is a half-written acceptance
+  -- and proves nothing. Both or neither.
+  CONSTRAINT chk_terms_shape
+    CHECK ((terms_version IS NULL) = (terms_accepted_at IS NULL))
 );
 
 -- Global roles (e.g. platform admin)
@@ -121,6 +132,24 @@ CREATE TABLE organizations (
   -- organization_bank_accounts, which is RLS-gated on bank_account.manage and
   -- superseded (not updated) on change so verification can't go stale.
   past_tournament_refs  text,
+  -- Which version of the Organizer Agreement this organization is bound by.
+  -- Written server-side from src/lib/legal.ts (ORGANIZER_AGREEMENT_VERSION) at
+  -- application and on every re-acceptance; the request body never supplies it.
+  --
+  -- Bumping the constant is the re-acceptance mechanism: an organization whose
+  -- version is older is shown a blocking panel, and the payout functions
+  -- (queue_payout / request_early_payout, Phases 5-6) MUST refuse when this is
+  -- not the current version, so a stale agreement stops money rather than
+  -- failing silently.
+  --
+  -- Unlike bank details (see the note above), these three are safe on this row
+  -- despite the column-unrestricted public SELECT policy in 004_rls.sql: a
+  -- version string, a timestamp, and an opaque user id no more revealing than
+  -- created_by / reviewed_by already are. This is not a precedent for anything
+  -- that would actually leak.
+  agreement_version     varchar(20),
+  agreement_accepted_at timestamptz,
+  agreement_accepted_by uuid REFERENCES users(id) ON DELETE SET NULL,
   approval_status       approval_status NOT NULL DEFAULT 'pending',
   reviewed_by           uuid REFERENCES users(id) ON DELETE SET NULL,
   reviewed_at           timestamptz,
@@ -128,7 +157,10 @@ CREATE TABLE organizations (
   created_by            uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now(),
-  deleted_at            timestamptz
+  deleted_at            timestamptz,
+  -- Both or neither — a version with no timestamp is not an acceptance.
+  CONSTRAINT chk_agreement_shape
+    CHECK ((agreement_version IS NULL) = (agreement_accepted_at IS NULL))
 );
 
 -- =============================================
