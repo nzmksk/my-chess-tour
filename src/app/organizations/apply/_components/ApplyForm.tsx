@@ -33,6 +33,7 @@ export default function ApplyForm() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [pastTournamentRefs, setPastTournamentRefs] = useState("");
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [status, setStatus] = useState<FormStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingOrg, setPendingOrg] = useState<PendingOrg | null>(null);
@@ -87,6 +88,8 @@ export default function ApplyForm() {
           email: email.trim(),
           phone: phone.trim() || null,
           past_tournament_refs: pastTournamentRefs.trim() || null,
+          // The version this is recorded against is the server's, not ours.
+          agreement_accepted: agreementAccepted,
         }),
       });
 
@@ -280,6 +283,35 @@ export default function ApplyForm() {
           </p>
         </div>
 
+        {/* Organizer Agreement */}
+        <div className="check-row">
+          <input
+            id="agreement"
+            type="checkbox"
+            className="checkbox"
+            checked={agreementAccepted}
+            onChange={(e) => setAgreementAccepted(e.target.checked)}
+            aria-label="I have read and accept the Organizer Agreement"
+          />
+          <label className="check-label" htmlFor="agreement">
+            I have read and accept the{" "}
+            <a
+              href="/organizer-agreement"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="modal-trigger-link"
+            >
+              Organizer Agreement
+            </a>{" "}
+            on behalf of this organization.
+          </label>
+        </div>
+        <p className="font-lato text-text-muted -mt-3 text-xs">
+          It covers how entry fees are collected, how and when payouts are made,
+          and what happens if a tournament is cancelled after you have been
+          paid.
+        </p>
+
         {/* Error */}
         {status === "error" && errorMessage && (
           <p className="font-lato text-error text-center text-sm">
@@ -290,7 +322,7 @@ export default function ApplyForm() {
         {/* Submit */}
         <button
           type="submit"
-          disabled={status === "submitting"}
+          disabled={status === "submitting" || !agreementAccepted}
           className="btn-primary w-full rounded-md"
         >
           {status === "submitting" ? "Submitting…" : "Submit Application"}
