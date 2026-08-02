@@ -11,6 +11,7 @@ import {
   checkPasswordRequirements,
 } from "@/services/auth/auth-validation";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
+import { TERMS_VERSION } from "@/lib/legal";
 import { getClientIp } from "@/lib/request-ip";
 import { generateCode } from "@/services/auth/verification-code";
 
@@ -76,11 +77,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { email, password, firstName, lastName } = body as {
+  const { email, password, firstName, lastName, termsAccepted } = body as {
     email?: string;
     password?: string;
     firstName?: string;
     lastName?: string;
+    termsAccepted?: boolean;
   };
 
   if (!email || typeof email !== "string") {
@@ -109,6 +111,21 @@ export async function POST(request: NextRequest) {
   if (!lastName || typeof lastName !== "string") {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "Last name is required" } },
+      { status: 400 },
+    );
+  }
+
+  // Consent is a condition of creating the account, so it is enforced here and
+  // not only by the checkbox in auth-validation.ts — a direct API call must not
+  // be able to create an account with no acceptance on file.
+  if (termsAccepted !== true) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "You must accept the Terms of Service and Privacy Policy",
+        },
+      },
       { status: 400 },
     );
   }
@@ -207,6 +224,12 @@ export async function POST(request: NextRequest) {
       user_metadata: {
         first_name: firstName,
         last_name: lastName,
+        // handle_new_user copies this onto users.terms_version and stamps
+        // terms_accepted_at, so the record of WHICH terms were accepted is
+        // written in the same statement that creates the row. The value is the
+        // server's constant — a client-supplied version would be evidence of
+        // nothing.
+        terms_version: TERMS_VERSION,
       },
     });
 

@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApplyRequest } from "./validators";
+import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
 
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
@@ -94,6 +95,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       phone: body.phone ?? null,
       past_tournament_refs: body.past_tournament_refs ?? null,
       created_by: claims.id,
+      // Written from the server constant, never from the request — the point of
+      // recording a version is that it names the document the platform served.
+      agreement_version: ORGANIZER_AGREEMENT_VERSION,
+      agreement_accepted_at: new Date().toISOString(),
+      agreement_accepted_by: claims.id,
     })
     .select()
     .single();

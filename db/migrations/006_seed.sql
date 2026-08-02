@@ -323,7 +323,11 @@ BEGIN
     'review@chip.com', pwd_hash,
     now(),
     '{"provider":"email","providers":["email"]}',
-    json_build_object('first_name', 'CHIP', 'last_name', 'Review'),
+    -- terms_version rides in the metadata exactly as the signup route sends it,
+    -- so handle_new_user records the acceptance the same way it does in
+    -- production. Keep in step with TERMS_VERSION in src/lib/legal.ts.
+    json_build_object('first_name', 'CHIP', 'last_name', 'Review',
+                      'terms_version', '2026-08-02'),
     now(), now(),
     '', '', '', '', '', '', '', ''
   );
@@ -378,7 +382,8 @@ BEGIN
       org_emails[i], pwd_hash,
       now(),
       '{"provider":"email","providers":["email"]}',
-      json_build_object('first_name', org_first[i], 'last_name', org_last[i]),
+      json_build_object('first_name', org_first[i], 'last_name', org_last[i],
+                        'terms_version', '2026-08-02'),
       now(), now(),
       '', '', '', '', '', '', '', ''
     );
@@ -406,15 +411,21 @@ BEGIN
 
     org_user_ids := array_append(org_user_ids, new_user_id);
 
+    -- Seeded organizations accept the current Organizer Agreement, otherwise
+    -- every seeded dashboard opens behind the re-acceptance gate. Keep this
+    -- literal in step with ORGANIZER_AGREEMENT_VERSION in src/lib/legal.ts —
+    -- a mismatch here surfaces as the gate appearing on every seeded org.
     INSERT INTO public.organizations (
       name, description, email,
       phone, approval_status, reviewed_at,
-      reviewed_by, created_by
+      reviewed_by, created_by,
+      agreement_version, agreement_accepted_at, agreement_accepted_by
     ) VALUES (
       org_names[i], org_descs[i], org_emails[i],
       '+601' || (i + 1)::text || '-' || (1000000 + i * 123456)::text,
       'approved', now(),
-      new_user_id, new_user_id
+      new_user_id, new_user_id,
+      '2026-08-02', now(), new_user_id
     ) RETURNING id INTO new_org_id;
 
     org_profile_ids := array_append(org_profile_ids, new_org_id);
@@ -469,7 +480,8 @@ BEGIN
       p_email, pwd_hash,
       now(),
       '{"provider":"email","providers":["email"]}',
-      json_build_object('first_name', p_first, 'last_name', p_last),
+      json_build_object('first_name', p_first, 'last_name', p_last,
+                        'terms_version', '2026-08-02'),
       now() - (i || ' days')::interval,
       now() - (i || ' days')::interval,
       '', '', '', '', '', '', '', ''

@@ -119,6 +119,7 @@ const APPROVED_ORG = {
   id: ORG_ID,
   name: "KL Chess Association",
   approval_status: "approved",
+  agreement_version: "2026-08-02",
   created_by: USER_ID,
 };
 
@@ -380,6 +381,27 @@ describe("GET /api/v1/organizations/:orgId/dashboard", () => {
       expect(data.organization.id).toBe(ORG_ID);
       expect(data.organization.name).toBe("KL Chess Association");
       expect(data.organization.approval_status).toBe("approved");
+    });
+
+    it("exposes agreement_version so the dashboard can gate on it", async () => {
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const { data } = await res.json();
+      expect(data.organization.agreement_version).toBe("2026-08-02");
+    });
+
+    it("passes through a null agreement_version rather than omitting it", async () => {
+      // An org that predates the agreement must reach the gate as "stale", not
+      // as "field missing" — those read the same to the component only because
+      // it normalises undefined, and relying on that is how gaps get missed.
+      setOrgResult({ ...APPROVED_ORG, agreement_version: null });
+
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const { data } = await res.json();
+      expect(data.organization.agreement_version).toBeNull();
     });
 
     it("includes all four stats fields", async () => {

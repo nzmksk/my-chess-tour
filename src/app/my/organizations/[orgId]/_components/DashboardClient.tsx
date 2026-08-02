@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { formatCalendarDate } from "@/lib/datetime";
+import AgreementGate from "./AgreementGate";
 
 type TournamentStatus =
   | "draft"
@@ -27,7 +28,7 @@ interface Stats {
 }
 
 interface DashboardData {
-  organization: { id: string; name: string };
+  organization: { id: string; name: string; agreement_version?: string | null };
   stats: Stats;
   recent_tournaments: RecentTournament[];
 }
@@ -174,6 +175,12 @@ export default function DashboardClient({ data }: Props) {
           + Create
         </Link>
       </div>
+
+      {/* Agreement gate — renders nothing when the current version is accepted */}
+      <AgreementGate
+        organizationId={organization.id}
+        agreementVersion={organization.agreement_version ?? null}
+      />
 
       {/* Stats */}
       <div className="mb-8 grid grid-cols-2 gap-3">

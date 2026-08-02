@@ -55,6 +55,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { GET, POST } from "../route";
+import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -66,6 +67,7 @@ const ORG_ID = "bbbbbbbb-0000-0000-0000-000000000001";
 const VALID_BODY = {
   name: "KL Chess Association",
   email: "chess@klca.com",
+  agreement_accepted: true,
 };
 
 function makeOrg(overrides: Record<string, unknown> = {}) {
@@ -346,6 +348,19 @@ describe("POST /api/v1/organizations/applications", () => {
       const json = await res.json();
       expect(json.error.message).toMatch(/url/i);
     });
+
+    it.each([undefined, false, "true", 1])(
+      "returns 400 when agreement_accepted is %s",
+      async (agreement_accepted) => {
+        const res = await POST(
+          makePostRequest({ ...VALID_BODY, agreement_accepted }),
+        );
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error.code).toBe("VALIDATION_ERROR");
+        expect(json.error.message).toMatch(/organizer agreement/i);
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -417,9 +432,66 @@ describe("POST /api/v1/organizations/applications", () => {
         phone: "+60123456789",
         past_tournament_refs: "KL Open 2025",
         links: [{ label: "Facebook", url: "https://facebook.com/klchess" }],
+        agreement_accepted: true,
       };
       const res = await POST(makePostRequest(body));
       expect(res.status).toBe(201);
+    });
+
+    it("records the agreement version from the server constant", async () => {
+      let callIndex = 0;
+      (mockBuilder as Record<string, unknown>).then = (
+        onfulfilled: (v: unknown) => unknown,
+        onrejected?: (r: unknown) => unknown,
+      ) => {
+        const result =
+          callIndex++ === 0
+            ? { data: null, error: null }
+            : { data: makeOrg(), error: null };
+        return Promise.resolve(result).then(onfulfilled, onrejected);
+      };
+
+      await POST(makePostRequest());
+
+      const insertMock = mockBuilder.insert as ReturnType<typeof vi.fn>;
+      expect(insertMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agreement_version: ORGANIZER_AGREEMENT_VERSION,
+          agreement_accepted_by: appIdFor(USER_ID),
+          agreement_accepted_at: expect.any(String),
+        }),
+      );
+    });
+
+    it("ignores an agreement version supplied in the request body", async () => {
+      // The recorded version must name the document the platform served, so a
+      // body-supplied version can never reach the row.
+      let callIndex = 0;
+      (mockBuilder as Record<string, unknown>).then = (
+        onfulfilled: (v: unknown) => unknown,
+        onrejected?: (r: unknown) => unknown,
+      ) => {
+        const result =
+          callIndex++ === 0
+            ? { data: null, error: null }
+            : { data: makeOrg(), error: null };
+        return Promise.resolve(result).then(onfulfilled, onrejected);
+      };
+
+      await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          agreement_version: "1999-01-01",
+          agreement_accepted_at: "1999-01-01T00:00:00Z",
+          agreement_accepted_by: "cccccccc-0000-0000-0000-000000000009",
+        }),
+      );
+
+      const insertMock = mockBuilder.insert as ReturnType<typeof vi.fn>;
+      const inserted = insertMock.mock.calls[0][0];
+      expect(inserted.agreement_version).toBe(ORGANIZER_AGREEMENT_VERSION);
+      expect(inserted.agreement_accepted_by).toBe(appIdFor(USER_ID));
+      expect(JSON.stringify(inserted)).not.toContain("1999-01-01");
     });
 
     it("returns 500 on an unexpected insert error", async () => {

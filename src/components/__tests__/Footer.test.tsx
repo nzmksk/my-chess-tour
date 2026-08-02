@@ -49,6 +49,12 @@ describe("Footer", () => {
     expect(html).toContain("Privacy Policy");
   });
 
+  it("renders the Organizer Agreement link", () => {
+    const html = renderToStaticMarkup(<Footer />);
+    expect(html).toContain('href="/organizer-agreement"');
+    expect(html).toContain("Organizer Agreement");
+  });
+
   it("renders the Facebook social link", () => {
     const html = renderToStaticMarkup(<Footer />);
     expect(html).toContain("facebook.com/mychesstour");

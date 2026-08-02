@@ -6,6 +6,11 @@ interface OrgLink {
   label: string;
 }
 
+// Deliberately no agreement_version field. The applicant declares that they
+// accept the Organizer Agreement; WHICH version that acceptance is recorded
+// against is decided by the server from src/lib/legal.ts. Because this shape is
+// what the route inserts, a version in the request body cannot reach the
+// database even by accident.
 export interface ApplyRequest {
   name: string;
   description?: string | null;
@@ -66,6 +71,22 @@ export function validateApplyRequest(
           error: {
             code: "VALIDATION_ERROR",
             message: "Invalid email address",
+          },
+        },
+        { status: 400 },
+      ),
+    };
+  }
+
+  // The agreement governs money movement and carries a claw-back obligation, so
+  // an application without an explicit acceptance is not an application.
+  if (b.agreement_accepted !== true) {
+    return {
+      error: NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "You must accept the Organizer Agreement",
           },
         },
         { status: 400 },

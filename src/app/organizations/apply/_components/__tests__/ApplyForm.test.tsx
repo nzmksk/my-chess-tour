@@ -59,6 +59,16 @@ function getSubmitButton() {
   }) as HTMLButtonElement;
 }
 
+function getAgreementCheckbox() {
+  return screen.getByLabelText(
+    "I have read and accept the Organizer Agreement",
+  ) as HTMLInputElement;
+}
+
+function acceptAgreement() {
+  fireEvent.click(getAgreementCheckbox());
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -70,10 +80,21 @@ describe("ApplyForm", () => {
       expect(screen.getByText("Apply as Tournament Organizer")).toBeDefined();
     });
 
-    it("renders the submit button in idle state", () => {
+    it("cannot be submitted until the Organizer Agreement is accepted", () => {
+      // The agreement is what makes the payout terms and the claw-back binding,
+      // so it is a precondition of applying, not a footnote.
       render(<ApplyForm />);
-      expect(getSubmitButton()).toBeDefined();
+      expect(getSubmitButton().disabled).toBe(true);
+
+      acceptAgreement();
       expect(getSubmitButton().disabled).toBe(false);
+    });
+
+    it("links to the agreement so it can be read before accepting", () => {
+      render(<ApplyForm />);
+      const link = screen.getByRole("link", { name: "Organizer Agreement" });
+      expect(link.getAttribute("href")).toBe("/organizer-agreement");
+      expect(link.getAttribute("target")).toBe("_blank");
     });
 
     it("renders no link rows initially", () => {
@@ -243,6 +264,19 @@ describe("ApplyForm", () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.links).toBeNull();
     });
+
+    it("sends the acceptance but never a version — the server decides that", async () => {
+      render(<ApplyForm />);
+      acceptAgreement();
+
+      await act(async () => {
+        fireEvent.submit(document.querySelector("form")!);
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.agreement_accepted).toBe(true);
+      expect(body).not.toHaveProperty("agreement_version");
+    });
   });
 
   describe("handleSubmit — error", () => {
@@ -289,6 +323,7 @@ describe("ApplyForm", () => {
     it("re-enables the submit button after an error", async () => {
       mockFetch.mockResolvedValueOnce(makeErrorFetch("Bad request"));
       render(<ApplyForm />);
+      acceptAgreement();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
