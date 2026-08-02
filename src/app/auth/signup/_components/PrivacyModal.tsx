@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { TERMS_VERSION, formatLegalVersion } from "@/lib/legal";
 
 interface PrivacyModalProps {
   onClose: () => void;
@@ -50,7 +51,7 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
 
         <div className="modal-body">
           <p className="modal-paragraph">
-            <strong>Effective Date: 1 June 2025</strong>
+            <strong>Effective Date: {formatLegalVersion(TERMS_VERSION)}</strong>
           </p>
           <p className="modal-paragraph">
             MY Chess Tour (&quot;MCT&quot;, &quot;we&quot;, &quot;us&quot;, or
@@ -99,6 +100,22 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             <li>Bank account number</li>
             <li>Bank account holder name</li>
             <li>Bank name</li>
+          </ul>
+
+          <p className="modal-paragraph">
+            <strong>Business Verification Data</strong> (organisers only)
+          </p>
+          <ul className="modal-list">
+            <li>
+              SSM or ROS registration documents, and supporting evidence of the
+              organisation&apos;s standing
+            </li>
+            <li>Registered business address and contact details</li>
+            <li>
+              Name and role of the authorised representative accepting the
+              Organizer Agreement
+            </li>
+            <li>Bank account details used to receive tournament payouts</li>
           </ul>
 
           <p className="modal-paragraph">
@@ -193,6 +210,10 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
                   facts retained for 7 years
                 </td>
               </tr>
+              <tr>
+                <td>Business verification documents (organisers)</td>
+                <td>7 years after the organiser relationship ends</td>
+              </tr>
             </tbody>
           </table>
 
@@ -203,15 +224,31 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
           </p>
           <ul className="modal-list">
             <li>
-              Sensitive personal data (OKU status, date of birth, gender) and
-              financial data (bank details) are encrypted at rest.
-            </li>
-            <li>
               All data is transmitted over encrypted connections (HTTPS/TLS).
             </li>
             <li>
-              Access to personal data is restricted to authorised personnel
-              only.
+              Our database and file storage are hosted on encrypted storage
+              volumes. We do not additionally encrypt individual fields such as
+              bank account numbers, and we would rather state that plainly than
+              overstate the protection.
+            </li>
+            <li>
+              Access is enforced at the database level by row-level security, so
+              one user&apos;s records are not readable by another.
+            </li>
+            <li>
+              Sensitive personal data (OKU status, date of birth, gender) and
+              financial data (bank details) are restricted to the specific
+              features that need them, and to authorised personnel.
+            </li>
+            <li>
+              Bank account numbers and document paths are masked in our internal
+              change logs, so historical copies of them are not retained there.
+            </li>
+            <li>
+              Verification documents are held in private storage that is not
+              publicly reachable, and are reviewed only by platform
+              administrators.
             </li>
           </ul>
 
@@ -263,10 +300,17 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               rating for pairing and certification purposes.
             </li>
             <li>
-              <strong>Payment processors</strong> — for processing entry fees
-              and prize disbursements.
+              <strong>CHIP (chip-in.asia)</strong> — our licensed payment
+              processor, which receives the details needed to collect entry fees
+              and to disburse organiser payouts and prizes, including bank
+              account details.
             </li>
           </ul>
+          <p className="modal-paragraph">
+            Business verification documents are not shared with third parties.
+            They are reviewed by platform administrators and disclosed further
+            only where the law requires it.
+          </p>
 
           <h3 className="modal-section-title">8. Cookies</h3>
           <p className="modal-paragraph">

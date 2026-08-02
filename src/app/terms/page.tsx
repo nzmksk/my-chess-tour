@@ -1,4 +1,5 @@
 import NavBar from "@/components/NavBar";
+import { TERMS_VERSION, formatLegalVersion } from "@/lib/legal";
 
 export const metadata = {
   title: "Terms of Service",
@@ -8,18 +9,20 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <main className="max-w-3xl mx-auto px-6 py-16">
+      <main className="mx-auto max-w-3xl px-6 py-16">
         <div className="card card--featured p-8">
-          <div className="text-center mb-8">
+          <div className="mb-8 text-center">
             <span className="auth-logo">MY Chess Tour</span>
             <h1 className="auth-heading">Terms of Service</h1>
-            <p className="auth-subheading">Effective Date: 1 June 2025</p>
+            <p className="auth-subheading">
+              Effective Date: {formatLegalVersion(TERMS_VERSION)}
+            </p>
             <hr className="divider-gold" />
           </div>
 
-          <div className="font-lato text-sm text-text-body leading-relaxed space-y-6">
+          <div className="font-lato text-text-body space-y-6 text-sm leading-relaxed">
             <p className="text-text-secondary">
               Welcome to MY Chess Tour (&quot;MCT&quot;, &quot;we&quot;,
               &quot;us&quot;, or &quot;our&quot;). These Terms of Service govern
@@ -28,7 +31,7 @@ export default function TermsPage() {
             </p>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 1. Acceptance of Terms
               </h2>
               <p className="text-text-secondary">
@@ -41,7 +44,7 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 2. Account Registration
               </h2>
               <p className="text-text-secondary mb-2">
@@ -50,7 +53,7 @@ export default function TermsPage() {
                 national identity card (MyKad) or passport, as it is used for
                 official tournament records and FIDE/MCF registration.
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary">
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
                   You are responsible for maintaining the security of your
                   account.
@@ -67,7 +70,7 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 3. Tournament Participation
               </h2>
               <p className="text-text-secondary mb-2">
@@ -76,7 +79,7 @@ export default function TermsPage() {
                 tournament arbiter. By registering for a tournament, you agree
                 to:
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary">
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
                   Abide by all rules and decisions made by the chief arbiter.
                 </li>
@@ -96,25 +99,35 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 4. Payment &amp; Refund Policy
               </h2>
               <p className="text-text-secondary mb-2">
                 Tournament entry fees are stated on the event page and are
-                collected by the tournament organiser. Refund eligibility is
-                determined by the organiser&apos;s policy for that event, which
-                will be displayed during registration. MY Chess Tour is not
-                liable for any disputes between players and organisers regarding
-                refunds.
+                collected by MY Chess Tour on the organiser&apos;s behalf, then
+                paid out to them under our Organizer Agreement. Refund
+                eligibility is determined by the organiser&apos;s policy for
+                that event, which is displayed during registration.
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary">
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
-                  Prize money disbursement is the sole responsibility of the
-                  tournament organiser.
+                  Your entry fee pays for the running of the event — venue,
+                  arbiters, equipment and rating fees. It is not a stake, and no
+                  part of it is paid out to another player as prize money.
                 </li>
                 <li>
-                  MY Chess Tour may collect a platform service fee, which will
-                  be disclosed at the time of registration.
+                  Prize money is funded separately by the organiser, a sponsor
+                  or a grant, and is distributed by the organiser — unless they
+                  have appointed MY Chess Tour to distribute a fully funded
+                  prize pool for that event.
+                </li>
+                <li>
+                  MY Chess Tour collects a platform service fee of up to 10%.
+                  The total you pay is always shown in full before you pay.
+                </li>
+                <li>
+                  If an event is cancelled with our approval, every confirmed
+                  player is refunded in full, including the service fee.
                 </li>
                 <li>
                   All fees are in Malaysian Ringgit (MYR) unless stated
@@ -124,14 +137,36 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
-                5. Code of Conduct
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                5. Organisers
+              </h2>
+              <p className="text-text-secondary mb-2">
+                Organising tournaments on MY Chess Tour requires an approved
+                organization and acceptance of our{" "}
+                <a href="/organizer-agreement" className="modal-trigger-link">
+                  Organizer Agreement
+                </a>
+                , which governs commission, payout timing, refunds, prize
+                funding and liability. That agreement is versioned; when a new
+                version is published, organisers must accept it before further
+                payouts are released.
+              </p>
+              <p className="text-text-secondary">
+                Nothing in the Organizer Agreement reduces our obligations to
+                players under these Terms. Where the two conflict as they apply
+                to a player, these Terms prevail.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                6. Code of Conduct
               </h2>
               <p className="text-text-secondary mb-2">
                 We are committed to a respectful and inclusive environment. All
                 users must:
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary">
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
                   Treat fellow players, organisers, and arbiters with respect.
                 </li>
@@ -156,8 +191,8 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
-                6. Intellectual Property
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                7. Intellectual Property
               </h2>
               <p className="text-text-secondary">
                 All content on the MY Chess Tour platform — including logos,
@@ -168,8 +203,8 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
-                7. Limitation of Liability
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                8. Limitation of Liability
               </h2>
               <p className="text-text-secondary">
                 MY Chess Tour provides its platform on an &quot;as is&quot;
@@ -181,8 +216,8 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
-                8. Amendments
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                9. Amendments
               </h2>
               <p className="text-text-secondary">
                 We may update these Terms from time to time. We will notify you
@@ -193,8 +228,8 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
-                9. Governing Law
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                10. Governing Law
               </h2>
               <p className="text-text-secondary">
                 These Terms are governed by the laws of Malaysia. Any disputes
@@ -204,8 +239,8 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
-                10. Contact Us
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                11. Contact Us
               </h2>
               <p className="text-text-secondary">
                 For questions about these Terms, please contact us at{" "}

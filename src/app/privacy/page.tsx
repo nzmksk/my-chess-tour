@@ -1,4 +1,5 @@
 import NavBar from "@/components/NavBar";
+import { TERMS_VERSION, formatLegalVersion } from "@/lib/legal";
 
 export const metadata = {
   title: "Privacy Policy",
@@ -8,18 +9,20 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <main className="max-w-3xl mx-auto px-6 py-16">
+      <main className="mx-auto max-w-3xl px-6 py-16">
         <div className="card card--featured p-8">
-          <div className="text-center mb-8">
+          <div className="mb-8 text-center">
             <span className="auth-logo">MY Chess Tour</span>
             <h1 className="auth-heading">Privacy Policy</h1>
-            <p className="auth-subheading">Effective Date: 1 June 2025</p>
+            <p className="auth-subheading">
+              Effective Date: {formatLegalVersion(TERMS_VERSION)}
+            </p>
             <hr className="divider-gold" />
           </div>
 
-          <div className="font-lato text-sm text-text-body leading-relaxed space-y-6">
+          <div className="font-lato text-text-body space-y-6 text-sm leading-relaxed">
             <p className="text-text-secondary">
               MY Chess Tour (&quot;MCT&quot;, &quot;we&quot;, &quot;us&quot;, or
               &quot;our&quot;) is committed to protecting your personal data in
@@ -30,13 +33,13 @@ export default function PrivacyPage() {
             </p>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 1. Data We Collect
               </h2>
               <p className="text-text-secondary mb-2 font-semibold">
                 Account Data
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary mb-4">
+              <ul className="text-text-secondary mb-4 list-disc space-y-1 pl-5">
                 <li>First name, last name</li>
                 <li>Email address</li>
                 <li>Profile avatar</li>
@@ -45,7 +48,7 @@ export default function PrivacyPage() {
               <p className="text-text-secondary mb-2 font-semibold">
                 Player Profile Data
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary mb-4">
+              <ul className="text-text-secondary mb-4 list-disc space-y-1 pl-5">
                 <li>Nationality</li>
                 <li>FIDE ID and MCF ID</li>
                 <li>
@@ -61,23 +64,39 @@ export default function PrivacyPage() {
               <p className="text-text-secondary mb-2 font-semibold">
                 Financial Data (collected only for prize payout purposes)
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary mb-4">
+              <ul className="text-text-secondary mb-4 list-disc space-y-1 pl-5">
                 <li>Bank account number</li>
                 <li>Bank account holder name</li>
                 <li>Bank name</li>
               </ul>
 
               <p className="text-text-secondary mb-2 font-semibold">
+                Business Verification Data (organisers only)
+              </p>
+              <ul className="text-text-secondary mb-4 list-disc space-y-1 pl-5">
+                <li>
+                  SSM or ROS registration documents, and supporting evidence of
+                  the organisation&apos;s standing
+                </li>
+                <li>Registered business address and contact details</li>
+                <li>
+                  Name and role of the authorised representative accepting the
+                  Organizer Agreement
+                </li>
+                <li>Bank account details used to receive tournament payouts</li>
+              </ul>
+
+              <p className="text-text-secondary mb-2 font-semibold">
                 Tournament &amp; Registration Data
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary">
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>Tournament registration records</li>
                 <li>Payment records (amounts, dates, transaction IDs)</li>
               </ul>
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 2. Sensitive Personal Data
               </h2>
               <p className="text-text-secondary mb-3">
@@ -88,34 +107,34 @@ export default function PrivacyPage() {
                 <table className="w-full border-collapse text-xs">
                   <thead>
                     <tr>
-                      <th className="font-cinzel tracking-widest uppercase text-gold-muted text-left px-3 py-2 border-b border-border">
+                      <th className="font-cinzel text-gold-muted border-border border-b px-3 py-2 text-left tracking-widest uppercase">
                         Data Field
                       </th>
-                      <th className="font-cinzel tracking-widest uppercase text-gold-muted text-left px-3 py-2 border-b border-border">
+                      <th className="font-cinzel text-gold-muted border-border border-b px-3 py-2 text-left tracking-widest uppercase">
                         Reason for Collection
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         OKU (disability) status
                       </td>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Event accessibility and FIDE Special Needs registration
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Date of birth
                       </td>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Age-category eligibility; identity verification
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 text-text-secondary">Gender</td>
-                      <td className="px-3 py-2 text-text-secondary">
+                      <td className="text-text-secondary px-3 py-2">Gender</td>
+                      <td className="text-text-secondary px-3 py-2">
                         Gender-restricted event categories (e.g. Women&apos;s
                         Open)
                       </td>
@@ -130,10 +149,10 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 3. How We Use Your Data
               </h2>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary mb-2">
+              <ul className="text-text-secondary mb-2 list-disc space-y-1 pl-5">
                 <li>To create and manage your MCT account.</li>
                 <li>To register you for tournaments and verify eligibility.</li>
                 <li>To submit ratings to FIDE and MCF on your behalf.</li>
@@ -151,7 +170,7 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 4. Data Retention
               </h2>
               <p className="text-text-secondary mb-3">
@@ -161,47 +180,55 @@ export default function PrivacyPage() {
                 <table className="w-full border-collapse text-xs">
                   <thead>
                     <tr>
-                      <th className="font-cinzel tracking-widest uppercase text-gold-muted text-left px-3 py-2 border-b border-border">
+                      <th className="font-cinzel text-gold-muted border-border border-b px-3 py-2 text-left tracking-widest uppercase">
                         Data Type
                       </th>
-                      <th className="font-cinzel tracking-widest uppercase text-gold-muted text-left px-3 py-2 border-b border-border">
+                      <th className="font-cinzel text-gold-muted border-border border-b px-3 py-2 text-left tracking-widest uppercase">
                         Retention Period
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Personal profile data
                       </td>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         30 days after account deletion request
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Financial / payment records
                       </td>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         7 years from transaction date (Income Tax Act
                         requirement)
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Tournament results &amp; pairings
                       </td>
-                      <td className="px-3 py-2 border-b border-border text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Kept indefinitely (not personal data)
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Registration records
                       </td>
-                      <td className="px-3 py-2 text-text-secondary">
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
                         Personal fields anonymised after account deletion;
                         financial facts retained for 7 years
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="text-text-secondary px-3 py-2">
+                        Business verification documents (organisers)
+                      </td>
+                      <td className="text-text-secondary px-3 py-2">
+                        7 years after the organiser relationship ends
                       </td>
                     </tr>
                   </tbody>
@@ -210,37 +237,55 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 5. Data Security
               </h2>
               <p className="text-text-secondary mb-2">
                 We implement appropriate technical and organisational measures
                 to protect your data:
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary">
-                <li>
-                  Sensitive personal data (OKU status, date of birth, gender)
-                  and financial data (bank details) are encrypted at rest.
-                </li>
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
                   All data is transmitted over encrypted connections
                   (HTTPS/TLS).
                 </li>
                 <li>
-                  Access to personal data is restricted to authorised personnel
-                  only.
+                  Our database and file storage are hosted on encrypted storage
+                  volumes. We do not additionally encrypt individual fields such
+                  as bank account numbers, and we would rather state that
+                  plainly than overstate the protection.
+                </li>
+                <li>
+                  Access is enforced at the database level by row-level
+                  security, so one user&apos;s records are not readable by
+                  another.
+                </li>
+                <li>
+                  Sensitive personal data (OKU status, date of birth, gender)
+                  and financial data (bank details) are restricted to the
+                  specific features that need them, and to authorised personnel.
+                </li>
+                <li>
+                  Bank account numbers and document paths are masked in our
+                  internal change logs, so historical copies of them are not
+                  retained there.
+                </li>
+                <li>
+                  Verification documents are held in private storage that is not
+                  publicly reachable, and are reviewed only by platform
+                  administrators.
                 </li>
               </ul>
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 6. Your Rights Under PDPA
               </h2>
               <p className="text-text-secondary mb-2">
                 As a data subject under the PDPA, you have the right to:
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary mb-2">
+              <ul className="text-text-secondary mb-2 list-disc space-y-1 pl-5">
                 <li>
                   <strong>Access</strong> — request a copy of the personal data
                   we hold about you.
@@ -268,14 +313,14 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 7. Sharing of Data
               </h2>
               <p className="text-text-secondary mb-2">
                 We may share your data with the following third parties only
                 where necessary:
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-text-secondary">
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
                   <strong>FIDE</strong> — for rating submission and player
                   registration.
@@ -289,14 +334,21 @@ export default function PrivacyPage() {
                   and rating for pairing and certification purposes.
                 </li>
                 <li>
-                  <strong>Payment processors</strong> — for processing entry
-                  fees and prize disbursements.
+                  <strong>CHIP (chip-in.asia)</strong> — our licensed payment
+                  processor, which receives the details needed to collect entry
+                  fees and to disburse organiser payouts and prizes, including
+                  bank account details.
                 </li>
               </ul>
+              <p className="text-text-secondary mt-2">
+                Business verification documents are not shared with third
+                parties. They are reviewed by platform administrators and
+                disclosed further only where the law requires it.
+              </p>
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 8. Cookies
               </h2>
               <p className="text-text-secondary">
@@ -306,7 +358,7 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 9. Changes to This Policy
               </h2>
               <p className="text-text-secondary">
@@ -317,7 +369,7 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="font-cinzel text-sm font-semibold tracking-widest uppercase text-gold-muted mb-3">
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 10. Contact Us
               </h2>
               <p className="text-text-secondary">

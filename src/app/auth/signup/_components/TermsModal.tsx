@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { TERMS_VERSION, formatLegalVersion } from "@/lib/legal";
 
 interface TermsModalProps {
   onClose: () => void;
@@ -50,7 +51,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
 
         <div className="modal-body">
           <p className="modal-paragraph">
-            <strong>Effective Date: 1 June 2025</strong>
+            <strong>Effective Date: {formatLegalVersion(TERMS_VERSION)}</strong>
           </p>
           <p className="modal-paragraph">
             Welcome to MY Chess Tour (&quot;MCT&quot;, &quot;we&quot;,
@@ -111,26 +112,54 @@ export default function TermsModal({ onClose }: TermsModalProps) {
           <h3 className="modal-section-title">4. Payment & Refund Policy</h3>
           <p className="modal-paragraph">
             Tournament entry fees are stated on the event page and are collected
-            by the tournament organiser. Refund eligibility is determined by the
-            organiser&apos;s policy for that event, which will be displayed
-            during registration. MY Chess Tour is not liable for any disputes
-            between players and organisers regarding refunds.
+            by MY Chess Tour on the organiser&apos;s behalf, then paid out to
+            them under our Organizer Agreement. Refund eligibility is determined
+            by the organiser&apos;s policy for that event, which is displayed
+            during registration.
           </p>
           <ul className="modal-list">
             <li>
-              Prize money disbursement is the sole responsibility of the
-              tournament organiser.
+              Your entry fee pays for the running of the event — venue,
+              arbiters, equipment and rating fees. It is not a stake, and no
+              part of it is paid out to another player as prize money.
             </li>
             <li>
-              MY Chess Tour may collect a platform service fee, which will be
-              disclosed at the time of registration.
+              Prize money is funded separately by the organiser, a sponsor or a
+              grant, and is distributed by the organiser — unless they have
+              appointed MY Chess Tour to distribute a fully funded prize pool
+              for that event.
+            </li>
+            <li>
+              MY Chess Tour collects a platform service fee of up to 10%. The
+              total you pay is always shown in full before you pay.
+            </li>
+            <li>
+              If an event is cancelled with our approval, every confirmed player
+              is refunded in full, including the service fee.
             </li>
             <li>
               All fees are in Malaysian Ringgit (MYR) unless stated otherwise.
             </li>
           </ul>
 
-          <h3 className="modal-section-title">5. Code of Conduct</h3>
+          <h3 className="modal-section-title">5. Organisers</h3>
+          <p className="modal-paragraph">
+            Organising tournaments on MY Chess Tour requires an approved
+            organization and acceptance of our{" "}
+            <a
+              href="/organizer-agreement"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="modal-trigger-link"
+            >
+              Organizer Agreement
+            </a>
+            , which governs commission, payout timing, refunds, prize funding
+            and liability. Nothing in that agreement reduces our obligations to
+            players under these Terms.
+          </p>
+
+          <h3 className="modal-section-title">6. Code of Conduct</h3>
           <p className="modal-paragraph">
             We are committed to a respectful and inclusive environment. All
             users must:
@@ -156,7 +185,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             FIDE.
           </p>
 
-          <h3 className="modal-section-title">6. Intellectual Property</h3>
+          <h3 className="modal-section-title">7. Intellectual Property</h3>
           <p className="modal-paragraph">
             All content on the MY Chess Tour platform — including logos,
             graphics, software, and tournament data — is owned by or licensed to
@@ -164,7 +193,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             without our written permission.
           </p>
 
-          <h3 className="modal-section-title">7. Limitation of Liability</h3>
+          <h3 className="modal-section-title">8. Limitation of Liability</h3>
           <p className="modal-paragraph">
             MY Chess Tour provides its platform on an &quot;as is&quot; basis.
             To the fullest extent permitted by Malaysian law, we are not liable
@@ -172,7 +201,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             your use of the platform or participation in any event.
           </p>
 
-          <h3 className="modal-section-title">8. Amendments</h3>
+          <h3 className="modal-section-title">9. Amendments</h3>
           <p className="modal-paragraph">
             We may update these Terms from time to time. We will notify you of
             material changes via email or a prominent notice on the platform.
@@ -180,14 +209,14 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             of the revised Terms.
           </p>
 
-          <h3 className="modal-section-title">9. Governing Law</h3>
+          <h3 className="modal-section-title">10. Governing Law</h3>
           <p className="modal-paragraph">
             These Terms are governed by the laws of Malaysia. Any disputes shall
             be subject to the exclusive jurisdiction of the courts of Kuala
             Lumpur, Malaysia.
           </p>
 
-          <h3 className="modal-section-title">10. Contact Us</h3>
+          <h3 className="modal-section-title">11. Contact Us</h3>
           <p className="modal-paragraph">
             For questions about these Terms, please contact us at{" "}
             <strong>support@mychesstour.com</strong>.
