@@ -11,7 +11,12 @@ export const metadata: Metadata = {
 };
 
 interface DashboardData {
-  organization: { id: string; name: string; approval_status: string };
+  organization: {
+    id: string;
+    name: string;
+    approval_status: string;
+    agreement_version: string | null;
+  };
   stats: {
     active_tournaments: number;
     total_registrations: number;

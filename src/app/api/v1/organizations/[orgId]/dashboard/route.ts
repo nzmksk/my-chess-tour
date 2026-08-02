@@ -55,7 +55,7 @@ export async function GET(
   ] = await Promise.all([
     supabaseAdmin
       .from("organizations")
-      .select("id, name, approval_status")
+      .select("id, name, approval_status, agreement_version")
       .eq("id", orgId)
       .is("deleted_at", null)
       .single(),
@@ -208,6 +208,10 @@ export async function GET(
           id: org.id,
           name: org.name,
           approval_status: org.approval_status,
+          // Drives the re-acceptance gate on the dashboard. NULL for
+          // organizations created before the agreement existed, which the gate
+          // treats the same as a stale version.
+          agreement_version: org.agreement_version,
         },
         stats: {
           active_tournaments: activeTournaments,

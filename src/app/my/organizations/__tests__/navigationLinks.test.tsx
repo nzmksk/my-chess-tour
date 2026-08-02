@@ -4,6 +4,12 @@ import * as React from "react";
 
 import { discoverRouteTemplates, isValidRoute } from "@/test/appRoutes";
 
+// DashboardClient renders the agreement gate, which is a client component using
+// useRouter. Static rendering has no app router mounted, so stub it.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+}));
+
 // Render <Link> as a plain <a> so hrefs land in the static markup.
 vi.mock("next/link", () => ({
   default: ({
@@ -34,7 +40,13 @@ const ORG_ID = "org-1111-2222";
 const TOURNAMENT_ID = "tour-3333-4444";
 
 const dashboardData = {
-  organization: { id: ORG_ID, name: "Test Organization" },
+  // Deliberately stale, so the agreement gate renders and its /organizer-agreement
+  // link is included in the route check below.
+  organization: {
+    id: ORG_ID,
+    name: "Test Organization",
+    agreement_version: "2025-01-01",
+  },
   stats: {
     active_tournaments: 1,
     total_registrations: 0,
