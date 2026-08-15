@@ -16,6 +16,11 @@
 --   R5  NULL stays NULL, so "cleared" is still distinguishable from "set"
 --   R6  a non-redacted table (tournaments) is unaffected
 --
+-- The other two redacted columns — organization_bank_accounts.account_number
+-- and organization_documents.storage_path (#518) — are covered by scenario A1
+-- in db/tests/organizer_onboarding.sql, alongside the organization_id scoping
+-- they need. Redaction is the same mechanism; only the column list differs.
+--
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it builds
 -- throwaway fixtures and persists NOTHING. A failing assertion RAISEs (and rolls
