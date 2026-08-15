@@ -9,6 +9,26 @@ CREATE UNIQUE INDEX idx_users_email_active ON users (email) WHERE deleted_at IS 
 -- Organizations (case-insensitive unique name among active, non-deleted orgs)
 CREATE UNIQUE INDEX idx_organizations_name_active ON organizations (lower(name)) WHERE deleted_at IS NULL;
 
+-- Organization bank accounts
+-- Exactly one active account per org. Changing details = deactivate + insert a
+-- fresh 'pending' row, which is what forces re-verification.
+CREATE UNIQUE INDEX uniq_active_bank_account_per_org
+  ON organization_bank_accounts (organization_id) WHERE is_active;
+
+-- Anti-fraud: one bank account cannot be the active payout destination for two
+-- organizations (payout redirection).
+CREATE UNIQUE INDEX uniq_active_bank_destination
+  ON organization_bank_accounts (bank_code, account_number) WHERE is_active;
+
+-- Correlation fallback. NON-unique on purpose: CHIP may return the same
+-- bank_account_id for an identical (account_number, bank_code) pair under a
+-- different reference. Correlation goes via `reference` (our uuid) first.
+CREATE INDEX idx_bank_accounts_chip_id ON organization_bank_accounts (chip_bank_account_id)
+  WHERE chip_bank_account_id IS NOT NULL;
+
+-- Organization documents (fetched as a set per application/organization)
+CREATE INDEX idx_org_documents_org ON organization_documents (organization_id);
+
 -- Organization memberships
 CREATE INDEX idx_org_memberships_user ON organization_memberships (user_id);
 CREATE INDEX idx_org_memberships_role ON organization_memberships (role_id);

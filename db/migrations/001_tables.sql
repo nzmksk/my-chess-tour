@@ -118,6 +118,15 @@ CREATE TABLE player_profiles (
 -- =============================================
 CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
 
+-- What kind of legal entity is behind the organization. Decides which
+-- verification documents the application must carry (enforced in
+-- create_organization_application, 003_functions_triggers.sql):
+--   company  -> SSM registration number + an 'ssm' document
+--   society  -> ROS registration number + an 'ros' document
+--   individual -> no registration number; an identity document or an
+--                 authorization letter instead
+CREATE TYPE org_entity_type AS ENUM ('company', 'society', 'individual');
+
 CREATE TABLE organizations (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name                  varchar(255) NOT NULL,
@@ -132,6 +141,17 @@ CREATE TABLE organizations (
   -- organization_bank_accounts, which is RLS-gated on bank_account.manage and
   -- superseded (not updated) on change so verification can't go stale.
   past_tournament_refs  text,
+  -- Business identity (KYB). Set at application and NOT editable afterwards:
+  -- changing either would invalidate the admin's approval, which IS the KYB
+  -- decision. registration_number is the SSM/ROS number and is NULL for
+  -- 'individual'. The supporting documents live in organization_documents.
+  --
+  -- Safe on this row despite the public SELECT policy, on the same reasoning as
+  -- the agreement columns below: an entity type and a public registry number
+  -- are matters of public record. The documents proving them are not, which is
+  -- why they are in a private bucket and a separate RLS-gated table.
+  entity_type           org_entity_type,
+  registration_number   varchar(100),
   -- Which version of the Organizer Agreement this organization is bound by.
   -- Written server-side from src/lib/legal.ts (ORGANIZER_AGREEMENT_VERSION) at
   -- application and on every re-acceptance; the request body never supplies it.
@@ -161,6 +181,70 @@ CREATE TABLE organizations (
   -- Both or neither — a version with no timestamp is not an acceptance.
   CONSTRAINT chk_agreement_shape
     CHECK ((agreement_version IS NULL) = (agreement_accepted_at IS NULL))
+);
+
+-- =============================================
+-- ORGANIZATION BANK ACCOUNTS
+-- Where an organization's payouts are sent. A separate table rather than
+-- columns on `organizations`, for three independent reasons:
+--   1. The public SELECT policy on organizations has no column restriction, so
+--      anything on that row is readable by anon through PostgREST.
+--   2. Changing the details must force RE-VERIFICATION. That is a row
+--      lifecycle (supersede the old row, insert a fresh 'pending' one), not a
+--      column update — see set_organization_bank_account.
+--   3. A payout must reference the account it was actually sent to, which
+--      needs history. Superseded rows stay, with is_active = false.
+--
+-- The CHIP Send `reference` for registering this account is id::text. It is
+-- deterministic, so a retried POST /send/bank_accounts returns the existing
+-- record instead of creating a second recipient — hence no extra column.
+-- chip_bank_account_id and the move to 'verified' are written in Phase 4 (#519);
+-- nothing in this phase can leave a row in any state but 'pending'.
+-- =============================================
+CREATE TYPE bank_account_status AS ENUM ('pending', 'verified', 'rejected');
+
+CREATE TABLE organization_bank_accounts (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id      uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  bank_name            varchar(100) NOT NULL,  -- display name, derived server-side from bank_code
+  bank_code            varchar(11)  NOT NULL,  -- SWIFT/BIC, e.g. MBBEMYKL
+  account_holder       varchar(255) NOT NULL,
+  account_number       varchar(50)  NOT NULL,  -- digits only, normalized on write
+  status               bank_account_status NOT NULL DEFAULT 'pending',
+  chip_bank_account_id bigint,                 -- CHIP /send/bank_accounts id
+  verified_at          timestamptz,
+  rejection_reason     text,
+  is_active            boolean NOT NULL DEFAULT true,
+  created_by           uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chk_bank_account_number_digits CHECK (account_number ~ '^[0-9]{5,20}$'),
+  CONSTRAINT chk_bank_code_format  CHECK (bank_code ~ '^[A-Z0-9]{8}([A-Z0-9]{3})?$'),
+  CONSTRAINT chk_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified')
+);
+
+-- =============================================
+-- ORGANIZATION DOCUMENTS (KYB)
+-- Business-verification uploads: SSM/ROS extracts, authorization letters,
+-- identity documents. The files themselves live in the private
+-- organization-documents bucket (005_bucket_policies.sql); this table holds
+-- only the paths.
+--
+-- Deliberately NO per-document status column. The admin's approve/reject of the
+-- application IS the KYB decision, and organizations.approval_status /
+-- rejection_reason already carry it. A second review state machine would be two
+-- sources of truth for one human judgement.
+-- =============================================
+CREATE TYPE org_document_type AS ENUM ('ssm', 'ros', 'authorization_letter', 'identity_document', 'other');
+
+CREATE TABLE organization_documents (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  doc_type          org_document_type NOT NULL,
+  storage_path      text NOT NULL,
+  original_filename varchar(255),
+  uploaded_by       uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at        timestamptz NOT NULL DEFAULT now()
 );
 
 -- =============================================
