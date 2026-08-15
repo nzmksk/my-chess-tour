@@ -2,17 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
-const { mockUpsert, mockFrom, mockGetClaims } = vi.hoisted(() => {
+const { mockUpsert, mockFrom, mockGetClaims, mockInfo } = vi.hoisted(() => {
   const mockUpsert = vi.fn();
+  const mockInfo = vi.fn();
   return {
     mockUpsert,
+    mockInfo,
     mockFrom: vi.fn(() => ({ upsert: mockUpsert })),
     mockGetClaims: vi.fn(),
   };
 });
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: {
+    from: mockFrom,
+    storage: { from: vi.fn(() => ({ info: mockInfo })) },
+  },
 }));
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
@@ -46,6 +51,10 @@ describe("POST /api/v1/profile/oku", () => {
       error: null,
     });
     mockUpsert.mockResolvedValue({ error: null });
+    mockInfo.mockResolvedValue({
+      data: { size: 1024, contentType: "image/png" },
+      error: null,
+    });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -88,6 +97,41 @@ describe("POST /api/v1/profile/oku", () => {
     expect(payload.oku_status).toBe("pending");
     expect(payload.oku_document_path).toBe(`users/${APP_USER}/oku/12345.png`);
     expect(payload.oku_reviewed_by).toBeNull();
+  });
+
+  // MAX_BYTES in the uploader is a UX affordance; the file never passes through
+  // this route, so these three are the only enforcement that exists.
+  it("400 when no object exists at the claimed path", async () => {
+    mockInfo.mockResolvedValue({ data: null, error: { message: "not found" } });
+    const res = await POST(
+      makeReq({ document_path: `users/${APP_USER}/oku/ghost.png` }),
+    );
+    expect(res.status).toBe(400);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("400 when the uploaded object exceeds 5MB", async () => {
+    mockInfo.mockResolvedValue({
+      data: { size: 6 * 1024 * 1024, contentType: "image/png" },
+      error: null,
+    });
+    const res = await POST(
+      makeReq({ document_path: `users/${APP_USER}/oku/big.png` }),
+    );
+    expect(res.status).toBe(400);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("400 when the uploaded object is a disallowed type", async () => {
+    mockInfo.mockResolvedValue({
+      data: { size: 1024, contentType: "application/zip" },
+      error: null,
+    });
+    const res = await POST(
+      makeReq({ document_path: `users/${APP_USER}/oku/payload.zip` }),
+    );
+    expect(res.status).toBe(400);
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("500 when the upsert fails", async () => {
