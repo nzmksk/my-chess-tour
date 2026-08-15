@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { formatCalendarDate } from "@/lib/datetime";
 import AgreementGate from "./AgreementGate";
+import BankAccountNotice, {
+  type BankAccountStatus,
+} from "./BankAccountNotice";
 
 type TournamentStatus =
   | "draft"
@@ -29,6 +32,10 @@ interface Stats {
 
 interface DashboardData {
   organization: { id: string; name: string; agreement_version?: string | null };
+  bank_account?: {
+    status: BankAccountStatus;
+    rejection_reason: string | null;
+  } | null;
   stats: Stats;
   recent_tournaments: RecentTournament[];
 }
@@ -150,7 +157,7 @@ function TournamentRow({ tournament: t, orgId }: TournamentRowProps) {
 }
 
 export default function DashboardClient({ data }: Props) {
-  const { organization, stats, recent_tournaments } = data;
+  const { organization, bank_account, stats, recent_tournaments } = data;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -182,6 +189,13 @@ export default function DashboardClient({ data }: Props) {
         agreementVersion={organization.agreement_version ?? null}
       />
 
+      {/* The other thing that silently stops a payout. Renders nothing once the
+          bank account is verified. */}
+      <BankAccountNotice
+        organizationId={organization.id}
+        bankAccount={bank_account ?? null}
+      />
+
       {/* Stats */}
       <div className="mb-8 grid grid-cols-2 gap-3">
         <StatCard label="Active Tournaments" value={stats.active_tournaments} />
@@ -204,23 +218,43 @@ export default function DashboardClient({ data }: Props) {
         <h2 className="font-cinzel text-text-primary mb-3 text-base font-bold tracking-wide">
           Manage
         </h2>
-        <Link
-          href={`/my/organizations/${organization.id}/members`}
-          className="card flex items-center justify-between px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-gold-bright text-xl">♟</span>
-            <div>
-              <p className="font-lato text-text-primary text-sm font-semibold">
-                Members
-              </p>
-              <p className="font-lato text-text-muted mt-0.5 text-xs">
-                View and manage organization members
-              </p>
+        <div className="flex flex-col gap-3">
+          <Link
+            href={`/my/organizations/${organization.id}/members`}
+            className="card flex items-center justify-between px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-gold-bright text-xl">♟</span>
+              <div>
+                <p className="font-lato text-text-primary text-sm font-semibold">
+                  Members
+                </p>
+                <p className="font-lato text-text-muted mt-0.5 text-xs">
+                  View and manage organization members
+                </p>
+              </div>
             </div>
-          </div>
-          <span className="text-text-muted text-lg">›</span>
-        </Link>
+            <span className="text-text-muted text-lg">›</span>
+          </Link>
+
+          <Link
+            href={`/my/organizations/${organization.id}/settings`}
+            className="card flex items-center justify-between px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-gold-bright text-xl">♜</span>
+              <div>
+                <p className="font-lato text-text-primary text-sm font-semibold">
+                  Settings
+                </p>
+                <p className="font-lato text-text-muted mt-0.5 text-xs">
+                  Organization profile, payout bank account and verification
+                </p>
+              </div>
+            </div>
+            <span className="text-text-muted text-lg">›</span>
+          </Link>
+        </div>
       </div>
 
       {/* Tournament Table */}
