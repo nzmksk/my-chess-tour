@@ -5,11 +5,58 @@ import {
   bankNameForSwift,
 } from "@/lib/malaysian-banks";
 
-// These assertions are about SHAPE only. Nothing here can prove CHIP Send
-// accepts a given code — that reconciliation is a Phase 4 (#519) task against
-// CHIP's own list, and a code we accept that CHIP rejects surfaces as a failed
-// payout rather than a failed form.
+// Shape assertions, plus one that pins the exact set. MALAYSIAN_BANKS is a 1:1
+// mirror of CHIP Send's documented bank_code enum, so drift in either direction
+// is a bug: a code CHIP does not know is a failed payout, and one we drop is a
+// bank an organizer cannot pick.
+// https://docs.chip-in.asia/chip-send/api-reference/bank-accounts/create
+// Copied from the "Available options" enum on the CHIP Send create-bank-account
+// page. Kept as a literal, not derived from MALAYSIAN_BANKS, so that editing
+// the list without checking CHIP first fails here instead of at payout time.
+const CHIP_SEND_BANK_CODES = [
+  "ACDBMYK2",
+  "PHBMMYKL",
+  "AGOBMYKL",
+  "RJHIMYKL",
+  "MFBBMYKL",
+  "ARBKMYKL",
+  "BIMBMYKL",
+  "BKRMMYKL",
+  "BMMBMYKL",
+  "BOFAMY2X",
+  "BKCHMYKL",
+  "BOTKMYKX",
+  "BSNAMYK1",
+  "BNPAMYKL",
+  "PCBCMYKL",
+  "CIBBMYKL",
+  "DEUTMYKL",
+  "FNXSMYNB",
+  "GXSPMYKL",
+  "HLBBMYKL",
+  "HBMBMYKL",
+  "ICBKMYKL",
+  "CHASMYKX",
+  "KFHOMYKL",
+  "MBBEMYKL",
+  "AFBQMYKL",
+  "MHCBMYKA",
+  "OCBCMYKL",
+  "PBBEMYKL",
+  "RHBBMYKL",
+  "SCBLMYKX",
+  "SMBCMYKL",
+  "TNGDMYNB",
+  "UOVBMYKL",
+];
+
 describe("MALAYSIAN_BANKS", () => {
+  it("mirrors CHIP Send's bank_code enum exactly", () => {
+    expect([...BANK_SWIFT_CODES].sort()).toEqual(
+      [...CHIP_SEND_BANK_CODES].sort(),
+    );
+  });
+
   it("is not empty", () => {
     expect(MALAYSIAN_BANKS.length).toBeGreaterThan(0);
   });
