@@ -108,7 +108,7 @@ export async function GET(
   const [
     { data: tournaments, error: tourError },
     { data: payoutRows, error: payoutError },
-    { data: bankAccount },
+    { data: bankAccount, error: bankError },
   ] = await Promise.all([
     supabaseAdmin
       .from("tournaments")
@@ -140,6 +140,17 @@ export async function GET(
   if (payoutError) {
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: payoutError.message } },
+      { status: 500 },
+    );
+  }
+
+  // Never swallowed: a failed lookup is indistinguishable from an absent
+  // account in the payload, and the banner would then tell an organizer who
+  // has filed their bank details that they have none — the one state that
+  // reads as their fault to fix.
+  if (bankError) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: bankError.message } },
       { status: 500 },
     );
   }
