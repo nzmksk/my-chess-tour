@@ -6,39 +6,47 @@ import { NextRequest } from "next/server";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockBuilder, mockFrom, mockGetClaims } = vi.hoisted(() => {
-  function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
-    const b: Record<string, unknown> = {};
-    for (const m of [
-      "select",
-      "eq",
-      "in",
-      "ilike",
-      "is",
-      "order",
-      "single",
-      "maybeSingle",
-      "insert",
-    ]) {
-      b[m] = vi.fn(() => b);
+const { mockBuilder, mockFrom, mockGetClaims, mockRpc, mockInfo } = vi.hoisted(
+  () => {
+    function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
+      const b: Record<string, unknown> = {};
+      for (const m of [
+        "select",
+        "eq",
+        "in",
+        "ilike",
+        "is",
+        "order",
+        "single",
+        "maybeSingle",
+        "insert",
+      ]) {
+        b[m] = vi.fn(() => b);
+      }
+      b.then = (
+        onfulfilled: (v: unknown) => unknown,
+        onrejected?: (r: unknown) => unknown,
+      ) => Promise.resolve(finalResult).then(onfulfilled, onrejected);
+      return b;
     }
-    b.then = (
-      onfulfilled: (v: unknown) => unknown,
-      onrejected?: (r: unknown) => unknown,
-    ) => Promise.resolve(finalResult).then(onfulfilled, onrejected);
-    return b;
-  }
 
-  // A single configurable builder used by all queries in a given test
-  const mockBuilder = makeBuilder({ data: null, error: null });
-  const mockFrom = vi.fn(() => mockBuilder);
-  const mockGetClaims = vi.fn();
+    // A single configurable builder used by all queries in a given test
+    const mockBuilder = makeBuilder({ data: null, error: null });
+    const mockFrom = vi.fn(() => mockBuilder);
+    const mockGetClaims = vi.fn();
+    const mockRpc = vi.fn();
+    const mockInfo = vi.fn();
 
-  return { mockBuilder, mockFrom, mockGetClaims };
-});
+    return { mockBuilder, mockFrom, mockGetClaims, mockRpc, mockInfo };
+  },
+);
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: {
+    from: mockFrom,
+    rpc: mockRpc,
+    storage: { from: vi.fn(() => ({ info: mockInfo })) },
+  },
 }));
 
 vi.mock("@/services/supabase/server", () => ({
@@ -64,10 +72,21 @@ import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
 const USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const ORG_ID = "bbbbbbbb-0000-0000-0000-000000000001";
 
+// The document prefix is keyed to the RESOLVED public.users.id, not the JWT sub.
+const DOC_PATH = `users/${appIdFor(USER_ID)}/org-kyb/1.pdf`;
+
 const VALID_BODY = {
   name: "KL Chess Association",
   email: "chess@klca.com",
   agreement_accepted: true,
+  entity_type: "society",
+  registration_number: "PPM-001-14-01012020",
+  bank_code: "MBBEMYKL",
+  bank_account_holder: "KL Chess Association",
+  bank_account_number: "5140 1234-5678",
+  documents: [
+    { doc_type: "ros", storage_path: DOC_PATH, original_filename: "ros.pdf" },
+  ],
 };
 
 function makeOrg(overrides: Record<string, unknown> = {}) {
@@ -243,8 +262,14 @@ describe("POST /api/v1/organizations/applications", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setUser();
-    // Default: no existing org, successful insert
     setQueryResult(null);
+    // Default: every claimed upload exists and is acceptable, and the RPC
+    // creates the application.
+    mockInfo.mockResolvedValue({
+      data: { size: 2048, contentType: "application/pdf" },
+      error: null,
+    });
+    mockRpc.mockResolvedValue({ data: makeOrg(), error: null });
   });
 
   afterEach(() => {
@@ -364,47 +389,196 @@ describe("POST /api/v1/organizations/applications", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Name uniqueness check
+  // Bank account, entity and document validation
   // -------------------------------------------------------------------------
 
-  describe("name uniqueness", () => {
-    it("returns 409 when an organization with the same name already exists", async () => {
-      setQueryResult({ id: ORG_ID });
-      const res = await POST(makePostRequest());
-      expect(res.status).toBe(409);
+  describe("payout bank account", () => {
+    it("returns 400 for a SWIFT code that isn't a bank we support", async () => {
+      const res = await POST(
+        makePostRequest({ ...VALID_BODY, bank_code: "NOTABANK" }),
+      );
+      expect(res.status).toBe(400);
       const json = await res.json();
-      expect(json.error.code).toBe("NAME_TAKEN");
-      expect(json.error.message).toMatch(/already exists/i);
+      expect(json.error.message).toMatch(/bank/i);
+      expect(mockRpc).not.toHaveBeenCalled();
     });
 
-    it("returns 500 when the name uniqueness check query fails", async () => {
-      setQueryResult(null, { message: "DB connection error" });
-      const res = await POST(makePostRequest());
-      expect(res.status).toBe(500);
+    it.each(["1234", "12345678901234567890123", "abcdefgh"])(
+      "returns 400 for account number %s",
+      async (bank_account_number) => {
+        const res = await POST(
+          makePostRequest({ ...VALID_BODY, bank_account_number }),
+        );
+        expect(res.status).toBe(400);
+      },
+    );
+
+    it("normalizes spaces and dashes out of the account number", async () => {
+      await POST(makePostRequest());
+      expect(mockRpc).toHaveBeenCalledWith(
+        "create_organization_application",
+        expect.objectContaining({ p_account_number: "514012345678" }),
+      );
+    });
+
+    it("derives the bank display name server-side from the SWIFT code", async () => {
+      // The client never supplies bank_name, so the stored name cannot
+      // contradict the code it arrived with.
+      await POST(
+        makePostRequest({ ...VALID_BODY, bank_name: "Definitely Not Maybank" }),
+      );
+      expect(mockRpc).toHaveBeenCalledWith(
+        "create_organization_application",
+        expect.objectContaining({
+          p_bank_code: "MBBEMYKL",
+          p_bank_name: "Maybank",
+        }),
+      );
+    });
+  });
+
+  describe("entity identity", () => {
+    it("returns 400 for an unknown entity type", async () => {
+      const res = await POST(
+        makePostRequest({ ...VALID_BODY, entity_type: "cooperative" }),
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 400 when a society supplies no registration number", async () => {
+      const res = await POST(
+        makePostRequest({ ...VALID_BODY, registration_number: "  " }),
+      );
+      expect(res.status).toBe(400);
       const json = await res.json();
-      expect(json.error.code).toBe("INTERNAL_ERROR");
+      expect(json.error.message).toMatch(/ROS registration number/i);
+    });
+
+    it("returns 400 when a company supplies no SSM document", async () => {
+      const res = await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          entity_type: "company",
+          documents: [
+            {
+              doc_type: "other",
+              storage_path: DOC_PATH,
+              original_filename: "misc.pdf",
+            },
+          ],
+        }),
+      );
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error.message).toMatch(/SSM document/i);
+    });
+
+    it("drops a registration number for an individual organizer", async () => {
+      await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          entity_type: "individual",
+          registration_number: "PPM-999",
+          documents: [
+            {
+              doc_type: "identity_document",
+              storage_path: DOC_PATH,
+              original_filename: "mykad.pdf",
+            },
+          ],
+        }),
+      );
+      expect(mockRpc).toHaveBeenCalledWith(
+        "create_organization_application",
+        expect.objectContaining({ p_registration_number: null }),
+      );
+    });
+  });
+
+  describe("verification documents", () => {
+    it("returns 400 when no documents are submitted", async () => {
+      const res = await POST(
+        makePostRequest({ ...VALID_BODY, documents: [] }),
+      );
+      expect(res.status).toBe(400);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    // SECURITY: storage RLS stops a user WRITING outside their folder; only this
+    // check stops them CLAIMING someone else's object as their document, which
+    // the admin page would then mint a signed URL for.
+    it("returns 400 for a path in another user's folder", async () => {
+      const res = await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          documents: [
+            {
+              doc_type: "ros",
+              storage_path:
+                "users/cccccccc-0000-0000-0000-000000000009/org-kyb/1.pdf",
+              original_filename: "theirs.pdf",
+            },
+          ],
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 for a path containing a traversal segment", async () => {
+      const res = await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          documents: [
+            {
+              doc_type: "ros",
+              storage_path: `users/${appIdFor(USER_ID)}/org-kyb/../../secret.pdf`,
+              original_filename: "x.pdf",
+            },
+          ],
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when no object exists at the claimed path", async () => {
+      mockInfo.mockResolvedValue({
+        data: null,
+        error: { message: "not found" },
+      });
+      const res = await POST(makePostRequest());
+      expect(res.status).toBe(400);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when the uploaded object exceeds 5MB", async () => {
+      mockInfo.mockResolvedValue({
+        data: { size: 6 * 1024 * 1024, contentType: "application/pdf" },
+        error: null,
+      });
+      const res = await POST(makePostRequest());
+      expect(res.status).toBe(400);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when the uploaded object is a disallowed type", async () => {
+      mockInfo.mockResolvedValue({
+        data: { size: 2048, contentType: "application/zip" },
+        error: null,
+      });
+      const res = await POST(makePostRequest());
+      expect(res.status).toBe(400);
+      expect(mockRpc).not.toHaveBeenCalled();
     });
   });
 
   // -------------------------------------------------------------------------
-  // Insert
+  // Creation (one transactional RPC)
   // -------------------------------------------------------------------------
 
-  describe("insert", () => {
+  describe("creation", () => {
     it("returns 201 with the created organization on success", async () => {
-      // First call (maybeSingle check) returns null, second call (insert) returns org
-      let callIndex = 0;
-      (mockBuilder as Record<string, unknown>).then = (
-        onfulfilled: (v: unknown) => unknown,
-        onrejected?: (r: unknown) => unknown,
-      ) => {
-        const result =
-          callIndex++ === 0
-            ? { data: null, error: null }
-            : { data: makeOrg(), error: null };
-        return Promise.resolve(result).then(onfulfilled, onrejected);
-      };
-
       const res = await POST(makePostRequest());
       expect(res.status).toBe(201);
       const json = await res.json();
@@ -413,52 +587,25 @@ describe("POST /api/v1/organizations/applications", () => {
     });
 
     it("returns 201 when optional fields are provided", async () => {
-      let callIndex = 0;
-      (mockBuilder as Record<string, unknown>).then = (
-        onfulfilled: (v: unknown) => unknown,
-        onrejected?: (r: unknown) => unknown,
-      ) => {
-        const result =
-          callIndex++ === 0
-            ? { data: null, error: null }
-            : { data: makeOrg({ description: "A chess club" }), error: null };
-        return Promise.resolve(result).then(onfulfilled, onrejected);
-      };
-
-      const body = {
-        name: "KL Chess",
-        email: "chess@klca.com",
-        description: "A chess club",
-        phone: "+60123456789",
-        past_tournament_refs: "KL Open 2025",
-        links: [{ label: "Facebook", url: "https://facebook.com/klchess" }],
-        agreement_accepted: true,
-      };
-      const res = await POST(makePostRequest(body));
+      const res = await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          description: "A chess club",
+          phone: "+60123456789",
+          past_tournament_refs: "KL Open 2025",
+          links: [{ label: "Facebook", url: "https://facebook.com/klchess" }],
+        }),
+      );
       expect(res.status).toBe(201);
     });
 
     it("records the agreement version from the server constant", async () => {
-      let callIndex = 0;
-      (mockBuilder as Record<string, unknown>).then = (
-        onfulfilled: (v: unknown) => unknown,
-        onrejected?: (r: unknown) => unknown,
-      ) => {
-        const result =
-          callIndex++ === 0
-            ? { data: null, error: null }
-            : { data: makeOrg(), error: null };
-        return Promise.resolve(result).then(onfulfilled, onrejected);
-      };
-
       await POST(makePostRequest());
-
-      const insertMock = mockBuilder.insert as ReturnType<typeof vi.fn>;
-      expect(insertMock).toHaveBeenCalledWith(
+      expect(mockRpc).toHaveBeenCalledWith(
+        "create_organization_application",
         expect.objectContaining({
-          agreement_version: ORGANIZER_AGREEMENT_VERSION,
-          agreement_accepted_by: appIdFor(USER_ID),
-          agreement_accepted_at: expect.any(String),
+          p_agreement_version: ORGANIZER_AGREEMENT_VERSION,
+          p_created_by: appIdFor(USER_ID),
         }),
       );
     });
@@ -466,18 +613,6 @@ describe("POST /api/v1/organizations/applications", () => {
     it("ignores an agreement version supplied in the request body", async () => {
       // The recorded version must name the document the platform served, so a
       // body-supplied version can never reach the row.
-      let callIndex = 0;
-      (mockBuilder as Record<string, unknown>).then = (
-        onfulfilled: (v: unknown) => unknown,
-        onrejected?: (r: unknown) => unknown,
-      ) => {
-        const result =
-          callIndex++ === 0
-            ? { data: null, error: null }
-            : { data: makeOrg(), error: null };
-        return Promise.resolve(result).then(onfulfilled, onrejected);
-      };
-
       await POST(
         makePostRequest({
           ...VALID_BODY,
@@ -487,26 +622,60 @@ describe("POST /api/v1/organizations/applications", () => {
         }),
       );
 
-      const insertMock = mockBuilder.insert as ReturnType<typeof vi.fn>;
-      const inserted = insertMock.mock.calls[0][0];
-      expect(inserted.agreement_version).toBe(ORGANIZER_AGREEMENT_VERSION);
-      expect(inserted.agreement_accepted_by).toBe(appIdFor(USER_ID));
-      expect(JSON.stringify(inserted)).not.toContain("1999-01-01");
+      const args = mockRpc.mock.calls[0][1];
+      expect(args.p_agreement_version).toBe(ORGANIZER_AGREEMENT_VERSION);
+      expect(args.p_created_by).toBe(appIdFor(USER_ID));
+      expect(JSON.stringify(args)).not.toContain("1999-01-01");
     });
 
-    it("returns 500 on an unexpected insert error", async () => {
-      let callIndex = 0;
-      (mockBuilder as Record<string, unknown>).then = (
-        onfulfilled: (v: unknown) => unknown,
-        onrejected?: (r: unknown) => unknown,
-      ) => {
-        const result =
-          callIndex++ === 0
-            ? { data: null, error: null }
-            : { data: null, error: { message: "Unexpected DB error" } };
-        return Promise.resolve(result).then(onfulfilled, onrejected);
-      };
+    it("returns 409 when the RPC reports the name is taken", async () => {
+      mockRpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "P0001",
+          message: "NAME_TAKEN: an organization with this name already exists",
+        },
+      });
+      const res = await POST(makePostRequest());
+      expect(res.status).toBe(409);
+      const json = await res.json();
+      expect(json.error.code).toBe("NAME_TAKEN");
+      expect(json.error.message).toMatch(/already exists/i);
+    });
 
+    it("returns 409 when the account is another organization's destination", async () => {
+      mockRpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "P0001",
+          message: "BANK_ACCOUNT_IN_USE: this bank account is already...",
+        },
+      });
+      const res = await POST(makePostRequest());
+      expect(res.status).toBe(409);
+      const json = await res.json();
+      expect(json.error.code).toBe("BANK_ACCOUNT_IN_USE");
+    });
+
+    it("returns 400 when the RPC rejects the entity/document combination", async () => {
+      mockRpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "P0001",
+          message: "ENTITY_DOCS_REQUIRED: a company must supply an SSM document",
+        },
+      });
+      const res = await POST(makePostRequest());
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("returns 500 on an unexpected RPC error", async () => {
+      mockRpc.mockResolvedValue({
+        data: null,
+        error: { code: "XX000", message: "Unexpected DB error" },
+      });
       const res = await POST(makePostRequest());
       expect(res.status).toBe(500);
       const json = await res.json();
