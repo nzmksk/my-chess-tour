@@ -3,9 +3,9 @@ import { validateEmail } from "@/services/auth/auth-validation";
 import { BANK_SWIFT_CODES } from "@/lib/malaysian-banks";
 import { validateOrgLinks, type OrgLink } from "../_lib/org-fields";
 
-export type OrgEntityType = "company" | "society" | "individual";
+type OrgEntityType = "company" | "society" | "individual";
 
-export type OrgDocumentType =
+type OrgDocumentType =
   | "ssm"
   | "ros"
   | "authorization_letter"
@@ -29,7 +29,7 @@ const DOCUMENT_TYPES: readonly OrgDocumentType[] = [
 /** At most this many KYB documents per application — a bound, not a target. */
 const MAX_DOCUMENTS = 10;
 
-export interface OrgDocumentInput {
+interface OrgDocumentInput {
   doc_type: OrgDocumentType;
   storage_path: string;
   original_filename: string | null;
@@ -74,7 +74,7 @@ function invalid(message: string): { error: NextResponse } {
  * until this request creates it — see the bucket comment in
  * 005_bucket_policies.sql.
  */
-export function orgDocumentPrefix(appUserId: string): string {
+function orgDocumentPrefix(appUserId: string): string {
   return `users/${appUserId}/org-kyb/`;
 }
 

@@ -123,7 +123,7 @@ export type PaymentMethod =
 
 export type Platform = "web" | "api" | "ios" | "android" | "macos" | "windows";
 
-export type PaymentType =
+type PaymentType =
   | "purchase"
   | "purchase_charge"
   | "payout"

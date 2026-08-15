@@ -13,7 +13,7 @@ import type { PurchasesResponse } from "./purchases-response";
  * *is* the completed refund. The in-flight case is represented by a different
  * body shape entirely; see `RefundResponse`.
  */
-export interface RefundPayment {
+interface RefundPayment {
   /** Object type identifier */
   type: string;
   /** Object ID */
