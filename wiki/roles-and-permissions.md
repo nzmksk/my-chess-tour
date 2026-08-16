@@ -64,7 +64,7 @@ organization-scoped and only mean anything inside the org they were granted in.
 
 ## 3. Permissions
 
-**10 permission keys**, seeded in `006_seed.sql`:
+**11 permission keys**, seeded in `006_seed.sql`:
 
 | Key | Scope it's used in | Meaning |
 |---|---|---|
@@ -78,6 +78,7 @@ organization-scoped and only mean anything inside the org they were granted in.
 | `registration.view` | organization | View the participant roster for the org's tournaments. |
 | `payment.view` | organization | View the payments/payout figures for the org's tournaments. |
 | `refund.manage` | organization | Manage refunds for the org's tournaments. |
+| `bank_account.manage` | organization | Read and replace the org's payout bank account. **Owner only** — narrower than `org.manage` on purpose (see below). |
 
 ---
 
@@ -97,6 +98,7 @@ Straight from the `role_permissions` inserts in `006_seed.sql`:
 | `registration.view` | — | ✅ | ✅ | ✅ |
 | `payment.view`      | — | ✅ | ✅ | — |
 | `refund.manage`     | — | ✅ | ✅ | — |
+| `bank_account.manage` | — | ✅ | — | — |
 
 **Reading the matrix:**
 
@@ -106,10 +108,22 @@ Straight from the `role_permissions` inserts in `006_seed.sql`:
   from the org permission tables. (The seed comment "implies all" is conceptual,
   not a table row.)
 - **`owner`** holds every organization permission — full control of its org.
-- **`admin`** = owner **minus `org.manage` and `tournament.delete`**. So an org
-  admin can run tournaments and manage members/refunds, but cannot change the
-  organization's own settings/roles and cannot cancel/close a tournament.
+- **`admin`** = owner **minus `org.manage`, `tournament.delete` and
+  `bank_account.manage`**. So an org admin can run tournaments and manage
+  members/refunds, but cannot change the organization's own settings/roles,
+  cannot cancel/close a tournament, and cannot see or redirect where the
+  organization's money is paid out.
 - **`member`** is view-only: `tournament.view` + `registration.view`.
+
+**Why `bank_account.manage` is separate from `org.manage`.** The two are held by
+the same role today, so the split buys nothing at runtime — it buys something
+the first time the roles diverge. `org.manage` is "edit the organization"; being
+able to point its payouts at a different account is a materially different
+power, and payout redirection is the fraud this whole area is defending against.
+Folding it into `org.manage` would mean any future role granted profile editing
+silently inherits it. The RLS policy on `organization_bank_accounts`
+(`004_rls.sql`) and both `/bank-account` API verbs check this key and no other,
+and there is deliberately **no general org-member SELECT** on that table.
 
 ---
 

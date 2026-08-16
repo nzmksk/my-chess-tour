@@ -40,6 +40,26 @@ export interface Applicant {
   player_profiles: PlayerProfile | PlayerProfile[] | null;
 }
 
+export type OrgEntityType = "company" | "society" | "individual";
+
+/** Masked. The full account number is never sent to the browser. */
+export interface ApplicationBankAccount {
+  bank_name: string;
+  bank_code: string;
+  account_holder: string;
+  account_number_last4: string;
+  status: "pending" | "verified" | "rejected";
+  rejection_reason: string | null;
+}
+
+export interface ApplicationDocument {
+  id: string;
+  doc_type: string;
+  original_filename: string | null;
+  /** Short-lived signed URL, minted server-side. Null if it couldn't be. */
+  url: string | null;
+}
+
 export interface ApplicationDetail {
   id: string;
   name: string;
@@ -48,12 +68,23 @@ export interface ApplicationDetail {
   email: string | null;
   phone: string | null;
   past_tournament_refs: string | null;
+  entity_type: OrgEntityType | null;
+  registration_number: string | null;
   approval_status: ApprovalStatus;
   rejection_reason: string | null;
   created_at: string;
   reviewed_at: string | null;
   applicant: Applicant | null;
+  bank_account: ApplicationBankAccount | null;
+  documents: ApplicationDocument[];
 }
+
+/**
+ * How long a reviewer's document links stay live. Matches the OKU review page.
+ * Short on purpose: these are identity documents, and a signed URL that outlives
+ * the review is a credential sitting in a browser history.
+ */
+const DOCUMENT_URL_TTL_SECONDS = 300;
 
 export default async function AdminApplicationDetailPage({
   params,
@@ -86,6 +117,7 @@ export default async function AdminApplicationDetailPage({
     .from("organizations")
     .select(
       `id, name, description, links, email, phone, past_tournament_refs,
+       entity_type, registration_number,
        approval_status, rejection_reason, created_at, reviewed_at,
        applicant:users!created_by(
          id, first_name, last_name, email, created_at,
@@ -100,11 +132,62 @@ export default async function AdminApplicationDetailPage({
     redirect("/admin/applications");
   }
 
+  const [{ data: bankRow }, { data: documentRows }] = await Promise.all([
+    supabaseAdmin
+      .from("organization_bank_accounts")
+      .select(
+        "bank_name, bank_code, account_holder, account_number, status, rejection_reason",
+      )
+      .eq("organization_id", id)
+      .eq("is_active", true)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("organization_documents")
+      .select("id, doc_type, storage_path, original_filename")
+      .eq("organization_id", id)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  // Masked here, in the server component, so the full number never reaches the
+  // client bundle — the same rule the API follows.
+  const bankAccount = bankRow
+    ? {
+        bank_name: bankRow.bank_name,
+        bank_code: bankRow.bank_code,
+        account_holder: bankRow.account_holder,
+        account_number_last4: (bankRow.account_number as string).slice(-4),
+        status: bankRow.status,
+        rejection_reason: bankRow.rejection_reason,
+      }
+    : null;
+
+  // The bucket is private, so a path is not a link. Each URL is signed here and
+  // expires with the review session.
+  const documents = await Promise.all(
+    (documentRows ?? []).map(async (doc) => {
+      const { data: signed } = await supabaseAdmin.storage
+        .from("organization-documents")
+        .createSignedUrl(doc.storage_path as string, DOCUMENT_URL_TTL_SECONDS);
+      return {
+        id: doc.id as string,
+        doc_type: doc.doc_type as string,
+        original_filename: doc.original_filename as string | null,
+        url: signed?.signedUrl ?? null,
+      };
+    }),
+  );
+
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
       <ApplicationDetailClient
-        application={data as unknown as ApplicationDetail}
+        application={
+          {
+            ...data,
+            bank_account: bankAccount,
+            documents,
+          } as unknown as ApplicationDetail
+        }
       />
     </div>
   );

@@ -17,6 +17,13 @@ interface DashboardData {
     approval_status: string;
     agreement_version: string | null;
   };
+  // NULL when the organization has no active bank account. Typed here as well
+  // as in DashboardClient so that dropping it from the API payload breaks the
+  // build instead of silently rendering the "no bank account" banner.
+  bank_account: {
+    status: "pending" | "verified" | "rejected";
+    rejection_reason: string | null;
+  } | null;
   stats: {
     active_tournaments: number;
     total_registrations: number;

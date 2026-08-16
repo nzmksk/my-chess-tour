@@ -23,6 +23,7 @@ import type { Tournament } from "../../types";
 
 const base: Tournament = {
   id: "1",
+  slug: "test-tournament",
   name: "Test Tournament",
   venue: { name: "Test Venue", state: "Selangor" },
   timezone: "Asia/Kuala_Lumpur",

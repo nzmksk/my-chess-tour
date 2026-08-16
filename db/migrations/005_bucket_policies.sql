@@ -95,3 +95,59 @@ USING (
     OR has_global_permission(app_user_id(), 'platform.manage')
   )
 );
+
+-- =============================================
+-- ORGANIZATION DOCUMENTS BUCKET (private)
+-- Upload convention: organization-documents/users/{user_id}/org-kyb/{uuid}.{ext}
+-- Business-verification documents (SSM/ROS extracts, authorization letters,
+-- identity documents). NOT public. Read only by the uploader or a platform
+-- admin, who views via a server-generated signed URL.
+--
+-- USER-scoped, not org-scoped like the avatars bucket, because at upload time
+-- the organization row DOES NOT EXIST YET — the application POST is what
+-- creates it, and it does so in the same transaction that registers these
+-- paths. An org-scoped policy would have nothing to check against. That makes
+-- these three a verbatim copy of the oku-documents policies above, which is the
+-- whole reason to prefer this shape.
+--
+-- The path prefix is re-checked server-side when a path is registered (see
+-- src/app/api/v1/organizations/applications/validators.ts): storage RLS stops a
+-- user WRITING outside their folder, but only the API can stop them CLAIMING
+-- someone else's path as their document.
+-- =============================================
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('organization-documents', 'organization-documents', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Uploader can add their own KYB document.
+CREATE POLICY "Users can upload own org document"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'organization-documents'
+  AND (storage.foldername(name))[1] = 'users'
+  AND (storage.foldername(name))[2] = app_user_id()::text
+);
+
+-- Uploader can replace/remove their own KYB document (re-upload before submit,
+-- or after a rejected application).
+CREATE POLICY "Users can delete own org document"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'organization-documents'
+  AND (storage.foldername(name))[1] = 'users'
+  AND (storage.foldername(name))[2] = app_user_id()::text
+);
+
+-- Uploader or a platform admin can read KYB documents.
+CREATE POLICY "Org documents readable by uploader or admin"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'organization-documents'
+  AND (
+    (storage.foldername(name))[2] = app_user_id()::text
+    OR has_global_permission(app_user_id(), 'platform.manage')
+  )
+);

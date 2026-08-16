@@ -22,6 +22,9 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_profiles
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON organizations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON organization_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournaments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -272,12 +275,24 @@ BEGIN
   IF TG_TABLE_NAME = 'player_profiles' THEN
     v_old := redact_jsonb_columns(v_old, ARRAY['bank_account_number', 'oku_document_path']);
     v_new := redact_jsonb_columns(v_new, ARRAY['bank_account_number', 'oku_document_path']);
+  ELSIF TG_TABLE_NAME = 'organization_bank_accounts' THEN
+    v_old := redact_jsonb_columns(v_old, ARRAY['account_number']);
+    v_new := redact_jsonb_columns(v_new, ARRAY['account_number']);
+  ELSIF TG_TABLE_NAME = 'organization_documents' THEN
+    -- storage_path is capability-bearing: anyone holding it can be issued a
+    -- signed URL to a private-bucket identity document. The last-4 suffix that
+    -- survives redaction is the file extension, which reveals nothing.
+    v_old := redact_jsonb_columns(v_old, ARRAY['storage_path']);
+    v_new := redact_jsonb_columns(v_new, ARRAY['storage_path']);
   END IF;
 
   -- Resolve organization_id based on source table
   IF TG_TABLE_NAME = 'organizations' THEN
     v_org_id := v_record_id::uuid;
-  ELSIF TG_TABLE_NAME IN ('organization_memberships', 'tournaments', 'payments') THEN
+  ELSIF TG_TABLE_NAME IN (
+    'organization_memberships', 'tournaments', 'payments',
+    'organization_bank_accounts', 'organization_documents'
+  ) THEN
     v_org_id := (COALESCE(v_new, v_old) ->> 'organization_id')::uuid;
   ELSIF TG_TABLE_NAME = 'registrations' THEN
     SELECT t.organization_id INTO v_org_id
@@ -334,6 +349,12 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organizations
 
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_memberships
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_documents
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON user_global_roles
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
@@ -495,6 +516,234 @@ RETURNS TABLE(tournament_id uuid, count bigint) AS $$
     AND status = 'confirmed'
   GROUP BY tournament_id;
 $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+-- =============================================
+-- SET ORGANIZATION BANK ACCOUNT
+-- The ONLY write path for organization_bank_accounts (004_rls.sql revokes
+-- INSERT/UPDATE/DELETE from anon and authenticated).
+--
+-- Changing payout details must force re-verification, so this SUPERSEDES rather
+-- than updates: the current active row is deactivated and a fresh 'pending' row
+-- is inserted, in one transaction under a lock on the organization row. That
+-- pairing is what guarantees uniq_active_bank_account_per_org (002_indexes.sql)
+-- never sees two active rows, and it leaves the superseded row intact so a
+-- payout can still name the account it was actually sent to.
+--
+-- A re-save that changes nothing is a no-op, returning {"changed": false} and
+-- the existing row. Two states qualify:
+--   'verified' — re-inserting would destroy a completed verification.
+--   'pending'  — the row's own id is the CHIP Send `reference` for an
+--                in-flight registration; superseding it orphans that attempt.
+-- 'rejected' deliberately does NOT qualify: an unchanged re-save there is an
+-- organizer retrying after fixing something at their bank, and they need a new
+-- row (and therefore a new CHIP reference) to retry against.
+--
+-- A uniq_active_bank_destination collision raises 23505 uncaught, on purpose —
+-- callers translate it, because "this account is already another organization's
+-- payout destination" is a 409, not a failure of this function.
+-- =============================================
+CREATE OR REPLACE FUNCTION set_organization_bank_account(
+  p_org_id         uuid,
+  p_bank_code      varchar(11),
+  p_bank_name      varchar(100),
+  p_account_holder varchar(255),
+  p_account_number varchar(50),
+  p_actor_id       uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_current organization_bank_accounts;
+  v_row     organization_bank_accounts;
+  v_changed boolean := true;
+BEGIN
+  -- Lock the organization so concurrent saves serialize; without it two
+  -- requests could both deactivate and both insert.
+  PERFORM 1 FROM organizations
+    WHERE id = p_org_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'organization % not found', p_org_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_current
+    FROM organization_bank_accounts
+    WHERE organization_id = p_org_id AND is_active;
+
+  IF FOUND
+     AND v_current.bank_code      = p_bank_code
+     AND v_current.bank_name      = p_bank_name
+     AND v_current.account_holder = p_account_holder
+     AND v_current.account_number = p_account_number
+     AND v_current.status <> 'rejected'
+  THEN
+    v_changed := false;
+    v_row     := v_current;
+  ELSE
+    UPDATE organization_bank_accounts
+      SET is_active = false
+      WHERE organization_id = p_org_id AND is_active;
+
+    INSERT INTO organization_bank_accounts (
+      organization_id, bank_name, bank_code, account_holder, account_number, created_by
+    ) VALUES (
+      p_org_id, p_bank_name, p_bank_code, p_account_holder, p_account_number, p_actor_id
+    )
+    RETURNING * INTO v_row;
+  END IF;
+
+  -- Masked, like every other surface that touches this value. The full account
+  -- number does not leave the table.
+  RETURN jsonb_build_object(
+    'changed',              v_changed,
+    'id',                   v_row.id,
+    'bank_name',            v_row.bank_name,
+    'bank_code',            v_row.bank_code,
+    'account_holder',       v_row.account_holder,
+    'account_number_last4', right(v_row.account_number, 4),
+    'status',               v_row.status,
+    'rejection_reason',     v_row.rejection_reason,
+    'verified_at',          v_row.verified_at
+  );
+END;
+$$;
+
+-- =============================================
+-- CREATE ORGANIZATION APPLICATION
+-- Creates the organization, its payout bank account, its KYB document rows and
+-- its agreement stamp in ONE transaction.
+--
+-- This replaced a read-then-insert in the API route. Two things were wrong with
+-- that: the ILIKE name pre-check lost a concurrent race, and once bank details
+-- and documents were added, a failure partway through would leave the
+-- organization created — and its name taken — with no way for the applicant to
+-- retry. All or nothing is the only correct shape here.
+--
+-- The entity rule is enforced HERE, not only in the route, so it cannot be
+-- bypassed by calling the RPC directly.
+--
+-- Failures RAISE with a stable sentinel prefix so the route can map them to
+-- distinct HTTP codes; same approach as the "Tournament is full" message the
+-- checkout route matches on.
+-- =============================================
+CREATE OR REPLACE FUNCTION create_organization_application(
+  p_created_by          uuid,
+  p_name                varchar(255),
+  p_email               varchar(255),
+  p_entity_type         org_entity_type,
+  p_agreement_version   varchar(20),
+  p_bank_code           varchar(11),
+  p_bank_name           varchar(100),
+  p_account_holder      varchar(255),
+  p_account_number      varchar(50),
+  p_documents           jsonb,
+  p_description         text    DEFAULT NULL,
+  p_links               jsonb   DEFAULT NULL,
+  p_phone               varchar(20) DEFAULT NULL,
+  p_past_tournament_refs text   DEFAULT NULL,
+  p_registration_number varchar(100) DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org_id    uuid;
+  v_docs      jsonb := COALESCE(p_documents, '[]'::jsonb);
+  v_reg_no    varchar(100);
+  v_accepted  timestamptz := now();
+BEGIN
+  IF p_entity_type IS NULL THEN
+    RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: an entity type is required'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_entity_type IN ('company', 'society') THEN
+    v_reg_no := NULLIF(btrim(p_registration_number), '');
+
+    IF v_reg_no IS NULL THEN
+      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: a % must supply its registration number', p_entity_type
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_docs) d
+      WHERE d->>'doc_type' IN ('ssm', 'ros')
+    ) THEN
+      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: a % must supply an SSM or ROS document', p_entity_type
+        USING ERRCODE = 'P0001';
+    END IF;
+  ELSE
+    -- An individual has no registry entry to cite. Normalised to NULL rather
+    -- than rejected, so the column means exactly one thing.
+    v_reg_no := NULL;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_docs) d
+      WHERE d->>'doc_type' IN ('identity_document', 'authorization_letter')
+    ) THEN
+      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: an individual organizer must supply an identity document or authorization letter'
+        USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  BEGIN
+    INSERT INTO organizations (
+      name, description, links, email, phone, past_tournament_refs,
+      entity_type, registration_number, created_by,
+      agreement_version, agreement_accepted_at, agreement_accepted_by
+    ) VALUES (
+      p_name, p_description, p_links, p_email, p_phone, p_past_tournament_refs,
+      p_entity_type, v_reg_no, p_created_by,
+      p_agreement_version, v_accepted, p_created_by
+    )
+    RETURNING id INTO v_org_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      -- idx_organizations_name_active (002_indexes.sql). Catching the index
+      -- rather than pre-checking is what makes this race-free.
+      RAISE EXCEPTION 'NAME_TAKEN: an organization with this name already exists'
+        USING ERRCODE = 'P0001';
+  END;
+
+  BEGIN
+    PERFORM set_organization_bank_account(
+      v_org_id, p_bank_code, p_bank_name, p_account_holder, p_account_number, p_created_by
+    );
+  EXCEPTION
+    WHEN unique_violation THEN
+      -- uniq_active_bank_destination (002_indexes.sql).
+      RAISE EXCEPTION 'BANK_ACCOUNT_IN_USE: this bank account is already the payout destination for another organization'
+        USING ERRCODE = 'P0001';
+  END;
+
+  INSERT INTO organization_documents (
+    organization_id, doc_type, storage_path, original_filename, uploaded_by
+  )
+  SELECT
+    v_org_id,
+    (d->>'doc_type')::org_document_type,
+    d->>'storage_path',
+    NULLIF(d->>'original_filename', ''),
+    p_created_by
+  FROM jsonb_array_elements(v_docs) d;
+
+  RETURN jsonb_build_object(
+    'id',                    v_org_id,
+    'name',                  p_name,
+    'approval_status',       'pending',
+    'entity_type',           p_entity_type,
+    'registration_number',   v_reg_no,
+    'agreement_version',     p_agreement_version,
+    'agreement_accepted_at', v_accepted
+  );
+END;
+$$;
 
 -- =============================================
 -- REVIEW ORGANIZATION APPLICATION

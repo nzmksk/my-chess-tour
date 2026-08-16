@@ -11,6 +11,7 @@ const {
   mockMemberBuilder,
   mockTournamentsBuilder,
   mockPayoutBuilder,
+  mockBankBuilder,
   mockRegistrationsCountBuilder,
   mockRegistrationsListBuilder,
   mockFrom,
@@ -45,6 +46,7 @@ const {
   const mockMemberBuilder = makeBuilder({ count: 0, error: null });
   const mockTournamentsBuilder = makeBuilder({ data: [], error: null });
   const mockPayoutBuilder = makeBuilder({ data: [], error: null });
+  const mockBankBuilder = makeBuilder({ data: null, error: null });
   // Two separate registrations builders: one for count, one for list.
   // The route calls registrations twice in parallel when there are tournaments.
   let regCallIndex = 0;
@@ -56,6 +58,7 @@ const {
     if (table === "organization_memberships") return mockMemberBuilder;
     if (table === "tournaments") return mockTournamentsBuilder;
     if (table === "tournament_payout_summary") return mockPayoutBuilder;
+    if (table === "organization_bank_accounts") return mockBankBuilder;
     if (table === "registrations") {
       // Alternate between count builder and list builder on successive calls
       return regCallIndex++ % 2 === 0
@@ -78,6 +81,7 @@ const {
     mockMemberBuilder,
     mockTournamentsBuilder,
     mockPayoutBuilder,
+    mockBankBuilder,
     mockRegistrationsCountBuilder,
     mockRegistrationsListBuilder,
     mockFrom,
@@ -144,6 +148,8 @@ const PAYOUT_ROW = {
   net_payout_cents: 90000,
 };
 
+const PENDING_BANK = { status: "pending", rejection_reason: null };
+
 function makeRequest(orgId: string = ORG_ID): NextRequest {
   return new NextRequest(
     `http://localhost/api/v1/organizations/${orgId}/dashboard`,
@@ -193,6 +199,13 @@ function setPayoutResult(data: unknown, error: unknown = null) {
   ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
 }
 
+function setBankResult(data: unknown, error: unknown = null) {
+  (mockBankBuilder as Record<string, unknown>).then = (
+    onfulfilled: (v: unknown) => unknown,
+    onrejected?: (r: unknown) => unknown,
+  ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
+}
+
 function setRegistrationsCountResult(
   count: number | null,
   error: unknown = null,
@@ -227,6 +240,7 @@ describe("GET /api/v1/organizations/:orgId/dashboard", () => {
     setMemberResult(1);
     setTournamentsResult([PUBLISHED_TOURNAMENT]);
     setPayoutResult([PAYOUT_ROW]);
+    setBankResult(PENDING_BANK);
     setRegistrationsCountResult(5);
     setRegistrationsListResult([
       { tournament_id: TOUR_ID_1 },
@@ -591,6 +605,77 @@ describe("GET /api/v1/organizations/:orgId/dashboard", () => {
       expect(res.status).toBe(500);
       const json = await res.json();
       expect(json.error.code).toBe("INTERNAL_ERROR");
+    });
+
+    it("returns 500 when the bank account query fails, rather than reporting no account", async () => {
+      // A swallowed error here is worse than a 500: the payload would carry
+      // bank_account: null and the dashboard would tell an organizer who has
+      // filed their details that the organization has none on file.
+      setBankResult(null, { message: "DB error" });
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error.code).toBe("INTERNAL_ERROR");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Bank account
+  // -------------------------------------------------------------------------
+
+  describe("bank_account", () => {
+    it("passes through a pending account so the banner reads 'awaiting verification'", async () => {
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const { data } = await res.json();
+      expect(data.bank_account).toEqual(PENDING_BANK);
+    });
+
+    it("passes through the rejection reason on a rejected account", async () => {
+      setBankResult({
+        status: "rejected",
+        rejection_reason: "Name does not match bank records",
+      });
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const { data } = await res.json();
+      expect(data.bank_account.status).toBe("rejected");
+      expect(data.bank_account.rejection_reason).toBe(
+        "Name does not match bank records",
+      );
+    });
+
+    it("returns null only when the organization has no active account", async () => {
+      setBankResult(null);
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const { data } = await res.json();
+      expect(data.bank_account).toBeNull();
+    });
+
+    it("scopes the lookup to the organization's active account", async () => {
+      await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const eqMock = mockBankBuilder.eq as ReturnType<typeof vi.fn>;
+      expect(eqMock).toHaveBeenCalledWith("organization_id", ORG_ID);
+      expect(eqMock).toHaveBeenCalledWith("is_active", true);
+    });
+
+    it("never exposes the account number or holder to a non-managing member", async () => {
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const { data } = await res.json();
+      expect(data.bank_account).not.toHaveProperty("account_number");
+      expect(data.bank_account).not.toHaveProperty("account_holder");
+      const selectMock = mockBankBuilder.select as ReturnType<typeof vi.fn>;
+      expect(selectMock).toHaveBeenCalledWith("status, rejection_reason");
     });
   });
 

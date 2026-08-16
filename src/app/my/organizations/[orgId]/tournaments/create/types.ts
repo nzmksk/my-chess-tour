@@ -16,7 +16,7 @@ import type {
 // WIZARD STATE
 // =============================================
 
-export type WizardStepId =
+type WizardStepId =
   | "basic-info"
   | "format"
   | "fees"

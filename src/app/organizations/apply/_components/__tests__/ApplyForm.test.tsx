@@ -22,6 +22,25 @@ vi.mock("next/navigation", () => ({
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
+// KYB documents go browser→storage before the POST, so the form now needs a
+// Supabase browser client. Uploads succeed by default; the tests that care
+// about failure override it.
+const mockUpload = vi.fn();
+const mockGetUser = vi.fn();
+vi.mock("@/services/supabase/client", () => ({
+  createClient: () => ({
+    auth: { getUser: mockGetUser },
+    storage: { from: () => ({ upload: mockUpload }) },
+  }),
+}));
+
+const APP_USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
+
+beforeEach(() => {
+  mockGetUser.mockResolvedValue({ data: { user: { id: APP_USER_ID } } });
+  mockUpload.mockResolvedValue({ error: null });
+});
+
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -67,6 +86,43 @@ function getAgreementCheckbox() {
 
 function acceptAgreement() {
   fireEvent.click(getAgreementCheckbox());
+}
+
+/**
+ * Fill everything the form now refuses to submit without: the payout bank
+ * account, the entity registration number, and one verification document of the
+ * type the selected entity requires. Defaults to the 'company' entity, which is
+ * what the form opens on.
+ */
+function fillPayoutAndKyb() {
+  fireEvent.change(screen.getByLabelText("Bank"), {
+    target: { value: "MBBEMYKL" },
+  });
+  fireEvent.change(screen.getByLabelText("Account Holder Name"), {
+    target: { value: "Test Org" },
+  });
+  fireEvent.change(screen.getByLabelText("Account Number"), {
+    target: { value: "5140 1234-5678" },
+  });
+  fireEvent.change(screen.getByLabelText(/SSM Registration Number/), {
+    target: { value: "202001234567" },
+  });
+  fireEvent.change(screen.getByLabelText("Verification documents"), {
+    target: {
+      files: [
+        new File(["%PDF-1.4"], "ssm.pdf", { type: "application/pdf" }),
+      ],
+    },
+  });
+}
+
+function fillOrgBasics(name = "Test Org") {
+  fireEvent.change(screen.getByPlaceholderText("e.g., KL Chess Association"), {
+    target: { value: name },
+  });
+  fireEvent.change(screen.getByPlaceholderText("chess@org.com"), {
+    target: { value: "test@org.com" },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +206,7 @@ describe("ApplyForm", () => {
     it("updates the type (select) of a link row", () => {
       render(<ApplyForm />);
       fireEvent.click(getAddLinkButton());
-      const select = screen.getByRole("combobox") as HTMLSelectElement;
+      const select = screen.getByLabelText("Link type 1") as HTMLSelectElement;
       fireEvent.change(select, { target: { value: "facebook" } });
       expect(select.value).toBe("facebook");
     });
@@ -168,12 +224,8 @@ describe("ApplyForm", () => {
 
     async function submitForm() {
       render(<ApplyForm />);
-      const nameInput = screen.getByPlaceholderText(
-        "e.g., KL Chess Association",
-      );
-      const emailInput = screen.getByPlaceholderText("chess@org.com");
-      fireEvent.change(nameInput, { target: { value: "Test Org" } });
-      fireEvent.change(emailInput, { target: { value: "test@org.com" } });
+      fillOrgBasics();
+      fillPayoutAndKyb();
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
       });
@@ -230,12 +282,8 @@ describe("ApplyForm", () => {
       fireEvent.change(urlInput, { target: { value: "https://fb.com/chess" } });
 
       fireEvent.click(getAddLinkButton()); // add a second (empty) link row
-      const nameInput = screen.getByPlaceholderText(
-        "e.g., KL Chess Association",
-      );
-      const emailInput = screen.getByPlaceholderText("chess@org.com");
-      fireEvent.change(nameInput, { target: { value: "Test Org" } });
-      fireEvent.change(emailInput, { target: { value: "test@org.com" } });
+      fillOrgBasics();
+      fillPayoutAndKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -250,12 +298,8 @@ describe("ApplyForm", () => {
       render(<ApplyForm />);
       fireEvent.click(getAddLinkButton());
       // leave URL empty
-      const nameInput = screen.getByPlaceholderText(
-        "e.g., KL Chess Association",
-      );
-      const emailInput = screen.getByPlaceholderText("chess@org.com");
-      fireEvent.change(nameInput, { target: { value: "Test Org" } });
-      fireEvent.change(emailInput, { target: { value: "test@org.com" } });
+      fillOrgBasics();
+      fillPayoutAndKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -268,6 +312,8 @@ describe("ApplyForm", () => {
     it("sends the acceptance but never a version — the server decides that", async () => {
       render(<ApplyForm />);
       acceptAgreement();
+      fillOrgBasics();
+      fillPayoutAndKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -277,17 +323,112 @@ describe("ApplyForm", () => {
       expect(body.agreement_accepted).toBe(true);
       expect(body).not.toHaveProperty("agreement_version");
     });
+
+    it("sends a SWIFT code and a normalized account number, never a bank name", async () => {
+      // The server derives the display name from the code, so the two cannot
+      // disagree about which bank the money is going to.
+      await submitForm();
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.bank_code).toBe("MBBEMYKL");
+      expect(body.bank_account_number).toBe("514012345678");
+      expect(body).not.toHaveProperty("bank_name");
+    });
+
+    it("uploads each document to the user's own folder and submits its path", async () => {
+      await submitForm();
+
+      expect(mockUpload).toHaveBeenCalledTimes(1);
+      const uploadedPath = mockUpload.mock.calls[0][0] as string;
+      expect(uploadedPath.startsWith(`users/${APP_USER_ID}/org-kyb/`)).toBe(
+        true,
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.documents).toHaveLength(1);
+      expect(body.documents[0]).toMatchObject({
+        doc_type: "ssm",
+        storage_path: uploadedPath,
+        original_filename: "ssm.pdf",
+      });
+    });
   });
 
-  describe("handleSubmit — error", () => {
-    it("shows the API error message on a failed response", async () => {
-      mockFetch.mockResolvedValueOnce(makeErrorFetch("Already applied"));
+  // The API and the RPC both enforce these; checking them here saves an upload
+  // and a round trip, and names the missing piece.
+  describe("client-side preconditions", () => {
+    async function submitWith(setup: () => void) {
       render(<ApplyForm />);
-
+      fillOrgBasics();
+      setup();
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
       });
+    }
 
+    it("refuses to submit without a bank chosen", async () => {
+      await submitWith(() => {});
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(screen.getByText("Please choose your bank.")).toBeDefined();
+    });
+
+    it("refuses to submit without a registration number", async () => {
+      await submitWith(() => {
+        fireEvent.change(screen.getByLabelText("Bank"), {
+          target: { value: "MBBEMYKL" },
+        });
+        fireEvent.change(screen.getByLabelText("Account Holder Name"), {
+          target: { value: "Test Org" },
+        });
+        fireEvent.change(screen.getByLabelText("Account Number"), {
+          target: { value: "514012345678" },
+        });
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(
+        screen.getByText("Please enter your SSM Registration Number."),
+      ).toBeDefined();
+    });
+
+    it("refuses to submit without the document the entity type requires", async () => {
+      await submitWith(() => {
+        fireEvent.change(screen.getByLabelText("Bank"), {
+          target: { value: "MBBEMYKL" },
+        });
+        fireEvent.change(screen.getByLabelText("Account Holder Name"), {
+          target: { value: "Test Org" },
+        });
+        fireEvent.change(screen.getByLabelText("Account Number"), {
+          target: { value: "514012345678" },
+        });
+        fireEvent.change(screen.getByLabelText(/SSM Registration Number/), {
+          target: { value: "202001234567" },
+        });
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockUpload).not.toHaveBeenCalled();
+    });
+
+    it("drops the registration number field for an individual organizer", async () => {
+      render(<ApplyForm />);
+      fireEvent.click(screen.getByLabelText(/Individual organizer/));
+      expect(screen.queryByLabelText(/Registration Number/)).toBeNull();
+    });
+  });
+
+  describe("handleSubmit — error", () => {
+    async function submitReady() {
+      render(<ApplyForm />);
+      fillOrgBasics();
+      fillPayoutAndKyb();
+      await act(async () => {
+        fireEvent.submit(document.querySelector("form")!);
+      });
+    }
+
+    it("shows the API error message on a failed response", async () => {
+      mockFetch.mockResolvedValueOnce(makeErrorFetch("Already applied"));
+      await submitReady();
       expect(screen.getByText("Already applied")).toBeDefined();
     });
 
@@ -296,12 +437,7 @@ describe("ApplyForm", () => {
         ok: false,
         json: vi.fn().mockResolvedValue({}),
       });
-      render(<ApplyForm />);
-
-      await act(async () => {
-        fireEvent.submit(document.querySelector("form")!);
-      });
-
+      await submitReady();
       expect(
         screen.getByText("Submission failed. Please try again."),
       ).toBeDefined();
@@ -309,21 +445,25 @@ describe("ApplyForm", () => {
 
     it("shows a network error when fetch throws", async () => {
       mockFetch.mockRejectedValueOnce(new Error("Network failure"));
-      render(<ApplyForm />);
-
-      await act(async () => {
-        fireEvent.submit(document.querySelector("form")!);
-      });
-
+      await submitReady();
       expect(
         screen.getByText("A network error occurred. Please try again."),
       ).toBeDefined();
+    });
+
+    it("stops and reports when a document upload fails", async () => {
+      mockUpload.mockResolvedValue({ error: { message: "storage down" } });
+      await submitReady();
+      expect(screen.getByText(/Failed to upload ssm.pdf/)).toBeDefined();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it("re-enables the submit button after an error", async () => {
       mockFetch.mockResolvedValueOnce(makeErrorFetch("Bad request"));
       render(<ApplyForm />);
       acceptAgreement();
+      fillOrgBasics();
+      fillPayoutAndKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -345,8 +485,10 @@ describe("ApplyForm", () => {
         }),
       );
       render(<ApplyForm />);
+      fillOrgBasics();
+      fillPayoutAndKyb();
 
-      act(() => {
+      await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
       });
 

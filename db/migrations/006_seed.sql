@@ -42,6 +42,7 @@ DECLARE
   p_registration_view integer;
   p_payment_view      integer;
   p_refund_manage     integer;
+  p_bank_account_manage integer;
 BEGIN
   -- Roles
   INSERT INTO roles (name, scope) VALUES ('platform_admin', 'global') RETURNING id INTO r_platform_admin;
@@ -60,6 +61,9 @@ BEGIN
   INSERT INTO permissions (key) VALUES ('registration.view') RETURNING id INTO p_registration_view;
   INSERT INTO permissions (key) VALUES ('payment.view') RETURNING id INTO p_payment_view;
   INSERT INTO permissions (key) VALUES ('refund.manage') RETURNING id INTO p_refund_manage;
+  -- Owner-only. Where the organization's money lands is not something a
+  -- delegated org `admin` should be able to read or redirect.
+  INSERT INTO permissions (key) VALUES ('bank_account.manage') RETURNING id INTO p_bank_account_manage;
 
   -- platform_admin: platform.manage (implies all)
   INSERT INTO role_permissions (role_id, permission_id) VALUES (r_platform_admin, p_platform_manage);
@@ -74,9 +78,10 @@ BEGIN
     (r_owner, p_tournament_view),
     (r_owner, p_registration_view),
     (r_owner, p_payment_view),
-    (r_owner, p_refund_manage);
+    (r_owner, p_refund_manage),
+    (r_owner, p_bank_account_manage);
 
-  -- admin: all except org.manage and tournament.delete
+  -- admin: all except org.manage, tournament.delete and bank_account.manage
   INSERT INTO role_permissions (role_id, permission_id) VALUES
     (r_admin, p_org_invite),
     (r_admin, p_tournament_create),
@@ -91,7 +96,7 @@ BEGIN
     (r_member, p_tournament_view),
     (r_member, p_registration_view);
 
-  RAISE NOTICE '[0/4] RBAC seeded: 4 roles, 10 permissions';
+  RAISE NOTICE '[0/4] RBAC seeded: 4 roles, 11 permissions';
 END;
 $$;
 
@@ -205,6 +210,12 @@ DECLARE
   ];
   org_first   text[] := ARRAY['Ahmad','Mohd','Wei','Raj','Siti'];
   org_last    text[] := ARRAY['Kamaruddin','Yusof','Ming','Krishnan','Rahman'];
+  -- Payout destinations. Seeded as 'verified' because every payout phase from
+  -- #519 onward needs a usable recipient to develop against, and because an
+  -- unverified seed org would open its dashboard behind the bank-account banner.
+  -- SWIFT codes must exist in MALAYSIAN_BANKS (src/lib/malaysian-banks.ts).
+  org_bank_codes   text[] := ARRAY['MBBEMYKL','CIBBMYKL','PBBEMYKL','RHBBMYKL','HLBBMYKL'];
+  org_bank_names   text[] := ARRAY['Maybank','CIMB Bank','Public Bank','RHB Bank','Hong Leong Bank'];
 
   t_names text[] := ARRAY[
     'KL Open Chess Championship',        'Selangor Rapid Chess Tournament',
@@ -419,22 +430,36 @@ BEGIN
       name, description, email,
       phone, approval_status, reviewed_at,
       reviewed_by, created_by,
+      entity_type, registration_number,
       agreement_version, agreement_accepted_at, agreement_accepted_by
     ) VALUES (
       org_names[i], org_descs[i], org_emails[i],
       '+601' || (i + 1)::text || '-' || (1000000 + i * 123456)::text,
       'approved', now(),
       new_user_id, new_user_id,
+      'society', 'PPM-' || lpad(i::text, 3, '0') || '-14-01012020',
       '2026-08-02', now(), new_user_id
     ) RETURNING id INTO new_org_id;
 
     org_profile_ids := array_append(org_profile_ids, new_org_id);
 
+    -- Inserted directly rather than through set_organization_bank_account,
+    -- which can only ever produce a 'pending' row (CHIP Send is what verifies,
+    -- from #519). A seed needs the end state, not the starting one.
+    INSERT INTO public.organization_bank_accounts (
+      organization_id, bank_name, bank_code, account_holder, account_number,
+      status, verified_at, created_by
+    ) VALUES (
+      new_org_id, org_bank_names[i], org_bank_codes[i], org_names[i],
+      '5140' || lpad((1000000 + i * 98765)::text, 8, '0'),
+      'verified', now(), new_user_id
+    );
+
     INSERT INTO public.organization_memberships (organization_id, user_id, role_id)
     VALUES (new_org_id, new_user_id, r_owner_id);
   END LOOP;
 
-  RAISE NOTICE '  > 5 organizers created';
+  RAISE NOTICE '  > 5 organizers created (each with a verified payout bank account)';
 
   -- ===========================================================================
   -- 2. PLAYERS

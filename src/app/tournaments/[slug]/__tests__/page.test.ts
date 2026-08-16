@@ -56,10 +56,15 @@ vi.mock("@/services/supabase/admin", () => ({
 
 const mockFetch = vi.fn();
 
+// The route param is the slug; "t1" stays as the tournament's UUID, which the
+// page resolves from the fetched payload for its internal queries.
+const SLUG = "kl-open-rapid-2026";
+
 function makeTournamentPayload(overrides: Record<string, unknown> = {}) {
   return {
     data: {
       id: "t1",
+      slug: SLUG,
       name: "KL Open Rapid Championship 2026",
       description: "Annual rapid chess championship.",
       venue: {
@@ -107,7 +112,7 @@ describe("TournamentDetailPage", () => {
 
     const { default: TournamentDetailPage } = await import("../page");
     const result = await TournamentDetailPage({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(result).not.toBeNull();
@@ -129,7 +134,7 @@ describe("TournamentDetailData", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    const result = await TournamentDetailData({ id: "t1" });
+    const result = await TournamentDetailData({ slug: SLUG });
 
     expect(result).toBeDefined();
   });
@@ -138,7 +143,7 @@ describe("TournamentDetailData", () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
     const { TournamentDetailData } = await import("../page");
-    await TournamentDetailData({ id: "nonexistent" });
+    await TournamentDetailData({ slug: "nonexistent" });
 
     expect(mockNotFound).toHaveBeenCalled();
   });
@@ -147,7 +152,7 @@ describe("TournamentDetailData", () => {
     mockFetch.mockRejectedValue(new Error("Network failure"));
 
     const { TournamentDetailData } = await import("../page");
-    await TournamentDetailData({ id: "t1" });
+    await TournamentDetailData({ slug: SLUG });
 
     expect(mockNotFound).toHaveBeenCalled();
   });
@@ -159,7 +164,7 @@ describe("TournamentDetailData", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    await TournamentDetailData({ id: "t1" });
+    await TournamentDetailData({ slug: SLUG });
 
     expect(mockNotFound).toHaveBeenCalled();
   });
@@ -174,7 +179,7 @@ describe("TournamentDetailData", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    const result = await TournamentDetailData({ id: "t1" });
+    const result = await TournamentDetailData({ slug: SLUG });
 
     expect(result).toBeDefined();
     expect(mockNotFound).not.toHaveBeenCalled();
@@ -187,7 +192,7 @@ describe("TournamentDetailData", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    const result = await TournamentDetailData({ id: "t1" });
+    const result = await TournamentDetailData({ slug: SLUG });
 
     expect(result).toBeDefined();
     expect(mockNotFound).not.toHaveBeenCalled();
@@ -206,7 +211,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "nonexistent" }),
+      params: Promise.resolve({ slug: "nonexistent" }),
     });
 
     expect(result).toEqual({ title: "Tournament Not Found" });
@@ -220,7 +225,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(result.title).toBe("KL Open Rapid Championship 2026");
@@ -237,7 +242,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(result.description).toBe("Custom tournament description.");
@@ -256,7 +261,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(result.description).toContain(" FIDE rated.");
@@ -276,7 +281,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(result.description).not.toContain("FIDE rated");
@@ -291,7 +296,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect((result.openGraph as Record<string, unknown>)?.type).toBe("article");
@@ -310,7 +315,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -329,7 +334,7 @@ describe("generateMetadata", () => {
 
     const { generateMetadata } = await import("../page");
     const result = await generateMetadata({
-      params: Promise.resolve({ id: "t1" }),
+      params: Promise.resolve({ slug: SLUG }),
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -415,7 +420,7 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock({ data: [], error: null }, [], []),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("returns empty array when registrations query errors", async () => {
@@ -423,7 +428,7 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock({ data: null, error: { message: "DB error" } }, [], []),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("returns empty array when all user_ids are null", async () => {
@@ -431,7 +436,7 @@ describe("fetchStartingRank coverage", () => {
       makeFromMock({ data: [{ user_id: null }], error: null }, [], []),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("covers rapid format: uses rapid fide_rating field", async () => {
@@ -454,7 +459,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("covers blitz format: uses blitz fide_rating field", async () => {
@@ -486,7 +491,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("covers classical format: uses standard fide_rating, falls back to national", async () => {
@@ -518,7 +523,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("filters null user_ids and handles missing user in map", async () => {
@@ -530,7 +535,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("sorts FIDE-rated players first, MCF-only second, then unrated alphabetically", async () => {
@@ -580,7 +585,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("covers classical format with fide_rating object: uses standard field", async () => {
@@ -612,7 +617,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("sorts MCF-only player above unrated player", async () => {
@@ -648,7 +653,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("covers sort branch: unrated player compared against MCF-rated player", async () => {
@@ -700,7 +705,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("covers sort branch: two unrated players sorted alphabetically", async () => {
@@ -738,7 +743,7 @@ describe("fetchStartingRank coverage", () => {
       ),
     );
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 
   it("covers the logged-in user path: registration status check then fetchStartingRank", async () => {
@@ -779,7 +784,7 @@ describe("fetchStartingRank coverage", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    expect(await TournamentDetailData({ id: "t1" })).toBeDefined();
+    expect(await TournamentDetailData({ slug: SLUG })).toBeDefined();
   });
 });
 
@@ -822,7 +827,7 @@ describe("starting rank visibility rules", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    const result = await TournamentDetailData({ id: "t1" });
+    const result = await TournamentDetailData({ slug: SLUG });
 
     expect(canViewProp(result)).toBe(false);
   });
@@ -844,7 +849,7 @@ describe("starting rank visibility rules", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    const result = await TournamentDetailData({ id: "t1" });
+    const result = await TournamentDetailData({ slug: SLUG });
 
     expect(canViewProp(result)).toBe(true);
   });
@@ -866,7 +871,7 @@ describe("starting rank visibility rules", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    const result = await TournamentDetailData({ id: "t1" });
+    const result = await TournamentDetailData({ slug: SLUG });
 
     expect(canViewProp(result)).toBe(true);
   });
@@ -885,7 +890,7 @@ describe("starting rank visibility rules", () => {
     });
 
     const { TournamentDetailData } = await import("../page");
-    const result = await TournamentDetailData({ id: "t1" });
+    const result = await TournamentDetailData({ slug: SLUG });
 
     expect(canViewProp(result)).toBe(false);
   });

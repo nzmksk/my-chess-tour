@@ -8,6 +8,8 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_global_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_bank_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournament_cancellation_requests ENABLE ROW LEVEL SECURITY;
@@ -149,6 +151,42 @@ USING (has_org_permission(app_user_id(), id, 'org.manage'));
 CREATE POLICY "Platform admins full access to organizations"
 ON organizations FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+-- =============================================
+-- ORGANIZATION BANK ACCOUNTS
+-- Payout destination. Deliberately NO general org-member SELECT: a `member` or
+-- `admin` of an organization has no business reading where its money goes, and
+-- the last-4 an organizer needs to recognise their own account is served by the
+-- API, not by table access.
+-- =============================================
+CREATE POLICY "Org bank managers can view own bank accounts"
+ON organization_bank_accounts FOR SELECT
+USING (has_org_permission(app_user_id(), organization_id, 'bank_account.manage'));
+
+CREATE POLICY "Platform admins full access to bank accounts"
+ON organization_bank_accounts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+-- Following the `users` precedent above: no client write capability at all.
+-- Every write goes through set_organization_bank_account (which supersedes
+-- rather than updates, so verification can't go stale) or the service role. A
+-- column-scoped UPDATE policy could not express that rule, and a blanket one
+-- would let a JWT holder set status='verified' on their own row.
+REVOKE UPDATE, INSERT, DELETE ON organization_bank_accounts FROM anon, authenticated;
+
+-- =============================================
+-- ORGANIZATION DOCUMENTS (KYB)
+-- Paths into a private bucket, so reading a row is close to reading the file.
+-- =============================================
+CREATE POLICY "Org managers can view own documents"
+ON organization_documents FOR SELECT
+USING (has_org_permission(app_user_id(), organization_id, 'org.manage'));
+
+CREATE POLICY "Platform admins full access to org documents"
+ON organization_documents FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON organization_documents FROM anon, authenticated;
 
 -- =============================================
 -- ORGANIZATION MEMBERSHIPS
