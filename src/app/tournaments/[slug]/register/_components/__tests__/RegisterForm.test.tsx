@@ -63,6 +63,7 @@ function makeTournament(
 ): TournamentDetail {
   return {
     id: TOURNAMENT_ID,
+    slug: "test-open-2026",
     name: "Test Open 2026",
     venue: { name: "Chess Club", state: "Selangor" },
     timezone: "Asia/Kuala_Lumpur",
