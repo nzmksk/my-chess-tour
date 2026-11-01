@@ -133,6 +133,22 @@ describe("forgotPassword action", () => {
     expect(sentLink).toContain("next=%2Fauth%2Fupdate-password");
   });
 
+  it("falls back to localhost when NEXT_PUBLIC_SITE_URL is unset", async () => {
+    mocks.validateForgotPasswordForm.mockReturnValue({
+      errors: {},
+      isValid: true,
+    });
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+
+    await forgotPassword(INITIAL, makeFormData({ email: "user@example.com" }));
+
+    const [, sentLink] = mocks.sendPasswordResetEmail.mock.calls[0] ?? [];
+    expect(sentLink).toMatch(
+      /^http:\/\/localhost:3000\/api\/v1\/auth\/callback\?/,
+    );
+    expect(sentLink).not.toContain("undefined");
+  });
+
   // --- Error from Supabase (email enumeration guard) -----------------------
 
   it("does not send email when generateLink returns an error", async () => {
