@@ -21,6 +21,7 @@ vi.mock("resend", () => ({
 }));
 
 import {
+  sendBankVerificationEmail,
   sendCancellationReviewEmail,
   sendPasswordResetEmail,
   sendTournamentCancellationEmail,
@@ -398,5 +399,99 @@ describe("sendCancellationReviewEmail", () => {
         approved: true,
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("sendBankVerificationEmail", () => {
+  const base = {
+    recipientName: "Olivia",
+    orgName: "KL Chess Club",
+    orgId: "11111111-1111-4111-8111-111111111111",
+    bankName: "Maybank",
+    accountLast4: "2229",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "<html>Hi {{recipientName}}, {{orgName}} {{bankName}} *{{accountLast4}} " +
+        '— {{rejectionReason}} <a href="{{settingsUrl}}">settings</a></html>',
+    );
+    mockSend.mockResolvedValue({ error: null });
+    process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
+  });
+
+  it("uses the verified template and subject when verified", async () => {
+    await sendBankVerificationEmail("owner@example.com", {
+      ...base,
+      verified: true,
+    });
+
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("bank-account-verified.html"),
+      "utf-8",
+    );
+    const { subject, to } = mockSend.mock.calls[0][0];
+    expect(to).toBe("owner@example.com");
+    expect(subject).toMatch(/verified/i);
+    expect(subject).toMatch(/KL Chess Club/);
+  });
+
+  it("uses the failed template with the reason when not verified", async () => {
+    await sendBankVerificationEmail("owner@example.com", {
+      ...base,
+      verified: false,
+      rejectionReason: "Name does not match",
+    });
+
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("bank-account-verification-failed.html"),
+      "utf-8",
+    );
+    const { html, subject } = mockSend.mock.calls[0][0];
+    expect(subject).toMatch(/couldn't verify/i);
+    expect(html).toContain("Name does not match");
+  });
+
+  it("links to the organization's settings page", async () => {
+    await sendBankVerificationEmail("owner@example.com", {
+      ...base,
+      verified: false,
+    });
+    const { html } = mockSend.mock.calls[0][0];
+    expect(html).toContain(
+      `https://mychesstour.com/my/organizations/${base.orgId}/settings`,
+    );
+  });
+
+  it("renders at most the last 4 digits even if given a full number", async () => {
+    await sendBankVerificationEmail("owner@example.com", {
+      ...base,
+      accountLast4: "157380112229",
+      verified: true,
+    });
+    const { html } = mockSend.mock.calls[0][0];
+    expect(html).toContain("*2229");
+    expect(html).not.toContain("157380112229");
+  });
+
+  it("escapes user-supplied values", async () => {
+    await sendBankVerificationEmail("owner@example.com", {
+      ...base,
+      orgName: "<script>x</script>",
+      verified: false,
+      rejectionReason: "<b>bad</b>",
+    });
+    const { html } = mockSend.mock.calls[0][0];
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;b&gt;bad&lt;/b&gt;");
+  });
+
+  it("throws when Resend reports an error", async () => {
+    mockSend.mockResolvedValue({ error: { message: "boom" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendBankVerificationEmail("owner@example.com", { ...base, verified: true }),
+    ).rejects.toThrow(/boom/);
   });
 });

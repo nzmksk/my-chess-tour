@@ -132,3 +132,63 @@ export async function sendCancellationReviewEmail(
     );
   }
 }
+
+// Notifies an organization owner/admin of CHIP Send's verdict on their payout
+// bank account — verified, or could not be verified (with the reason and a link
+// to fix the details). One function with a boolean branch, like
+// sendCancellationReviewEmail.
+//
+// Only the last 4 digits of the account number are ever passed in or rendered:
+// an email is a copy of the data we no longer control.
+export async function sendBankVerificationEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    orgName: string;
+    orgId: string;
+    bankName: string;
+    accountLast4: string;
+    verified: boolean;
+    rejectionReason?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const settingsUrl = `${siteUrl}/my/organizations/${encodeURIComponent(params.orgId)}/settings`;
+
+  const template = params.verified
+    ? "bank-account-verified.html"
+    : "bank-account-verification-failed.html";
+
+  // Defence in depth: whatever a caller passes, render at most 4 digits.
+  const last4 = params.accountLast4.replace(/\D/g, "").slice(-4);
+
+  let html = loadTemplate(template)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{orgName\}\}/g, escapeHtml(params.orgName))
+    .replace(/\{\{bankName\}\}/g, escapeHtml(params.bankName))
+    .replace(/\{\{accountLast4\}\}/g, last4)
+    .replace(/\{\{settingsUrl\}\}/g, settingsUrl);
+
+  if (!params.verified) {
+    html = html.replace(
+      /\{\{rejectionReason\}\}/g,
+      escapeHtml(params.rejectionReason ?? ""),
+    );
+  }
+
+  const subject = params.verified
+    ? `Your payout account for ${params.orgName} is verified`
+    : `Action needed: we couldn't verify the payout account for ${params.orgName}`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send bank verification email:", error);
+    throw new Error(`Failed to send bank verification email: ${error.message}`);
+  }
+}
