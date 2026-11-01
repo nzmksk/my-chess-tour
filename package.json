@@ -21,7 +21,7 @@
     "cmdk": "^1.1.1",
     "country-data-list": "^1.6.3",
     "lucide-react": "1.28.0",
-    "next": "16.3.0",
+    "next": "16.4.3",
     "radix-ui": "1.6.1",
     "react": "19.2.7",
     "react-circle-flags": "0.0.30",
@@ -38,14 +38,14 @@
     "@types/node": "26.1.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/coverage-v8": "4.1.12",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.0",
+    "eslint-config-next": "16.4.3",
     "jsdom": "29.1.1",
     "knip": "6.31.0",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "0.8.1",
     "typescript": "6.0.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.12"
   }
 }
