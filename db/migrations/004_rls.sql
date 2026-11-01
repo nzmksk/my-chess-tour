@@ -321,9 +321,23 @@ CREATE POLICY "Players can view own refunds"
 ON refunds FOR SELECT
 USING (can_act_for(requested_by));
 
-CREATE POLICY "Players can request refund"
-ON refunds FOR INSERT
-WITH CHECK (can_act_for(requested_by));
+-- No client write capability, as for registrations above. The INSERT policy
+-- that used to sit here checked only can_act_for(requested_by): not that the
+-- registration was the caller's, and not refund_amount_cents, status or
+-- processed_at. A JWT holder could therefore
+--   * pre-insert a live refund on their own registration with any amount; when
+--     the tournament is cancelled, review_tournament_cancellation's
+--     ON CONFLICT DO NOTHING keeps that row, and list_pending_cancellation_refunds
+--     hands the inflated amount to the refund job, or
+--   * insert a near-zero live refund on ANOTHER player's registration, which
+--     uniq_active_refund_per_registration then lets stand in place of their
+--     real cancellation refund.
+--
+-- No application code needs it: refunds are created by
+-- review_tournament_cancellation and settled by settle_refund, both
+-- service-role only. A player-initiated refund request, if it is ever built,
+-- belongs behind an API route. db/tests/refund_writes.sql checks this.
+REVOKE UPDATE, INSERT, DELETE ON refunds FROM anon, authenticated;
 
 -- Org members with refund.manage can view/manage refunds for their tournaments
 CREATE POLICY "Org refund managers can view tournament refunds"
