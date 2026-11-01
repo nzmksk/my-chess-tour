@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { registerActiveOrganizationBankAccount } from "@/services/payouts/bank-account";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =
@@ -199,6 +200,15 @@ export async function PATCH(
       { error: { code: "INTERNAL_ERROR", message: error.message } },
       { status: 500 },
     );
+  }
+
+  // The approval has committed. Only now is the payout account registered with
+  // CHIP Send — never at application time, so a pending applicant's details
+  // don't reach the PSP and a rejected one doesn't cost a verification.
+  // Best-effort, like the cancellation route's refunds: it never throws, and a
+  // failure leaves the account 'pending' without affecting this response.
+  if (action === "approve") {
+    await registerActiveOrganizationBankAccount(id);
   }
 
   return NextResponse.json({ data }, { status: 200 });

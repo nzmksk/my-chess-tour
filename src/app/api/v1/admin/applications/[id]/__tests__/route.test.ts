@@ -60,6 +60,12 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+const { mockRegisterBank } = vi.hoisted(() => ({ mockRegisterBank: vi.fn() }));
+
+vi.mock("@/services/payouts/bank-account", () => ({
+  registerActiveOrganizationBankAccount: mockRegisterBank,
+}));
+
 import { GET, PATCH } from "../route";
 
 // ---------------------------------------------------------------------------
@@ -364,6 +370,18 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       const json = await res.json();
       expect(json.data.approval_status).toBe("approved");
     });
+
+    it("registers the payout bank account with CHIP Send after approving", async () => {
+      await PATCH(makePatchRequest(APP_ID, { action: "approve" }), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
+      expect(mockRegisterBank).toHaveBeenCalledOnce();
+      expect(mockRegisterBank).toHaveBeenCalledWith(APP_ID);
+      // Only after the review RPC has committed.
+      expect(mockAdminRpc.mock.invocationCallOrder[0]).toBeLessThan(
+        mockRegisterBank.mock.invocationCallOrder[0],
+      );
+    });
   });
 
   // ── Reject ────────────────────────────────────────────────────────────────
@@ -390,6 +408,17 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       const json = await res.json();
       expect(json.data.approval_status).toBe("rejected");
     });
+
+    it("does not register a bank account for a rejected application", async () => {
+      await PATCH(
+        makePatchRequest(APP_ID, {
+          action: "reject",
+          rejection_reason: "Insufficient information",
+        }),
+        { params: Promise.resolve({ id: APP_ID }) },
+      );
+      expect(mockRegisterBank).not.toHaveBeenCalled();
+    });
   });
 
   // ── Error handling ────────────────────────────────────────────────────────
@@ -415,6 +444,7 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
         params: Promise.resolve({ id: APP_ID }),
       });
       expect(res.status).toBe(500);
+      expect(mockRegisterBank).not.toHaveBeenCalled();
     });
   });
 });
