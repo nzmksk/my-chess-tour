@@ -919,10 +919,13 @@ $$;
 --
 -- Deliberately still callable by clients: app_user_id, can_act_for,
 -- has_global_permission, has_org_permission, is_org_member, is_org_approved
--- (RLS policies and the user-session permission checks depend on them),
--- get_participant_counts (read-only, public counts) and
--- assert_tournament_capacity (the enforce_tournament_capacity trigger calls it
--- with the inserting user's rights, and RLS lets players insert registrations).
+-- (RLS policies and the user-session permission checks depend on them) and
+-- get_participant_counts (read-only, public counts).
+--
+-- assert_tournament_capacity is revoked too. The enforce_tournament_capacity
+-- trigger calls it with the inserting role's rights, but clients can no longer
+-- insert registrations (004_rls.sql), so it only ever fires inside the
+-- SECURITY DEFINER functions in 007, which run as the owner.
 --
 -- db/tests/function_privileges.sql fails if a SECURITY DEFINER function is
 -- executable by anon or authenticated without being on that list.
@@ -931,8 +934,10 @@ REVOKE EXECUTE ON FUNCTION set_organization_bank_account   FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION create_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_tournament_cancellation  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION assert_tournament_capacity      FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_tournament_cancellation  TO service_role;
+GRANT EXECUTE ON FUNCTION assert_tournament_capacity      TO service_role;

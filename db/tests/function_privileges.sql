@@ -35,6 +35,7 @@ DECLARE
     'create_organization_application',
     'review_organization_application',
     'review_tournament_cancellation',
+    'assert_tournament_capacity',
     'create_registration_with_payment',
     'start_new_payment_attempt',
     'settle_registration_payment',
@@ -52,10 +53,7 @@ DECLARE
     'has_org_permission',
     'is_org_member',
     'is_org_approved',
-    'get_participant_counts',
-    -- Called by the enforce_tournament_capacity trigger, which runs with the
-    -- inserting user's rights; RLS lets players insert registrations directly.
-    'assert_tournament_capacity'
+    'get_participant_counts'
   ];
   v_name    text;
   v_role    text;
