@@ -1,7 +1,7 @@
-import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
+import { selfApiFetch } from "@/lib/self-fetch";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "./_components/TournamentWizardContext";
 import WizardShell from "./_components/WizardShell";
@@ -15,20 +15,9 @@ interface OrgData {
   organization: { id: string; name: string; approval_status: string };
 }
 
-async function fetchOrg(
-  orgId: string,
-  cookieHeader: string,
-): Promise<OrgData | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
+async function fetchOrg(orgId: string): Promise<OrgData | null> {
   try {
-    const res = await fetch(
-      `${baseUrl}/api/v1/organizations/${orgId}/dashboard`,
-      {
-        cache: "no-store",
-        headers: { cookie: cookieHeader },
-      },
-    );
+    const res = await selfApiFetch(`/api/v1/organizations/${orgId}/dashboard`);
     if (!res.ok) return null;
     const json = await res.json();
     return json.data ?? null;
@@ -50,10 +39,7 @@ export default async function CreateTournamentPage({
     redirect("/auth/login");
   }
 
-  const headersList = await headers();
-  const cookieHeader = headersList.get("cookie") ?? "";
-
-  const data = await fetchOrg(orgId, cookieHeader);
+  const data = await fetchOrg(orgId);
 
   if (!data) {
     notFound();

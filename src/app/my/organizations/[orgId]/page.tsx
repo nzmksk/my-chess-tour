@@ -1,7 +1,7 @@
-import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
+import { selfApiFetch } from "@/lib/self-fetch";
 import { getAuthClaims } from "@/services/supabase/permission";
 import DashboardClient from "./_components/DashboardClient";
 
@@ -40,20 +40,9 @@ interface DashboardData {
   }[];
 }
 
-async function fetchDashboard(
-  orgId: string,
-  cookieHeader: string,
-): Promise<DashboardData | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
+async function fetchDashboard(orgId: string): Promise<DashboardData | null> {
   try {
-    const res = await fetch(
-      `${baseUrl}/api/v1/organizations/${orgId}/dashboard`,
-      {
-        cache: "no-store",
-        headers: { cookie: cookieHeader },
-      },
-    );
+    const res = await selfApiFetch(`/api/v1/organizations/${orgId}/dashboard`);
     if (res.status === 404) return null;
     if (res.status === 403 || res.status === 401) return null;
     if (!res.ok) return null;
@@ -77,10 +66,7 @@ export default async function OrganizerDashboardPage({
     redirect("/auth/login");
   }
 
-  const headersList = await headers();
-  const cookieHeader = headersList.get("cookie") ?? "";
-
-  const data = await fetchDashboard(orgId, cookieHeader);
+  const data = await fetchDashboard(orgId);
 
   if (!data) {
     notFound();
