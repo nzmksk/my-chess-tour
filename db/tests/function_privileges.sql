@@ -41,7 +41,8 @@ DECLARE
     'settle_registration_payment',
     'expire_stale_pending_payments',
     'list_pending_cancellation_refunds',
-    'settle_refund'
+    'settle_refund',
+    'settle_bank_account_verification'
   ];
   -- SECURITY DEFINER functions clients may call. Adding to this list is a
   -- security decision: the function must check the caller itself or expose

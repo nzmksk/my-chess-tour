@@ -475,12 +475,96 @@ END;
 $$;
 
 -- =============================================
+-- SETTLE BANK ACCOUNT VERIFICATION
+-- Records CHIP Send's verdict on a registered payout recipient (#519). Called by
+-- two paths that must agree, both classifying through chipBankAccountOutcome:
+--   * registerOrganizationBankAccount, when POST /send/bank_accounts already
+--     answers `verified` synchronously;
+--   * the CHIP Send webhook, on a bank-account status event.
+-- Either may arrive first, or both, or the webhook twice. So:
+--   * the row is locked FOR UPDATE, serializing the two paths;
+--   * a row that is no longer 'pending' is terminal and the call is a no-op
+--     ({"already_processed": true}) — a verdict is never overwritten. A changed
+--     account gets a NEW row (set_organization_bank_account supersedes), so
+--     there is never a legitimate reason to flip verified ↔ rejected in place.
+--
+--   p_verified = true  → status 'verified', verified_at stamped, reason cleared.
+--   p_verified = false → status 'rejected' with p_reason (or a generic reason;
+--                        the organizer is shown it, so it must not be blank).
+-- p_chip_bank_account_id is recorded when given and never cleared by a NULL.
+--
+-- Superseded rows (is_active = false) are still settled — the verdict is history
+-- worth keeping — but `is_active` is returned so the caller can skip telling the
+-- organizer about an account they have already replaced.
+-- =============================================
+CREATE OR REPLACE FUNCTION settle_bank_account_verification(
+  p_bank_account_id      uuid,
+  p_chip_bank_account_id bigint,
+  p_verified             boolean,
+  p_reason               text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_row organization_bank_accounts;
+BEGIN
+  SELECT * INTO v_row
+    FROM organization_bank_accounts
+    WHERE id = p_bank_account_id
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'bank account % not found', p_bank_account_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_row.status <> 'pending' THEN
+    RETURN jsonb_build_object(
+      'bank_account_id',   v_row.id,
+      'organization_id',   v_row.organization_id,
+      'already_processed', true,
+      'verified',          v_row.status = 'verified',
+      'is_active',         v_row.is_active
+    );
+  END IF;
+
+  IF p_verified THEN
+    UPDATE organization_bank_accounts
+      SET status               = 'verified',
+          verified_at          = now(),
+          rejection_reason     = NULL,
+          chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+      WHERE id = p_bank_account_id;
+  ELSE
+    UPDATE organization_bank_accounts
+      SET status               = 'rejected',
+          verified_at          = NULL,
+          rejection_reason     = COALESCE(NULLIF(btrim(p_reason), ''),
+                                          'The bank could not verify these account details.'),
+          chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+      WHERE id = p_bank_account_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'bank_account_id',   v_row.id,
+    'organization_id',   v_row.organization_id,
+    'already_processed', false,
+    'verified',          p_verified,
+    'is_active',         v_row.is_active
+  );
+END;
+$$;
+
+-- =============================================
 -- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
 -- Same reasoning as the block at the end of 003_functions_triggers.sql: these
 -- SECURITY DEFINER functions trust their arguments, and the checkout route,
 -- CHIP webhook and expiry/refund jobs call them through the service role. Left
 -- executable by clients, anyone could settle their own registration as paid,
--- settle refunds, or list pending refunds across every organization.
+-- settle refunds, list pending refunds across every organization, or mark their
+-- own payout bank account verified.
 --
 -- compute_registration_amounts is not SECURITY DEFINER (pure arithmetic) and is
 -- left as is.
@@ -491,6 +575,7 @@ REVOKE EXECUTE ON FUNCTION settle_registration_payment       FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION expire_stale_pending_payments     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_pending_cancellation_refunds FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_refund                     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION settle_bank_account_verification  FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
 GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
@@ -498,3 +583,4 @@ GRANT EXECUTE ON FUNCTION settle_registration_payment       TO service_role;
 GRANT EXECUTE ON FUNCTION expire_stale_pending_payments     TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_cancellation_refunds TO service_role;
 GRANT EXECUTE ON FUNCTION settle_refund                     TO service_role;
+GRANT EXECUTE ON FUNCTION settle_bank_account_verification  TO service_role;
