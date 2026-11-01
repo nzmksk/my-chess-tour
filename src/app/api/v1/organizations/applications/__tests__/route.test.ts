@@ -473,6 +473,47 @@ describe("POST /api/v1/organizations/applications", () => {
       expect(json.error.message).toMatch(/SSM document/i);
     });
 
+    it("returns 400 when a company supplies only an ROS document", async () => {
+      const res = await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          entity_type: "company",
+          registration_number: "202001234567",
+          documents: [
+            {
+              doc_type: "ros",
+              storage_path: DOC_PATH,
+              original_filename: "ros.pdf",
+            },
+          ],
+        }),
+      );
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error.message).toMatch(/SSM document/i);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when a society supplies only an SSM document", async () => {
+      const res = await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          entity_type: "society",
+          documents: [
+            {
+              doc_type: "ssm",
+              storage_path: DOC_PATH,
+              original_filename: "ssm.pdf",
+            },
+          ],
+        }),
+      );
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error.message).toMatch(/ROS document/i);
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
     it("drops a registration number for an individual organizer", async () => {
       await POST(
         makePostRequest({
@@ -497,9 +538,7 @@ describe("POST /api/v1/organizations/applications", () => {
 
   describe("verification documents", () => {
     it("returns 400 when no documents are submitted", async () => {
-      const res = await POST(
-        makePostRequest({ ...VALID_BODY, documents: [] }),
-      );
+      const res = await POST(makePostRequest({ ...VALID_BODY, documents: [] }));
       expect(res.status).toBe(400);
       expect(mockRpc).not.toHaveBeenCalled();
     });
@@ -662,7 +701,8 @@ describe("POST /api/v1/organizations/applications", () => {
         data: null,
         error: {
           code: "P0001",
-          message: "ENTITY_DOCS_REQUIRED: a company must supply an SSM document",
+          message:
+            "ENTITY_DOCS_REQUIRED: a company must supply an SSM document",
         },
       });
       const res = await POST(makePostRequest());

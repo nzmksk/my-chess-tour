@@ -29,6 +29,9 @@
 --       the name stays free
 --   C3  a duplicate name raises NAME_TAKEN, not a raw unique violation
 --   C4  an individual's registration_number is normalised to NULL
+--   C5  the registry document must MATCH the entity: a company with only an
+--       ROS document, or a society with only an SSM one, raises
+--       ENTITY_DOCS_REQUIRED
 --   A1  audit snapshots redact account_number and storage_path, and carry the
 --       organization_id
 --
@@ -276,6 +279,54 @@ BEGIN
     RAISE EXCEPTION 'C2 FAIL: the failed application left an organization behind';
   END IF;
   RAISE NOTICE 'C2 PASS — a rejected application rolls back wholly, name stays free';
+
+  -- ---- C5: the registry document must match the entity ---------------------
+  BEGIN
+    PERFORM create_organization_application(
+      p_created_by        => v_user,
+      p_name              => 'WRONG REGISTRY CO',
+      p_email             => 'wrongreg-co@test.local',
+      p_entity_type       => 'company',
+      p_agreement_version => '2026-08-02',
+      p_bank_code         => 'HLBBMYKL',
+      p_bank_name         => 'Hong Leong Bank',
+      p_account_holder    => 'Wrong Registry Co',
+      p_account_number    => '5556667778',
+      p_documents         => '[{"doc_type":"ros","storage_path":"users/x/org-kyb/ros.pdf"}]'::jsonb,
+      p_registration_number => '202001234567'
+    );
+    RAISE EXCEPTION 'C5 FAIL: a company was accepted with only an ROS document'
+      USING ERRCODE = 'assert_failure';
+  EXCEPTION
+    WHEN sqlstate 'P0001' THEN
+      IF SQLERRM NOT LIKE 'ENTITY_DOCS_REQUIRED: a company must supply an SSM document%' THEN
+        RAISE EXCEPTION 'C5 FAIL: unexpected P0001 for company — %', SQLERRM;
+      END IF;
+  END;
+
+  BEGIN
+    PERFORM create_organization_application(
+      p_created_by        => v_user,
+      p_name              => 'WRONG REGISTRY SOC',
+      p_email             => 'wrongreg-soc@test.local',
+      p_entity_type       => 'society',
+      p_agreement_version => '2026-08-02',
+      p_bank_code         => 'HLBBMYKL',
+      p_bank_name         => 'Hong Leong Bank',
+      p_account_holder    => 'Wrong Registry Soc',
+      p_account_number    => '6667778889',
+      p_documents         => '[{"doc_type":"ssm","storage_path":"users/x/org-kyb/ssm.pdf"}]'::jsonb,
+      p_registration_number => 'PPM-001-14-01012020'
+    );
+    RAISE EXCEPTION 'C5 FAIL: a society was accepted with only an SSM document'
+      USING ERRCODE = 'assert_failure';
+  EXCEPTION
+    WHEN sqlstate 'P0001' THEN
+      IF SQLERRM NOT LIKE 'ENTITY_DOCS_REQUIRED: a society must supply an ROS document%' THEN
+        RAISE EXCEPTION 'C5 FAIL: unexpected P0001 for society — %', SQLERRM;
+      END IF;
+  END;
+  RAISE NOTICE 'C5 PASS — the wrong registry''s document is rejected for both entity types';
 
   -- ---- C3: duplicate name --------------------------------------------------
   BEGIN
