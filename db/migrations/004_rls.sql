@@ -8,6 +8,8 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_global_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_bank_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournament_cancellation_requests ENABLE ROW LEVEL SECURITY;
@@ -151,6 +153,42 @@ ON organizations FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
 
 -- =============================================
+-- ORGANIZATION BANK ACCOUNTS
+-- Payout destination. Deliberately NO general org-member SELECT: a `member` or
+-- `admin` of an organization has no business reading where its money goes, and
+-- the last-4 an organizer needs to recognise their own account is served by the
+-- API, not by table access.
+-- =============================================
+CREATE POLICY "Org bank managers can view own bank accounts"
+ON organization_bank_accounts FOR SELECT
+USING (has_org_permission(app_user_id(), organization_id, 'bank_account.manage'));
+
+CREATE POLICY "Platform admins full access to bank accounts"
+ON organization_bank_accounts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+-- Following the `users` precedent above: no client write capability at all.
+-- Every write goes through set_organization_bank_account (which supersedes
+-- rather than updates, so verification can't go stale) or the service role. A
+-- column-scoped UPDATE policy could not express that rule, and a blanket one
+-- would let a JWT holder set status='verified' on their own row.
+REVOKE UPDATE, INSERT, DELETE ON organization_bank_accounts FROM anon, authenticated;
+
+-- =============================================
+-- ORGANIZATION DOCUMENTS (KYB)
+-- Paths into a private bucket, so reading a row is close to reading the file.
+-- =============================================
+CREATE POLICY "Org managers can view own documents"
+ON organization_documents FOR SELECT
+USING (has_org_permission(app_user_id(), organization_id, 'org.manage'));
+
+CREATE POLICY "Platform admins full access to org documents"
+ON organization_documents FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON organization_documents FROM anon, authenticated;
+
+-- =============================================
 -- ORGANIZATION MEMBERSHIPS
 -- =============================================
 
@@ -215,13 +253,21 @@ CREATE POLICY "Players can view own registrations"
 ON registrations FOR SELECT
 USING (can_act_for(user_id));
 
-CREATE POLICY "Players can register"
-ON registrations FOR INSERT
-WITH CHECK (can_act_for(user_id));
-
-CREATE POLICY "Players can cancel own registration"
-ON registrations FOR UPDATE
-USING (can_act_for(user_id));
+-- No client write capability, following the `users` and
+-- organization_bank_accounts precedent. `status` and `current_payment_id` ARE
+-- the payment state: an INSERT or UPDATE policy scoped only on can_act_for()
+-- let a JWT holder write
+--   POST  /rest/v1/registrations  {"user_id": <self>, "tournament_id": …, "status": "confirmed"}
+--   PATCH /rest/v1/registrations?id=eq.<own>  {"status": "confirmed"}
+-- and hold a confirmed seat without paying. A column-scoped policy cannot
+-- express the state machine (pending_payment -> confirmed only on a paid,
+-- current attempt), so the capability is removed outright.
+--
+-- No application code needs it: every write goes through the SECURITY DEFINER
+-- functions in 007_payment_functions.sql (create_registration_with_payment,
+-- start_new_payment_attempt, settle_registration_payment,
+-- expire_stale_pending_payments), all service-role only. db/tests/registration_writes.sql checks this.
+REVOKE UPDATE, INSERT, DELETE ON registrations FROM anon, authenticated;
 
 -- Org members with registration.view can see their tournament's registrations
 CREATE POLICY "Org members can view tournament registrations"
@@ -275,9 +321,23 @@ CREATE POLICY "Players can view own refunds"
 ON refunds FOR SELECT
 USING (can_act_for(requested_by));
 
-CREATE POLICY "Players can request refund"
-ON refunds FOR INSERT
-WITH CHECK (can_act_for(requested_by));
+-- No client write capability, as for registrations above. The INSERT policy
+-- that used to sit here checked only can_act_for(requested_by): not that the
+-- registration was the caller's, and not refund_amount_cents, status or
+-- processed_at. A JWT holder could therefore
+--   * pre-insert a live refund on their own registration with any amount; when
+--     the tournament is cancelled, review_tournament_cancellation's
+--     ON CONFLICT DO NOTHING keeps that row, and list_pending_cancellation_refunds
+--     hands the inflated amount to the refund job, or
+--   * insert a near-zero live refund on ANOTHER player's registration, which
+--     uniq_active_refund_per_registration then lets stand in place of their
+--     real cancellation refund.
+--
+-- No application code needs it: refunds are created by
+-- review_tournament_cancellation and settled by settle_refund, both
+-- service-role only. A player-initiated refund request, if it is ever built,
+-- belongs behind an API route. db/tests/refund_writes.sql checks this.
+REVOKE UPDATE, INSERT, DELETE ON refunds FROM anon, authenticated;
 
 -- Org members with refund.manage can view/manage refunds for their tournaments
 CREATE POLICY "Org refund managers can view tournament refunds"

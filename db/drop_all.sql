@@ -2,9 +2,9 @@
 -- DROP ALL — full teardown of the MY Chess Tour schema
 -- Reverses migrations 001–007 so you can re-apply them from scratch.
 --
--- Scope: drops everything this app owns in `public`, the avatars and
--- oku-documents storage buckets and their policies, the auth trigger this app
--- adds to auth.users, and the seed
+-- Scope: drops everything this app owns in `public`, the avatars,
+-- oku-documents and organization-documents storage buckets and their policies,
+-- the auth trigger this app adds to auth.users, and the seed
 -- accounts. It does NOT touch Supabase-managed schemas (auth/storage) beyond
 -- those app-owned objects, and does NOT drop the `public` schema itself (so
 -- role grants / extensions stay intact).
@@ -28,15 +28,22 @@ DROP POLICY IF EXISTS "Users can upload own OKU document"     ON storage.objects
 DROP POLICY IF EXISTS "Users can delete own OKU document"     ON storage.objects;
 DROP POLICY IF EXISTS "OKU documents readable by owner or admin" ON storage.objects;
 
+-- organization-documents bucket (private)
+DROP POLICY IF EXISTS "Users can upload own org document"     ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own org document"     ON storage.objects;
+DROP POLICY IF EXISTS "Org documents readable by uploader or admin" ON storage.objects;
+
 -- Uploaded files, then the buckets themselves. Dropping the policies alone left
--- both behind: avatars and OKU documents are keyed by users.id, so after the
--- users table is recreated below they would be orphaned blobs whose paths point
--- at ids that no longer exist — and OKU documents are scanned government IDs, so
--- leaving them in a "full teardown" is the wrong default. Objects first: they FK
--- to buckets. 005 recreates the buckets (ON CONFLICT DO NOTHING), so this is safe
--- to re-apply.
-DELETE FROM storage.objects WHERE bucket_id IN ('avatars', 'oku-documents');
-DELETE FROM storage.buckets WHERE id       IN ('avatars', 'oku-documents');
+-- both behind: avatars, OKU documents and organization KYB documents are all
+-- keyed by users.id, so after the users table is recreated below they would be
+-- orphaned blobs whose paths point at ids that no longer exist — and OKU cards
+-- and KYB documents are scanned identity documents, so leaving them in a "full
+-- teardown" is the wrong default. Objects first: they FK to buckets. 005
+-- recreates the buckets (ON CONFLICT DO NOTHING), so this is safe to re-apply.
+DELETE FROM storage.objects
+  WHERE bucket_id IN ('avatars', 'oku-documents', 'organization-documents');
+DELETE FROM storage.buckets
+  WHERE id        IN ('avatars', 'oku-documents', 'organization-documents');
 
 -- -----------------------------------------------------------------------------
 -- 2. Auth trigger this app adds to auth.users (migration 003)
@@ -60,6 +67,8 @@ DROP TABLE IF EXISTS public.payments                CASCADE;
 DROP TABLE IF EXISTS public.registrations           CASCADE;
 DROP TABLE IF EXISTS public.tournaments             CASCADE;
 DROP TABLE IF EXISTS public.organization_memberships CASCADE;
+DROP TABLE IF EXISTS public.organization_documents  CASCADE;
+DROP TABLE IF EXISTS public.organization_bank_accounts CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
 DROP TABLE IF EXISTS public.player_profiles         CASCADE;
 DROP TABLE IF EXISTS public.user_global_roles       CASCADE;
@@ -98,6 +107,9 @@ DROP TYPE IF EXISTS public.gender               CASCADE;
 DROP TYPE IF EXISTS public.chess_title          CASCADE;
 DROP TYPE IF EXISTS public.oku_status           CASCADE;
 DROP TYPE IF EXISTS public.approval_status      CASCADE;
+DROP TYPE IF EXISTS public.org_entity_type      CASCADE;
+DROP TYPE IF EXISTS public.org_document_type    CASCADE;
+DROP TYPE IF EXISTS public.bank_account_status  CASCADE;
 DROP TYPE IF EXISTS public.tournament_status    CASCADE;
 DROP TYPE IF EXISTS public.registration_status  CASCADE;
 DROP TYPE IF EXISTS public.payment_type         CASCADE;
@@ -120,7 +132,8 @@ FROM information_schema.tables
 WHERE table_schema = 'public'
   AND table_name IN (
     'roles','permissions','role_permissions','users','user_global_roles',
-    'player_profiles','organizations','organization_memberships','tournaments',
+    'player_profiles','organizations','organization_memberships',
+    'organization_bank_accounts','organization_documents','tournaments',
     'registrations','payments','refunds','tournament_cancellation_requests',
     'audit_logs','waitlist'
   );
@@ -131,6 +144,7 @@ JOIN pg_namespace n ON n.oid = t.typnamespace
 WHERE n.nspname = 'public'
   AND t.typname IN (
     'role_scope','gender','chess_title','oku_status','approval_status',
+    'org_entity_type','org_document_type','bank_account_status',
     'tournament_status','registration_status','payment_type','payment_status',
     'refund_status'
   );
@@ -145,8 +159,8 @@ WHERE email LIKE '%@mct.com' OR email = 'review@chip.com';
 
 SELECT 'app_buckets' AS check, count(*)
 FROM storage.buckets
-WHERE id IN ('avatars', 'oku-documents');
+WHERE id IN ('avatars', 'oku-documents', 'organization-documents');
 
 SELECT 'app_storage_objects' AS check, count(*)
 FROM storage.objects
-WHERE bucket_id IN ('avatars', 'oku-documents');
+WHERE bucket_id IN ('avatars', 'oku-documents', 'organization-documents');

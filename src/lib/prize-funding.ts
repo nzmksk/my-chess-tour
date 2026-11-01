@@ -36,24 +36,24 @@ export const PRIZE_FUNDING_LABELS: Record<PrizeFundingSource, string> = {
 export const PRIZE_DISTRIBUTION_MODES = ["organizer", "platform"] as const;
 export type PrizeDistribution = (typeof PRIZE_DISTRIBUTION_MODES)[number];
 
-export interface PrizeFunding {
+interface PrizeFunding {
   source: PrizeFundingSource;
   /** Who is actually putting up the money. Required, and shown publicly. */
   funder_name: string;
 }
 
-export interface PrizeEntry {
+interface PrizeEntry {
   place?: string;
   amount_cents?: number;
 }
 
-export interface PrizeCategoryJson {
+interface PrizeCategoryJson {
   name?: string;
   funding?: PrizeFunding | null;
   entries?: PrizeEntry[];
 }
 
-export interface SpecialPrizeJson {
+interface SpecialPrizeJson {
   name?: string;
   funding?: PrizeFunding | null;
   amount_cents?: number;

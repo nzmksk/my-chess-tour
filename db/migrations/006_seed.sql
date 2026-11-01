@@ -3,9 +3,14 @@
 -- MY Chess Tour
 --
 -- Creates: RBAC roles & permissions · 5 organizers · 50 players
---          · 15 tournaments · 200 registrations + payments
+--          · 15 tournaments · ~200 registrations, one payment attempt each
 --
--- Prerequisites: migrations 001–005 must be applied first.
+-- Dates are relative to the moment the seed runs, so re-run it (on a fresh
+-- database) when the seeded tournaments have drifted into the past: the
+-- listing hides anything that ended more than 30 days ago.
+--
+-- Prerequisites: migrations 001–005 and 007 must be applied first (the
+-- registration amounts come from compute_registration_amounts in 007).
 -- Password for all seed accounts: Abcd!234
 --
 -- Identity note: inserting into auth.users fires on_auth_user_created, which
@@ -42,6 +47,7 @@ DECLARE
   p_registration_view integer;
   p_payment_view      integer;
   p_refund_manage     integer;
+  p_bank_account_manage integer;
 BEGIN
   -- Roles
   INSERT INTO roles (name, scope) VALUES ('platform_admin', 'global') RETURNING id INTO r_platform_admin;
@@ -60,6 +66,9 @@ BEGIN
   INSERT INTO permissions (key) VALUES ('registration.view') RETURNING id INTO p_registration_view;
   INSERT INTO permissions (key) VALUES ('payment.view') RETURNING id INTO p_payment_view;
   INSERT INTO permissions (key) VALUES ('refund.manage') RETURNING id INTO p_refund_manage;
+  -- Owner-only. Where the organization's money lands is not something a
+  -- delegated org `admin` should be able to read or redirect.
+  INSERT INTO permissions (key) VALUES ('bank_account.manage') RETURNING id INTO p_bank_account_manage;
 
   -- platform_admin: platform.manage (implies all)
   INSERT INTO role_permissions (role_id, permission_id) VALUES (r_platform_admin, p_platform_manage);
@@ -74,9 +83,10 @@ BEGIN
     (r_owner, p_tournament_view),
     (r_owner, p_registration_view),
     (r_owner, p_payment_view),
-    (r_owner, p_refund_manage);
+    (r_owner, p_refund_manage),
+    (r_owner, p_bank_account_manage);
 
-  -- admin: all except org.manage and tournament.delete
+  -- admin: all except org.manage, tournament.delete and bank_account.manage
   INSERT INTO role_permissions (role_id, permission_id) VALUES
     (r_admin, p_org_invite),
     (r_admin, p_tournament_create),
@@ -91,7 +101,7 @@ BEGIN
     (r_member, p_tournament_view),
     (r_member, p_registration_view);
 
-  RAISE NOTICE '[0/4] RBAC seeded: 4 roles, 10 permissions';
+  RAISE NOTICE '[0/4] RBAC seeded: 4 roles, 11 permissions';
 END;
 $$;
 
@@ -136,12 +146,37 @@ DECLARE
 
   -- Registration vars
   reg_status   text;
-  confirmed_ts timestamptz;
-  cancelled_ts timestamptz;
-  fee_cents    integer;
+  k            integer;
+  n_regs       integer;
+  t_pick       integer;
+  v_t          tournaments;
+  v_pp         player_profiles;
+  v_r          jsonb;
+  v_rating     integer;
+  v_eligible   boolean;
+  v_tier       text;
+  v_base_cents integer;
+  v_amounts    record;
+  v_win_start  timestamptz;
+  v_win_end    timestamptz;
+  v_reg_at     timestamptz;
+  v_settled_at timestamptz;
+  new_pay_id   uuid;
+  n_confirmed  integer := 0;
+  n_failed     integer := 0;
+  n_expired    integer := 0;
 
   -- Tournament vars
-  t_offset_wk  integer;
+  -- Start date of each tournament, in days from today. 1–2 ended within the
+  -- listing's 30-day "past" window, 3 is ongoing, 4–12 are upcoming with
+  -- registration still open (deadline = start - 7 days), 13–15 are drafts.
+  t_offset_days integer[] := ARRAY[
+    -20, -6, -1,
+     10, 17, 24, 31, 38, 45, 52, 59, 66,
+     80, 94, 108
+  ];
+  n_published  integer := 12;
+  t_published_at timestamptz;
   t_start      date;
   t_end        date;
   t_deadline   timestamptz;
@@ -205,6 +240,17 @@ DECLARE
   ];
   org_first   text[] := ARRAY['Ahmad','Mohd','Wei','Raj','Siti'];
   org_last    text[] := ARRAY['Kamaruddin','Yusof','Ming','Krishnan','Rahman'];
+  -- Payout destinations. Seeded as 'verified' because every payout phase from
+  -- #519 onward needs a usable recipient to develop against, and because an
+  -- unverified seed org would open its dashboard behind the bank-account banner.
+  -- SWIFT codes must exist in MALAYSIAN_BANKS (src/lib/malaysian-banks.ts).
+  org_bank_codes   text[] := ARRAY['MBBEMYKL','CIBBMYKL','PBBEMYKL','RHBBMYKL','HLBBMYKL'];
+  org_bank_names   text[] := ARRAY['Maybank','CIMB Bank','Public Bank','RHB Bank','Hong Leong Bank'];
+  -- tournaments.organizer_commission_pct per organizer: how much of the
+  -- platform fee the organizer absorbs (0 = player pays it all, 10 = organizer
+  -- absorbs it all). Varied so seeded payments exercise every split
+  -- compute_registration_amounts can produce.
+  org_commission_pct smallint[] := ARRAY[0, 3, 10, 0, 5];
 
   t_names text[] := ARRAY[
     'KL Open Chess Championship',        'Selangor Rapid Chess Tournament',
@@ -222,9 +268,9 @@ DECLARE
   -- picklist in VENUE_TIME_ZONES, src/lib/datetime.ts).
   --
   -- Positions 7–9 are outside Malaysia. Venue index is (idx - 1) % 11 and
-  -- tournaments 1–9 are the published ones, so those three are exactly the
-  -- non-Malaysian venues that reach discovery — two at UTC+7, which is what
-  -- makes a seeded database disagree with Malaysia about what day it is.
+  -- tournaments 7–9 are published and upcoming, so those three non-Malaysian
+  -- venues reach discovery — two at UTC+7, which is what makes a seeded
+  -- database disagree with Malaysia about what day it is.
   venue_names text[] := ARRAY[
     'KL Convention Centre',           'Sunway Pyramid Convention Centre',
     'Penang Chess Academy',           'Johor Bahru Chess Club',
@@ -419,22 +465,38 @@ BEGIN
       name, description, email,
       phone, approval_status, reviewed_at,
       reviewed_by, created_by,
+      entity_type, registration_number,
       agreement_version, agreement_accepted_at, agreement_accepted_by
     ) VALUES (
       org_names[i], org_descs[i], org_emails[i],
       '+601' || (i + 1)::text || '-' || (1000000 + i * 123456)::text,
       'approved', now(),
       new_user_id, new_user_id,
+      'society', 'PPM-' || lpad(i::text, 3, '0') || '-14-01012020',
       '2026-08-02', now(), new_user_id
     ) RETURNING id INTO new_org_id;
 
     org_profile_ids := array_append(org_profile_ids, new_org_id);
 
+    -- Inserted directly rather than through set_organization_bank_account,
+    -- which can only ever produce a 'pending' row (CHIP Send is what verifies,
+    -- from #519). A seed needs the end state, not the starting one — including
+    -- the CHIP Send recipient id a verified account carries. The ids are fake;
+    -- nothing calls CHIP with them until payouts run against a sandbox.
+    INSERT INTO public.organization_bank_accounts (
+      organization_id, bank_name, bank_code, account_holder, account_number,
+      status, chip_bank_account_id, verified_at, created_by
+    ) VALUES (
+      new_org_id, org_bank_names[i], org_bank_codes[i], org_names[i],
+      '5140' || lpad((1000000 + i * 98765)::text, 8, '0'),
+      'verified', 900000 + i, now(), new_user_id
+    );
+
     INSERT INTO public.organization_memberships (organization_id, user_id, role_id)
     VALUES (new_org_id, new_user_id, r_owner_id);
   END LOOP;
 
-  RAISE NOTICE '  > 5 organizers created';
+  RAISE NOTICE '  > 5 organizers created (each with a verified payout bank account)';
 
   -- ===========================================================================
   -- 2. PLAYERS
@@ -524,7 +586,12 @@ BEGIN
         json_build_object('standard', p_fide_std, 'rapid', p_fide_rpd, 'blitz', p_fide_blz)::jsonb
       ELSE NULL END,
       p_nat,
-      (date '1985-01-01' + ((i * 173) % 9131 || ' days')::interval)::date,
+      -- Every 5th player is a junior (born 2009–2013) so the under-18 and
+      -- under-21 restricted tournaments have someone eligible to enter them.
+      CASE WHEN i % 5 = 0
+        THEN date '2009-01-01' + (i * 97) % 1800
+        ELSE (date '1985-01-01' + ((i * 173) % 9131 || ' days')::interval)::date
+      END,
       p_gender::gender,
       'Malaysia'
     )
@@ -549,15 +616,19 @@ BEGIN
     FOR j IN 1..3 LOOP
       idx := (i - 1) * 3 + j;
 
-      t_offset_wk := (idx - 8) * 2;
-      t_start    := current_date + (t_offset_wk * 7 || ' days')::interval;
-      t_end      := t_start + ((1 + (idx % 3)) || ' days')::interval;
-      t_deadline := (t_start - '7 days'::interval)::timestamptz;
+      t_start    := current_date + t_offset_days[idx];
+      t_end      := t_start + (idx % 3) + 1;
+      t_deadline := (t_start - 7)::timestamptz;
 
       t_status := CASE
-        WHEN t_offset_wk < 4 THEN 'published'::tournament_status
-        ELSE                      'draft'::tournament_status
+        WHEN idx <= n_published THEN 'published'::tournament_status
+        ELSE                         'draft'::tournament_status
       END;
+
+      -- Published three weeks ago, or two weeks before the start if that is
+      -- earlier, so it is never in the future and always leaves a registration
+      -- window before the deadline. Satisfies chk_published_at (<= deadline).
+      t_published_at := LEAST((t_start - 14)::timestamptz, now() - interval '21 days');
 
       t_fee := fee_opts[((idx - 1) % 5) + 1];
       v_idx := ((idx - 1) % array_length(venue_names, 1)) + 1;
@@ -602,8 +673,8 @@ BEGIN
         format, time_control,
         is_fide_rated, is_mcf_rated,
         entry_fees, prizes, restrictions,
-        max_participants, status,
-        published_at, registration_closed_at
+        max_participants, organizer_commission_pct, status,
+        published_by, published_at, registration_closed_at
       ) VALUES (
         org_profile_ids[i],
         t_names[idx],
@@ -697,8 +768,10 @@ BEGIN
         ),
         t_restrictions,
         max_parts[(idx % 5) + 1],
+        org_commission_pct[i],
         t_status::tournament_status,
-        CASE WHEN t_status = 'published'::tournament_status THEN (t_start - interval '14 days')::timestamptz ELSE NULL END,
+        CASE WHEN t_status = 'published'::tournament_status THEN org_user_ids[i] ELSE NULL END,
+        CASE WHEN t_status = 'published'::tournament_status THEN t_published_at ELSE NULL END,
         -- registration_closed_at defaults to the deadline at publish; drafts NULL.
         CASE WHEN t_status = 'published'::tournament_status THEN t_deadline ELSE NULL END
       ) RETURNING id INTO new_t_id;
@@ -707,98 +780,149 @@ BEGIN
     END LOOP;
   END LOOP;
 
-  RAISE NOTICE '  > 15 tournaments created (12 in Malaysia, 3 in other ASEAN timezones)';
+  RAISE NOTICE '  > 15 tournaments created: 2 recently ended, 1 ongoing, 9 upcoming, 3 drafts (3 venues outside Malaysia)';
 
   -- ===========================================================================
   -- 4. REGISTRATIONS & PAYMENTS
+  --
+  -- Shaped like what the payment functions in 007 produce, not hand-rolled:
+  --   * every registration has one payment attempt (payments is a per-attempt
+  --     ledger) and points at it through registrations.current_payment_id;
+  --   * amounts come from compute_registration_amounts on the tournament's own
+  --     fee for the tier, under its commission settings;
+  --   * end states only, because a pending_payment row older than the 10-minute
+  --     hold is something the expiry sweep would immediately cancel:
+  --       confirmed          payment 'paid'   (settle_registration_payment, paid)
+  --       failed_payment     payment 'failed' (settle_registration_payment, declined)
+  --       cancelled_payment  payment left 'pending', reason 'payment_expired'
+  --                          (expire_stale_pending_payments; the pending row is
+  --                          what lets a late `paid` webhook still rescue it).
+  -- Players only register for published tournaments they are eligible for, and
+  -- only inside the registration window (published_at .. deadline, never in the
+  -- future). Inserted directly rather than through the functions because those
+  -- stamp now() and the seed needs back-dated history.
   -- ===========================================================================
   RAISE NOTICE '[4/4] Seeding registrations and payments...';
 
   FOR i IN 1..50 LOOP
-    FOR j IN 0..3 LOOP
+    SELECT * INTO v_pp FROM player_profiles WHERE user_id = player_user_ids[i];
+    n_regs := 0;
+
+    -- Walk the published tournaments starting from a per-player offset and take
+    -- the first four the player may enter.
+    FOR k IN 0..(n_published - 1) LOOP
+      EXIT WHEN n_regs = 4;
+      t_pick := ((i - 1 + k) % n_published) + 1;
+      SELECT * INTO v_t FROM tournaments WHERE id = tourney_ids[t_pick];
+
+      -- Eligibility, mirroring checkRestrictions / resolvePlayerRating
+      -- (src/app/api/v1/tournaments/[slug]/registrations/validators.ts,
+      -- src/app/tournaments/utils.ts) for the restriction kinds seeded above.
+      v_eligible := true;
+      FOR v_r IN SELECT * FROM jsonb_array_elements(COALESCE(v_t.restrictions, '[]'::jsonb)) LOOP
+        CASE v_r->>'type'
+          WHEN 'gender' THEN
+            v_eligible := v_eligible AND v_pp.gender::text = v_r->>'value';
+          WHEN 'nationality' THEN
+            v_eligible := v_eligible AND v_pp.nationality = v_r->>'value';
+          WHEN 'age' THEN
+            -- Not yet `max` on the start date: DOB >= start_date - max years.
+            v_eligible := v_eligible AND v_pp.date_of_birth
+              >= (v_t.start_date - make_interval(years => (v_r->>'max')::integer))::date;
+          WHEN 'rating' THEN
+            -- FIDE-rated: the FIDE list for the format. Otherwise MCF-rated (all
+            -- seeded tournaments are): the national rating. Unrated passes a max.
+            v_rating := CASE
+              WHEN v_t.is_fide_rated THEN (v_pp.fide_rating->>(
+                CASE v_t.format->>'type'
+                  WHEN 'blitz' THEN 'blitz' WHEN 'rapid' THEN 'rapid' ELSE 'standard'
+                END))::integer
+              ELSE v_pp.national_rating
+            END;
+            v_eligible := v_eligible AND (v_rating IS NULL OR v_rating <= (v_r->>'max')::integer);
+          ELSE NULL;
+        END CASE;
+      END LOOP;
+      CONTINUE WHEN NOT v_eligible;
 
       reg_status := CASE
-        WHEN reg_idx < 120 THEN 'confirmed'
-        WHEN reg_idx < 170 THEN 'pending_payment'
-        ELSE                    'cancelled_payment'
+        WHEN reg_idx % 10 < 8 THEN 'confirmed'
+        WHEN reg_idx % 10 = 8 THEN 'failed_payment'
+        ELSE                       'cancelled_payment'
       END;
 
-      confirmed_ts := CASE
-        WHEN reg_status = 'confirmed'
-        THEN now() - ((30 - (reg_idx % 25)) || ' days')::interval
-        ELSE NULL
-      END;
+      -- Somewhere in the registration window, deterministically spread.
+      v_win_start := v_t.published_at + interval '1 hour';
+      v_win_end   := LEAST(now(), v_t.registration_deadline) - interval '1 hour';
+      v_reg_at    := v_win_start + (v_win_end - v_win_start) * (((reg_idx * 37) % 97) / 97.0);
+      v_settled_at := v_reg_at + make_interval(mins => 2 + reg_idx % 7);
 
-      cancelled_ts := CASE
-        WHEN reg_status = 'cancelled_payment'
-        THEN now() - ((reg_idx % 15) || ' days')::interval
-        ELSE NULL
+      -- Early bird is valid through the deadline day, which bounds the window,
+      -- so either tier is a price the player could genuinely have been charged.
+      v_tier := CASE WHEN reg_idx % 3 = 0 THEN 'standard' ELSE 'early_bird' END;
+      v_base_cents := CASE v_tier
+        WHEN 'standard' THEN (v_t.entry_fees->'standard'->>'amount_cents')::integer
+        ELSE (SELECT (e->>'amount_cents')::integer
+                FROM jsonb_array_elements(v_t.entry_fees->'additional') e
+               WHERE e->>'type' = 'early_bird')
       END;
-
-      fee_cents := fee_opts[(reg_idx % 5) + 1];
+      SELECT * INTO v_amounts FROM compute_registration_amounts(
+        v_base_cents, v_t.commission_rate, v_t.organizer_commission_pct
+      );
 
       INSERT INTO public.registrations (
-        user_id, tournament_id,
-        fee_tier, status,
+        user_id, tournament_id, fee_tier, status,
         registered_at, confirmed_at, cancelled_at, cancellation_reason
       ) VALUES (
-        player_user_ids[i],
-        tourney_ids[((i - 1 + j) % 15) + 1],
-        CASE WHEN j < 2 THEN 'early_bird' ELSE 'standard' END,
-        reg_status::registration_status,
-        now() - ((60 - (reg_idx % 45)) || ' days')::interval,
-        confirmed_ts,
-        cancelled_ts,
-        CASE
-          WHEN reg_status = 'cancelled_payment'
-          THEN (ARRAY[
-            'Unable to attend due to scheduling conflict',
-            'Personal reasons',
-            'Work commitment'
-          ])[(reg_idx % 3) + 1]
-          ELSE NULL
-        END
+        player_user_ids[i], v_t.id, v_tier, reg_status::registration_status,
+        v_reg_at,
+        CASE WHEN reg_status = 'confirmed' THEN v_settled_at END,
+        CASE WHEN reg_status = 'cancelled_payment' THEN v_reg_at + interval '10 minutes' END,
+        CASE WHEN reg_status = 'cancelled_payment' THEN 'payment_expired' END
       ) RETURNING id INTO new_reg_id;
 
-      IF reg_status = 'confirmed' THEN
-        INSERT INTO public.payments (
-          type,
-          tournament_id,
-          registration_id,
-          user_id,
-          gross_amount_cents,
-          platform_fee_cents,
-          net_amount_cents,
-          currency,
-          payment_method,
-          chip_transaction_id,
-          status,
-          paid_at
-        ) VALUES (
-          'registration',
-          tourney_ids[((i - 1 + j) % 15) + 1],
-          new_reg_id,
-          player_user_ids[i],
-          fee_cents,
-          (fee_cents * 0.10)::integer,
-          fee_cents - (fee_cents * 0.10)::integer,
-          'MYR',
-          (ARRAY[
-            'online_banking','credit_card','chip',
-            'online_banking','credit_card'
-          ])[(reg_idx % 5) + 1],
-          'CHIP-' || upper(substring(md5(new_reg_id::text), 1, 8)),
-          'paid',
-          confirmed_ts
-        );
-      END IF;
+      INSERT INTO public.payments (
+        type, tournament_id, registration_id, user_id, organization_id,
+        gross_amount_cents, platform_fee_cents,
+        organizer_commission_cents, player_commission_cents, net_amount_cents,
+        currency, payment_method, chip_transaction_id,
+        status, paid_at, created_at
+      ) VALUES (
+        'registration', v_t.id, new_reg_id, player_user_ids[i], v_t.organization_id,
+        v_amounts.gross_amount_cents, v_amounts.platform_fee_cents,
+        v_amounts.organizer_commission_cents, v_amounts.player_commission_cents,
+        v_amounts.net_amount_cents,
+        'MYR',
+        -- CHIP's transaction_data.payment_method values, as the webhook records them.
+        CASE WHEN reg_status = 'confirmed'
+          THEN (ARRAY['fpx_b2c','visa','mastercard','duitnow_qr','fpx_b2c'])[(reg_idx % 5) + 1]
+        END,
+        -- Every attempt had a CHIP purchase created for it, paid or not.
+        'SEED-' || upper(substring(md5(new_reg_id::text), 1, 12)),
+        CASE reg_status
+          WHEN 'confirmed'      THEN 'paid'::payment_status
+          WHEN 'failed_payment' THEN 'failed'::payment_status
+          ELSE                       'pending'::payment_status
+        END,
+        CASE WHEN reg_status = 'confirmed' THEN v_settled_at END,
+        v_reg_at
+      ) RETURNING id INTO new_pay_id;
 
+      UPDATE public.registrations SET current_payment_id = new_pay_id WHERE id = new_reg_id;
+
+      CASE reg_status
+        WHEN 'confirmed'      THEN n_confirmed := n_confirmed + 1;
+        WHEN 'failed_payment' THEN n_failed    := n_failed + 1;
+        ELSE                       n_expired   := n_expired + 1;
+      END CASE;
+
+      n_regs  := n_regs + 1;
       reg_idx := reg_idx + 1;
     END LOOP;
   END LOOP;
 
-  RAISE NOTICE '  > % registrations created (120 confirmed, 50 pending, 30 cancelled)', reg_idx;
-  RAISE NOTICE '  > 120 payment records created';
+  RAISE NOTICE '  > % registrations, each with one payment attempt (% confirmed/paid, % failed, % expired)',
+    reg_idx, n_confirmed, n_failed, n_expired;
   RAISE NOTICE '';
   RAISE NOTICE '=== Seed complete ===';
   RAISE NOTICE 'All accounts are verified and login-ready. Password: Abcd!234';

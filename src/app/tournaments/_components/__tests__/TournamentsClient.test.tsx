@@ -101,6 +101,7 @@ vi.mock("next/image", () => ({
 function makeTournament(overrides: Partial<Tournament> = {}): Tournament {
   return {
     id: "1",
+    slug: "default-tournament",
     name: "Default Tournament",
     venue: { name: "Test Venue", state: "Selangor" },
     timezone: "Asia/Kuala_Lumpur",

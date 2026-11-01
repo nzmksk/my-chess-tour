@@ -1,7 +1,7 @@
-import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
+import { selfApiFetch } from "@/lib/self-fetch";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
 import type {
@@ -57,14 +57,10 @@ interface TournamentForEdit {
 async function fetchTournamentForEdit(
   orgId: string,
   id: string,
-  cookieHeader: string,
 ): Promise<TournamentForEdit | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
   try {
-    const res = await fetch(
-      `${baseUrl}/api/v1/organizations/${orgId}/tournaments/${id}`,
-      { cache: "no-store", headers: { cookie: cookieHeader } },
+    const res = await selfApiFetch(
+      `/api/v1/organizations/${orgId}/tournaments/${id}`,
     );
     if (!res.ok) return null;
     const json = await res.json();
@@ -164,19 +160,9 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
   };
 }
 
-async function fetchOrgName(
-  orgId: string,
-  cookieHeader: string,
-): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+async function fetchOrgName(orgId: string): Promise<string> {
   try {
-    const res = await fetch(
-      `${baseUrl}/api/v1/organizations/${orgId}/dashboard`,
-      {
-        cache: "no-store",
-        headers: { cookie: cookieHeader },
-      },
-    );
+    const res = await selfApiFetch(`/api/v1/organizations/${orgId}/dashboard`);
     if (!res.ok) return "Organization";
     const json = await res.json();
     return (json.data?.organization?.name as string) ?? "Organization";
@@ -198,12 +184,9 @@ export default async function EditTournamentPage({
     redirect("/auth/login");
   }
 
-  const headersList = await headers();
-  const cookieHeader = headersList.get("cookie") ?? "";
-
   const [tournament, orgName] = await Promise.all([
-    fetchTournamentForEdit(orgId, id, cookieHeader),
-    fetchOrgName(orgId, cookieHeader),
+    fetchTournamentForEdit(orgId, id),
+    fetchOrgName(orgId),
   ]);
 
   if (!tournament) {

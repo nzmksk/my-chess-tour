@@ -36,16 +36,25 @@ vi.mock("@/services/supabase/server", () => ({
   }),
 }));
 
+// The page now issues three differently-shaped queries (organizations →
+// .is().single(); bank account → .eq().eq().maybeSingle(); documents →
+// .eq().order()), so the builder has to be chainable rather than a fixed chain.
+// The individual spies are still shared, which is what the assertions below
+// read.
 const mockSingle = vi.hoisted(() => vi.fn());
-const mockIs = vi.hoisted(() => vi.fn().mockReturnValue({ single: mockSingle }));
-const mockEq = vi.hoisted(() => vi.fn().mockReturnValue({ is: mockIs }));
-const mockSelect = vi.hoisted(() => vi.fn().mockReturnValue({ eq: mockEq }));
-const mockFrom = vi.hoisted(() =>
-  vi.fn().mockReturnValue({ select: mockSelect }),
-);
+const mockMaybeSingle = vi.hoisted(() => vi.fn());
+const mockOrder = vi.hoisted(() => vi.fn());
+const mockIs = vi.hoisted(() => vi.fn());
+const mockEq = vi.hoisted(() => vi.fn());
+const mockSelect = vi.hoisted(() => vi.fn());
+const mockFrom = vi.hoisted(() => vi.fn());
+const mockCreateSignedUrl = vi.hoisted(() => vi.fn());
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: {
+    from: mockFrom,
+    storage: { from: vi.fn(() => ({ createSignedUrl: mockCreateSignedUrl })) },
+  },
 }));
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -89,10 +98,26 @@ describe("AdminApplicationDetailPage", () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    mockIs.mockReturnValue({ single: mockSingle });
-    mockEq.mockReturnValue({ is: mockIs });
-    mockSelect.mockReturnValue({ eq: mockEq });
-    mockFrom.mockReturnValue({ select: mockSelect });
+    const builder = {
+      select: mockSelect,
+      eq: mockEq,
+      is: mockIs,
+      order: mockOrder,
+      single: mockSingle,
+      maybeSingle: mockMaybeSingle,
+    };
+    mockSelect.mockReturnValue(builder);
+    mockEq.mockReturnValue(builder);
+    mockIs.mockReturnValue(builder);
+    mockFrom.mockReturnValue(builder);
+
+    // Defaults for the two queries added alongside the KYB review sections.
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    mockOrder.mockResolvedValue({ data: [], error: null });
+    mockCreateSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://signed.example/doc" },
+      error: null,
+    });
 
     mockRedirect.mockImplementation((url: string) => {
       const err = new Error(`NEXT_REDIRECT:${url}`);
@@ -189,5 +214,59 @@ describe("AdminApplicationDetailPage", () => {
     expect(mockFrom).toHaveBeenCalledWith("organizations");
     expect(mockEq).toHaveBeenCalledWith("id", APP_ID);
     expect(mockIs).toHaveBeenCalledWith("deleted_at", null);
+  });
+
+  it("passes only the last 4 digits of the account number to the client", async () => {
+    // The reviewer needs to recognise the account, not read it. Masking here in
+    // the server component keeps the full number out of the client bundle
+    // entirely — the same rule the API follows.
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockSingle.mockResolvedValue({ data: makeApplicationDetail(), error: null });
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        bank_name: "Maybank",
+        bank_code: "MBBEMYKL",
+        account_holder: "Penang Chess Club",
+        account_number: "514012345678",
+        status: "pending",
+        rejection_reason: null,
+      },
+      error: null,
+    });
+
+    const AdminApplicationDetailPage = await importPage();
+    const result = await AdminApplicationDetailPage({
+      params: Promise.resolve({ id: APP_ID }),
+    });
+
+    const rendered = JSON.stringify(result);
+    expect(rendered).toContain("5678");
+    expect(rendered).not.toContain("514012345678");
+  });
+
+  it("signs each document URL server-side with a 5-minute expiry", async () => {
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockSingle.mockResolvedValue({ data: makeApplicationDetail(), error: null });
+    mockOrder.mockResolvedValue({
+      data: [
+        {
+          id: "dddddddd-0000-0000-0000-000000000001",
+          doc_type: "ros",
+          storage_path: "users/u1/org-kyb/ros.pdf",
+          original_filename: "ros.pdf",
+        },
+      ],
+      error: null,
+    });
+
+    const AdminApplicationDetailPage = await importPage();
+    await AdminApplicationDetailPage({ params: Promise.resolve({ id: APP_ID }) });
+
+    expect(mockCreateSignedUrl).toHaveBeenCalledWith(
+      "users/u1/org-kyb/ros.pdf",
+      300,
+    );
   });
 });

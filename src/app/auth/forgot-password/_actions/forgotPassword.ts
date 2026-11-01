@@ -36,7 +36,8 @@ export async function forgotPassword(
       type: "recovery",
       next: "/auth/update-password",
     });
-    const resetLink = `${process.env.NEXT_PUBLIC_SITE_URL}/api/v1/auth/callback?${params.toString()}`;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const resetLink = `${siteUrl}/api/v1/auth/callback?${params.toString()}`;
     try {
       await sendPasswordResetEmail(email, resetLink);
     } catch (sendError) {

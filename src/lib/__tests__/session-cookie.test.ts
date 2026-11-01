@@ -46,7 +46,13 @@ describe("stripPersistence", () => {
   });
 
   it("handles sb- cookies with no options object", () => {
-    const cookie = { name: "sb-token", value: "val" };
+    // Annotated so `options` is part of the inferred generic, as it is for
+    // the @supabase/ssr cookie objects this runs against in production.
+    const cookie: {
+      name: string;
+      value: string;
+      options?: Record<string, unknown>;
+    } = { name: "sb-token", value: "val" };
     const result = stripPersistence([cookie]);
     expect(result[0].options).not.toHaveProperty("maxAge");
     expect(result[0].options).not.toHaveProperty("expires");

@@ -1,6 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import BankAccountFields, {
+  normalizeAccountNumber,
+  validateBankAccount,
+  type BankAccountValues,
+} from "@/components/BankAccountFields";
 
 // Masked view of a player's banking details — what the API returns and what the
 // UI renders. The full account number is never held here.
@@ -22,49 +27,49 @@ interface Props {
 // available for a future just-in-time prize-claim / refund surface. The account
 // number is always re-entered in full (the existing value is masked and never
 // sent back to the client).
+//
+// The fields and their rules live in BankAccountFields, shared with the
+// organization payout destination. This component is the player-side submit
+// around them: free-text bank name (no SWIFT code — player prizes have no
+// disbursement path yet, see launch-readiness P14) and one PATCH.
 export default function BankingForm({
   initial,
   onSaved,
   onCancel,
   submitLabel = "Save",
 }: Props) {
-  const hasExistingNumber = Boolean(initial?.bank_account_number_last4);
-
-  const [bankName, setBankName] = useState(initial?.bank_name ?? "");
-  const [holder, setHolder] = useState(initial?.bank_account_holder ?? "");
-  const [accountNumber, setAccountNumber] = useState("");
+  const [values, setValues] = useState<BankAccountValues>({
+    bankName: initial?.bank_name ?? "",
+    bankCode: "",
+    accountHolder: initial?.bank_account_holder ?? "",
+    accountNumber: "",
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function validate(): string | null {
-    if (!bankName.trim()) return "Please enter your bank name.";
-    if (bankName.trim().length > 100)
-      return "Bank name must be 100 characters or fewer.";
-    if (!holder.trim()) return "Please enter the account holder name.";
-    if (holder.trim().length > 255)
-      return "Account holder name must be 255 characters or fewer.";
-    const digits = accountNumber.replace(/[\s-]/g, "");
-    if (!/^\d{5,20}$/.test(digits))
-      return "Account number must contain 5 to 20 digits.";
-    return null;
+  function update(patch: Partial<BankAccountValues>) {
+    setValues((prev) => ({ ...prev, ...patch }));
+    setError(null);
   }
 
   async function handleSubmit() {
-    const validationError = validate();
+    const validationError = validateBankAccount(values, {
+      requireBankCode: false,
+    });
     if (validationError) {
       setError(validationError);
       return;
     }
     setSubmitting(true);
     setError(null);
-    const digits = accountNumber.replace(/[\s-]/g, "");
+    const digits = normalizeAccountNumber(values.accountNumber);
     try {
       const res = await fetch("/api/v1/profile/banking", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bank_name: bankName.trim(),
-          bank_account_holder: holder.trim(),
+          bank_name: values.bankName.trim(),
+          bank_account_holder: values.accountHolder.trim(),
           bank_account_number: digits,
         }),
       });
@@ -74,8 +79,8 @@ export default function BankingForm({
         return;
       }
       onSaved({
-        bank_name: bankName.trim(),
-        bank_account_holder: holder.trim(),
+        bank_name: values.bankName.trim(),
+        bank_account_holder: values.accountHolder.trim(),
         bank_account_number_last4: digits.slice(-4),
       });
     } catch {
@@ -87,70 +92,12 @@ export default function BankingForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="form-group">
-        <div className="label-row">
-          <label className="input-label" htmlFor="bank_name">
-            Bank Name
-          </label>
-        </div>
-        <input
-          id="bank_name"
-          className="input"
-          type="text"
-          placeholder="e.g. Maybank"
-          value={bankName}
-          maxLength={100}
-          onChange={(e) => {
-            setBankName(e.target.value);
-            setError(null);
-          }}
-        />
-      </div>
-
-      <div className="form-group">
-        <div className="label-row">
-          <label className="input-label" htmlFor="bank_account_holder">
-            Account Holder Name
-          </label>
-        </div>
-        <input
-          id="bank_account_holder"
-          className="input"
-          type="text"
-          placeholder="Name as it appears on the account"
-          value={holder}
-          maxLength={255}
-          onChange={(e) => {
-            setHolder(e.target.value);
-            setError(null);
-          }}
-        />
-      </div>
-
-      <div className="form-group">
-        <div className="label-row">
-          <label className="input-label" htmlFor="bank_account_number">
-            Account Number
-          </label>
-        </div>
-        <input
-          id="bank_account_number"
-          className="input"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder={
-            hasExistingNumber
-              ? `•••• ${initial?.bank_account_number_last4} — re-enter to change`
-              : "e.g. 1234567890"
-          }
-          value={accountNumber}
-          onChange={(e) => {
-            setAccountNumber(e.target.value.replace(/[^\d\s-]/g, ""));
-            setError(null);
-          }}
-        />
-      </div>
+      <BankAccountFields
+        values={values}
+        onChange={update}
+        existingLast4={initial?.bank_account_number_last4 ?? null}
+        disabled={submitting}
+      />
 
       {error && <p className="font-lato text-sm text-red-400">{error}</p>}
 

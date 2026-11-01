@@ -7,7 +7,7 @@ import { resolveTimeZone } from "@/lib/datetime";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export interface ManageParticipant {
+interface ManageParticipant {
   index: number;
   id: string;
   user_id: string;

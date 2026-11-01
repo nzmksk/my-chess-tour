@@ -11,6 +11,26 @@ import type {
   PlayerProfile,
 } from "../page";
 
+const ENTITY_LABELS: Record<string, string> = {
+  company: "Company (Sdn Bhd / Enterprise)",
+  society: "Society / Association",
+  individual: "Individual organizer",
+};
+
+const DOC_LABELS: Record<string, string> = {
+  ssm: "SSM registration",
+  ros: "ROS registration",
+  authorization_letter: "Authorization letter",
+  identity_document: "Identity document",
+  other: "Other supporting document",
+};
+
+const BANK_STATUS_LABELS: Record<string, string> = {
+  pending: "Awaiting verification",
+  verified: "Verified",
+  rejected: "Rejected",
+};
+
 const STATUS_CONFIG: Record<
   ApprovalStatus,
   { label: string; className: string }
@@ -289,6 +309,108 @@ export default function ApplicationDetailClient({ application }: Props) {
           <DetailRow label="Phone">
             {application.phone ?? <span className="text-text-muted">—</span>}
           </DetailRow>
+        </div>
+      </section>
+
+      {/* Banking — where this organization's payouts would go */}
+      <section className="card mb-4 overflow-hidden">
+        <div className="border-border bg-bg-raised border-b px-5 py-3">
+          <h2 className="font-cinzel text-text-primary text-sm font-bold tracking-wide uppercase">
+            Banking
+          </h2>
+        </div>
+        <div className="px-5 py-4">
+          {application.bank_account ? (
+            <>
+              <DetailRow label="Bank">
+                {application.bank_account.bank_name}{" "}
+                <span className="text-text-muted">
+                  ({application.bank_account.bank_code})
+                </span>
+              </DetailRow>
+              <DetailRow label="Account Holder">
+                {application.bank_account.account_holder}
+              </DetailRow>
+              {/* Last 4 only. No surface in this application ever renders or
+                  returns the full number. */}
+              <DetailRow label="Account Number">
+                •••• {application.bank_account.account_number_last4}
+              </DetailRow>
+              <DetailRow label="Status">
+                {BANK_STATUS_LABELS[application.bank_account.status] ??
+                  application.bank_account.status}
+                {application.bank_account.rejection_reason && (
+                  <span className="text-text-muted">
+                    {" "}
+                    — {application.bank_account.rejection_reason}
+                  </span>
+                )}
+              </DetailRow>
+            </>
+          ) : (
+            <p className="font-lato text-text-muted text-sm">
+              No bank account on file.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Verification documents (KYB) */}
+      <section className="card mb-4 overflow-hidden">
+        <div className="border-border bg-bg-raised border-b px-5 py-3">
+          <h2 className="font-cinzel text-text-primary text-sm font-bold tracking-wide uppercase">
+            Verification Documents
+          </h2>
+        </div>
+        <div className="px-5 py-4">
+          <DetailRow label="Entity Type">
+            {application.entity_type ? (
+              (ENTITY_LABELS[application.entity_type] ??
+              application.entity_type)
+            ) : (
+              <span className="text-text-muted">—</span>
+            )}
+          </DetailRow>
+          <DetailRow label="Registration No.">
+            {application.registration_number ?? (
+              <span className="text-text-muted">—</span>
+            )}
+          </DetailRow>
+          <DetailRow label="Documents">
+            {application.documents.length === 0 ? (
+              <span className="text-text-muted">
+                No documents were submitted.
+              </span>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {application.documents.map((doc) => (
+                  <span key={doc.id}>
+                    <span className="text-text-muted">
+                      {DOC_LABELS[doc.doc_type] ?? doc.doc_type}:
+                    </span>{" "}
+                    {doc.url ? (
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gold-bright break-all hover:underline"
+                      >
+                        {doc.original_filename ?? "View document"}
+                      </a>
+                    ) : (
+                      <span className="text-danger">
+                        {doc.original_filename ?? "Document"} — link unavailable
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+          </DetailRow>
+          <p className="font-lato text-text-muted mt-3 text-xs">
+            Document links expire 5 minutes after this page was loaded. Reload
+            to get fresh ones.
+          </p>
         </div>
       </section>
 

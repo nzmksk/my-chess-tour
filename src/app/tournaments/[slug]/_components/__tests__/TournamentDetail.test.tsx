@@ -4,7 +4,7 @@ import TournamentDetail from "../TournamentDetail";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
-  usePathname: () => "/tournaments/t1",
+  usePathname: () => "/tournaments/kl-open-rapid-2026",
   useSearchParams: () => ({ get: () => null, toString: () => "" }),
 }));
 import type { TournamentDetail as TournamentDetailType } from "../../types";
@@ -14,6 +14,7 @@ import type { StartingRankPlayer } from "../../types";
 
 const base: TournamentDetailType = {
   id: "t1",
+  slug: "kl-open-rapid-2026",
   name: "KL Open Rapid Championship 2026",
   description: "Annual rapid chess championship in Kuala Lumpur.",
   venue: {

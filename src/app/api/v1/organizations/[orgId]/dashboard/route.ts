@@ -108,6 +108,7 @@ export async function GET(
   const [
     { data: tournaments, error: tourError },
     { data: payoutRows, error: payoutError },
+    { data: bankAccount, error: bankError },
   ] = await Promise.all([
     supabaseAdmin
       .from("tournaments")
@@ -118,6 +119,15 @@ export async function GET(
       .from("tournament_payout_summary")
       .select("net_revenue_cents, net_payout_cents")
       .eq("organization_id", orgId),
+    // Status only — the dashboard needs to know whether payouts can land, not
+    // where. The masked details are served by the bank-account route, which is
+    // gated on bank_account.manage; this endpoint is open to any member.
+    supabaseAdmin
+      .from("organization_bank_accounts")
+      .select("status, rejection_reason")
+      .eq("organization_id", orgId)
+      .eq("is_active", true)
+      .maybeSingle(),
   ]);
 
   if (tourError) {
@@ -130,6 +140,17 @@ export async function GET(
   if (payoutError) {
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: payoutError.message } },
+      { status: 500 },
+    );
+  }
+
+  // Never swallowed: a failed lookup is indistinguishable from an absent
+  // account in the payload, and the banner would then tell an organizer who
+  // has filed their bank details that they have none — the one state that
+  // reads as their fault to fix.
+  if (bankError) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: bankError.message } },
       { status: 500 },
     );
   }
@@ -213,6 +234,9 @@ export async function GET(
           // treats the same as a stale version.
           agreement_version: org.agreement_version,
         },
+        // NULL means no active account at all, which the banner reports
+        // differently from one that is merely awaiting verification.
+        bank_account: bankAccount ?? null,
         stats: {
           active_tournaments: activeTournaments,
           total_registrations: totalRegistrations,
