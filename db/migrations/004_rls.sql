@@ -253,13 +253,21 @@ CREATE POLICY "Players can view own registrations"
 ON registrations FOR SELECT
 USING (can_act_for(user_id));
 
-CREATE POLICY "Players can register"
-ON registrations FOR INSERT
-WITH CHECK (can_act_for(user_id));
-
-CREATE POLICY "Players can cancel own registration"
-ON registrations FOR UPDATE
-USING (can_act_for(user_id));
+-- No client write capability, following the `users` and
+-- organization_bank_accounts precedent. `status` and `current_payment_id` ARE
+-- the payment state: an INSERT or UPDATE policy scoped only on can_act_for()
+-- let a JWT holder write
+--   POST  /rest/v1/registrations  {"user_id": <self>, "tournament_id": …, "status": "confirmed"}
+--   PATCH /rest/v1/registrations?id=eq.<own>  {"status": "confirmed"}
+-- and hold a confirmed seat without paying. A column-scoped policy cannot
+-- express the state machine (pending_payment -> confirmed only on a paid,
+-- current attempt), so the capability is removed outright.
+--
+-- No application code needs it: every write goes through the SECURITY DEFINER
+-- functions in 007_payment_functions.sql (create_registration_with_payment,
+-- start_new_payment_attempt, settle_registration_payment,
+-- expire_stale_pending_payments), all service-role only. db/tests/registration_writes.sql checks this.
+REVOKE UPDATE, INSERT, DELETE ON registrations FROM anon, authenticated;
 
 -- Org members with registration.view can see their tournament's registrations
 CREATE POLICY "Org members can view tournament registrations"
