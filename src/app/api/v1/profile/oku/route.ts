@@ -59,8 +59,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // The prefix check above proves the path is in this user's folder; it does
   // not prove anything is there, or that what is there is a 5MB image rather
   // than a 500MB blob. MAX_BYTES in the uploader is a UX affordance — the file
-  // never passes through this route, so this is the only place the limit can
-  // actually be enforced.
+  // never passes through this route. The bucket's file_size_limit and
+  // allowed_mime_types (005_bucket_policies.sql) reject bad uploads at Storage;
+  // this re-checks the object actually registered, and keep the two in sync.
   const check = await assertUploadedObject("oku-documents", documentPath, {
     maxBytes: OKU_MAX_BYTES,
     mimeTypes: OKU_MIME_TYPES,
