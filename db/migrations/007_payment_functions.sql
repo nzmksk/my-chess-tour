@@ -473,3 +473,28 @@ BEGIN
   );
 END;
 $$;
+
+-- =============================================
+-- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
+-- Same reasoning as the block at the end of 003_functions_triggers.sql: these
+-- SECURITY DEFINER functions trust their arguments, and the checkout route,
+-- CHIP webhook and expiry/refund jobs call them through the service role. Left
+-- executable by clients, anyone could settle their own registration as paid,
+-- settle refunds, or list pending refunds across every organization.
+--
+-- compute_registration_amounts is not SECURITY DEFINER (pure arithmetic) and is
+-- left as is.
+-- =============================================
+REVOKE EXECUTE ON FUNCTION create_registration_with_payment  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION start_new_payment_attempt         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION settle_registration_payment       FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION expire_stale_pending_payments     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_pending_cancellation_refunds FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION settle_refund                     FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
+GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
+GRANT EXECUTE ON FUNCTION settle_registration_payment       TO service_role;
+GRANT EXECUTE ON FUNCTION expire_stale_pending_payments     TO service_role;
+GRANT EXECUTE ON FUNCTION list_pending_cancellation_refunds TO service_role;
+GRANT EXECUTE ON FUNCTION settle_refund                     TO service_role;

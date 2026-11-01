@@ -897,3 +897,42 @@ BEGIN
   );
 END;
 $$;
+
+-- =============================================
+-- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
+-- Postgres grants EXECUTE on every new function to PUBLIC, and Supabase's
+-- default privileges grant it to anon and authenticated as well. With the
+-- public schema exposed through PostgREST, that makes every function above
+-- callable as POST /rest/v1/rpc/<name> by any client, and a SECURITY DEFINER
+-- function then runs with the owner's rights.
+--
+-- The functions below take the acting user, organization or reviewer as plain
+-- arguments and check none of it themselves; the API routes do that before
+-- calling them through the service role. Left callable, a client could replace
+-- any organization's payout account, file an application as someone else, or
+-- approve its own organization. So EXECUTE is revoked from every client role
+-- (PUBLIC alone is not enough: anon and authenticated hold their own grants)
+-- and granted to service_role only.
+--
+-- Nested calls are unaffected: create_organization_application calls
+-- set_organization_bank_account as the function owner, not as the client.
+--
+-- Deliberately still callable by clients: app_user_id, can_act_for,
+-- has_global_permission, has_org_permission, is_org_member, is_org_approved
+-- (RLS policies and the user-session permission checks depend on them),
+-- get_participant_counts (read-only, public counts) and
+-- assert_tournament_capacity (the enforce_tournament_capacity trigger calls it
+-- with the inserting user's rights, and RLS lets players insert registrations).
+--
+-- db/tests/function_privileges.sql fails if a SECURITY DEFINER function is
+-- executable by anon or authenticated without being on that list.
+-- =============================================
+REVOKE EXECUTE ON FUNCTION set_organization_bank_account   FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION create_organization_application FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_organization_application FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_tournament_cancellation  FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
+GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
+GRANT EXECUTE ON FUNCTION review_organization_application TO service_role;
+GRANT EXECUTE ON FUNCTION review_tournament_cancellation  TO service_role;
