@@ -223,8 +223,11 @@ export function validateApplyRequest(
   // Mirrors the rule create_organization_application enforces in-transaction.
   // Checked here too so the applicant gets a readable message naming the
   // document they're missing, rather than a generic RPC failure.
+  // The registry that matches the entity, not either one: a company is
+  // registered with SSM and a society with ROS.
+  const requiredRegistryDoc = entityType === "company" ? "ssm" : "ros";
   const hasRegistryDoc = documents.some(
-    (d) => d.doc_type === "ssm" || d.doc_type === "ros",
+    (d) => d.doc_type === requiredRegistryDoc,
   );
   const hasIdentityDoc = documents.some(
     (d) =>

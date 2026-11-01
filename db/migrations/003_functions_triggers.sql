@@ -671,11 +671,17 @@ BEGIN
         USING ERRCODE = 'P0001';
     END IF;
 
+    -- The registry that matches the entity, not either one: a company is
+    -- registered with SSM and a society with ROS, so the other registry's
+    -- extract is not evidence for it.
     IF NOT EXISTS (
       SELECT 1 FROM jsonb_array_elements(v_docs) d
-      WHERE d->>'doc_type' IN ('ssm', 'ros')
+      WHERE d->>'doc_type' =
+        CASE p_entity_type WHEN 'company' THEN 'ssm' ELSE 'ros' END
     ) THEN
-      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: a % must supply an SSM or ROS document', p_entity_type
+      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: a % must supply an % document',
+        p_entity_type,
+        CASE p_entity_type WHEN 'company' THEN 'SSM' ELSE 'ROS' END
         USING ERRCODE = 'P0001';
     END IF;
   ELSE
