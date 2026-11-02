@@ -192,7 +192,7 @@ describe("CHIP Send HTTP calls", () => {
   beforeEach(() => {
     vi.stubEnv("CHIP_SEND_API_KEY", API_KEY);
     vi.stubEnv("CHIP_SEND_API_SECRET", API_SECRET);
-    vi.stubEnv("CHIP_SEND_API_URL", "");
+    vi.stubEnv("CHIP_SEND_API_URL", STAGING_URL);
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockReset();
     fetchMock.mockImplementation(() =>
@@ -214,7 +214,7 @@ describe("CHIP Send HTTP calls", () => {
     };
   }
 
-  it("defaults to the staging host", async () => {
+  it("calls the configured host with the three auth headers", async () => {
     await getChipSendAccounts();
     const { url, init } = lastCall();
     expect(url).toBe(`${STAGING_URL}/send/accounts`);
@@ -229,6 +229,14 @@ describe("CHIP Send HTTP calls", () => {
     vi.stubEnv("CHIP_SEND_API_URL", "https://api.chip-in.asia/api/");
     await getChipSendAccounts();
     expect(lastCall().url).toBe("https://api.chip-in.asia/api/send/accounts");
+  });
+
+  it("throws before any request when CHIP_SEND_API_URL is unset", async () => {
+    vi.stubEnv("CHIP_SEND_API_URL", "");
+    await expect(getChipSendAccounts()).rejects.toThrow(
+      "CHIP_SEND_API_URL must be configured",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("signs each request independently", async () => {

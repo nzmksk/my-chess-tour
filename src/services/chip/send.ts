@@ -46,12 +46,15 @@ import type {
 // intended amount (a payout that is visibly too small) rather than 100× (money
 // gone). Confirm against the sandbox before the first real payout (Phase 5).
 
-const DEFAULT_CHIP_SEND_API_URL = "https://staging-api.chip-in.asia/api";
-
 function chipSendBaseUrl(): string {
   // Unlike chip.ts, not hardcoded: staging and production are different hosts
-  // and the credentials are per-environment.
-  const url = process.env.CHIP_SEND_API_URL || DEFAULT_CHIP_SEND_API_URL;
+  // and the credentials are per-environment. Deliberately NO fallback: a
+  // default host would let an environment with the variable unset quietly
+  // talk to the wrong CHIP environment instead of failing loudly.
+  const url = process.env.CHIP_SEND_API_URL;
+  if (!url) {
+    throw new Error("CHIP_SEND_API_URL must be configured");
+  }
   return url.replace(/\/+$/, "");
 }
 
