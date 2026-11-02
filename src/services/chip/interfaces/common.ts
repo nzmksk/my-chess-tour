@@ -108,6 +108,10 @@ export type PaymentMethod =
   | "fpx_b2b1"
   | "crypto_coin"
   | "dnqr"
+  /**
+   * @deprecated CHIP is deactivating this channel; use `"dnqr"` for DuitNow QR.
+   * Kept only so historical `transaction_data.payment_method` values still type-check.
+   */
   | "duitnow_qr"
   | "maestro"
   | "mastercard"
