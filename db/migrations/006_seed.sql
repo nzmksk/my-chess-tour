@@ -895,7 +895,7 @@ BEGIN
         'MYR',
         -- CHIP's transaction_data.payment_method values, as the webhook records them.
         CASE WHEN reg_status = 'confirmed'
-          THEN (ARRAY['fpx_b2c','visa','mastercard','duitnow_qr','fpx_b2c'])[(reg_idx % 5) + 1]
+          THEN (ARRAY['fpx_b2c','visa','mastercard','dnqr','fpx_b2c'])[(reg_idx % 5) + 1]
         END,
         -- Every attempt had a CHIP purchase created for it, paid or not.
         'SEED-' || upper(substring(md5(new_reg_id::text), 1, 12)),
