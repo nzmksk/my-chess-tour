@@ -7,12 +7,13 @@
 // disagree with the code it was sent alongside, and the row would then say
 // "Maybank" while the money went to CIMB.
 //
-// RECONCILED against CHIP Send's BankCode list (2026-08-16):
-//   https://docs.chip-in.asia/chip-send/api-reference/bank-accounts/create
-// This list is a 1:1 mirror of the codes in the BankCode schema's DESCRIPTION
-// — same 34 codes, no more, no fewer. The schema's `enum` disagrees with the
-// description and may be outdated; the description is authoritative (#519).
-// When reconciling again, follow the description, not the enum.
+// RECONCILED against CHIP Send's BankCode schema (2026-11-05):
+//   https://docs.chip-in.asia/openapi/chip-send.yaml
+// This list is a 1:1 mirror of it — same 37 codes, no more, no fewer. The
+// schema's description ("the complete set of codes accepted by POST
+// /send/bank_accounts") is authoritative. Its `enum` has lagged behind the
+// description before (#519); today the two agree, but if they diverge again,
+// follow the description.
 // Mirroring rather than curating is deliberate: a code we accept that CHIP
 // rejects is a FAILED PAYOUT (discovered after a tournament, with an organizer
 // waiting on money), whereas a code CHIP accepts that we omit is only a bank
@@ -21,8 +22,8 @@
 // which is why the corporate and custody banks below are kept even though no
 // chess organizer is likely to nominate one.
 //
-// Do not add an entry without confirming it against CHIP's enum first — the
-// unit test pins the exact set and will fail.
+// Do not add an entry without confirming it against CHIP's BankCode list first
+// — the unit test pins the exact set and will fail.
 //
 // Two CHIP-side details worth not "fixing" back:
 //   - MBSB Bank is AFBQMYKL, the legacy Asian Finance Bank code CHIP still
@@ -31,9 +32,8 @@
 //     CHIP accepts them as destinations, so they stay; the field is labelled
 //     "bank" in the UI, which is a slight misnomer for those two.
 //
-// Citibank (CITIMYKL) was in this list before the reconciliation and is NOT in
-// CHIP's enum — it was a latent failed payout. Its Malaysian consumer business
-// went to UOB in 2022 in any case.
+// Citibank (CITIMYKL) was dropped in the 2026-08-16 reconciliation because
+// CHIP's list didn't have it then. CHIP has since added it back, so it's back.
 
 export interface MalaysianBank {
   /** Display name stored on the bank account row. */
@@ -57,8 +57,10 @@ export const MALAYSIAN_BANKS: readonly MalaysianBank[] = [
   { name: "Bank Rakyat", swift: "BKRMMYKL" },
   { name: "Bank Simpanan Nasional", swift: "BSNAMYK1" },
   { name: "BNP Paribas Malaysia", swift: "BNPAMYKL" },
+  { name: "Boost Bank", swift: "BOBEMYK2" },
   { name: "China Construction Bank (Malaysia)", swift: "PCBCMYKL" },
   { name: "CIMB Bank", swift: "CIBBMYKL" },
+  { name: "Citibank", swift: "CITIMYKL" },
   { name: "Deutsche Bank (Malaysia)", swift: "DEUTMYKL" },
   { name: "Finexus Cards", swift: "FNXSMYNB" },
   { name: "GX Bank", swift: "GXSPMYKL" },
@@ -76,6 +78,7 @@ export const MALAYSIAN_BANKS: readonly MalaysianBank[] = [
   { name: "OCBC Bank", swift: "OCBCMYKL" },
   { name: "Public Bank", swift: "PBBEMYKL" },
   { name: "RHB Bank", swift: "RHBBMYKL" },
+  { name: "RYT Bank", swift: "SCCHMYKL" },
   { name: "Standard Chartered Bank", swift: "SCBLMYKX" },
   { name: "Sumitomo Mitsui Banking Corporation (Malaysia)", swift: "SMBCMYKL" },
   { name: "Touch 'n Go eWallet", swift: "TNGDMYNB" },
