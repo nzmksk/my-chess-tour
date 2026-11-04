@@ -42,6 +42,12 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+const { mockRegisterBank } = vi.hoisted(() => ({ mockRegisterBank: vi.fn() }));
+
+vi.mock("@/services/payouts/bank-account", () => ({
+  registerOrganizationBankAccount: mockRegisterBank,
+}));
+
 import { GET, PUT } from "../route";
 
 // ---------------------------------------------------------------------------
@@ -298,5 +304,90 @@ describe("PUT /api/v1/organizations/[orgId]/bank-account", () => {
     });
     const res = await PUT(makePut(), params());
     expect(res.status).toBe(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CHIP Send registration (#519) — approved organizations only
+// ---------------------------------------------------------------------------
+
+describe("PUT /api/v1/organizations/[orgId]/bank-account — CHIP Send registration", () => {
+  const ROW_ID = "cccccccc-0000-0000-0000-000000000001";
+
+  function asApproved(status = "approved") {
+    single().mockResolvedValue({
+      data: { id: ORG_ID, approval_status: status },
+      error: null,
+    });
+  }
+
+  it("registers the new pending account of an approved organization", async () => {
+    asApproved();
+    const res = await PUT(makePut(), params());
+    expect(res.status).toBe(200);
+    expect(mockRegisterBank).toHaveBeenCalledOnce();
+    expect(mockRegisterBank).toHaveBeenCalledWith(ROW_ID);
+    expect(mockRpc.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRegisterBank.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("re-registers an unchanged pending row (retry after a failed registration)", async () => {
+    asApproved();
+    mockRpc.mockResolvedValue({
+      data: { changed: false, id: ROW_ID, status: "pending" },
+      error: null,
+    });
+    await PUT(makePut(), params());
+    expect(mockRegisterBank).toHaveBeenCalledWith(ROW_ID);
+  });
+
+  it("returns the verification state CHIP settled synchronously", async () => {
+    asApproved();
+    maybeSingle().mockResolvedValue({
+      data: { status: "verified", rejection_reason: null, verified_at: "2026-11-01T00:00:00Z" },
+      error: null,
+    });
+    const res = await PUT(makePut(), params());
+    const json = await res.json();
+    expect(json.data.status).toBe("verified");
+    expect(json.data.verified_at).toBe("2026-11-01T00:00:00Z");
+    expect(json.data.account_number_last4).toBe("5678");
+    expect(JSON.stringify(json)).not.toContain("account_number\"");
+  });
+
+  it("falls back to the RPC result when the re-read fails", async () => {
+    asApproved();
+    maybeSingle().mockResolvedValue({ data: null, error: { message: "x" } });
+    const res = await PUT(makePut(), params());
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.status).toBe("pending");
+  });
+
+  it("does not re-register a verified account on a no-op save", async () => {
+    asApproved();
+    mockRpc.mockResolvedValue({
+      data: { changed: false, id: ROW_ID, status: "verified" },
+      error: null,
+    });
+    await PUT(makePut(), params());
+    expect(mockRegisterBank).not.toHaveBeenCalled();
+  });
+
+  it.each(["pending", "rejected"])(
+    "does not register for a %s application",
+    async (status) => {
+      asApproved(status);
+      await PUT(makePut(), params());
+      expect(mockRegisterBank).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not register when the save fails", async () => {
+    asApproved();
+    mockRpc.mockResolvedValue({ data: null, error: { code: "23505", message: "dup" } });
+    const res = await PUT(makePut(), params());
+    expect(res.status).toBe(409);
+    expect(mockRegisterBank).not.toHaveBeenCalled();
   });
 });

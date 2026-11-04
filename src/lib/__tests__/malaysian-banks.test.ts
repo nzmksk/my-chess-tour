@@ -6,13 +6,14 @@ import {
 } from "@/lib/malaysian-banks";
 
 // Shape assertions, plus one that pins the exact set. MALAYSIAN_BANKS is a 1:1
-// mirror of CHIP Send's documented bank_code enum, so drift in either direction
+// mirror of CHIP Send's documented BankCode list, so drift in either direction
 // is a bug: a code CHIP does not know is a failed payout, and one we drop is a
 // bank an organizer cannot pick.
-// https://docs.chip-in.asia/chip-send/api-reference/bank-accounts/create
-// Copied from the "Available options" enum on the CHIP Send create-bank-account
-// page. Kept as a literal, not derived from MALAYSIAN_BANKS, so that editing
-// the list without checking CHIP first fails here instead of at payout time.
+// https://docs.chip-in.asia/openapi/chip-send.yaml (BankCode, 2026-11-05)
+// Copied from the BankCode schema, in its order. Its description is
+// authoritative if it ever disagrees with its `enum`. Kept as a literal, not
+// derived from MALAYSIAN_BANKS, so that editing the list without checking CHIP
+// first fails here instead of at payout time.
 const CHIP_SEND_BANK_CODES = [
   "ACDBMYK2",
   "PHBMMYKL",
@@ -28,8 +29,10 @@ const CHIP_SEND_BANK_CODES = [
   "BOTKMYKX",
   "BSNAMYK1",
   "BNPAMYKL",
+  "BOBEMYK2",
   "PCBCMYKL",
   "CIBBMYKL",
+  "CITIMYKL",
   "DEUTMYKL",
   "FNXSMYNB",
   "GXSPMYKL",
@@ -44,6 +47,7 @@ const CHIP_SEND_BANK_CODES = [
   "OCBCMYKL",
   "PBBEMYKL",
   "RHBBMYKL",
+  "SCCHMYKL",
   "SCBLMYKX",
   "SMBCMYKL",
   "TNGDMYNB",
@@ -51,7 +55,7 @@ const CHIP_SEND_BANK_CODES = [
 ];
 
 describe("MALAYSIAN_BANKS", () => {
-  it("mirrors CHIP Send's bank_code enum exactly", () => {
+  it("mirrors CHIP Send's BankCode list exactly", () => {
     expect([...BANK_SWIFT_CODES].sort()).toEqual(
       [...CHIP_SEND_BANK_CODES].sort(),
     );
