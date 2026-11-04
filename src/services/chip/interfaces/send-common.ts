@@ -1,6 +1,6 @@
 // Types shared by the CHIP Send payloads. Source of truth:
 // https://docs.chip-in.asia/openapi/chip-send.yaml — CHIP Send is a different
-// API from Collect (different host, three-header auth, HMAC webhooks), so none
+// API from Collect (different host, three-header auth, per-webhook RSA keys), so none
 // of the Collect types in common.ts apply here.
 
 /** Pagination block on CHIP Send list responses (`meta.pagination`). */

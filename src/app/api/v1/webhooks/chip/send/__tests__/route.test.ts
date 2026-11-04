@@ -52,11 +52,22 @@ import { POST } from "../route";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const SECRET = "mct-webhook-test-secret";
 const BANK_ID = "22222222-2222-4222-8222-222222222222";
 
-function sign(body: string, secret = SECRET): string {
-  return crypto.createHmac("sha512", secret).update(body).digest("hex");
+function rsaKeyPair() {
+  return crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+}
+
+// The webhook's key pair: CHIP holds the private half, we get `public_key`.
+const { publicKey, privateKey } = rsaKeyPair();
+
+// What CHIP sends: base64 RSA PKCS#1 v1.5 over the SHA-512 of the raw body.
+function sign(body: string, key: string = privateKey, algorithm = "sha512"): string {
+  return crypto.sign(algorithm, Buffer.from(body), key).toString("base64");
 }
 
 function makeRequest(payload: unknown, signature?: string | null) {
@@ -83,7 +94,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   lookups.length = 0;
   eqCalls.length = 0;
-  vi.stubEnv("CHIP_SEND_API_SECRET", SECRET);
+  vi.stubEnv("CHIP_SEND_WEBHOOK_PUBLIC_KEY", publicKey);
   mockSettle.mockResolvedValue({ error: null, settled: true });
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -110,14 +121,6 @@ describe("signature verification", () => {
     });
   });
 
-  it("accepts an uppercase hex signature", async () => {
-    lookups.push({ data: { id: BANK_ID }, error: null });
-    const body = JSON.stringify(verifiedEvent);
-    const res = await POST(makeRequest(body, sign(body).toUpperCase()));
-    expect(res.status).toBe(200);
-    expect(mockSettle).toHaveBeenCalled();
-  });
-
   it("returns 200 WITHOUT processing on a bad signature (not 401)", async () => {
     const res = await POST(makeRequest(verifiedEvent, sign("other body")));
     expect(res.status).toBe(200);
@@ -126,17 +129,25 @@ describe("signature verification", () => {
     expect(console.warn).toHaveBeenCalled();
   });
 
-  it("rejects a signature made with the wrong secret", async () => {
+  it("rejects a signature from a different key (e.g. another webhook's)", async () => {
     const body = JSON.stringify(verifiedEvent);
-    const res = await POST(makeRequest(body, sign(body, "wrong-secret")));
+    const other = rsaKeyPair();
+    const res = await POST(makeRequest(body, sign(body, other.privateKey)));
     expect(res.status).toBe(200);
     expect(mockSettle).not.toHaveBeenCalled();
   });
 
-  it("rejects a base64 (Collect-style) signature", async () => {
+  it("rejects a Collect-style RSA-SHA256 signature", async () => {
     const body = JSON.stringify(verifiedEvent);
-    const b64 = crypto.createHmac("sha512", SECRET).update(body).digest("base64");
-    const res = await POST(makeRequest(body, b64));
+    const res = await POST(makeRequest(body, sign(body, privateKey, "sha256")));
+    expect(res.status).toBe(200);
+    expect(mockSettle).not.toHaveBeenCalled();
+  });
+
+  it("rejects a hex HMAC-SHA512 signature (the scheme CHIP does NOT use)", async () => {
+    const body = JSON.stringify(verifiedEvent);
+    const hmac = crypto.createHmac("sha512", "any-secret").update(body).digest("hex");
+    const res = await POST(makeRequest(body, hmac));
     expect(res.status).toBe(200);
     expect(mockSettle).not.toHaveBeenCalled();
   });
@@ -145,9 +156,8 @@ describe("signature verification", () => {
     ["missing", null],
     ["empty", ""],
     ["too short", "abcd"],
-    ["too long", "a".repeat(130)],
-    ["right length, not hex", "z".repeat(128)],
-    ["SHA-256 length", "a".repeat(64)],
+    ["not base64", "not base64!"],
+    ["valid base64, wrong length", Buffer.from("abcd").toString("base64")],
   ])("a %s header does not throw and is ignored", async (_label, sig) => {
     const res = await POST(makeRequest(verifiedEvent, sig));
     expect(res.status).toBe(200);
@@ -162,11 +172,33 @@ describe("signature verification", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 
-  it("returns 500 when the secret is not configured, so CHIP retries", async () => {
-    vi.stubEnv("CHIP_SEND_API_SECRET", "");
+  it("accepts a key stored quoted with literal \\n (Netlify-style)", async () => {
+    lookups.push({ data: { id: BANK_ID }, error: null });
+    vi.stubEnv(
+      "CHIP_SEND_WEBHOOK_PUBLIC_KEY",
+      `"${publicKey.trim().replace(/\n/g, "\\n")}"`,
+    );
+    const res = await POST(makeRequest(verifiedEvent));
+    expect(res.status).toBe(200);
+    expect(mockSettle).toHaveBeenCalled();
+  });
+
+  it("returns 500 when the public key is not configured, so CHIP retries", async () => {
+    vi.stubEnv("CHIP_SEND_WEBHOOK_PUBLIC_KEY", "");
     const res = await POST(makeRequest(verifiedEvent));
     expect(res.status).toBe(500);
     expect(mockSettle).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when the public key is not a valid PEM, so CHIP retries", async () => {
+    vi.stubEnv(
+      "CHIP_SEND_WEBHOOK_PUBLIC_KEY",
+      "-----BEGIN PUBLIC KEY-----\nnope\n-----END PUBLIC KEY-----",
+    );
+    const res = await POST(makeRequest(verifiedEvent));
+    expect(res.status).toBe(500);
+    expect(mockSettle).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalled();
   });
 });
 

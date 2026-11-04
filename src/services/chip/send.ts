@@ -17,7 +17,7 @@ import type {
 
 // CHIP Send client — payouts. Deliberately a separate module from chip.ts
 // (Collect): different host, a three-header auth scheme, string amounts on send
-// instructions, and HMAC-SHA512/hex webhooks instead of RSA/base64. Sharing code
+// instructions, and per-webhook RSA-SHA512 keys instead of one RSA-SHA256 key. Sharing code
 // between the two invites exactly the cross-wiring the vendor warns about.
 //
 // Spec (the source of truth — re-check it before adding an endpoint):
