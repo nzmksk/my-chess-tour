@@ -7,9 +7,12 @@
 // disagree with the code it was sent alongside, and the row would then say
 // "Maybank" while the money went to CIMB.
 //
-// RECONCILED against CHIP Send's bank_code enum (2026-08-16):
+// RECONCILED against CHIP Send's BankCode list (2026-08-16):
 //   https://docs.chip-in.asia/chip-send/api-reference/bank-accounts/create
-// This list is a 1:1 mirror of that enum — same 34 codes, no more, no fewer.
+// This list is a 1:1 mirror of the codes in the BankCode schema's DESCRIPTION
+// — same 34 codes, no more, no fewer. The schema's `enum` disagrees with the
+// description and may be outdated; the description is authoritative (#519).
+// When reconciling again, follow the description, not the enum.
 // Mirroring rather than curating is deliberate: a code we accept that CHIP
 // rejects is a FAILED PAYOUT (discovered after a tournament, with an organizer
 // waiting on money), whereas a code CHIP accepts that we omit is only a bank
