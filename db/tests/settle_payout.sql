@@ -355,6 +355,58 @@ BEGIN
   END;
   RAISE NOTICE 'Q PASS — clamp and every queue_payout refusal hold';
 
+  -- ===== R: the read helpers ================================================
+  -- Overview: an organizer sees its own; a beneficiary sees only what it accepted.
+  INSERT INTO users (email, first_name, last_name) VALUES ('po-pr@test.local', 'W', 'T') RETURNING id INTO v_player2;
+  INSERT INTO tournaments (
+    organization_id, name, venue_name, venue_state, venue_address,
+    start_date, end_date, registration_deadline,
+    format, time_control, entry_fees, max_participants, status
+  ) VALUES (
+    v_org, 'PO READ T', 'Venue', 'Selangor', 'Address',
+    current_date + 30, current_date + 31, now() + interval '20 days',
+    '{"type":"classical"}', '{"base_minutes":90}', '{"standard": {"amount_cents": 10000}}', 100, 'published'
+  ) RETURNING id INTO v_id2;
+  PERFORM nominate_payout_beneficiary(v_id2, v_ben, v_org_owner);
+
+  IF NOT EXISTS (SELECT 1 FROM list_pending_payout_nominations(v_ben) n WHERE n.tournament_id = v_id2) THEN
+    RAISE EXCEPTION 'R FAIL: pending nomination not listed for the nominee';
+  END IF;
+  IF EXISTS (SELECT 1 FROM list_organization_payout_overview(v_ben) o WHERE o.tournament_id = v_id2) THEN
+    RAISE EXCEPTION 'R FAIL: an unaccepted nomination exposed the tournament to the nominee';
+  END IF;
+
+  PERFORM accept_payout_nomination(v_id2, v_ben_owner);
+  IF EXISTS (SELECT 1 FROM list_pending_payout_nominations(v_ben) n WHERE n.tournament_id = v_id2) THEN
+    RAISE EXCEPTION 'R FAIL: an accepted nomination is still listed as pending';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM list_organization_payout_overview(v_ben) o
+    WHERE o.tournament_id = v_id2 AND o.is_beneficiary AND o.recipient_organization_id = v_ben
+  ) THEN
+    RAISE EXCEPTION 'R FAIL: the beneficiary cannot see the tournament it accepted';
+  END IF;
+
+  v_res := create_registration_with_payment(v_player2, v_id2, 'standard', 10000);
+  PERFORM settle_registration_payment((v_res->>'payment_id')::uuid, true, 11000);
+  IF (SELECT o.available_cents FROM list_organization_payout_overview(v_org) o WHERE o.tournament_id = v_id2) <> 10000 THEN
+    RAISE EXCEPTION 'R FAIL: overview available_cents wrong';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM list_admin_payout_candidates() c
+    WHERE c.tournament_id = v_id2 AND c.available_cents = 10000 AND c.is_beneficiary
+      AND c.block_reason IS NULL AND c.recipient_problem IS NULL
+  ) THEN
+    RAISE EXCEPTION 'R FAIL: payable tournament missing from the admin candidates';
+  END IF;
+
+  -- A live automatic payout takes it off the list.
+  PERFORM queue_payout(v_id2, 'automatic', NULL, v_org_owner);
+  IF EXISTS (SELECT 1 FROM list_admin_payout_candidates() c WHERE c.tournament_id = v_id2) THEN
+    RAISE EXCEPTION 'R FAIL: a tournament with a live automatic payout is still a candidate';
+  END IF;
+  RAISE NOTICE 'R PASS — overview, nominations and admin candidates';
+
   -- ===== W: clients have no write path to payouts ============================
   PERFORM set_config('request.jwt.claims',
     jsonb_build_object('sub', v_org_owner_auth, 'role', 'authenticated')::text, true);

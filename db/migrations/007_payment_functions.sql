@@ -886,6 +886,158 @@ END;
 $$;
 
 -- =============================================
+-- PAYOUT READ HELPERS
+-- Encapsulate the joins for the payout pages, the way
+-- list_pending_cancellation_refunds does for the refund job, and answer "how much
+-- is available" through available_payout_cents rather than re-deriving it.
+-- =============================================
+
+-- Per-tournament payout position for one organization: the tournaments it
+-- organized, plus those whose payout it has accepted as beneficiary. Drafts have no
+-- money to show. recipient_problem is surfaced so that a recipient which has lapsed
+-- (agreement bumped, bank account replaced) shows up on both dashboards instead of
+-- failing silently in the sweep.
+CREATE OR REPLACE FUNCTION list_organization_payout_overview(p_org_id uuid)
+RETURNS TABLE (
+  tournament_id              uuid,
+  tournament_name            varchar(255),
+  tournament_status          tournament_status,
+  organizing_organization_id uuid,
+  organizing_organization    varchar(255),
+  recipient_organization_id  uuid,
+  recipient_organization     varchar(255),
+  is_beneficiary             boolean,
+  net_revenue_cents          bigint,
+  paid_payouts_cents         bigint,
+  available_cents            integer,
+  early_requests_used        integer,
+  recipient_problem          text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH visible AS (
+    SELECT t.*,
+           CASE WHEN t.beneficiary_accepted_at IS NOT NULL
+                THEN t.beneficiary_organization_id
+                ELSE t.organization_id
+           END AS recipient_id
+    FROM tournaments t
+    WHERE t.status <> 'draft'
+      AND (
+        t.organization_id = p_org_id
+        OR (t.beneficiary_organization_id = p_org_id AND t.beneficiary_accepted_at IS NOT NULL)
+      )
+  )
+  SELECT
+    v.id,
+    v.name,
+    v.status,
+    v.organization_id,
+    organizer.name,
+    v.recipient_id,
+    recipient.name,
+    v.organization_id IS DISTINCT FROM p_org_id,
+    COALESCE(s.net_revenue_cents, 0),
+    COALESCE(s.total_payouts_cents, 0),
+    available_payout_cents(v.id),
+    (
+      SELECT count(DISTINCT p.request_seq)::integer
+      FROM payouts p
+      WHERE p.tournament_id = v.id AND p.kind = 'early' AND p.approval <> 'rejected'
+    ),
+    payout_recipient_problem(v.recipient_id)
+  FROM visible v
+  LEFT JOIN organizations organizer ON organizer.id = v.organization_id
+  LEFT JOIN organizations recipient ON recipient.id = v.recipient_id
+  LEFT JOIN tournament_payout_summary s
+    ON s.tournament_id = v.id AND s.organization_id = v.organization_id
+  ORDER BY v.start_date DESC;
+$$;
+
+-- Nominations this organization can still accept. Once a player has paid the
+-- nomination is frozen, and it can never be accepted, so it isn't offered.
+CREATE OR REPLACE FUNCTION list_pending_payout_nominations(p_org_id uuid)
+RETURNS TABLE (
+  tournament_id           uuid,
+  tournament_name         varchar(255),
+  start_date              date,
+  organizing_organization varchar(255)
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT t.id, t.name, t.start_date, o.name
+  FROM tournaments t
+  LEFT JOIN organizations o ON o.id = t.organization_id
+  WHERE t.beneficiary_organization_id = p_org_id
+    AND t.beneficiary_accepted_at IS NULL
+    AND t.status <> 'cancelled'
+    AND NOT EXISTS (
+      SELECT 1 FROM payments p
+      WHERE p.tournament_id = t.id AND p.type = 'registration' AND p.status = 'paid'
+    )
+  ORDER BY t.start_date;
+$$;
+
+-- What a platform admin could pay out by hand right now: published tournaments with
+-- at least the minimum available and no live automatic payout. Anything in the way
+-- is returned rather than filtered out, so the admin can see why it can't be paid.
+CREATE OR REPLACE FUNCTION list_admin_payout_candidates()
+RETURNS TABLE (
+  tournament_id             uuid,
+  tournament_name           varchar(255),
+  end_date                  date,
+  organizing_organization   varchar(255),
+  recipient_organization_id uuid,
+  recipient_organization    varchar(255),
+  is_beneficiary            boolean,
+  available_cents           integer,
+  block_reason              text,
+  recipient_problem         text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH candidates AS (
+    SELECT t.*,
+           available_payout_cents(t.id) AS available,
+           CASE WHEN t.beneficiary_accepted_at IS NOT NULL
+                THEN t.beneficiary_organization_id
+                ELSE t.organization_id
+           END AS recipient_id
+    FROM tournaments t
+    WHERE t.status = 'published'
+      AND NOT EXISTS (
+        SELECT 1 FROM payouts p
+        WHERE p.tournament_id = t.id AND p.kind = 'automatic' AND p.status <> 'failed'
+      )
+  )
+  SELECT
+    c.id,
+    c.name,
+    c.end_date,
+    organizer.name,
+    c.recipient_id,
+    recipient.name,
+    c.recipient_id IS DISTINCT FROM c.organization_id,
+    c.available,
+    tournament_payout_block_reason(c.id),
+    payout_recipient_problem(c.recipient_id)
+  FROM candidates c
+  LEFT JOIN organizations organizer ON organizer.id = c.organization_id
+  LEFT JOIN organizations recipient ON recipient.id = c.recipient_id
+  WHERE c.available >= 1000  -- MIN_PAYOUT_CENTS, as in queue_payout
+  ORDER BY c.end_date;
+$$;
+
+-- =============================================
 -- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
 -- Same reasoning as the block at the end of 003_functions_triggers.sql: these
 -- SECURITY DEFINER functions trust their arguments, and the checkout route,
@@ -909,6 +1061,9 @@ REVOKE EXECUTE ON FUNCTION available_payout_cents            FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION tournament_payout_block_reason    FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION queue_payout                      FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_payout                     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_organization_payout_overview FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_pending_payout_nominations   FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_admin_payout_candidates      FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
 GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
@@ -921,3 +1076,6 @@ GRANT EXECUTE ON FUNCTION available_payout_cents            TO service_role;
 GRANT EXECUTE ON FUNCTION tournament_payout_block_reason    TO service_role;
 GRANT EXECUTE ON FUNCTION queue_payout                      TO service_role;
 GRANT EXECUTE ON FUNCTION settle_payout                     TO service_role;
+GRANT EXECUTE ON FUNCTION list_organization_payout_overview TO service_role;
+GRANT EXECUTE ON FUNCTION list_pending_payout_nominations   TO service_role;
+GRANT EXECUTE ON FUNCTION list_admin_payout_candidates      TO service_role;
