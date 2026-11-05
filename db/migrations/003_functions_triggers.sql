@@ -410,19 +410,19 @@ DECLARE
   v_changed text[] := ARRAY[]::text[];
 BEGIN
   IF NEW.entry_fees IS DISTINCT FROM OLD.entry_fees THEN
-    v_changed := v_changed || 'entry_fees';
+    v_changed := array_append(v_changed, 'entry_fees');
   END IF;
   IF NEW.prizes IS DISTINCT FROM OLD.prizes THEN
-    v_changed := v_changed || 'prizes';
+    v_changed := array_append(v_changed, 'prizes');
   END IF;
   IF NEW.max_participants IS DISTINCT FROM OLD.max_participants THEN
-    v_changed := v_changed || 'max_participants';
+    v_changed := array_append(v_changed, 'max_participants');
   END IF;
   IF NEW.commission_rate IS DISTINCT FROM OLD.commission_rate THEN
-    v_changed := v_changed || 'commission_rate';
+    v_changed := array_append(v_changed, 'commission_rate');
   END IF;
   IF NEW.organizer_commission_pct IS DISTINCT FROM OLD.organizer_commission_pct THEN
-    v_changed := v_changed || 'organizer_commission_pct';
+    v_changed := array_append(v_changed, 'organizer_commission_pct');
   END IF;
 
   IF array_length(v_changed, 1) IS NULL THEN
