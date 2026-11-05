@@ -64,7 +64,7 @@ organization-scoped and only mean anything inside the org they were granted in.
 
 ## 3. Permissions
 
-**11 permission keys**, seeded in `006_seed.sql`:
+**13 permission keys**, seeded in `006_seed.sql`:
 
 | Key | Scope it's used in | Meaning |
 |---|---|---|
@@ -79,6 +79,8 @@ organization-scoped and only mean anything inside the org they were granted in.
 | `payment.view` | organization | View the payments/payout figures for the org's tournaments. |
 | `refund.manage` | organization | Manage refunds for the org's tournaments. |
 | `bank_account.manage` | organization | Read and replace the org's payout bank account. **Owner only** — narrower than `org.manage` on purpose (see below). |
+| `payout.view` | organization | See the org's payouts, including payouts where it is the beneficiary. Bank details are not part of this. |
+| `payout.request` | organization | Anything that moves the org's money: nominate or accept a payout beneficiary, request an early payout. **Owner only.** |
 
 ---
 
@@ -99,6 +101,8 @@ Straight from the `role_permissions` inserts in `006_seed.sql`:
 | `payment.view`      | — | ✅ | ✅ | — |
 | `refund.manage`     | — | ✅ | ✅ | — |
 | `bank_account.manage` | — | ✅ | — | — |
+| `payout.view`       | — | ✅ | ✅ | — |
+| `payout.request`    | — | ✅ | — | — |
 
 **Reading the matrix:**
 
@@ -108,11 +112,11 @@ Straight from the `role_permissions` inserts in `006_seed.sql`:
   from the org permission tables. (The seed comment "implies all" is conceptual,
   not a table row.)
 - **`owner`** holds every organization permission — full control of its org.
-- **`admin`** = owner **minus `org.manage`, `tournament.delete` and
-  `bank_account.manage`**. So an org admin can run tournaments and manage
-  members/refunds, but cannot change the organization's own settings/roles,
-  cannot cancel/close a tournament, and cannot see or redirect where the
-  organization's money is paid out.
+- **`admin`** = owner **minus `org.manage`, `tournament.delete`,
+  `bank_account.manage` and `payout.request`**. So an org admin can run
+  tournaments, manage members/refunds and see payouts, but cannot change the
+  organization's own settings/roles, cannot cancel/close a tournament, and cannot
+  see or redirect where the organization's money is paid out.
 - **`member`** is view-only: `tournament.view` + `registration.view`.
 
 **Why `bank_account.manage` is separate from `org.manage`.** The two are held by
@@ -254,8 +258,11 @@ is **not assignable** through the members UI (it's set only by the approval RPC)
   cancellation refunds ([refund-flow.md](./refund-flow.md)) — is authorised as a
   *platform* admin approving a cancellation and executes through `supabaseAdmin`
   (service role), which bypasses RLS entirely. Its first real consumer would be an
-  organizer-initiated refund from the participant roster (#510). Payout execution
-  has no permission key at all and remains schema/manual (see the money-out gaps
-  in [launch-readiness.md](./launch-readiness.md) §9).
-- **Roles are fixed data.** The four roles and ten permissions are seeded, not
+  organizer-initiated refund from the participant roster (#510).
+- **`payouts` has no client write path.** `payout.request` is checked by the API
+  routes and the nomination functions, not by an RLS INSERT policy: a policy can't
+  check the row's columns, so it would let an owner insert an already-approved
+  payout. Sending the money itself needs no org permission at all: it is triggered
+  by a platform admin or the sweep, through the service role.
+- **Roles are fixed data.** The four roles and thirteen permissions are seeded, not
   user-editable; changing them means a migration, not a UI action.
