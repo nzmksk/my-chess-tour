@@ -558,13 +558,342 @@ END;
 $$;
 
 -- =============================================
+-- AVAILABLE PAYOUT
+-- The single source of truth for how much may leave for a tournament right now,
+-- used by every call site (queue, execute, dashboards):
+--
+--   net_payout_cents - payouts still in flight
+--
+-- net_payout_cents already nets fees, refunds and PAID payouts, but the view only
+-- knows the ledger, so it cannot see a payout that has been queued or sent and not
+-- yet settled. Subtracting those here closes that double-spend window.
+-- p_exclude_payout_id lets a payout ask "how much is available to ME".
+--
+-- No prize term: prizes are never funded from this money.
+-- =============================================
+CREATE OR REPLACE FUNCTION available_payout_cents(
+  p_tournament_id     uuid,
+  p_exclude_payout_id uuid DEFAULT NULL
+)
+RETURNS integer
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT GREATEST(
+    0,
+    COALESCE((
+      SELECT SUM(s.net_payout_cents)
+      FROM tournament_payout_summary s
+      WHERE s.tournament_id = p_tournament_id
+    ), 0)
+    - COALESCE((
+      SELECT SUM(p.amount_cents)
+      FROM payouts p
+      WHERE p.tournament_id = p_tournament_id
+        AND p.approval <> 'rejected'
+        AND p.status IN ('pending', 'processing')
+        AND p.id IS DISTINCT FROM p_exclude_payout_id
+    ), 0)
+  )::integer;
+$$;
+
+-- =============================================
+-- TOURNAMENT PAYOUT BLOCK
+-- Why no money may leave for this tournament right now, or NULL if it may:
+-- cancelled, a cancellation under review, or a player refund still unsettled.
+-- Cancellation refunds every player their full gross, so paying the organizer
+-- while one is possible risks money the platform then can't fund.
+--
+-- Checked when a payout is queued and again just before it is sent, because a
+-- payout can wait days for budget.
+-- =============================================
+CREATE OR REPLACE FUNCTION tournament_payout_block_reason(p_tournament_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT CASE
+    WHEN NOT EXISTS (SELECT 1 FROM tournaments t WHERE t.id = p_tournament_id)
+      THEN 'tournament_not_found'
+    WHEN EXISTS (SELECT 1 FROM tournaments t WHERE t.id = p_tournament_id AND t.status = 'cancelled')
+      THEN 'tournament_cancelled'
+    WHEN EXISTS (
+      SELECT 1 FROM tournament_cancellation_requests c
+      WHERE c.tournament_id = p_tournament_id AND c.status = 'pending'
+    )
+      THEN 'cancellation_pending'
+    WHEN EXISTS (
+      SELECT 1 FROM refunds rf
+      JOIN registrations r ON r.id = rf.registration_id
+      WHERE r.tournament_id = p_tournament_id
+        AND rf.status <> 'rejected'
+        AND rf.processed_at IS NULL
+    )
+      THEN 'refund_pending'
+  END;
+$$;
+
+-- =============================================
+-- QUEUE PAYOUT
+-- Creates the row that reserves the money; executePayout (src/services/payouts/
+-- execute.ts) sends it, because a network call can't run in this transaction.
+--
+-- Takes a tournament-row lock so concurrent callers serialize, resolves the
+-- recipient (the ACCEPTED beneficiary, else the organizing org), refuses anything
+-- blocked or ineligible, and clamps the amount to what is available. A NULL
+-- p_amount_cents means all of it. Returns the new id, or NULL when a live automatic
+-- payout already exists, so a re-run of the sweep is a no-op rather than an error.
+--
+-- Automatic only. An early payout needs a reason, a request_seq and a review, all
+-- of which belong to request_early_payout.
+--
+-- Failures RAISE P0001 with a stable sentinel prefix for the route to map.
+-- =============================================
+CREATE OR REPLACE FUNCTION queue_payout(
+  p_tournament_id uuid,
+  p_kind          payout_kind,
+  p_amount_cents  integer,
+  p_requested_by  uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  -- Mirrors MIN_PAYOUT_CENTS in src/services/payouts/constants.ts, so the database
+  -- enforces it even if a route is bypassed. Below this, CHIP fees exceed the transfer.
+  c_min_payout_cents CONSTANT integer := 1000;
+  v_tournament tournaments;
+  v_blocked    text;
+  v_recipient  uuid;
+  v_problem    text;
+  v_bank_id    uuid;
+  v_available  integer;
+  v_amount     integer;
+  v_id         uuid;
+BEGIN
+  IF p_kind <> 'automatic' THEN
+    RAISE EXCEPTION 'PAYOUT_KIND_UNSUPPORTED: only automatic payouts are queued here'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  v_blocked := tournament_payout_block_reason(p_tournament_id);
+  IF v_blocked IS NOT NULL THEN
+    RAISE EXCEPTION 'PAYOUT_BLOCKED: %', v_blocked USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_tournament.organization_id IS NULL THEN
+    RAISE EXCEPTION 'PAYOUT_BLOCKED: tournament has no organizing organization'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Checked before the amount: with a live payout in flight nothing is available,
+  -- and "already queued" is the true answer, not "below the minimum".
+  IF EXISTS (
+    SELECT 1 FROM payouts p
+    WHERE p.tournament_id = p_tournament_id
+      AND p.kind = 'automatic'
+      AND p.status <> 'failed'
+  ) THEN
+    RETURN NULL;
+  END IF;
+
+  -- An unaccepted nomination redirects nothing.
+  v_recipient := CASE
+    WHEN v_tournament.beneficiary_accepted_at IS NOT NULL
+      THEN v_tournament.beneficiary_organization_id
+    ELSE v_tournament.organization_id
+  END;
+
+  v_problem := payout_recipient_problem(v_recipient);
+  IF v_problem IS NOT NULL THEN
+    RAISE EXCEPTION 'PAYOUT_RECIPIENT_INELIGIBLE: %', v_problem USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT b.id INTO v_bank_id
+    FROM organization_bank_accounts b
+    WHERE b.organization_id = v_recipient AND b.is_active AND b.status = 'verified';
+
+  v_available := available_payout_cents(p_tournament_id);
+  v_amount    := LEAST(COALESCE(p_amount_cents, v_available), v_available);
+
+  IF v_amount < c_min_payout_cents THEN
+    RAISE EXCEPTION 'PAYOUT_BELOW_MINIMUM: % cents is payable, the minimum is %',
+      v_amount, c_min_payout_cents
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  INSERT INTO payouts (
+    tournament_id, organization_id, recipient_organization_id, bank_account_id,
+    kind, amount_cents, approval, requested_by
+  ) VALUES (
+    p_tournament_id, v_tournament.organization_id, v_recipient, v_bank_id,
+    'automatic', v_amount, 'approved', p_requested_by
+  )
+  ON CONFLICT (tournament_id) WHERE (kind = 'automatic' AND status <> 'failed') DO NOTHING
+  RETURNING id INTO v_id;
+
+  IF v_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- This row is the retry of any earlier failed attempt.
+  UPDATE payouts
+    SET superseded_by = v_id
+    WHERE tournament_id = p_tournament_id
+      AND kind = 'automatic'
+      AND status = 'failed'
+      AND superseded_by IS NULL;
+
+  RETURN v_id;
+END;
+$$;
+
+-- =============================================
+-- SETTLE PAYOUT (idempotent, keyed by a specific payout row)
+-- The settle_refund twin, called by both the sync response and the webhook:
+--   paid  → the money left: book one type='organizer_payout' ledger row, which is
+--           what drains net_payout_cents, then stamp the payout paid/processed.
+--   !paid → record why, status 'failed', processed. No ledger row.
+--   already processed → no-op, reported back.
+--
+-- ⚠️ DELIBERATE DIVERGENCE from settle_refund, which leaves a failed refund
+-- `pending` for a retry on the same row. A failed payout is TERMINAL and a retry is
+-- a NEW row, linked via superseded_by. CHIP Send dedupes on `reference` (our row
+-- id), so re-sending the same row after a hard failure would return the FAILED
+-- instruction forever. Do not "fix" this to match refunds.
+--
+-- The ledger row always carries the ORGANIZING org, even when a beneficiary was
+-- paid: tournament_payout_summary groups on it, so anything else would leave the
+-- organizer's balance undrained.
+--
+-- The 'send_' prefix on chip_transaction_id is load-bearing.
+-- idx_payments_chip_transaction is unique across ALL payment types, and a Send
+-- instruction id is a small integer sharing that namespace with Collect purchase
+-- uuids. The prefix makes a collision structurally impossible.
+--
+-- "Real money wins", as in settle_registration_payment: if more was settled than
+-- was available (a refund landed while the transfer was in flight), the row is
+-- booked anyway and over_payout comes back true for loud logging. The money has
+-- physically left, and refusing to record it would make the ledger lie.
+-- paid_after_failed is the same alarm for a row we had already written off.
+-- =============================================
+CREATE OR REPLACE FUNCTION settle_payout(
+  p_payout_id                uuid,
+  p_chip_send_instruction_id bigint,
+  p_paid                     boolean,
+  p_amount_cents             integer DEFAULT NULL,
+  p_receipt_url              text DEFAULT NULL,
+  p_failure_reason           text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_payout      payouts;
+  v_instruction bigint;
+  v_settled     integer;
+  v_payment_id  uuid;
+  v_over_payout boolean := false;
+BEGIN
+  SELECT * INTO v_payout FROM payouts WHERE id = p_payout_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'payout % not found', p_payout_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_payout.processed_at IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'payout_id',         v_payout.id,
+      'tournament_id',     v_payout.tournament_id,
+      'already_processed', true,
+      'settled',           true,
+      'paid',              v_payout.status = 'paid',
+      'paid_after_failed', p_paid AND v_payout.status = 'failed'
+    );
+  END IF;
+
+  v_instruction := COALESCE(p_chip_send_instruction_id, v_payout.chip_send_instruction_id);
+
+  IF p_paid THEN
+    IF v_instruction IS NULL THEN
+      RAISE EXCEPTION 'payout % settled as paid with no send instruction id', p_payout_id
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    v_settled := COALESCE(p_amount_cents, v_payout.amount_cents);
+    IF v_settled <= 0 THEN
+      RAISE EXCEPTION 'payout % settled with a non-positive amount (%)', p_payout_id, v_settled
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    v_over_payout := v_settled > available_payout_cents(v_payout.tournament_id, p_payout_id);
+
+    INSERT INTO payments (
+      type, tournament_id, user_id, organization_id,
+      gross_amount_cents, platform_fee_cents, organizer_commission_cents,
+      player_commission_cents, net_amount_cents, currency,
+      payment_method, chip_transaction_id, status, paid_at
+    ) VALUES (
+      'organizer_payout', v_payout.tournament_id, NULL, v_payout.organization_id,
+      v_settled, 0, 0,
+      0, v_settled, 'MYR',
+      'chip_send', 'send_' || v_instruction, 'paid', now()
+    )
+    RETURNING id INTO v_payment_id;
+
+    UPDATE payouts
+      SET status                   = 'paid',
+          payment_id               = v_payment_id,
+          settled_amount_cents     = v_settled,
+          chip_send_instruction_id = v_instruction,
+          chip_receipt_url         = COALESCE(p_receipt_url, chip_receipt_url),
+          failure_reason           = NULL,
+          processed_at             = now()
+      WHERE id = p_payout_id;
+  ELSE
+    UPDATE payouts
+      SET status                   = 'failed',
+          chip_send_instruction_id = v_instruction,
+          failure_reason           = COALESCE(NULLIF(btrim(p_failure_reason), ''), 'send_instruction_failed'),
+          processed_at             = now()
+      WHERE id = p_payout_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'payout_id',         v_payout.id,
+    'tournament_id',     v_payout.tournament_id,
+    'already_processed', false,
+    'settled',           true,
+    'paid',              p_paid,
+    'amount_cents',      v_settled,
+    'over_payout',       v_over_payout
+  );
+END;
+$$;
+
+-- =============================================
 -- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
 -- Same reasoning as the block at the end of 003_functions_triggers.sql: these
 -- SECURITY DEFINER functions trust their arguments, and the checkout route,
 -- CHIP webhook and expiry/refund jobs call them through the service role. Left
 -- executable by clients, anyone could settle their own registration as paid,
--- settle refunds, list pending refunds across every organization, or mark their
--- own payout bank account verified.
+-- settle refunds, list pending refunds across every organization, mark their own
+-- payout bank account verified, or book and queue payouts. The read-only payout
+-- functions are revoked too: they reveal any organization's balance.
 --
 -- compute_registration_amounts is not SECURITY DEFINER (pure arithmetic) and is
 -- left as is.
@@ -576,6 +905,10 @@ REVOKE EXECUTE ON FUNCTION expire_stale_pending_payments     FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION list_pending_cancellation_refunds FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_refund                     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_bank_account_verification  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION available_payout_cents            FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION tournament_payout_block_reason    FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION queue_payout                      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION settle_payout                     FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
 GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
@@ -584,3 +917,7 @@ GRANT EXECUTE ON FUNCTION expire_stale_pending_payments     TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_cancellation_refunds TO service_role;
 GRANT EXECUTE ON FUNCTION settle_refund                     TO service_role;
 GRANT EXECUTE ON FUNCTION settle_bank_account_verification  TO service_role;
+GRANT EXECUTE ON FUNCTION available_payout_cents            TO service_role;
+GRANT EXECUTE ON FUNCTION tournament_payout_block_reason    TO service_role;
+GRANT EXECUTE ON FUNCTION queue_payout                      TO service_role;
+GRANT EXECUTE ON FUNCTION settle_payout                     TO service_role;
