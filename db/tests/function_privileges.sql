@@ -42,7 +42,10 @@ DECLARE
     'expire_stale_pending_payments',
     'list_pending_cancellation_refunds',
     'settle_refund',
-    'settle_bank_account_verification'
+    'settle_bank_account_verification',
+    'payout_recipient_problem',
+    'nominate_payout_beneficiary',
+    'accept_payout_nomination'
   ];
   -- SECURITY DEFINER functions clients may call. Adding to this list is a
   -- security decision: the function must check the caller itself or expose

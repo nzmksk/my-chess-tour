@@ -424,6 +424,15 @@ BEGIN
   IF NEW.organizer_commission_pct IS DISTINCT FROM OLD.organizer_commission_pct THEN
     v_changed := array_append(v_changed, 'organizer_commission_pct');
   END IF;
+  -- Who the money goes to. Players who paid did so knowing who was running the
+  -- event, so a nomination still unaccepted at the first payment simply lapses:
+  -- the payout stays with the organizing org.
+  IF NEW.beneficiary_organization_id IS DISTINCT FROM OLD.beneficiary_organization_id THEN
+    v_changed := array_append(v_changed, 'beneficiary_organization_id');
+  END IF;
+  IF NEW.beneficiary_accepted_at IS DISTINCT FROM OLD.beneficiary_accepted_at THEN
+    v_changed := array_append(v_changed, 'beneficiary_accepted_at');
+  END IF;
 
   IF array_length(v_changed, 1) IS NULL THEN
     RETURN NEW;
@@ -447,6 +456,47 @@ $$;
 
 CREATE TRIGGER guard_money_fields BEFORE UPDATE ON tournaments
   FOR EACH ROW EXECUTE FUNCTION guard_tournament_money_fields();
+
+-- =============================================
+-- TOURNAMENT BENEFICIARY GUARD
+-- 004_rls.sql lets anyone with tournament.edit update a tournament row through
+-- PostgREST, with no column restriction. Without this, an org admin could
+--   PATCH /rest/v1/tournaments?id=eq.<own>
+--     {"beneficiary_organization_id": <any org>, "beneficiary_accepted_at": "now"}
+-- and redirect the payout with no acceptance, past both functions below.
+--
+-- Same test as guard_users_identity_columns: auth.uid() IS NOT NULL means a user
+-- JWT is driving the statement. nominate_payout_beneficiary and
+-- accept_payout_nomination run through the service role, which has no `sub`.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_beneficiary_columns()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.beneficiary_organization_id IS NOT NULL OR NEW.beneficiary_accepted_at IS NOT NULL THEN
+      RAISE EXCEPTION 'tournaments.beneficiary_* cannot be set by a client session'
+        USING ERRCODE = 'P0001';
+    END IF;
+  ELSIF NEW.beneficiary_organization_id IS DISTINCT FROM OLD.beneficiary_organization_id
+     OR NEW.beneficiary_accepted_at IS DISTINCT FROM OLD.beneficiary_accepted_at THEN
+    RAISE EXCEPTION 'tournaments.beneficiary_* cannot be set by a client session'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_beneficiary_columns BEFORE INSERT OR UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_beneficiary_columns();
 
 -- =============================================
 -- TOURNAMENT CAPACITY ENFORCEMENT
@@ -910,6 +960,194 @@ END;
 $$;
 
 -- =============================================
+-- CURRENT ORGANIZER AGREEMENT VERSION
+-- The database has to refuse a stale agreement itself, even if a route is
+-- bypassed, and the money functions take no version argument to trust. This is
+-- the SQL twin of ORGANIZER_AGREEMENT_VERSION in src/lib/legal.ts; bumping that
+-- constant means changing this too, and src/lib/__tests__/legal.test.ts fails
+-- until the two match.
+-- =============================================
+CREATE OR REPLACE FUNCTION current_organizer_agreement_version()
+RETURNS varchar(20)
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT '2026-08-02'::varchar(20);
+$$;
+
+-- =============================================
+-- PAYOUT RECIPIENT ELIGIBILITY
+-- Why money cannot be sent to this organization right now, or NULL if it can.
+-- One definition shared by nomination and queue_payout, and returned to the
+-- dashboards so a lapsed recipient is shown rather than failing silently.
+-- A chip_bank_account_id is part of the check: without it there is nothing to
+-- put in a send instruction.
+-- =============================================
+CREATE OR REPLACE FUNCTION payout_recipient_problem(p_org_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org organizations;
+BEGIN
+  SELECT * INTO v_org FROM organizations WHERE id = p_org_id AND deleted_at IS NULL;
+
+  IF NOT FOUND OR v_org.approval_status <> 'approved' THEN
+    RETURN 'organization_not_approved';
+  END IF;
+  IF v_org.entity_type IS NULL THEN
+    RETURN 'entity_type_missing';
+  END IF;
+  IF v_org.agreement_version IS DISTINCT FROM current_organizer_agreement_version() THEN
+    RETURN 'agreement_not_current';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM organization_bank_accounts b
+    WHERE b.organization_id = p_org_id
+      AND b.is_active
+      AND b.status = 'verified'
+      AND b.chip_bank_account_id IS NOT NULL
+  ) THEN
+    RETURN 'bank_account_not_verified';
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+-- =============================================
+-- PAYOUT BENEFICIARY NOMINATION
+-- A tournament may nominate another approved organization to receive its payout.
+-- Money is never wired to an unvetted party: the nominee must already pass
+-- payout_recipient_problem, and it takes an acceptance from someone holding
+-- payout.request on the NOMINEE, so a one-sided nomination cannot redirect money.
+-- The organizing org stays liable for any claw-back regardless of who is paid.
+--
+-- p_beneficiary_org_id NULL withdraws the nomination. Nominating again resets any
+-- earlier acceptance, because that acceptance was for a different organization.
+--
+-- Both functions check the actor themselves, unlike the review functions above:
+-- the permission is on an org the route can't otherwise infer. The paid-registration
+-- freeze is left to guard_tournament_money_fields, the single authority on it.
+-- Failures RAISE with a stable sentinel prefix for the route to map.
+-- =============================================
+CREATE OR REPLACE FUNCTION nominate_payout_beneficiary(
+  p_tournament_id      uuid,
+  p_beneficiary_org_id uuid,
+  p_user_id            uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+  v_problem    text;
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, v_tournament.organization_id, 'payout.request') THEN
+    RAISE EXCEPTION 'NOMINATION_FORBIDDEN: payout.request is required on the organizing organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_tournament.status = 'cancelled' THEN
+    RAISE EXCEPTION 'NOMINATION_CLOSED: this tournament is cancelled' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_beneficiary_org_id IS NOT NULL THEN
+    IF p_beneficiary_org_id = v_tournament.organization_id THEN
+      RAISE EXCEPTION 'NOMINATION_SELF: an organization cannot nominate itself' USING ERRCODE = 'P0001';
+    END IF;
+
+    v_problem := payout_recipient_problem(p_beneficiary_org_id);
+    IF v_problem IS NOT NULL THEN
+      RAISE EXCEPTION 'NOMINEE_INELIGIBLE: %', v_problem USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  UPDATE tournaments
+    SET beneficiary_organization_id = p_beneficiary_org_id,
+        beneficiary_accepted_at     = NULL
+    WHERE id = p_tournament_id;
+
+  RETURN jsonb_build_object(
+    'tournament_id',               p_tournament_id,
+    'beneficiary_organization_id', p_beneficiary_org_id,
+    'beneficiary_accepted_at',     NULL
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION accept_payout_nomination(
+  p_tournament_id uuid,
+  p_user_id       uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+  v_problem    text;
+  v_accepted   timestamptz := now();
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_tournament.beneficiary_organization_id IS NULL THEN
+    RAISE EXCEPTION 'NOMINATION_NOT_FOUND: this tournament has no pending nomination' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, v_tournament.beneficiary_organization_id, 'payout.request') THEN
+    RAISE EXCEPTION 'NOMINATION_FORBIDDEN: payout.request is required on the nominated organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- Idempotent: a double-click or a retried request is not an error.
+  IF v_tournament.beneficiary_accepted_at IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'tournament_id',               p_tournament_id,
+      'beneficiary_organization_id', v_tournament.beneficiary_organization_id,
+      'beneficiary_accepted_at',     v_tournament.beneficiary_accepted_at,
+      'already_accepted',            true
+    );
+  END IF;
+
+  IF v_tournament.status = 'cancelled' THEN
+    RAISE EXCEPTION 'NOMINATION_CLOSED: this tournament is cancelled' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Re-checked: the nominee may have lapsed since it was nominated.
+  v_problem := payout_recipient_problem(v_tournament.beneficiary_organization_id);
+  IF v_problem IS NOT NULL THEN
+    RAISE EXCEPTION 'NOMINEE_INELIGIBLE: %', v_problem USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE tournaments SET beneficiary_accepted_at = v_accepted WHERE id = p_tournament_id;
+
+  RETURN jsonb_build_object(
+    'tournament_id',               p_tournament_id,
+    'beneficiary_organization_id', v_tournament.beneficiary_organization_id,
+    'beneficiary_accepted_at',     v_accepted,
+    'already_accepted',            false
+  );
+END;
+$$;
+
+-- =============================================
 -- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
 -- Postgres grants EXECUTE on every new function to PUBLIC, and Supabase's
 -- default privileges grant it to anon and authenticated as well. With the
@@ -946,9 +1184,15 @@ REVOKE EXECUTE ON FUNCTION create_organization_application FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION review_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_tournament_cancellation  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION assert_tournament_capacity      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION payout_recipient_problem        FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION nominate_payout_beneficiary     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_tournament_cancellation  TO service_role;
 GRANT EXECUTE ON FUNCTION assert_tournament_capacity      TO service_role;
+GRANT EXECUTE ON FUNCTION payout_recipient_problem        TO service_role;
+GRANT EXECUTE ON FUNCTION nominate_payout_beneficiary     TO service_role;
+GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
