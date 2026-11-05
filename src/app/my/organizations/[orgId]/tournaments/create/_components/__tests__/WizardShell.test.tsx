@@ -27,6 +27,7 @@ vi.mock("../steps/BasicInfoStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/FormatStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/FeesStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/PrizesStep", () => ({ default: () => <div /> }));
+vi.mock("../steps/PayoutStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/ReviewStep", () => ({ default: () => <div /> }));
 
 const mockFetch = vi.fn();
@@ -63,17 +64,21 @@ const INITIAL: PersistedState = {
   prizesData: { categories: [], specialPrizes: [], distribution: "organizer" },
   tournamentId: TOUR_ID,
   // The Review step is the only one that shows "Save Changes".
-  currentStepIndex: 4,
-  completedSteps: [0, 1, 2, 3],
+  currentStepIndex: 5,
+  completedSteps: [0, 1, 2, 3, 4],
 };
 
-function renderEditWizard() {
+function renderEditWizard(
+  initialData: PersistedState = INITIAL,
+  canNominate = false,
+) {
   return render(
     <TournamentWizardProvider
       orgId={ORG_ID}
-      initialData={INITIAL}
+      initialData={initialData}
       storageKeySuffix={`edit-${TOUR_ID}`}
       excludeId={TOUR_ID}
+      canNominate={canNominate}
     >
       <WizardShell
         orgId={ORG_ID}
@@ -193,5 +198,84 @@ describe("WizardShell — Save Changes", () => {
     expect(init.method).toBe("PATCH");
     // The venue names the zone; the client does not send one.
     expect(JSON.parse(init.body)).not.toHaveProperty("timezone");
+  });
+});
+
+describe("WizardShell — payout nomination", () => {
+  const NOMINEE = "33333333-3333-4333-8333-333333333333";
+
+  const withPayout = (
+    beneficiaryOrgId: string | null,
+    savedBeneficiaryOrgId: string | null,
+  ): PersistedState => ({
+    ...INITIAL,
+    payoutData: {
+      beneficiaryOrgId,
+      beneficiaryOrgName: beneficiaryOrgId ? "Penang Chess" : "",
+      savedBeneficiaryOrgId,
+      accepted: false,
+      locked: false,
+    },
+  });
+
+  const beneficiaryCalls = () =>
+    mockFetch.mock.calls.filter(([url]) => String(url).endsWith("/beneficiary"));
+
+  async function save(initial: PersistedState, canNominate = true) {
+    renderEditWizard(initial, canNominate);
+    fireEvent.click(await screen.findByRole("button", { name: /save changes/i }));
+  }
+
+  it("nominates after saving the tournament, when the choice changed", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(NOMINEE, null));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    const [url, init] = beneficiaryCalls()[0];
+    expect(url).toBe(`/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}/beneficiary`);
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body)).toEqual({ beneficiary_organization_id: NOMINEE });
+    // The tournament first: a new one has no id to nominate on until it is saved.
+    expect(String(mockFetch.mock.calls[0][0])).not.toContain("/beneficiary");
+  });
+
+  it("withdraws with null when the choice was removed", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(null, NOMINEE));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(JSON.parse(beneficiaryCalls()[0][1].body)).toEqual({
+      beneficiary_organization_id: null,
+    });
+  });
+
+  it("sends nothing when the choice is unchanged", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(NOMINEE, NOMINEE));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(beneficiaryCalls()).toHaveLength(0);
+  });
+
+  it("sends nothing for someone without payout.request", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(NOMINEE, null), false);
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(beneficiaryCalls()).toHaveLength(0);
+  });
+
+  it("keeps the organizer on the wizard when the nomination is refused", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith("/beneficiary")
+        ? jsonResponse(409, {
+            error: { message: "The payout recipient is locked once a player has paid" },
+          })
+        : jsonResponse(200, { data: {} }),
+    );
+    await save(withPayout(NOMINEE, null));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/locked once a player has paid/i);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

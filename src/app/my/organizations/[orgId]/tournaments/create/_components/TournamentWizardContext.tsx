@@ -12,6 +12,7 @@ import type {
   BasicInfoData,
   FeesData,
   FormatData,
+  PayoutData,
   PersistedState,
   PrizesData,
   WizardStep,
@@ -24,6 +25,7 @@ export const WIZARD_STEPS: WizardStep[] = [
   { id: "format", label: "Format" },
   { id: "fees", label: "Fees" },
   { id: "prizes", label: "Prizes" },
+  { id: "payout", label: "Payout" },
   { id: "review", label: "Review" },
 ];
 
@@ -46,6 +48,14 @@ const initialPrizesData: PrizesData = {
   categories: [],
   specialPrizes: [],
   distribution: "organizer",
+};
+
+const initialPayoutData: PayoutData = {
+  beneficiaryOrgId: null,
+  beneficiaryOrgName: "",
+  savedBeneficiaryOrgId: null,
+  accepted: false,
+  locked: false,
 };
 
 const initialFormatData: FormatData = {
@@ -106,6 +116,11 @@ interface TournamentWizardContextType {
   setFeesData: React.Dispatch<React.SetStateAction<FeesData>>;
   prizesData: PrizesData;
   setPrizesData: React.Dispatch<React.SetStateAction<PrizesData>>;
+  payoutData: PayoutData;
+  setPayoutData: React.Dispatch<React.SetStateAction<PayoutData>>;
+  /** Whether this user holds payout.request. The API enforces it regardless. */
+  canNominate: boolean;
+  orgId: string;
   tournamentId: string | null;
   setTournamentId: React.Dispatch<React.SetStateAction<string | null>>;
   registerStepHandler: (index: number, handler: () => Promise<void>) => void;
@@ -124,12 +139,14 @@ export function TournamentWizardProvider({
   initialData,
   storageKeySuffix,
   excludeId = null,
+  canNominate = false,
 }: {
   orgId: string;
   children: React.ReactNode;
   initialData?: PersistedState;
   storageKeySuffix?: string;
   excludeId?: string | null;
+  canNominate?: boolean;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -138,6 +155,7 @@ export function TournamentWizardProvider({
   const [formatData, setFormatData] = useState<FormatData>(initialFormatData);
   const [feesData, setFeesData] = useState<FeesData>(initialFeesData);
   const [prizesData, setPrizesData] = useState<PrizesData>(initialPrizesData);
+  const [payoutData, setPayoutData] = useState<PayoutData>(initialPayoutData);
   const [tournamentId, setTournamentId] = useState<string | null>(null);
 
   // isHydrated gates the persist effect so it never runs before the load
@@ -163,6 +181,7 @@ export function TournamentWizardProvider({
       setFormatData(saved.formatData ?? initialFormatData);
       setFeesData(saved.feesData ?? initialFeesData);
       setPrizesData(saved.prizesData ?? initialPrizesData);
+      setPayoutData(saved.payoutData ?? initialPayoutData);
       setTournamentId(saved.tournamentId ?? null);
       setCurrentStepIndex(saved.currentStepIndex ?? 0);
       if (saved.completedSteps) {
@@ -183,6 +202,7 @@ export function TournamentWizardProvider({
         formatData,
         feesData,
         prizesData,
+        payoutData,
         tournamentId,
         currentStepIndex,
         completedSteps: [...completedSteps],
@@ -197,6 +217,7 @@ export function TournamentWizardProvider({
     formatData,
     feesData,
     prizesData,
+    payoutData,
     tournamentId,
     currentStepIndex,
     completedSteps,
@@ -270,6 +291,10 @@ export function TournamentWizardProvider({
         setFeesData,
         prizesData,
         setPrizesData,
+        payoutData,
+        setPayoutData,
+        canNominate,
+        orgId,
         tournamentId,
         setTournamentId,
         registerStepHandler,

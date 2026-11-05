@@ -106,7 +106,7 @@ function InfoGrid({ rows }: { rows: [string, React.ReactNode][] }) {
 }
 
 export default function ReviewStep() {
-  const { basicInfoData, formatData, feesData, prizesData, goToStep } =
+  const { basicInfoData, formatData, feesData, prizesData, payoutData, goToStep } =
     useTournamentWizard();
 
   // ── Basic Info ────────────────────────────────────────────
@@ -285,7 +285,7 @@ export default function ReviewStep() {
       </SectionCard>
 
       {/* Prizes */}
-      <SectionCard title="Prizes" onEdit={() => goToStep(3)} last>
+      <SectionCard title="Prizes" onEdit={() => goToStep(3)}>
         <div className="font-lato text-text-muted text-sm">
           {!hasCategories && !hasSpecialPrizes && (
             <p className="text-text-disabled">No prizes defined.</p>
@@ -324,6 +324,17 @@ export default function ReviewStep() {
             </div>
           )}
         </div>
+      </SectionCard>
+
+      {/* Payout */}
+      <SectionCard title="Payout Recipient" onEdit={() => goToStep(4)} last>
+        <p className="font-lato text-text-muted text-sm">
+          {payoutData.beneficiaryOrgId
+            ? `${payoutData.beneficiaryOrgName || "Nominated organization"} (${
+                payoutData.accepted ? "accepted" : "must accept before anything changes"
+              })`
+            : "Your organization"}
+        </p>
       </SectionCard>
     </div>
   );
