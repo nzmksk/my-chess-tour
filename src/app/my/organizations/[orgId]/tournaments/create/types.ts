@@ -21,6 +21,7 @@ type WizardStepId =
   | "format"
   | "fees"
   | "prizes"
+  | "payout"
   | "review";
 
 export interface WizardStep {
@@ -175,11 +176,28 @@ export interface PrizesData {
   distribution: PrizeDistribution;
 }
 
+/**
+ * The optional payout beneficiary. Not part of the tournament body: a nomination is
+ * its own write (PUT .../beneficiary), because it takes a permission that editing
+ * a tournament doesn't.
+ */
+export interface PayoutData {
+  beneficiaryOrgId: string | null;
+  beneficiaryOrgName: string;
+  /** What the server holds, so a save only nominates when this has changed. */
+  savedBeneficiaryOrgId: string | null;
+  accepted: boolean;
+  /** A player has paid, so the nomination is frozen. */
+  locked: boolean;
+}
+
 export interface PersistedState {
   basicInfoData: BasicInfoData;
   formatData: FormatData;
   feesData: FeesData;
   prizesData: PrizesData;
+  /** Optional: a session saved before this step existed won't have it. */
+  payoutData?: PayoutData;
   tournamentId: string | null;
   currentStepIndex: number;
   completedSteps: number[];

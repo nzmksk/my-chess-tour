@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { selfApiFetch } from "@/lib/self-fetch";
-import { getAuthClaims } from "@/services/supabase/permission";
+import { getAuthClaims, hasOrgPermission } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
 import type {
   PersistedRestriction,
@@ -52,6 +52,13 @@ interface TournamentForEdit {
   entry_fees: StoredEntryFees | null;
   prizes: PrizesJson | null;
   restrictions: PersistedRestriction[] | null;
+  beneficiary: {
+    organization_id: string;
+    name: string | null;
+    accepted: boolean;
+  } | null;
+  /** Any confirmed registration means a player has paid. */
+  has_paid_registration: boolean;
 }
 
 async function fetchTournamentForEdit(
@@ -64,7 +71,11 @@ async function fetchTournamentForEdit(
     );
     if (!res.ok) return null;
     const json = await res.json();
-    return (json.data?.tournament as TournamentForEdit) ?? null;
+    if (!json.data?.tournament) return null;
+    return {
+      ...json.data.tournament,
+      has_paid_registration: (json.data.stats?.confirmed ?? 0) > 0,
+    } as TournamentForEdit;
   } catch {
     return null;
   }
@@ -149,11 +160,20 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
       : ("organizer" as const),
   };
 
+  const payoutData = {
+    beneficiaryOrgId: t.beneficiary?.organization_id ?? null,
+    beneficiaryOrgName: t.beneficiary?.name ?? "",
+    savedBeneficiaryOrgId: t.beneficiary?.organization_id ?? null,
+    accepted: t.beneficiary?.accepted ?? false,
+    locked: t.has_paid_registration,
+  };
+
   return {
     basicInfoData,
     formatData,
     feesData,
     prizesData,
+    payoutData,
     tournamentId: t.id,
     currentStepIndex: 0,
     completedSteps: [],
@@ -184,9 +204,10 @@ export default async function EditTournamentPage({
     redirect("/auth/login");
   }
 
-  const [tournament, orgName] = await Promise.all([
+  const [tournament, orgName, canNominate] = await Promise.all([
     fetchTournamentForEdit(orgId, id),
     fetchOrgName(orgId),
+    hasOrgPermission(claims.id, orgId, "payout.request"),
   ]);
 
   if (!tournament) {
@@ -203,6 +224,7 @@ export default async function EditTournamentPage({
         initialData={initialData}
         storageKeySuffix={`edit-${id}`}
         excludeId={id}
+        canNominate={canNominate}
       >
         <WizardShell
           orgId={orgId}

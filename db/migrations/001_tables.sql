@@ -313,6 +313,14 @@ CREATE TABLE tournaments (
   published_by                uuid REFERENCES users(id) ON DELETE SET NULL,
   published_at                timestamptz,
   registration_closed_at      timestamptz,                        -- effective registration close time. NULL for drafts; defaults to registration_deadline at publish; moved earlier (to now()) when the organizer closes registration early. Never exceeds registration_deadline. Early close is irreversible.
+  -- Another approved organization nominated to receive this tournament's payout,
+  -- reusing its KYB, verified bank account and signed agreement rather than a
+  -- second vetting pipeline. A nomination redirects nothing until the beneficiary
+  -- accepts it (accepted_at set by accept_payout_nomination). Both columns are
+  -- money fields, frozen at the first paid registration, and only ever written by
+  -- the two functions in 003_functions_triggers.sql.
+  beneficiary_organization_id uuid REFERENCES organizations(id) ON DELETE RESTRICT,
+  beneficiary_accepted_at     timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now(),
 
@@ -332,7 +340,13 @@ CREATE TABLE tournaments (
     CHECK (
       registration_closed_at IS NULL
       OR registration_closed_at <= registration_deadline
-    )
+    ),
+  CONSTRAINT chk_beneficiary_not_self
+    CHECK (beneficiary_organization_id IS NULL OR beneficiary_organization_id <> organization_id),
+  -- One-directional on purpose: nominated-but-not-accepted is a real state (the
+  -- pending nomination), while an acceptance with no nominee means nothing.
+  CONSTRAINT chk_beneficiary_shape
+    CHECK (beneficiary_accepted_at IS NULL OR beneficiary_organization_id IS NOT NULL)
 );
 
 -- =============================================
@@ -397,7 +411,9 @@ CREATE TABLE registrations (
 -- player_commission = player's share of platform fee
 -- net = gross - platform_fee
 -- =============================================
-CREATE TYPE payment_type AS ENUM ('registration', 'refund', 'organizer_payout', 'player_prize', 'adjustment');
+-- prize_funding: sponsor money paid IN for a prize pool. Ring-fenced: it never
+-- touches an organizer's revenue, see tournament_payout_summary below.
+CREATE TYPE payment_type AS ENUM ('registration', 'refund', 'organizer_payout', 'player_prize', 'prize_funding', 'adjustment');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed');
 
 CREATE TABLE payments (
@@ -406,7 +422,12 @@ CREATE TABLE payments (
   tournament_id               uuid NOT NULL REFERENCES tournaments(id) ON DELETE RESTRICT,
   registration_id             uuid REFERENCES registrations(id)        ON DELETE RESTRICT,                          -- for registration/refund types
   user_id                     uuid REFERENCES users(id)                ON DELETE SET NULL,                          -- player paying or receiving prize/refund
-  organization_id             uuid REFERENCES organizations(id)        ON DELETE SET NULL,                          -- org paying or receiving payout
+  -- ALWAYS the ORGANIZING org, on every row, even when a payout goes to a
+  -- beneficiary. tournament_payout_summary groups by (tournament_id,
+  -- organization_id), so a ledger row carrying a beneficiary's id would form its
+  -- own group and the organizing org's net_payout_cents would never drain. Who
+  -- actually received the money lives on payouts.recipient_organization_id.
+  organization_id             uuid REFERENCES organizations(id)        ON DELETE SET NULL,
   gross_amount_cents          integer NOT NULL,                   -- what the payer actually paid
   platform_fee_cents          integer NOT NULL DEFAULT 0,         -- platform's cut. platform_fee = organizer_commission + player_commission
   organizer_commission_cents  integer NOT NULL DEFAULT 0,         -- organizer's absorbed share of commission
@@ -456,6 +477,58 @@ CREATE TABLE refunds (
 );
 
 -- =============================================
+-- PAYOUTS
+-- Money OUT to an organization via CHIP Send. One row per attempt; the paid
+-- transfer itself is the type='organizer_payout' ledger row in payments, which
+-- is what drains tournament_payout_summary.net_payout_cents.
+--
+-- The CHIP Send `reference` is id::text (36 chars, inside the 1-40 limit). The PK
+-- IS the idempotency key, hence no extra column: a retried POST with the same
+-- reference returns the existing instruction instead of paying twice.
+--
+-- A failed payout is TERMINAL and a retry is a NEW row, linked from the failed one
+-- via superseded_by. See the header of settle_payout (007_payment_functions.sql)
+-- for why this differs from refunds.
+-- =============================================
+CREATE TYPE payout_kind   AS ENUM ('automatic', 'early');
+CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'paid', 'failed');
+
+CREATE TABLE payouts (
+  id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id             uuid NOT NULL REFERENCES tournaments(id)   ON DELETE RESTRICT,
+  organization_id           uuid NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,  -- the ORGANIZING org, always; see payments.organization_id
+  recipient_organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,  -- the organizing org, or its accepted beneficiary
+  bank_account_id           uuid REFERENCES organization_bank_accounts(id) ON DELETE RESTRICT,
+  kind                      payout_kind   NOT NULL,
+  request_seq               smallint,     -- 1..2, early only; carries the "max 2" cap
+  superseded_by             uuid REFERENCES payouts(id) ON DELETE SET NULL,
+  amount_cents              integer NOT NULL,  -- what may be sent; reserved by available_payout_cents while in flight
+  settled_amount_cents      integer,           -- what CHIP says actually left
+  approval                  approval_status NOT NULL DEFAULT 'pending',
+  status                    payout_status   NOT NULL DEFAULT 'pending',
+  reason                    text,
+  requested_by              uuid REFERENCES users(id) ON DELETE SET NULL,
+  requested_at              timestamptz NOT NULL DEFAULT now(),
+  reviewed_by               uuid REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at               timestamptz,
+  rejection_reason          text,
+  chip_send_instruction_id  bigint,
+  chip_send_limit_id        bigint,
+  chip_receipt_url          text,
+  failure_reason            text,
+  payment_id                uuid REFERENCES payments(id) ON DELETE RESTRICT,
+  processed_at              timestamptz,  -- set once by settle_payout; the idempotency marker
+  created_at                timestamptz NOT NULL DEFAULT now(),
+  updated_at                timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_payout_amount_positive  CHECK (amount_cents > 0),
+  CONSTRAINT chk_payout_reviewed_at      CHECK (reviewed_at IS NULL OR reviewed_at >= requested_at),
+  CONSTRAINT chk_payout_early_shape      CHECK (kind <> 'early' OR (reason IS NOT NULL AND request_seq BETWEEN 1 AND 2)),
+  CONSTRAINT chk_payout_auto_shape       CHECK (kind <> 'automatic' OR (approval = 'approved' AND request_seq IS NULL)),
+  CONSTRAINT chk_payout_paid_shape       CHECK (status <> 'paid' OR (payment_id IS NOT NULL AND settled_amount_cents IS NOT NULL))
+);
+
+-- =============================================
 -- AUDIT LOGS
 -- Trigger-based audit trail for PDPA compliance.
 -- Captures full row snapshots for regulated tables.
@@ -493,7 +566,16 @@ CREATE TABLE waitlist (
 -- re-derived from tournaments.commission_rate, so the figures always match
 -- what was actually charged and split at payment time.
 --   net_revenue = organizer's portion (net of platform fee AND refunds)
---   net_payout  = net_revenue - prizes paid - payouts already executed
+--   net_payout  = net_revenue - payouts already executed
+--   prize_pool_balance = prize money paid in - prize money paid out
+--
+-- Prizes are NOT part of net_payout. Entry fees never fund prizes (see
+-- src/lib/prize-funding.ts), so subtracting them would charge sponsor-funded
+-- prize money to the organizer's own revenue and underpay them by the whole pool.
+--
+-- This view only knows the ledger, so it subtracts PAID payouts only. How much
+-- may leave right now, net of payouts still in flight, is available_payout_cents
+-- (007_payment_functions.sql). Do not teach this view about the payouts table.
 -- =============================================
 
 -- Why view is preferred over materialized view:
@@ -533,6 +615,11 @@ WITH payment_totals AS (
         THEN net_amount_cents ELSE 0 END
     ) AS net_refunded_cents,
 
+    -- Sponsor money paid in for the prize pool.
+    SUM(CASE WHEN type = 'prize_funding' AND status = 'paid'
+        THEN gross_amount_cents ELSE 0 END
+    ) AS total_prize_funding_cents,
+
     -- Prizes paid out to players.
     SUM(CASE WHEN type = 'player_prize' AND status = 'paid'
         THEN gross_amount_cents ELSE 0 END
@@ -552,6 +639,7 @@ SELECT
   organization_id,
   total_registration_cents,
   total_refunded_cents,
+  total_prize_funding_cents,
   total_prizes_cents,
   total_payouts_cents,
 
@@ -564,8 +652,10 @@ SELECT
   -- Organizer's revenue: net of platform fee and net of refunds.
   net_registration_cents - net_refunded_cents AS net_revenue_cents,
 
-  -- Amount still owed to the organizer.
+  -- Amount still owed to the organizer. No prize term, see the note above.
   (net_registration_cents - net_refunded_cents)
-    - total_prizes_cents
-    - total_payouts_cents AS net_payout_cents
+    - total_payouts_cents AS net_payout_cents,
+
+  -- The ring-fenced prize pool: separate from everything the organizer is owed.
+  total_prize_funding_cents - total_prizes_cents AS prize_pool_balance_cents
 FROM payment_totals;

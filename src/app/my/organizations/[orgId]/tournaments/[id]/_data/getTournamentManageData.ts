@@ -46,6 +46,12 @@ interface TournamentManageData {
     entry_fees: unknown;
     prizes: unknown;
     restrictions: unknown;
+    /** The nominated payout recipient, if any. See nominate_payout_beneficiary. */
+    beneficiary: {
+      organization_id: string;
+      name: string | null;
+      accepted: boolean;
+    } | null;
   };
   stats: { total: number; confirmed: number; pending: number };
   participants: ManageParticipant[];
@@ -171,7 +177,7 @@ export const getTournamentManageData = cache(
     const { data: tournament, error: tErr } = await supabaseAdmin
       .from("tournaments")
       .select(
-        "id, name, description, status, start_date, end_date, registration_deadline, registration_closed_at, venue_name, venue_state, venue_address, venue_country, timezone, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions",
+        "id, name, description, status, start_date, end_date, registration_deadline, registration_closed_at, venue_name, venue_state, venue_address, venue_country, timezone, format, time_control, is_fide_rated, is_mcf_rated, max_participants, entry_fees, prizes, restrictions, beneficiary_organization_id, beneficiary_accepted_at, beneficiary:organizations!beneficiary_organization_id(name)",
       )
       .eq("id", id)
       .eq("organization_id", orgId)
@@ -339,6 +345,15 @@ export const getTournamentManageData = cache(
           entry_fees: tournament.entry_fees,
           prizes: tournament.prizes ?? null,
           restrictions: tournament.restrictions ?? null,
+          beneficiary: tournament.beneficiary_organization_id
+            ? {
+                organization_id: tournament.beneficiary_organization_id,
+                name:
+                  (tournament.beneficiary as unknown as { name: string } | null)
+                    ?.name ?? null,
+                accepted: tournament.beneficiary_accepted_at !== null,
+              }
+            : null,
         },
         stats: { total, confirmed, pending },
         participants,

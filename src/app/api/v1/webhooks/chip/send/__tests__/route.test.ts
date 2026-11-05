@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockFrom, lookups, mockSettle, eqCalls } = vi.hoisted(() => {
+const { mockFrom, lookups, mockSettle, mockSettlePayout, eqCalls } = vi.hoisted(() => {
   const lookups: Array<{ data: unknown; error: unknown }> = [];
   const eqCalls: Array<[string, unknown]> = [];
 
@@ -35,6 +35,7 @@ const { mockFrom, lookups, mockSettle, eqCalls } = vi.hoisted(() => {
     eqCalls,
     mockFrom: vi.fn(() => makeBuilder()),
     mockSettle: vi.fn(),
+    mockSettlePayout: vi.fn(),
   };
 });
 
@@ -44,6 +45,10 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/payouts/bank-account", () => ({
   settleBankAccountVerification: mockSettle,
+}));
+
+vi.mock("@/services/payouts/settle", () => ({
+  settlePayout: mockSettlePayout,
 }));
 
 import { POST } from "../route";
@@ -82,6 +87,17 @@ function makeRequest(payload: unknown, signature?: string | null) {
   });
 }
 
+const PAYOUT_ID = "33333333-3333-4333-8333-333333333333";
+
+const completedEvent = {
+  event_type: "send_instruction.completed",
+  id: 8,
+  reference: PAYOUT_ID,
+  state: "completed",
+  amount: "99.50",
+  receipt_url: "https://chip.test/r/8",
+};
+
 const verifiedEvent = {
   event_type: "bank_account.verified",
   id: 84,
@@ -96,6 +112,7 @@ beforeEach(() => {
   eqCalls.length = 0;
   vi.stubEnv("CHIP_SEND_WEBHOOK_PUBLIC_KEY", publicKey);
   mockSettle.mockResolvedValue({ error: null, settled: true });
+  mockSettlePayout.mockResolvedValue({ error: null, settled: true });
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -311,14 +328,147 @@ describe("bank account events", () => {
 // Everything else
 // ---------------------------------------------------------------------------
 
-describe("other deliveries", () => {
-  it("acks a send-instruction event with no state change", async () => {
+describe("send instruction events", () => {
+  it("settles a completed instruction, correlating on reference first", async () => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    const res = await POST(makeRequest(completedEvent));
+    expect(res.status).toBe(200);
+    expect(mockFrom).toHaveBeenCalledWith("payouts");
+    expect(eqCalls[0]).toEqual(["id", PAYOUT_ID]);
+    expect(mockSettlePayout).toHaveBeenCalledWith({
+      payoutId: PAYOUT_ID,
+      chipSendInstructionId: 8,
+      paid: true,
+      amountCents: 9950,
+      receiptUrl: "https://chip.test/r/8",
+      failureReason: null,
+    });
+    expect(mockSettle).not.toHaveBeenCalled();
+  });
+
+  it("falls back to chip_send_instruction_id when reference misses", async () => {
+    lookups.push({ data: null, error: null });
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    await POST(makeRequest(completedEvent));
+    expect(eqCalls[1]).toEqual(["chip_send_instruction_id", 8]);
+    expect(mockSettlePayout).toHaveBeenCalledWith(
+      expect.objectContaining({ payoutId: PAYOUT_ID, paid: true }),
+    );
+  });
+
+  it("understands a status-topic delivery with the resource under data", async () => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    await POST(
+      makeRequest({
+        event: "send_instruction_status",
+        data: { id: "8", reference: PAYOUT_ID, state: "completed", amount: "10.00" },
+      }),
+    );
+    expect(mockSettlePayout).toHaveBeenCalledWith(
+      expect.objectContaining({ chipSendInstructionId: 8, paid: true, amountCents: 1000 }),
+    );
+  });
+
+  it("recognises an instruction by its state when there is no event name", async () => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    await POST(makeRequest({ id: 8, reference: PAYOUT_ID, state: "completed" }));
+    expect(mockSettlePayout).toHaveBeenCalled();
+  });
+
+  it("leaves the amount to the recorded one when CHIP's is unusable", async () => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    await POST(makeRequest({ ...completedEvent, amount: undefined }));
+    expect(mockSettlePayout).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: null }),
+    );
+  });
+
+  it.each([
+    ["send_instruction.rejected", "rejected", "send_instruction_rejected"],
+    ["send_instruction.deleted", "deleted", "send_instruction_deleted"],
+    ["send_instruction.failed", undefined, "send_instruction_failed"],
+  ])("settles %s as a terminal failure", async (event_type, state, failureReason) => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
     const res = await POST(
-      makeRequest({ event_type: "send_instruction.completed", id: 8, state: "completed" }),
+      makeRequest({ event_type, id: 8, reference: PAYOUT_ID, state }),
+    );
+    expect(res.status).toBe(200);
+    expect(mockSettlePayout).toHaveBeenCalledWith({
+      payoutId: PAYOUT_ID,
+      chipSendInstructionId: 8,
+      paid: false,
+      amountCents: null,
+      receiptUrl: null,
+      failureReason,
+    });
+  });
+
+  it.each([
+    ["created", "send_instruction.created", "received"],
+    ["in progress", "send_instruction.in_progress", "executing"],
+    ["accepted, which can still end rejected", "send_instruction_status", "accepted"],
+    ["unrecognised", "send_instruction.something_new", undefined],
+  ])("acks %s with no state change", async (_label, event_type, state) => {
+    const res = await POST(
+      makeRequest({ event_type, id: 8, reference: PAYOUT_ID, state }),
+    );
+    expect(res.status).toBe(200);
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockSettlePayout).not.toHaveBeenCalled();
+  });
+
+  it("acks an event matching no payout without settling", async () => {
+    lookups.push({ data: null, error: null });
+    lookups.push({ data: null, error: null });
+    const res = await POST(makeRequest(completedEvent));
+    expect(res.status).toBe(200);
+    expect(mockSettlePayout).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("returns 500 when the lookup fails, so CHIP re-delivers", async () => {
+    lookups.push({ data: null, error: { message: "db down" } });
+    const res = await POST(makeRequest(completedEvent));
+    expect(res.status).toBe(500);
+    expect(mockSettlePayout).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when settlement fails with a DB error, so CHIP re-delivers", async () => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    mockSettlePayout.mockResolvedValue({
+      error: { code: "40001", message: "serialization failure" },
+      settled: false,
+    });
+    const res = await POST(makeRequest(completedEvent));
+    expect(res.status).toBe(500);
+  });
+
+  it("acks when the payout vanished before settlement (P0002)", async () => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    mockSettlePayout.mockResolvedValue({
+      error: { code: "P0002", message: "not found" },
+      settled: false,
+    });
+    const res = await POST(makeRequest(completedEvent));
+    expect(res.status).toBe(200);
+  });
+
+  it("ignores a badly signed instruction event", async () => {
+    const res = await POST(makeRequest(completedEvent, sign("other body")));
+    expect(res.status).toBe(200);
+    expect(mockSettlePayout).not.toHaveBeenCalled();
+  });
+});
+
+describe("other deliveries", () => {
+  it("acks a budget allocation event with no state change", async () => {
+    const res = await POST(
+      makeRequest({ event_type: "budget_allocation_status", id: 5, status: "approved" }),
     );
     expect(res.status).toBe(200);
     expect(mockFrom).not.toHaveBeenCalled();
     expect(mockSettle).not.toHaveBeenCalled();
+    expect(mockSettlePayout).not.toHaveBeenCalled();
   });
 
   it("acks a signed but non-JSON body", async () => {
