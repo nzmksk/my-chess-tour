@@ -55,7 +55,7 @@ export async function GET(
        timezone, start_date, end_date, registration_deadline, registration_closed_at,
        format, time_control, is_fide_rated, is_mcf_rated, entry_fees, prizes,
        restrictions, max_participants, status, published_at, updated_at,
-       organizations(id, name, description, avatar_url, links, email, phone)`,
+       organizations!organization_id(id, name, description, avatar_url, links, email, phone)`,
     )
     .eq("slug", slug)
     .eq("status", "published")
