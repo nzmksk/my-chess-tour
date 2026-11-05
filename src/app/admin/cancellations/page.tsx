@@ -97,7 +97,7 @@ export default async function AdminCancellationsPage() {
     .select(
       `id, reason, status, rejection_reason, created_at, reviewed_at,
        tournament:tournaments(id, name, slug, start_date,
-         organization:organizations(id, name)),
+         organization:organizations!organization_id(id, name)),
        requester:users!requested_by(first_name, last_name, email)`,
     )
     .order("created_at", { ascending: false });
