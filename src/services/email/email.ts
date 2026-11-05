@@ -192,3 +192,100 @@ export async function sendBankVerificationEmail(
     throw new Error(`Failed to send bank verification email: ${error.message}`);
   }
 }
+
+function formatRinggit(cents: number): string {
+  return `RM ${(cents / 100).toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+// CHIP's receipt link comes from a webhook body, so it only becomes a link if it
+// really is an https URL.
+function safeHttpsUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+// Tells an organization its payout has been sent. Shared by automatic and early
+// payouts, which differ only in the subject. Only the last 4 digits of the account
+// number are ever passed in or rendered.
+export async function sendPayoutProcessedEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    amountCents: number;
+    accountLast4: string;
+    receiptUrl?: string | null;
+    early?: boolean;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const dashboardUrl = `${siteUrl}/my/organizations`;
+  const receiptUrl = safeHttpsUrl(params.receiptUrl);
+  // Defence in depth: whatever a caller passes, render at most 4 digits.
+  const last4 = params.accountLast4.replace(/\D/g, "").slice(-4);
+
+  const html = loadTemplate("payout-processed.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{accountLast4\}\}/g, last4)
+    .replace(/\{\{ctaUrl\}\}/g, escapeHtml(receiptUrl ?? dashboardUrl))
+    .replace(/\{\{ctaLabel\}\}/g, receiptUrl ? "View Receipt" : "View Payouts")
+    .replace(/\{\{dashboardUrl\}\}/g, dashboardUrl);
+
+  const subject = params.early
+    ? `Your early payout for ${params.tournamentName} has been sent`
+    : `Your payout for ${params.tournamentName} has been sent`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send payout processed email:", error);
+    throw new Error(`Failed to send payout processed email: ${error.message}`);
+  }
+}
+
+// Tells an organization its payout failed, in plain language (see
+// describePayoutFailure) with a prompt to check bank details or contact support.
+export async function sendPayoutFailedEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    amountCents: number;
+    failureReason: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate("payout-failed.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{failureReason\}\}/g, escapeHtml(params.failureReason))
+    .replace(/\{\{dashboardUrl\}\}/g, `${siteUrl}/my/organizations`);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `Action needed: your payout for ${params.tournamentName} failed`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send payout failed email:", error);
+    throw new Error(`Failed to send payout failed email: ${error.message}`);
+  }
+}
