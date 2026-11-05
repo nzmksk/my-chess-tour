@@ -6,6 +6,9 @@ import AgreementGate from "./AgreementGate";
 import BankAccountNotice, {
   type BankAccountStatus,
 } from "./BankAccountNotice";
+import PendingNominations, {
+  type PendingNomination,
+} from "./PendingNominations";
 
 type TournamentStatus =
   | "draft"
@@ -42,6 +45,8 @@ interface DashboardData {
 
 interface Props {
   data: DashboardData;
+  /** Empty unless this user can accept them. See PendingNominations. */
+  pendingNominations?: PendingNomination[];
 }
 
 const STATUS_CONFIG: Record<
@@ -94,17 +99,38 @@ function getActionConfig(status: TournamentStatus): {
   }
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="card flex flex-col gap-1 px-5 py-4">
+function StatCard({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string | number;
+  href?: string;
+}) {
+  const body = (
+    <>
       <p className="font-lato text-text-muted text-xs tracking-widest uppercase">
         {label}
       </p>
       <p className="font-cinzel text-text-primary text-2xl font-bold">
         {value}
       </p>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="card flex flex-col gap-1 px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
+      >
+        {body}
+      </Link>
+    );
+  }
+
+  return <div className="card flex flex-col gap-1 px-5 py-4">{body}</div>;
 }
 
 interface TournamentRowProps {
@@ -156,7 +182,10 @@ function TournamentRow({ tournament: t, orgId }: TournamentRowProps) {
   );
 }
 
-export default function DashboardClient({ data }: Props) {
+export default function DashboardClient({
+  data,
+  pendingNominations = [],
+}: Props) {
   const { organization, bank_account, stats, recent_tournaments } = data;
 
   return (
@@ -196,6 +225,11 @@ export default function DashboardClient({ data }: Props) {
         bankAccount={bank_account ?? null}
       />
 
+      <PendingNominations
+        organizationId={organization.id}
+        nominations={pendingNominations}
+      />
+
       {/* Stats */}
       <div className="mb-8 grid grid-cols-2 gap-3">
         <StatCard label="Active Tournaments" value={stats.active_tournaments} />
@@ -210,6 +244,7 @@ export default function DashboardClient({ data }: Props) {
         <StatCard
           label="Pending Payout"
           value={formatCents(stats.pending_payout_cents)}
+          href={`/my/organizations/${organization.id}/payouts`}
         />
       </div>
 

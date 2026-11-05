@@ -23,6 +23,7 @@ vi.mock("next/link", () => ({
 
 import DashboardClient from "../[orgId]/_components/DashboardClient";
 import MembersClient from "../[orgId]/members/_components/MembersClient";
+import PayoutsClient from "../[orgId]/payouts/_components/PayoutsClient";
 import TournamentManageClient from "../[orgId]/tournaments/[id]/_components/TournamentManageClient";
 import ApplicationsClient from "../applications/_components/ApplicationsClient";
 
@@ -149,6 +150,13 @@ const CASES: { name: string; markup: () => string }[] = [
       renderToStaticMarkup(<ApplicationsClient applications={applications} />),
   },
   {
+    name: "PayoutsClient",
+    markup: () =>
+      renderToStaticMarkup(
+        <PayoutsClient orgId={ORG_ID} data={{ tournaments: [], payouts: [] }} />,
+      ),
+  },
+  {
     name: "MembersClient",
     markup: () =>
       renderToStaticMarkup(
@@ -189,6 +197,7 @@ describe("app route discovery", () => {
     // route set silently passing every link assertion).
     expect(routes).toContain("/my/organizations/[orgId]");
     expect(routes).toContain("/my/organizations/[orgId]/members");
+    expect(routes).toContain("/my/organizations/[orgId]/payouts");
     expect(routes).toContain("/my/organizations/[orgId]/tournaments/[id]");
     expect(routes).toContain("/my/organizations/[orgId]/tournaments/[id]/edit");
     expect(routes).toContain("/my/organizations/[orgId]/tournaments/create");
@@ -203,6 +212,15 @@ describe("app route discovery", () => {
   it("accepts a real dynamic route", () => {
     expect(isValidRoute("/my/organizations/org-1")).toBe(true);
     expect(isValidRoute("/my/organizations/org-1/members")).toBe(true);
+  });
+});
+
+describe("DashboardClient payouts link", () => {
+  it("links the Pending Payout stat to the payouts page", () => {
+    const hrefs = internalHrefs(
+      renderToStaticMarkup(<DashboardClient data={dashboardData} />),
+    );
+    expect(hrefs).toContain(`/my/organizations/${ORG_ID}/payouts`);
   });
 });
 
