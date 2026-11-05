@@ -3,12 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ChipSendError,
   chipBankAccountOutcome,
+  chipSendAmountToCents,
   chipSendChecksum,
   chipSendHeaders,
   chipSendOutcome,
   createChipSendInstruction,
   getChipSendAccounts,
   getChipSendInstruction,
+  getChipSendLimit,
   increaseChipSendLimit,
   registerChipBankAccount,
   resendChipSendLimitApproval,
@@ -331,6 +333,49 @@ describe("CHIP Send HTTP calls", () => {
     expect((err as ChipSendError).message).toMatch(/insufficient balance/i);
   });
 
+  it("the sandbox's 400 'Balance not enough' is insufficient balance", async () => {
+    // Exactly what POST /send/send_instructions answered in the CHIP sandbox when
+    // asked for more than current_balance (checked for #520).
+    fetchMock.mockResolvedValue(
+      new Response(
+        '{"message":"Balance not enough. Please increase your Send Limit","code":400,"data":{}}',
+        { status: 400 },
+      ),
+    );
+    const err = (await createChipSendInstruction({
+      bank_account_id: 1,
+      amountCents: 100,
+      email: "a@b.c",
+      description: "d",
+      reference: "r",
+    }).catch((e: unknown) => e)) as ChipSendError;
+    expect(err).toBeInstanceOf(ChipSendError);
+    expect(err.status).toBe(400);
+    expect(err.insufficientBalance).toBe(true);
+    expect(err.message).toMatch(/insufficient balance \(400\)/i);
+  });
+
+  it("any other 400 is NOT flagged as insufficient balance", async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{"message":"Invalid bank account"}', { status: 400 }),
+    );
+    const err = (await createChipSendInstruction({
+      bank_account_id: 1,
+      amountCents: 100,
+      email: "a@b.c",
+      description: "d",
+      reference: "r",
+    }).catch((e: unknown) => e)) as ChipSendError;
+    expect(err.insufficientBalance).toBe(false);
+  });
+
+  it("getChipSendLimit fetches by id", async () => {
+    await getChipSendLimit(5);
+    const { url, init } = lastCall();
+    expect(url).toBe(`${STAGING_URL}/send/send_limits/5`);
+    expect(init.method).toBe("GET");
+  });
+
   it("a 403 elsewhere is NOT flagged as insufficient balance", async () => {
     fetchMock.mockResolvedValue(new Response("nope", { status: 403 }));
     const err = (await increaseChipSendLimit(100).catch(
@@ -385,6 +430,27 @@ describe("chipBankAccountOutcome", () => {
   });
 });
 
+describe("chipSendAmountToCents", () => {
+  it("converts ringgit strings and numbers to integer cents", () => {
+    expect(chipSendAmountToCents("12.44")).toBe(1244);
+    expect(chipSendAmountToCents("100")).toBe(10000);
+    expect(chipSendAmountToCents("100.5")).toBe(10050);
+    expect(chipSendAmountToCents(10)).toBe(1000);
+  });
+
+  it("does not lose a sen to float rounding", () => {
+    // 19.99 * 100 is 1998.9999999999998 in a double.
+    expect(chipSendAmountToCents("19.99")).toBe(1999);
+    expect(chipSendAmountToCents(19.99)).toBe(1999);
+  });
+
+  it("returns null for anything that isn't a positive amount", () => {
+    for (const bad of [undefined, null, "", "abc", "-5", "1.234", "0", 0, {}]) {
+      expect(chipSendAmountToCents(bad)).toBeNull();
+    }
+  });
+});
+
 describe("chipSendOutcome", () => {
   it("only completed is success", () => {
     expect(chipSendOutcome("completed")).toBe("completed");
@@ -393,12 +459,13 @@ describe("chipSendOutcome", () => {
     );
   });
 
-  it("rejected and deleted are terminal failures", () => {
+  it("rejected, deleted and failed are terminal failures", () => {
     expect(chipSendOutcome("rejected")).toBe("failed");
     expect(chipSendOutcome("deleted")).toBe("failed");
     expect(chipSendOutcome(undefined, "send_instruction.rejected")).toBe(
       "failed",
     );
+    expect(chipSendOutcome(undefined, "send_instruction.failed")).toBe("failed");
   });
 
   it("in-flight states (incl. accepted) are pending", () => {
