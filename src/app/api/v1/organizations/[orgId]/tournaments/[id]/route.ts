@@ -155,10 +155,9 @@ async function resolvePermission(
 }
 
 // Columns that define what a player is paying for and what they can win. Once
-// somebody has paid, changing these rewrites the deal after the fact — and for
-// `prizes` it also moves the payout holdback under a tournament that is already
-// selling. Frozen at the first paid registration, not at publish, so an
-// organizer can still correct a typo on a listing nobody has bought into yet.
+// somebody has paid, changing these rewrites the deal after the fact. Frozen at
+// the first paid registration, not at publish, so an organizer can still correct
+// a typo on a listing nobody has bought into yet.
 const MONEY_FIELDS = [
   "entry_fees",
   "prizes",

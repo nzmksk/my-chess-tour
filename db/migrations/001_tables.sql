@@ -397,7 +397,9 @@ CREATE TABLE registrations (
 -- player_commission = player's share of platform fee
 -- net = gross - platform_fee
 -- =============================================
-CREATE TYPE payment_type AS ENUM ('registration', 'refund', 'organizer_payout', 'player_prize', 'adjustment');
+-- prize_funding: sponsor money paid IN for a prize pool. Ring-fenced: it never
+-- touches an organizer's revenue, see tournament_payout_summary below.
+CREATE TYPE payment_type AS ENUM ('registration', 'refund', 'organizer_payout', 'player_prize', 'prize_funding', 'adjustment');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed');
 
 CREATE TABLE payments (
@@ -406,7 +408,12 @@ CREATE TABLE payments (
   tournament_id               uuid NOT NULL REFERENCES tournaments(id) ON DELETE RESTRICT,
   registration_id             uuid REFERENCES registrations(id)        ON DELETE RESTRICT,                          -- for registration/refund types
   user_id                     uuid REFERENCES users(id)                ON DELETE SET NULL,                          -- player paying or receiving prize/refund
-  organization_id             uuid REFERENCES organizations(id)        ON DELETE SET NULL,                          -- org paying or receiving payout
+  -- ALWAYS the ORGANIZING org, on every row, even when a payout goes to a
+  -- beneficiary. tournament_payout_summary groups by (tournament_id,
+  -- organization_id), so a ledger row carrying a beneficiary's id would form its
+  -- own group and the organizing org's net_payout_cents would never drain. Who
+  -- actually received the money lives on payouts.recipient_organization_id.
+  organization_id             uuid REFERENCES organizations(id)        ON DELETE SET NULL,
   gross_amount_cents          integer NOT NULL,                   -- what the payer actually paid
   platform_fee_cents          integer NOT NULL DEFAULT 0,         -- platform's cut. platform_fee = organizer_commission + player_commission
   organizer_commission_cents  integer NOT NULL DEFAULT 0,         -- organizer's absorbed share of commission
@@ -493,7 +500,16 @@ CREATE TABLE waitlist (
 -- re-derived from tournaments.commission_rate, so the figures always match
 -- what was actually charged and split at payment time.
 --   net_revenue = organizer's portion (net of platform fee AND refunds)
---   net_payout  = net_revenue - prizes paid - payouts already executed
+--   net_payout  = net_revenue - payouts already executed
+--   prize_pool_balance = prize money paid in - prize money paid out
+--
+-- Prizes are NOT part of net_payout. Entry fees never fund prizes (see
+-- src/lib/prize-funding.ts), so subtracting them would charge sponsor-funded
+-- prize money to the organizer's own revenue and underpay them by the whole pool.
+--
+-- This view only knows the ledger, so it subtracts PAID payouts only. How much
+-- may leave right now, net of payouts still in flight, is available_payout_cents
+-- (007_payment_functions.sql). Do not teach this view about the payouts table.
 -- =============================================
 
 -- Why view is preferred over materialized view:
@@ -533,6 +549,11 @@ WITH payment_totals AS (
         THEN net_amount_cents ELSE 0 END
     ) AS net_refunded_cents,
 
+    -- Sponsor money paid in for the prize pool.
+    SUM(CASE WHEN type = 'prize_funding' AND status = 'paid'
+        THEN gross_amount_cents ELSE 0 END
+    ) AS total_prize_funding_cents,
+
     -- Prizes paid out to players.
     SUM(CASE WHEN type = 'player_prize' AND status = 'paid'
         THEN gross_amount_cents ELSE 0 END
@@ -552,6 +573,7 @@ SELECT
   organization_id,
   total_registration_cents,
   total_refunded_cents,
+  total_prize_funding_cents,
   total_prizes_cents,
   total_payouts_cents,
 
@@ -564,8 +586,10 @@ SELECT
   -- Organizer's revenue: net of platform fee and net of refunds.
   net_registration_cents - net_refunded_cents AS net_revenue_cents,
 
-  -- Amount still owed to the organizer.
+  -- Amount still owed to the organizer. No prize term, see the note above.
   (net_registration_cents - net_refunded_cents)
-    - total_prizes_cents
-    - total_payouts_cents AS net_payout_cents
+    - total_payouts_cents AS net_payout_cents,
+
+  -- The ring-fenced prize pool: separate from everything the organizer is owed.
+  total_prize_funding_cents - total_prizes_cents AS prize_pool_balance_cents
 FROM payment_totals;

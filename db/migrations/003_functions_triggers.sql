@@ -379,8 +379,7 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancel
 -- TOURNAMENT EDIT FREEZE (money fields)
 -- entry_fees/prizes/max_participants and the commission split define what a
 -- player is buying. Once anyone has paid, changing them rewrites a concluded
--- transaction — and moving `prizes` also shifts the payout holdback under a
--- tournament that is already selling.
+-- transaction.
 --
 -- The PATCH route returns the readable 409 (naming the rejected fields); this
 -- trigger is the authority, so the rule holds for any writer including the
