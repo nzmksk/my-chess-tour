@@ -1,6 +1,11 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { chipBankAccountOutcome } from "@/services/chip/send";
+import {
+  chipBankAccountOutcome,
+  chipSendAmountToCents,
+  chipSendOutcome,
+} from "@/services/chip/send";
 import { settleBankAccountVerification } from "@/services/payouts/bank-account";
+import { settlePayout } from "@/services/payouts/settle";
 import { normalizePublicKey } from "@/services/chip/public-key";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -29,8 +34,8 @@ const UUID_RE =
 // budget_allocation_status, send_instruction_status), not the delivery body.
 // We therefore accept the resource at the top level or wrapped in `data`, and
 // the event name under any of the usual keys. Classification goes through
-// chipBankAccountOutcome, which understands both resource statuses and dotted
-// event names.
+// chipBankAccountOutcome / chipSendOutcome, which understand both resource
+// statuses and dotted event names.
 interface ChipSendBankAccountObject {
   id?: number | string;
   reference?: string | null;
@@ -40,11 +45,24 @@ interface ChipSendBankAccountObject {
   bank_code?: string;
 }
 
-interface ChipSendWebhookPayload extends ChipSendBankAccountObject {
+// Field names follow the SendInstruction resource in the spec. The delivery body
+// itself is undocumented, so every field is treated as possibly absent.
+interface ChipSendInstructionObject {
+  id?: number | string;
+  reference?: string | null;
+  state?: string;
+  amount?: unknown;
+  receipt_url?: string | null;
+  bank_account_id?: number | string;
+}
+
+type ChipSendWebhookObject = ChipSendBankAccountObject & ChipSendInstructionObject;
+
+interface ChipSendWebhookPayload extends ChipSendWebhookObject {
   event_type?: string;
   event?: string;
   type?: string;
-  data?: ChipSendBankAccountObject;
+  data?: ChipSendWebhookObject;
 }
 
 const ack = () =>
@@ -106,6 +124,16 @@ function isBankAccountEvent(
   if (eventType) return eventType.toLowerCase().startsWith("bank_account");
   // No event name: recognise a bank-account resource by its own fields.
   return obj.account_number !== undefined || obj.bank_code !== undefined;
+}
+
+function isSendInstructionEvent(
+  eventType: string,
+  obj: ChipSendInstructionObject,
+): boolean {
+  if (eventType) return eventType.toLowerCase().startsWith("send_instruction");
+  // No event name: recognise an instruction by its state field, which a bank
+  // account (`status`) doesn't have.
+  return obj.state !== undefined;
 }
 
 function toChipId(id: unknown): number | null {
@@ -175,6 +203,75 @@ async function handleBankAccountEvent(
   return ack();
 }
 
+async function handleSendInstructionEvent(
+  obj: ChipSendInstructionObject,
+  eventType: string,
+): Promise<NextResponse> {
+  const outcome = chipSendOutcome(obj.state, eventType);
+  // created / in_progress / anything unrecognised: nothing to settle yet.
+  if (outcome === "pending") return ack();
+
+  const chipId = toChipId(obj.id);
+
+  // Correlate on `reference` (our payouts.id, sent with the instruction), falling
+  // back to CHIP's integer id.
+  let payoutId: string | null = null;
+
+  if (obj.reference && UUID_RE.test(obj.reference)) {
+    const { data, error } = await supabaseAdmin
+      .from("payouts")
+      .select("id")
+      .eq("id", obj.reference)
+      .maybeSingle();
+    if (error) return serverError(error.message);
+    payoutId = (data as { id: string } | null)?.id ?? null;
+  }
+
+  if (!payoutId && chipId !== null) {
+    const { data, error } = await supabaseAdmin
+      .from("payouts")
+      .select("id")
+      .eq("chip_send_instruction_id", chipId)
+      .maybeSingle();
+    if (error) return serverError(error.message);
+    payoutId = (data as { id: string } | null)?.id ?? null;
+  }
+
+  if (!payoutId) {
+    console.warn("CHIP Send webhook: send instruction event with no matching payout", {
+      event: eventType,
+      chipId,
+    });
+    return ack();
+  }
+
+  const paid = outcome === "completed";
+  // The state when there is one, else the last part of the event name. Either way
+  // it lands on a code describePayoutFailure knows: rejected, deleted or failed.
+  const failureCode =
+    (obj.state ?? eventType.split(".").pop() ?? "failed").toLowerCase();
+
+  const { error } = await settlePayout({
+    payoutId,
+    chipSendInstructionId: chipId,
+    paid,
+    // Null falls back to the amount we recorded when sending.
+    amountCents: paid ? chipSendAmountToCents(obj.amount) : null,
+    receiptUrl: paid ? obj.receipt_url : null,
+    failureReason: paid ? null : `send_instruction_${failureCode}`,
+  });
+
+  if (error) {
+    // The row vanished between lookup and settle — nothing to retry for.
+    if (error.code === "P0002") return ack();
+    // A DB failure: 500 so CHIP re-delivers. The money may already have left, so
+    // this must not be swallowed.
+    return serverError(error.message);
+  }
+
+  return ack();
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Must read the raw body before parsing — the signature is over these bytes.
   const raw = await request.text();
@@ -207,14 +304,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!payload || typeof payload !== "object") return ack();
 
   const eventType = eventTypeOf(payload);
-  const obj: ChipSendBankAccountObject =
+  const obj: ChipSendWebhookObject =
     payload.data && typeof payload.data === "object" ? payload.data : payload;
 
   if (isBankAccountEvent(eventType, obj)) {
     return handleBankAccountEvent(obj, eventType);
   }
 
-  // Send-instruction and budget-allocation events are handled in Phase 5;
-  // acknowledge so CHIP stops retrying.
+  if (isSendInstructionEvent(eventType, obj)) {
+    return handleSendInstructionEvent(obj, eventType);
+  }
+
+  // Budget-allocation events change nothing here: a parked payout finds out by
+  // re-checking the balance on its next execution. Acknowledge so CHIP stops retrying.
   return ack();
 }
