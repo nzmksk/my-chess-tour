@@ -45,7 +45,11 @@ DECLARE
     'settle_bank_account_verification',
     'payout_recipient_problem',
     'nominate_payout_beneficiary',
-    'accept_payout_nomination'
+    'accept_payout_nomination',
+    'available_payout_cents',
+    'tournament_payout_block_reason',
+    'queue_payout',
+    'settle_payout'
   ];
   -- SECURITY DEFINER functions clients may call. Adding to this list is a
   -- security decision: the function must check the caller itself or expose
