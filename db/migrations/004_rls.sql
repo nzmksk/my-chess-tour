@@ -16,6 +16,7 @@ ALTER TABLE tournament_cancellation_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- =============================================
@@ -354,6 +355,31 @@ USING (
 CREATE POLICY "Platform admins full access to refunds"
 ON refunds FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+-- =============================================
+-- PAYOUTS
+-- =============================================
+-- Either side of the payout may read it: a beneficiary must be able to see money
+-- coming to them, and the organizing org stays liable for it.
+CREATE POLICY "Org payout viewers can view payouts"
+ON payouts FOR SELECT
+USING (
+  has_org_permission(app_user_id(), organization_id, 'payout.view')
+  OR has_org_permission(app_user_id(), recipient_organization_id, 'payout.view')
+);
+
+CREATE POLICY "Platform admins full access to payouts"
+ON payouts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+-- No client write capability, as for refunds above. An INSERT policy scoped on
+-- payout.request could not check any column of the row, so an org owner could
+--   POST /rest/v1/payouts  {"kind": "automatic", "approval": "approved", ...}
+-- and create an already-approved payout, to any bank account, past every guard
+-- in queue_payout. payout.request is enforced by the API route instead; every
+-- write goes through the service-role functions in 007_payment_functions.sql.
+-- db/tests/settle_payout.sql checks this.
+REVOKE UPDATE, INSERT, DELETE ON payouts FROM anon, authenticated;
 
 -- =============================================
 -- TOURNAMENT CANCELLATION REQUESTS

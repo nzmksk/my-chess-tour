@@ -31,6 +31,9 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournaments
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournament_cancellation_requests
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON payouts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- =============================================
 -- AUTH SIGNUP TRIGGER
 -- Creates user + player_profile on auth signup.
@@ -290,7 +293,7 @@ BEGIN
   IF TG_TABLE_NAME = 'organizations' THEN
     v_org_id := v_record_id::uuid;
   ELSIF TG_TABLE_NAME IN (
-    'organization_memberships', 'tournaments', 'payments',
+    'organization_memberships', 'tournaments', 'payments', 'payouts',
     'organization_bank_accounts', 'organization_documents'
   ) THEN
     v_org_id := (COALESCE(v_new, v_old) ->> 'organization_id')::uuid;
@@ -363,6 +366,9 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON payments
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON refunds
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON payouts
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 -- Good practice: status transitions

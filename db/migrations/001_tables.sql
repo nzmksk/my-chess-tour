@@ -313,6 +313,14 @@ CREATE TABLE tournaments (
   published_by                uuid REFERENCES users(id) ON DELETE SET NULL,
   published_at                timestamptz,
   registration_closed_at      timestamptz,                        -- effective registration close time. NULL for drafts; defaults to registration_deadline at publish; moved earlier (to now()) when the organizer closes registration early. Never exceeds registration_deadline. Early close is irreversible.
+  -- Another approved organization nominated to receive this tournament's payout,
+  -- reusing its KYB, verified bank account and signed agreement rather than a
+  -- second vetting pipeline. A nomination redirects nothing until the beneficiary
+  -- accepts it (accepted_at set by accept_payout_nomination). Both columns are
+  -- money fields, frozen at the first paid registration, and only ever written by
+  -- the two functions in 003_functions_triggers.sql.
+  beneficiary_organization_id uuid REFERENCES organizations(id) ON DELETE RESTRICT,
+  beneficiary_accepted_at     timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now(),
 
@@ -332,7 +340,13 @@ CREATE TABLE tournaments (
     CHECK (
       registration_closed_at IS NULL
       OR registration_closed_at <= registration_deadline
-    )
+    ),
+  CONSTRAINT chk_beneficiary_not_self
+    CHECK (beneficiary_organization_id IS NULL OR beneficiary_organization_id <> organization_id),
+  -- One-directional on purpose: nominated-but-not-accepted is a real state (the
+  -- pending nomination), while an acceptance with no nominee means nothing.
+  CONSTRAINT chk_beneficiary_shape
+    CHECK (beneficiary_accepted_at IS NULL OR beneficiary_organization_id IS NOT NULL)
 );
 
 -- =============================================
@@ -460,6 +474,58 @@ CREATE TABLE refunds (
 
   CONSTRAINT chk_reviewed_at
     CHECK (reviewed_at IS NULL OR reviewed_at >= requested_at)
+);
+
+-- =============================================
+-- PAYOUTS
+-- Money OUT to an organization via CHIP Send. One row per attempt; the paid
+-- transfer itself is the type='organizer_payout' ledger row in payments, which
+-- is what drains tournament_payout_summary.net_payout_cents.
+--
+-- The CHIP Send `reference` is id::text (36 chars, inside the 1-40 limit). The PK
+-- IS the idempotency key, hence no extra column: a retried POST with the same
+-- reference returns the existing instruction instead of paying twice.
+--
+-- A failed payout is TERMINAL and a retry is a NEW row, linked from the failed one
+-- via superseded_by. See the header of settle_payout (007_payment_functions.sql)
+-- for why this differs from refunds.
+-- =============================================
+CREATE TYPE payout_kind   AS ENUM ('automatic', 'early');
+CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'paid', 'failed');
+
+CREATE TABLE payouts (
+  id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id             uuid NOT NULL REFERENCES tournaments(id)   ON DELETE RESTRICT,
+  organization_id           uuid NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,  -- the ORGANIZING org, always; see payments.organization_id
+  recipient_organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,  -- the organizing org, or its accepted beneficiary
+  bank_account_id           uuid REFERENCES organization_bank_accounts(id) ON DELETE RESTRICT,
+  kind                      payout_kind   NOT NULL,
+  request_seq               smallint,     -- 1..2, early only; carries the "max 2" cap
+  superseded_by             uuid REFERENCES payouts(id) ON DELETE SET NULL,
+  amount_cents              integer NOT NULL,  -- what may be sent; reserved by available_payout_cents while in flight
+  settled_amount_cents      integer,           -- what CHIP says actually left
+  approval                  approval_status NOT NULL DEFAULT 'pending',
+  status                    payout_status   NOT NULL DEFAULT 'pending',
+  reason                    text,
+  requested_by              uuid REFERENCES users(id) ON DELETE SET NULL,
+  requested_at              timestamptz NOT NULL DEFAULT now(),
+  reviewed_by               uuid REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at               timestamptz,
+  rejection_reason          text,
+  chip_send_instruction_id  bigint,
+  chip_send_limit_id        bigint,
+  chip_receipt_url          text,
+  failure_reason            text,
+  payment_id                uuid REFERENCES payments(id) ON DELETE RESTRICT,
+  processed_at              timestamptz,  -- set once by settle_payout; the idempotency marker
+  created_at                timestamptz NOT NULL DEFAULT now(),
+  updated_at                timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_payout_amount_positive  CHECK (amount_cents > 0),
+  CONSTRAINT chk_payout_reviewed_at      CHECK (reviewed_at IS NULL OR reviewed_at >= requested_at),
+  CONSTRAINT chk_payout_early_shape      CHECK (kind <> 'early' OR (reason IS NOT NULL AND request_seq BETWEEN 1 AND 2)),
+  CONSTRAINT chk_payout_auto_shape       CHECK (kind <> 'automatic' OR (approval = 'approved' AND request_seq IS NULL)),
+  CONSTRAINT chk_payout_paid_shape       CHECK (status <> 'paid' OR (payment_id IS NOT NULL AND settled_amount_cents IS NOT NULL))
 );
 
 -- =============================================
