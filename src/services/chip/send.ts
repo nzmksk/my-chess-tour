@@ -34,9 +34,12 @@ import type {
 //      checksum the single most common integration bug. chipSendHeaders() is
 //      therefore a function, called per request, and must never be cached.
 //
-//   3. A 403 on create-send-instruction means INSUFFICIENT BALANCE (allocate
-//      more with increaseChipSendLimit, or wait for approval), not a permissions
-//      problem. ChipSendError.insufficientBalance flags it.
+//   3. INSUFFICIENT BALANCE has two faces. The docs describe a 403 on
+//      create-send-instruction, but the sandbox actually answers that call (and
+//      bank account registration) with a 400 saying "Balance not enough. Please
+//      increase your Send Limit". ChipSendError.insufficientBalance flags both, so
+//      a payout waits for budget (increaseChipSendLimit) instead of being treated
+//      as a rejected request and failing for good.
 //
 // UNITS: the spec documents every Send amount in RINGGIT ("1 for RM 1"; send
 // instruction amounts are "floating point with maximum of 2 decimal places",
@@ -108,13 +111,13 @@ export function chipSendHeaders(): Record<string, string> {
 export class ChipSendError extends Error {
   readonly status: number;
   readonly body: string;
-  /** True for a 403 on create-send-instruction — see landmine 3. */
+  /** The account can't cover this right now, not a bad request — see landmine 3. */
   readonly insufficientBalance: boolean;
 
   constructor(status: number, body: string, insufficientBalance = false) {
     super(
       insufficientBalance
-        ? `CHIP Send insufficient balance (403): ${body}`
+        ? `CHIP Send insufficient balance (${status}): ${body}`
         : `CHIP Send API error ${status}: ${body}`,
     );
     this.name = "ChipSendError";
@@ -142,7 +145,8 @@ async function chipSendRequest<T>(
     throw new ChipSendError(
       res.status,
       text,
-      res.status === 403 && !!options.forbiddenMeansInsufficientBalance,
+      (res.status === 403 && !!options.forbiddenMeansInsufficientBalance) ||
+        (res.status === 400 && /balance not enough/i.test(text)),
     );
   }
 
@@ -174,6 +178,21 @@ export function toChipSendInstructionAmount(amountCents: number): string {
   return `${ringgit}.${sen}`;
 }
 
+/**
+ * A Send amount in ringgit (`"12.44"`, or a JSON number) → integer cents, or null
+ * if it isn't a usable amount. Parsed from the digits rather than multiplied, so
+ * a value like 19.99 can't land a sen short through float rounding. Null lets the
+ * caller fall back to the amount it recorded instead of booking a wrong one.
+ */
+export function chipSendAmountToCents(amount: unknown): number | null {
+  const text = typeof amount === "number" ? String(amount) : amount;
+  if (typeof text !== "string") return null;
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(text.trim());
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+}
+
 /** `GET /send/accounts` — balances and fees. Also the cheapest auth smoke test. */
 export async function getChipSendAccounts(): Promise<
   ChipSendList<ChipSendAccount>
@@ -193,6 +212,14 @@ export async function increaseChipSendLimit(
     amount: toChipSendLimitAmount(amountCents),
   };
   return chipSendRequest("POST", "/send/send_limits", body);
+}
+
+/** `GET /send/send_limits/{id}` — has this allocation been approved or expired? */
+export async function getChipSendLimit(id: number): Promise<ChipSendLimit> {
+  return chipSendRequest(
+    "GET",
+    `/send/send_limits/${encodeURIComponent(String(id))}`,
+  );
 }
 
 /** `POST /send/send_limits/{id}/resend_approval_requests`. */
@@ -225,7 +252,8 @@ export interface CreateChipSendInstructionInput
 
 /**
  * `POST /send/send_instructions` — pay a registered recipient. Idempotent on
- * `reference`. Throws a ChipSendError with `insufficientBalance: true` on 403.
+ * `reference`. Throws a ChipSendError with `insufficientBalance: true` when the
+ * balance can't cover it (landmine 3).
  */
 export async function createChipSendInstruction(
   input: CreateChipSendInstructionInput,
@@ -267,13 +295,15 @@ const SEND_COMPLETED = new Set(["completed", "send_instruction.completed"]);
 const SEND_FAILED = new Set([
   "rejected",
   "deleted",
+  "failed",
   "send_instruction.rejected",
   "send_instruction.deleted",
+  "send_instruction.failed",
 ]);
 
 /**
  * Maps a send-instruction `state` and/or webhook event to an outcome. Only
- * `completed` is success; `rejected`/`deleted` are terminal failures. Every
+ * `completed` is success; `rejected`/`deleted`/`failed` are terminal failures. Every
  * other state — including `accepted`, which can still end `rejected` after
  * review — is `"pending"`.
  */
