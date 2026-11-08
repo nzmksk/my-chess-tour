@@ -115,6 +115,7 @@ beforeEach(() => {
   mockSettlePayout.mockResolvedValue({ error: null, settled: true });
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -431,6 +432,10 @@ describe("send instruction events", () => {
     const res = await POST(makeRequest(completedEvent));
     expect(res.status).toBe(500);
     expect(mockSettlePayout).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(`failed to look up payout ${PAYOUT_ID}`),
+      "db down",
+    );
   });
 
   it("returns 500 when settlement fails with a DB error, so CHIP re-delivers", async () => {
@@ -441,6 +446,10 @@ describe("send instruction events", () => {
     });
     const res = await POST(makeRequest(completedEvent));
     expect(res.status).toBe(500);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(`settle_payout failed for payout ${PAYOUT_ID} (paid)`),
+      "40001: serialization failure",
+    );
   });
 
   it("acks when the payout vanished before settlement (P0002)", async () => {
@@ -451,6 +460,24 @@ describe("send instruction events", () => {
     });
     const res = await POST(makeRequest(completedEvent));
     expect(res.status).toBe(200);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`payout ${PAYOUT_ID} disappeared`),
+    );
+  });
+
+  it("logs what each delivery carried, but no amount or receipt", async () => {
+    lookups.push({ data: { id: PAYOUT_ID }, error: null });
+    await POST(makeRequest(completedEvent));
+    expect(console.info).toHaveBeenCalledWith(
+      "CHIP Send webhook: send instruction event",
+      {
+        event: "send_instruction.completed",
+        state: "completed",
+        chipId: 8,
+        reference: PAYOUT_ID,
+        outcome: "completed",
+      },
+    );
   });
 
   it("ignores a badly signed instruction event", async () => {

@@ -208,10 +208,20 @@ async function handleSendInstructionEvent(
   eventType: string,
 ): Promise<NextResponse> {
   const outcome = chipSendOutcome(obj.state, eventType);
+  const chipId = toChipId(obj.id);
+
+  // CHIP doesn't document this body, so record what each delivery carried. No
+  // amounts, emails or account details: just enough to match it to a payout.
+  console.info("CHIP Send webhook: send instruction event", {
+    event: eventType || null,
+    state: obj.state ?? null,
+    chipId,
+    reference: obj.reference ?? null,
+    outcome,
+  });
+
   // created / in_progress / anything unrecognised: nothing to settle yet.
   if (outcome === "pending") return ack();
-
-  const chipId = toChipId(obj.id);
 
   // Correlate on `reference` (our payouts.id, sent with the instruction), falling
   // back to CHIP's integer id.
@@ -223,7 +233,13 @@ async function handleSendInstructionEvent(
       .select("id")
       .eq("id", obj.reference)
       .maybeSingle();
-    if (error) return serverError(error.message);
+    if (error) {
+      console.error(
+        `CHIP Send webhook: failed to look up payout ${obj.reference}; asking CHIP to redeliver`,
+        error.message,
+      );
+      return serverError(error.message);
+    }
     payoutId = (data as { id: string } | null)?.id ?? null;
   }
 
@@ -233,7 +249,13 @@ async function handleSendInstructionEvent(
       .select("id")
       .eq("chip_send_instruction_id", chipId)
       .maybeSingle();
-    if (error) return serverError(error.message);
+    if (error) {
+      console.error(
+        `CHIP Send webhook: failed to look up the payout for instruction ${chipId}; asking CHIP to redeliver`,
+        error.message,
+      );
+      return serverError(error.message);
+    }
     payoutId = (data as { id: string } | null)?.id ?? null;
   }
 
@@ -241,6 +263,7 @@ async function handleSendInstructionEvent(
     console.warn("CHIP Send webhook: send instruction event with no matching payout", {
       event: eventType,
       chipId,
+      reference: obj.reference ?? null,
     });
     return ack();
   }
@@ -263,9 +286,18 @@ async function handleSendInstructionEvent(
 
   if (error) {
     // The row vanished between lookup and settle — nothing to retry for.
-    if (error.code === "P0002") return ack();
+    if (error.code === "P0002") {
+      console.warn(
+        `CHIP Send webhook: payout ${payoutId} disappeared before it could be settled`,
+      );
+      return ack();
+    }
     // A DB failure: 500 so CHIP re-delivers. The money may already have left, so
     // this must not be swallowed.
+    console.error(
+      `CHIP Send webhook: settle_payout failed for payout ${payoutId} (${paid ? "paid" : "failed"}); asking CHIP to redeliver`,
+      error.code ? `${error.code}: ${error.message}` : error.message,
+    );
     return serverError(error.message);
   }
 
