@@ -34,6 +34,7 @@ async function authorizeAdmin(): Promise<
   });
 
   if (error) {
+    console.error("Admin payouts: permission check failed", error.message);
     return { response: errorResponse("INTERNAL_ERROR", error.message, 500) };
   }
   if (!isAdmin) {
@@ -48,7 +49,10 @@ export async function GET(): Promise<NextResponse> {
   if ("response" in auth) return auth.response;
 
   const { data, error } = await loadAdminPayoutQueue();
-  if (error) return errorResponse("INTERNAL_ERROR", error, 500);
+  if (error) {
+    console.error("Admin payouts: failed to load the payout queue", error);
+    return errorResponse("INTERNAL_ERROR", error, 500);
+  }
 
   return NextResponse.json({ data }, { status: 200 });
 }
@@ -118,12 +122,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return errorResponse("NOT_FOUND", "Tournament not found", 404);
     }
     if (error.code === "P0001") {
+      // Expected refusals (blocked, ineligible recipient, below minimum), but worth
+      // a trace when someone asks why a payout never went out.
+      console.warn(
+        `Admin payouts: queue_payout refused tournament ${tournament_id}`,
+        error.message,
+      );
       return errorResponse("CONFLICT", queueErrorMessage(error.message), 409);
     }
+    console.error(
+      `Admin payouts: queue_payout failed for tournament ${tournament_id}`,
+      error.code ? `${error.code}: ${error.message}` : error.message,
+    );
     return errorResponse("INTERNAL_ERROR", error.message, 500);
   }
 
   if (!payoutId) {
+    console.warn(
+      `Admin payouts: tournament ${tournament_id} already has a live automatic payout`,
+    );
     return errorResponse(
       "PAYOUT_EXISTS",
       "This tournament already has an automatic payout",
@@ -132,6 +149,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const outcome = await executePayout(payoutId as string);
+  console.info(
+    `Admin payouts: admin ${auth.userId} queued payout ${payoutId} for tournament ${tournament_id}: ${outcome}`,
+  );
 
   return NextResponse.json({ data: { payout_id: payoutId, outcome } }, { status: 201 });
 }

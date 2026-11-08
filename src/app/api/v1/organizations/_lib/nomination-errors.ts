@@ -5,11 +5,13 @@ import { NextResponse } from "next/server";
  * Turns an error from nominate_payout_beneficiary / accept_payout_nomination into
  * the response to send. The functions raise a sentinel prefix with a stable SQLSTATE;
  * guard_tournament_money_fields raises the "locked" one with no sentinel at all.
+ *
+ * `action` names what was being attempted, for the log of an unexpected error.
  */
-export function nominationErrorResponse(error: {
-  code?: string;
-  message: string;
-}): NextResponse {
+export function nominationErrorResponse(
+  error: { code?: string; message: string },
+  action: string,
+): NextResponse {
   const respond = (code: string, message: string, status: number) =>
     NextResponse.json({ error: { code, message } }, { status });
 
@@ -46,5 +48,9 @@ export function nominationErrorResponse(error: {
     }
     return respond("CONFLICT", error.message, 409);
   }
+  console.error(
+    `Payout nomination: unexpected error ${action}`,
+    error.code ? `${error.code}: ${error.message}` : error.message,
+  );
   return respond("INTERNAL_ERROR", error.message, 500);
 }

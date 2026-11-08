@@ -57,6 +57,10 @@ export async function PUT(
     .maybeSingle();
 
   if (lookupError) {
+    console.error(
+      `Payout beneficiary: failed to look up tournament ${id}`,
+      lookupError.message,
+    );
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: lookupError.message } },
       { status: 500 },
@@ -75,7 +79,9 @@ export async function PUT(
     p_user_id: auth.userId,
   });
 
-  if (error) return nominationErrorResponse(error);
+  if (error) {
+    return nominationErrorResponse(error, `nominating a beneficiary for tournament ${id}`);
+  }
 
   return NextResponse.json({ data }, { status: 200 });
 }

@@ -65,6 +65,7 @@ export async function GET(
 
   const error = overview.error ?? history.error;
   if (error) {
+    console.error(`Organization ${orgId} payouts: failed to load`, error.message);
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: error.message } },
       { status: 500 },

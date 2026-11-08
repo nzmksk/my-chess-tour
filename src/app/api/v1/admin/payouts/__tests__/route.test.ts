@@ -58,6 +58,9 @@ beforeEach(() => {
     data: { candidates: [], payouts: [] },
     error: null,
   });
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
 // ---------------------------------------------------------------------------
@@ -190,5 +193,29 @@ describe("POST", () => {
     });
     expect((await POST(post({ tournament_id: TOURNAMENT_ID }))).status).toBe(500);
     expect(mockExecute).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(`queue_payout failed for tournament ${TOURNAMENT_ID}`),
+      "40001: serialization failure",
+    );
+  });
+
+  it("logs a refused payout, so it can be traced later", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "PAYOUT_BLOCKED: refund_pending" },
+    });
+    await POST(post({ tournament_id: TOURNAMENT_ID }));
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`refused tournament ${TOURNAMENT_ID}`),
+      "PAYOUT_BLOCKED: refund_pending",
+    );
+  });
+
+  it("logs who queued a payout and what happened to it", async () => {
+    mockExecute.mockResolvedValue("awaiting_budget");
+    await POST(post({ tournament_id: TOURNAMENT_ID }));
+    expect(console.info).toHaveBeenCalledWith(
+      `Admin payouts: admin ${ADMIN_ID} queued payout ${PAYOUT_ID} for tournament ${TOURNAMENT_ID}: awaiting_budget`,
+    );
   });
 });

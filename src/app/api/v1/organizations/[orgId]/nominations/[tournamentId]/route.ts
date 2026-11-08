@@ -34,6 +34,10 @@ export async function POST(
     .maybeSingle();
 
   if (lookupError) {
+    console.error(
+      `Payout nomination: failed to look up tournament ${tournamentId}`,
+      lookupError.message,
+    );
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: lookupError.message } },
       { status: 500 },
@@ -51,7 +55,9 @@ export async function POST(
     p_user_id: auth.userId,
   });
 
-  if (error) return nominationErrorResponse(error);
+  if (error) {
+    return nominationErrorResponse(error, `accepting the nomination for tournament ${tournamentId}`);
+  }
 
   return NextResponse.json({ data }, { status: 200 });
 }
