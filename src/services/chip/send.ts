@@ -244,6 +244,33 @@ export async function registerChipBankAccount(
   return chipSendRequest("POST", "/send/bank_accounts", request);
 }
 
+// The characters CHIP accepts in a send instruction's description. Anything else is
+// a 422 ("Description only allows alphanumeric characters, period, space,
+// underscore, hyphen, forward slash, at symbol, and parentheses"). The OpenAPI spec
+// doesn't say so; staging found it, when "MY Chess Tour payout: <name>" failed every
+// payout on its colon. 140 is CHIP's documented maximum length.
+const DESCRIPTION_DISALLOWED = /[^A-Za-z0-9 ._\-/@()]+/g;
+const DESCRIPTION_MAX_LENGTH = 140;
+
+/**
+ * Makes free text (a tournament name, say) safe for a send instruction's
+ * description: accents folded (é → e), apostrophes dropped, any other disallowed
+ * run turned into one space, then trimmed to 140. Never returns an empty string,
+ * since CHIP requires one.
+ */
+export function toChipSendDescription(text: string, fallback = "Payout"): string {
+  const cleaned = text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/['\u2018\u2019]/g, "")
+    .replace(DESCRIPTION_DISALLOWED, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, DESCRIPTION_MAX_LENGTH)
+    .trim();
+  return cleaned || fallback;
+}
+
 export interface CreateChipSendInstructionInput
   extends Omit<ChipSendInstructionRequest, "amount"> {
   /** Integer cents — formatted into the string CHIP expects. */

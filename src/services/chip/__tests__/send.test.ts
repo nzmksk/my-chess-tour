@@ -14,6 +14,7 @@ import {
   increaseChipSendLimit,
   registerChipBankAccount,
   resendChipSendLimitApproval,
+  toChipSendDescription,
   toChipSendInstructionAmount,
   toChipSendLimitAmount,
 } from "../send";
@@ -480,5 +481,31 @@ describe("chipSendOutcome", () => {
       expect(chipSendOutcome(s)).toBe("pending");
     }
     expect(chipSendOutcome("verified", "bank_account.verified")).toBe("pending");
+  });
+});
+
+describe("toChipSendDescription", () => {
+  it("replaces the colon that made CHIP 422 every payout on staging", () => {
+    expect(toChipSendDescription("MY Chess Tour payout: Selangor Rapid")).toBe(
+      "MY Chess Tour payout Selangor Rapid",
+    );
+  });
+
+  it("keeps everything CHIP allows", () => {
+    const allowed = "Open 2026 (U-12) a_b c.d e/f g@h";
+    expect(toChipSendDescription(allowed)).toBe(allowed);
+  });
+
+  it("folds accents, drops apostrophes, and collapses the rest into single spaces", () => {
+    expect(toChipSendDescription("Penang\u2019s Café  &  Blitz!!")).toBe("Penangs Cafe Blitz");
+  });
+
+  it("caps the length at 140", () => {
+    expect(toChipSendDescription("x".repeat(300))).toHaveLength(140);
+  });
+
+  it("never returns an empty description", () => {
+    expect(toChipSendDescription("象棋 :: ★")).toBe("Payout");
+    expect(toChipSendDescription("", "Tournament payout")).toBe("Tournament payout");
   });
 });

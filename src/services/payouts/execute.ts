@@ -7,6 +7,7 @@ import {
   getChipSendAccounts,
   getChipSendLimit,
   increaseChipSendLimit,
+  toChipSendDescription,
 } from "@/services/chip/send";
 import { MIN_PAYOUT_CENTS } from "./constants";
 import { settlePayout } from "./settle";
@@ -342,7 +343,10 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     instruction = await createChipSendInstruction({
       bank_account_id: bank.chip_bank_account_id,
       amountCents,
-      description: `MY Chess Tour payout: ${payout.tournament?.name ?? "tournament"}`.slice(0, 140),
+      // Tournament names are free text, and CHIP 422s on most punctuation.
+      description: toChipSendDescription(
+        `MY Chess Tour payout - ${payout.tournament?.name ?? "tournament"}`,
+      ),
       email: recipientEmail,
       reference: payoutId,
       // CHIP emails its own authoritative receipt, and our email points at it.
