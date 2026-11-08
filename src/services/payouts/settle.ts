@@ -72,7 +72,16 @@ export async function settlePayout(
       `Payout ${input.payoutId}: CHIP reports the transfer complete, but the payout was already marked failed. Money may have left with no ledger row.`,
     );
   }
-  if (result.already_processed) return { error: null, settled: false };
+  if (result.already_processed) {
+    console.info(`Payout ${input.payoutId}: already settled; nothing to do`);
+    return { error: null, settled: false };
+  }
+
+  console.info(
+    `Payout ${input.payoutId}: settled as ${input.paid ? "paid" : "failed"}${
+      input.chipSendInstructionId !== null ? ` (instruction ${input.chipSendInstructionId})` : ""
+    }`,
+  );
 
   if (result.over_payout) {
     console.error(
@@ -122,6 +131,13 @@ async function loadRecipients(
   ]);
 
   if (membersRes.error) throw new Error(membersRes.error.message);
+  if (orgsRes.error) {
+    // Members can still be told, so carry on without the contact addresses.
+    console.error(
+      "Payout emails: failed to load organization contact addresses",
+      orgsRes.error.message,
+    );
+  }
 
   const recipients = new Map<string, { email: string; name: string }>();
   for (const m of membersRes.data as unknown as MembershipRecipient[]) {
@@ -201,10 +217,15 @@ async function notifyPayoutSettled(payoutId: string): Promise<void> {
     ),
   );
 
-  const failed = results.filter((r) => r.status === "rejected").length;
-  if (failed > 0) {
+  const failures = results.flatMap((r) =>
+    r.status === "rejected"
+      ? [r.reason instanceof Error ? r.reason.message : String(r.reason)]
+      : [],
+  );
+  if (failures.length > 0) {
     console.error(
-      `Failed to send ${failed}/${recipients.size} payout email(s) for payout ${payoutId}`,
+      `Failed to send ${failures.length}/${recipients.size} payout email(s) for payout ${payoutId}`,
+      failures,
     );
   }
 }

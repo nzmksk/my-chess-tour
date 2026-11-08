@@ -95,6 +95,7 @@ beforeEach(() => {
   mockProcessed.mockResolvedValue(undefined);
   mockFailed.mockResolvedValue(undefined);
   vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
 // ---------------------------------------------------------------------------
@@ -241,5 +242,33 @@ describe("settlePayout", () => {
       paid: true,
     });
     expect(res).toEqual({ error: null, settled: true });
+  });
+
+  it("logs why each settlement email failed", async () => {
+    queueEmailData();
+    mockProcessed.mockRejectedValue(new Error("resend down"));
+    await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: true });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(`payout email(s) for payout ${PAYOUT_ID}`),
+      expect.arrayContaining(["resend down"]),
+    );
+  });
+
+  it("still emails members when the contact addresses can't be loaded", async () => {
+    queueEmailData();
+    tables.organizations = [{ data: null, error: { message: "orgs down" } }];
+    await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: true });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("failed to load organization contact addresses"),
+      "orgs down",
+    );
+    expect(mockProcessed).toHaveBeenCalledWith("owner@x.test", expect.anything());
+  });
+
+  it("logs which way a payout settled", async () => {
+    await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: false });
+    expect(console.info).toHaveBeenCalledWith(
+      `Payout ${PAYOUT_ID}: settled as failed (instruction 8)`,
+    );
   });
 });

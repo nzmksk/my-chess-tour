@@ -454,3 +454,79 @@ describe("sending", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Logging: every way a payout fails or stalls leaves a line saying why
+// ---------------------------------------------------------------------------
+
+function logged(level: "error" | "warn" | "info"): string {
+  return vi
+    .mocked(console[level])
+    .mock.calls.map((args) => args.map(String).join(" "))
+    .join("\n");
+}
+
+describe("logging", () => {
+  it("logs a terminal failure with its reason, digits redacted", async () => {
+    givenPayout();
+    mockCreate.mockRejectedValue(
+      new ChipSendError(400, '{"message":"Bad account 514000001234"}'),
+    );
+    await executePayout(ID);
+    expect(logged("error")).toContain(`Payout ${ID}: failed (chip_send_400`);
+    expect(logged("error")).not.toContain("514000001234");
+  });
+
+  it("logs why the bank account can't be paid", async () => {
+    givenPayout({
+      bank: { is_active: false, status: "verified", chip_bank_account_id: 42 },
+    });
+    await executePayout(ID);
+    expect(logged("error")).toContain("failed (bank_account_not_verified)");
+    expect(logged("error")).toContain("active=false");
+  });
+
+  it("logs the figures when too little is left to pay", async () => {
+    givenPayout();
+    givenRpc({ available: 500 });
+    await executePayout(ID);
+    expect(logged("error")).toContain("failed (insufficient_available_balance)");
+    expect(logged("error")).toContain("500 available");
+  });
+
+  it("logs a payout parked on budget, with the balance and the request", async () => {
+    givenPayout();
+    mockAccounts.mockResolvedValue(balance(50));
+    await executePayout(ID);
+    expect(logged("warn")).toContain("balance 5000 cents is below the 10000 cents payout");
+    expect(logged("warn")).toContain("requested send limit 77");
+  });
+
+  it("logs a payout still waiting on an earlier budget request", async () => {
+    givenPayout({ chip_send_limit_id: 5 });
+    mockAccounts.mockResolvedValue(balance(50));
+    mockGetLimit.mockResolvedValue({ id: 5, status: "pending" });
+    await executePayout(ID);
+    expect(logged("warn")).toContain("send limit 5 is still waiting for approval");
+  });
+
+  it("names a failed balance read instead of a generic error", async () => {
+    givenPayout();
+    mockAccounts.mockRejectedValue(new ChipSendError(503, "maintenance"));
+    await executePayout(ID);
+    expect(logged("error")).toContain("could not read the CHIP Send balance");
+    expect(logged("error")).toContain("CHIP Send 503");
+  });
+
+  it("includes the SQLSTATE of a database error", async () => {
+    tables.payouts = [{ data: null, error: { code: "57014", message: "timeout" } }];
+    await executePayout(ID);
+    expect(logged("error")).toContain("57014: timeout");
+  });
+
+  it("logs a skipped payout's state", async () => {
+    givenPayout({ status: "processing" });
+    await executePayout(ID);
+    expect(logged("info")).toContain("skipped (status processing");
+  });
+});
