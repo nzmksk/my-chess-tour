@@ -345,7 +345,7 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
       amountCents,
       // Tournament names are free text, and CHIP 422s on most punctuation.
       description: toChipSendDescription(
-        `MY Chess Tour payout - ${payout.tournament?.name ?? "tournament"}`,
+        `MY Chess Tour - ${payout.tournament?.name ?? "tournament payout"}`,
       ),
       email: recipientEmail,
       reference: payoutId,
