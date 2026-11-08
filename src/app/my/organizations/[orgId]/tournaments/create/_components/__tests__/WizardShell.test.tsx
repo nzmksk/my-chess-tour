@@ -67,11 +67,14 @@ const INITIAL: PersistedState = {
   completedSteps: [0, 1, 2, 3],
 };
 
-function renderEditWizard(status = "published") {
+function renderEditWizard(
+  status = "published",
+  currentStepIndex = INITIAL.currentStepIndex,
+) {
   return render(
     <TournamentWizardProvider
       orgId={ORG_ID}
-      initialData={INITIAL}
+      initialData={{ ...INITIAL, currentStepIndex }}
       storageKeySuffix={`edit-${TOUR_ID}`}
       excludeId={TOUR_ID}
     >
@@ -258,5 +261,29 @@ describe("WizardShell — editing a draft", () => {
       "Start date must be a future date · Registration deadline must be a future date",
     );
     expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("WizardShell — editing a published tournament", () => {
+  // A published tournament has no draft: the secondary button saves straight
+  // to the live tournament, so "Save Draft" misdescribed what it did.
+  it("labels the save button Save Changes on earlier steps", async () => {
+    renderEditWizard("published", 0);
+
+    expect(
+      await screen.findByRole("button", { name: /save changes/i }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /save draft/i })).toBeNull();
+  });
+
+  it("shows a single Save Changes button on the last step", async () => {
+    renderEditWizard("published");
+
+    await screen.findByRole("button", { name: /save changes/i });
+    expect(
+      screen.getAllByRole("button", { name: /save changes/i }),
+    ).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /save draft/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^publish$/i })).toBeNull();
   });
 });

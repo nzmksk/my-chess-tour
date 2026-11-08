@@ -336,14 +336,24 @@ export default function WizardShell({
           </button>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={handleSaveDraft}
-              disabled={isSaving}
-            >
-              {isSaving ? "Saving…" : "Save Draft"}
-            </button>
+            {/* A published tournament has no draft to save to: this button
+                writes straight to the live tournament, so it says so. On the
+                last step the primary button already reads Save Changes, and a
+                second identical button would only be noise. */}
+            {!(isLastStep && !canPublish) && (
+              <button
+                type="button"
+                className="font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+              >
+                {isSaving
+                  ? "Saving…"
+                  : canPublish
+                    ? "Save Draft"
+                    : "Save Changes"}
+              </button>
+            )}
 
             {isLastStep && !canPublish ? (
               <button
