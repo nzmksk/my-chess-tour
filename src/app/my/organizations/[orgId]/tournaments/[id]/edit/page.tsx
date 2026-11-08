@@ -210,6 +210,7 @@ export default async function EditTournamentPage({
           title="Edit Tournament"
           redirectPath={`/my/organizations/${orgId}/tournaments/${id}`}
           mode="edit"
+          status={tournament.status}
         />
       </TournamentWizardProvider>
     </div>
