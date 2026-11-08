@@ -16,3 +16,7 @@ chip_send() {
     -H "Authorization: Bearer $CHIP_SEND_API_KEY" -H "epoch: $epoch" -H "checksum: $checksum" \
     -H 'Content-Type: application/json' ${3:+--data "$3"} -w '\nHTTP %{http_code}\n'
 }
+
+read -rp 'PR number: ' PR_NUMBER;
+export PR_NUMBER;
+chip_send POST /webhooks '{"name": "MCT Staging - DP #'$PR_NUMBER'", "callback_url": "https://deploy-preview-'$PR_NUMBER'--staging-mychesstour.netlify.app/api/v1/webhooks/chip/send", "email": "admin@mychesstour.com", "event_hooks": ["bank_account_status","send_instruction_status","budget_allocation_status"]}'
