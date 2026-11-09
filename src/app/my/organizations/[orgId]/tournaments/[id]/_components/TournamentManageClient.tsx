@@ -347,7 +347,7 @@ export default function TournamentManageClient({
         )}
       </div>
 
-      {/* Organizer actions: close registration / request cancellation */}
+      {/* Organizer actions: publish a draft / close registration / request cancellation */}
       <TournamentActions
         orgId={orgId}
         tournamentId={tournament.id}

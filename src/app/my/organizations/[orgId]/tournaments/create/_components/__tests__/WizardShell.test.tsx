@@ -67,11 +67,14 @@ const INITIAL: PersistedState = {
   completedSteps: [0, 1, 2, 3],
 };
 
-function renderEditWizard() {
+function renderEditWizard(
+  status = "published",
+  currentStepIndex = INITIAL.currentStepIndex,
+) {
   return render(
     <TournamentWizardProvider
       orgId={ORG_ID}
-      initialData={INITIAL}
+      initialData={{ ...INITIAL, currentStepIndex }}
       storageKeySuffix={`edit-${TOUR_ID}`}
       excludeId={TOUR_ID}
     >
@@ -81,6 +84,7 @@ function renderEditWizard() {
         title="Edit Tournament"
         redirectPath={`/my/organizations/${ORG_ID}/tournaments/${TOUR_ID}`}
         mode="edit"
+        status={status}
       />
     </TournamentWizardProvider>,
   );
@@ -193,5 +197,93 @@ describe("WizardShell — Save Changes", () => {
     expect(init.method).toBe("PATCH");
     // The venue names the zone; the client does not send one.
     expect(JSON.parse(init.body)).not.toHaveProperty("timezone");
+  });
+});
+
+describe("WizardShell — editing a draft", () => {
+  // The bug this covers (#479): the edit wizard always ended in Save Changes,
+  // and the dashboard sends drafts straight to it, so a draft saved earlier had
+  // no way to be published.
+  it("ends in Publish rather than Save Changes", async () => {
+    renderEditWizard("draft");
+
+    expect(
+      await screen.findByRole("button", { name: /^publish$/i }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /save changes/i })).toBeNull();
+    // The draft can still be saved without publishing.
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeTruthy();
+  });
+
+  it("saves the edits, then publishes, then returns to the tournament", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: TOUR_ID } }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, { data: { id: TOUR_ID, status: "published" } }),
+      );
+
+    renderEditWizard("draft");
+    fireEvent.click(await screen.findByRole("button", { name: /^publish$/i }));
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(
+        `/my/organizations/${ORG_ID}/tournaments/${TOUR_ID}`,
+      ),
+    );
+
+    const base = `/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}`;
+    expect(mockFetch.mock.calls[0][0]).toBe(base);
+    expect(mockFetch.mock.calls[0][1].method).toBe("PATCH");
+    expect(mockFetch.mock.calls[1][0]).toBe(`${base}/publish`);
+    expect(mockFetch.mock.calls[1][1].method).toBe("POST");
+  });
+
+  it("shows the publish validator's reasons and stays put when refused", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: TOUR_ID } }))
+      .mockResolvedValueOnce(
+        jsonResponse(422, {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Start date must be a future date",
+            details: [
+              "Start date must be a future date",
+              "Registration deadline must be a future date",
+            ],
+          },
+        }),
+      );
+
+    renderEditWizard("draft");
+    fireEvent.click(await screen.findByRole("button", { name: /^publish$/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Start date must be a future date · Registration deadline must be a future date",
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("WizardShell — editing a published tournament", () => {
+  // A published tournament has no draft: the secondary button saves straight
+  // to the live tournament, so "Save Draft" misdescribed what it did.
+  it("labels the save button Save Changes on earlier steps", async () => {
+    renderEditWizard("published", 0);
+
+    expect(
+      await screen.findByRole("button", { name: /save changes/i }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /save draft/i })).toBeNull();
+  });
+
+  it("shows a single Save Changes button on the last step", async () => {
+    renderEditWizard("published");
+
+    await screen.findByRole("button", { name: /save changes/i });
+    expect(
+      screen.getAllByRole("button", { name: /save changes/i }),
+    ).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /save draft/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^publish$/i })).toBeNull();
   });
 });

@@ -28,6 +28,12 @@ interface WizardShellProps {
   title?: string;
   redirectPath?: string;
   mode?: "create" | "edit";
+  /**
+   * The stored status of the tournament being edited. Only meaningful in edit
+   * mode: a draft opened for editing still has to be publishable, while a live
+   * tournament can only have its changes saved.
+   */
+  status?: string;
 }
 
 export default function WizardShell({
@@ -36,6 +42,7 @@ export default function WizardShell({
   title = "Create Tournament",
   redirectPath,
   mode = "create",
+  status,
 }: WizardShellProps) {
   const router = useRouter();
   const {
@@ -58,6 +65,11 @@ export default function WizardShell({
   const [formError, setFormError] = useState<string | null>(null);
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
+  // Editing a draft is how an organizer gets back to one they saved earlier, so
+  // it has to end in Publish just like creating does — otherwise a saved draft
+  // can never go live. Only a tournament that is already published ends in
+  // Save Changes.
+  const canPublish = mode === "create" || status === "draft";
 
   const StepContent = STEP_COMPONENTS[currentStepIndex];
 
@@ -324,16 +336,26 @@ export default function WizardShell({
           </button>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={handleSaveDraft}
-              disabled={isSaving}
-            >
-              {isSaving ? "Saving…" : "Save Draft"}
-            </button>
+            {/* A published tournament has no draft to save to: this button
+                writes straight to the live tournament, so it says so. On the
+                last step the primary button already reads Save Changes, and a
+                second identical button would only be noise. */}
+            {!(isLastStep && !canPublish) && (
+              <button
+                type="button"
+                className="font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+              >
+                {isSaving
+                  ? "Saving…"
+                  : canPublish
+                    ? "Save Draft"
+                    : "Save Changes"}
+              </button>
+            )}
 
-            {isLastStep && mode === "edit" ? (
+            {isLastStep && !canPublish ? (
               <button
                 type="button"
                 className="font-cinzel text-bg-base cursor-pointer rounded-md border-0 px-5 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"

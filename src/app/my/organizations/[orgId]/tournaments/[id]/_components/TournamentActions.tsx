@@ -19,12 +19,150 @@ interface Props {
   cancellationPending: boolean;
 }
 
-// These actions only make sense for a live, published tournament. Guard here,
-// before any hooks mount, so drafts/cancelled tournaments render nothing (and
-// static renders without a router context don't invoke the router hook).
+// Which actions apply depends on the stored status. Guard here, before any
+// hooks mount, so cancelled tournaments render nothing (and static renders
+// without a router context don't invoke the router hook).
 export default function TournamentActions(props: Props) {
+  if (props.status === "draft") return <DraftActions {...props} />;
   if (props.status !== "published") return null;
   return <PublishedActions {...props} />;
+}
+
+/**
+ * The readable reasons behind a failed response. The publish route answers a
+ * not-ready draft with `{ error: { message, details } }`, where `details` lists
+ * every missing field — worth showing whole so the organizer can fix them all
+ * in one pass through the edit wizard.
+ */
+async function errorLinesFrom(res: Response, fallback: string) {
+  try {
+    const json = (await res.json()) as {
+      error?: { message?: string; details?: string[] };
+    };
+    const details = json.error?.details;
+    if (details && details.length > 0) return details;
+    return [json.error?.message ?? fallback];
+  } catch {
+    return [fallback];
+  }
+}
+
+// A draft is invisible to players until it is published. Publishing from here
+// saves the organizer a trip through the wizard when the draft is already
+// complete; when it isn't, the publish route's validation says what's missing.
+function DraftActions({ orgId, tournamentId }: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [confirmPublish, setConfirmPublish] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  // Only a 422 means the draft itself is incomplete; a 403 (role, unapproved
+  // org) or 409 is not something the edit wizard can fix.
+  const [incomplete, setIncomplete] = useState(false);
+
+  function publish() {
+    setErrors([]);
+    startTransition(async () => {
+      const res = await fetch(
+        `/api/v1/organizations/${orgId}/tournaments/${tournamentId}/publish`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        setIncomplete(res.status === 422);
+        setErrors(await errorLinesFrom(res, "Failed to publish tournament."));
+        setConfirmPublish(false);
+        return;
+      }
+      setConfirmPublish(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="mt-10">
+      <h2 className="font-cinzel text-text-primary mb-3 text-base font-bold tracking-wide">
+        Tournament Actions
+      </h2>
+
+      <div className="border-border flex flex-col gap-4 rounded-lg border px-5 py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-md">
+            <h3 className="font-lato text-text-primary text-sm font-semibold">
+              Publish this tournament
+            </h3>
+            <p className="font-lato text-text-muted mt-1 text-sm">
+              This tournament is a draft and is not visible to players.
+              Publishing lists it publicly and opens registration.
+            </p>
+          </div>
+
+          {!confirmPublish && (
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmPublish(true);
+                setErrors([]);
+              }}
+              disabled={isPending}
+              className="font-cinzel text-bg-base shrink-0 cursor-pointer rounded-md border-0 px-5 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--color-gold-bright), var(--color-gold-deep))",
+              }}
+            >
+              Publish
+            </button>
+          )}
+        </div>
+
+        {confirmPublish && (
+          <div className="bg-warning/10 border-warning/20 rounded-lg border p-4">
+            <p className="font-lato text-text-primary text-sm">
+              Publish now? Players will be able to find and register for this
+              tournament, and <strong>it cannot be returned to a draft</strong>.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmPublish(false)}
+                disabled={isPending}
+                className="font-lato bg-bg-raised border-border text-text-primary hover:border-gold-dim rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                Not Yet
+              </button>
+              <button
+                type="button"
+                onClick={publish}
+                disabled={isPending}
+                className="font-lato bg-success/15 text-success border-success/30 hover:bg-success/25 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {isPending ? "Publishing…" : "Yes, Publish"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {errors.length > 0 && (
+          <div role="alert" className="font-lato text-danger text-xs">
+            <p className="font-semibold">
+              {incomplete
+                ? "This draft isn’t ready to publish yet:"
+                : "Couldn’t publish this tournament:"}
+            </p>
+            <ul className="mt-1 list-disc pl-5">
+              {errors.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
+            {incomplete && (
+              <p className="text-text-muted mt-2">
+                Use Edit Tournament to fill in what&rsquo;s missing.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function PublishedActions({
