@@ -397,7 +397,7 @@ describe("sending", () => {
     expect(mockCreate).toHaveBeenCalledWith({
       bank_account_id: 42,
       amountCents: 10000,
-      description: "MY Chess Tour payout - KL Open",
+      description: "MY Chess Tour - KL Open",
       email: "org@x.test",
       reference: ID,
       send_recipient_receipt: true,
@@ -415,7 +415,15 @@ describe("sending", () => {
     await executePayout(ID);
     const description = mockCreate.mock.calls[0][0].description as string;
     expect(description).toMatch(/^[A-Za-z0-9 ._\-/@()]+$/);
-    expect(description).toBe("MY Chess Tour payout - Penangs Rapid Blitz Kejohanan 3 Cafe");
+    expect(description).toBe("MY Chess Tour - Penangs Rapid Blitz Kejohanan 3 Cafe");
+  });
+
+  it("still says what the transfer is when the tournament has no name", async () => {
+    givenPayout({ tournament: null });
+    await executePayout(ID);
+    expect(mockCreate.mock.calls[0][0].description).toBe(
+      "MY Chess Tour - tournament payout",
+    );
   });
 
   it("marks it processing and waits for the webhook", async () => {
