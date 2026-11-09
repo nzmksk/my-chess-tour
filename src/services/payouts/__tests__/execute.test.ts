@@ -88,6 +88,7 @@ function payout(overrides: Record<string, unknown> = {}) {
   return {
     id: ID,
     tournament_id: "t-1",
+    recipient_organization_id: "org-1",
     amount_cents: 10000,
     approval: "approved",
     status: "pending",
@@ -106,13 +107,20 @@ function givenPayout(overrides: Record<string, unknown> = {}) {
 
 function givenRpc({
   blocked = null,
+  problem = null,
   available = 10000,
-}: { blocked?: string | null; available?: number } = {}) {
+}: {
+  blocked?: string | null;
+  problem?: string | null;
+  available?: number;
+} = {}) {
   mockRpc.mockImplementation((name: string) =>
     Promise.resolve(
       name === "tournament_payout_block_reason"
         ? { data: blocked, error: null }
-        : { data: available, error: null },
+        : name === "payout_recipient_problem"
+          ? { data: problem, error: null }
+          : { data: available, error: null },
     ),
   );
 }
@@ -201,6 +209,46 @@ describe("blocks", () => {
       expect(mockCreate).not.toHaveBeenCalled();
     },
   );
+
+  // The bug this covers: queue_payout vets the recipient once, at queue time, so a
+  // payout parked on budget would still reach CHIP after the organization was
+  // unapproved or a new Organizer Agreement went unaccepted.
+  it.each(["organization_not_approved", "entity_type_missing", "agreement_not_current"])(
+    "holds, without failing, when the recipient has lapsed: %s",
+    async (problem) => {
+      givenPayout();
+      givenRpc({ problem });
+      expect(await executePayout(ID)).toBe("blocked");
+      expect(mockRpc).toHaveBeenCalledWith("payout_recipient_problem", {
+        p_org_id: "org-1",
+      });
+      expect(mockSettle).not.toHaveBeenCalled();
+      expect(mockCreate).not.toHaveBeenCalled();
+    },
+  );
+
+  it("leaves a lapsed bank account to the snapshotted-account check", async () => {
+    givenPayout({ bank: { is_active: false, status: "verified", chip_bank_account_id: 42 } });
+    givenRpc({ problem: "bank_account_not_verified" });
+    expect(await executePayout(ID)).toBe("failed");
+    expect(mockSettle).toHaveBeenCalledWith(
+      expect.objectContaining({ failureReason: "bank_account_not_verified" }),
+    );
+  });
+
+  it("reports a failed recipient check as an error, without sending", async () => {
+    givenPayout();
+    mockRpc.mockImplementation((name: string) =>
+      Promise.resolve(
+        name === "payout_recipient_problem"
+          ? { data: null, error: { message: "db down" } }
+          : { data: name === "tournament_payout_block_reason" ? null : 10000, error: null },
+      ),
+    );
+    expect(await executePayout(ID)).toBe("error");
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockSettle).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["superseded", { is_active: false, status: "verified", chip_bank_account_id: 42 }],

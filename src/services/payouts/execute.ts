@@ -26,7 +26,8 @@ import { settlePayout } from "./settle";
  *   paid             CHIP completed it synchronously; settled.
  *   failed           terminal; a retry is a new row.
  *   awaiting_budget  not enough Send balance; left `pending`, budget requested.
- *   blocked          a cancellation or refund is in the way; left `pending`.
+ *   blocked          a cancellation or refund is in the way, or the recipient
+ *                    has lapsed (unapproved, outdated agreement); left `pending`.
  *   skipped          nothing to do: settled, unapproved, in flight or missing.
  *   error            a transient failure; left `pending`, safe to re-run.
  */
@@ -42,6 +43,7 @@ export type ExecutePayoutResult =
 interface PayoutRow {
   id: string;
   tournament_id: string;
+  recipient_organization_id: string;
   amount_cents: number;
   approval: string;
   status: string;
@@ -203,7 +205,7 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
   const { data, error } = await supabaseAdmin
     .from("payouts")
     .select(
-      `id, tournament_id, amount_cents, approval, status, processed_at, chip_send_limit_id,
+      `id, tournament_id, recipient_organization_id, amount_cents, approval, status, processed_at, chip_send_limit_id,
        tournament:tournaments(name),
        recipient:organizations!recipient_organization_id(email),
        bank:organization_bank_accounts!bank_account_id(is_active, status, chip_bank_account_id)`,
@@ -251,6 +253,30 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
   }
   if (blocked) {
     console.info(`Payout ${payoutId}: blocked (${String(blocked)}); left pending`);
+    return "blocked";
+  }
+
+  // queue_payout vetted the recipient, but that was before any wait for budget, and
+  // an organization can be unapproved or fall behind on the Organizer Agreement in
+  // the meantime. Those can be put right, and the dashboard already says what is
+  // wrong, so the row waits with its money reserved rather than failing. The bank
+  // account is left to the check below: that one is about the account this row
+  // snapshotted, not whichever is current.
+  const { data: problem, error: problemError } = await supabaseAdmin.rpc(
+    "payout_recipient_problem",
+    { p_org_id: payout.recipient_organization_id },
+  );
+  if (problemError) {
+    console.error(
+      `Payout ${payoutId}: failed to check the recipient`,
+      describeDbError(problemError),
+    );
+    return "error";
+  }
+  if (problem && problem !== "bank_account_not_verified") {
+    console.info(
+      `Payout ${payoutId}: recipient ${payout.recipient_organization_id} cannot be paid (${String(problem)}); left pending`,
+    );
     return "blocked";
   }
 
