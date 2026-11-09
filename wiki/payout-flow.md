@@ -19,7 +19,7 @@ The view only subtracts **paid** payouts. How much may leave right now is `avail
 
 ## The flow
 
-1. **Queue.** `queue_payout` locks the tournament, refuses if anything is in the way (below), resolves the recipient and its verified bank account, clamps the amount to what is available, and inserts the row. A live automatic payout already there means it returns NULL. This row is what reserves the money.
+1. **Queue.** `queue_payout` locks the tournament, refuses if anything is in the way (below), checks the requested amount against what is available, resolves the recipient and its verified bank account, and inserts the row. An omitted amount means everything available; an explicit one above that is refused, not reduced. A live automatic payout already there means it returns NULL. This row is what reserves the money.
 2. **Send.** `executePayout` (`src/services/payouts/execute.ts`) re-checks blocks and the bank account, re-clamps the amount, and creates the send instruction with `reference` = the payout id. It never throws: anything transient leaves the row `pending` and safe to re-run.
 3. **Settle.** `settle_payout` books one `type='organizer_payout'` row in `payments`, which drains `net_payout_cents`, and sends the "payout processed" email. It is reached from the synchronous response or the webhook (`webhooks/chip/send`), whichever comes first. The other is a no-op on `processed_at`.
 
@@ -31,6 +31,7 @@ What can stop a payout:
 | Cancellation pending, or a refund not yet settled | queue, send | Refused at queue. Held `pending` at send. |
 | Recipient not approved, no entity type, stale agreement, bank account not verified | queue, nominate, accept | Refused. |
 | Bank account replaced since queueing | send | Terminal. The retry uses the new account. |
+| Requested amount above what is available | queue | Refused, before the recipient is checked. |
 | Less than `MIN_PAYOUT_CENTS` available | queue, send | Refused at queue. Terminal at send. |
 | CHIP Send balance below payout + fee | send | Budget requested, held `pending`. |
 

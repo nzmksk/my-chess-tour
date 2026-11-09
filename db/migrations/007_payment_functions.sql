@@ -644,7 +644,7 @@ $$;
 --
 -- Takes a tournament-row lock so concurrent callers serialize, resolves the
 -- recipient (the ACCEPTED beneficiary, else the organizing org), refuses anything
--- blocked or ineligible, and clamps the amount to what is available. A NULL
+-- blocked or ineligible, and refuses an amount above what is available. A NULL
 -- p_amount_cents means all of it. Returns the new id, or NULL when a live automatic
 -- payout already exists, so a re-run of the sweep is a no-op rather than an error.
 --
@@ -716,6 +716,26 @@ BEGIN
     ELSE v_tournament.organization_id
   END;
 
+  -- The amount is the admin's input, so it is checked before the recipient: a
+  -- typo'd amount should be reported as that, not as some other problem. An
+  -- omitted amount means everything available; an explicit one above that is a
+  -- mistake, and is refused rather than quietly reduced.
+  v_available := available_payout_cents(p_tournament_id);
+
+  IF p_amount_cents > v_available THEN
+    RAISE EXCEPTION 'PAYOUT_EXCEEDS_AVAILABLE: % cents requested, % cents is available',
+      p_amount_cents, v_available
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  v_amount := COALESCE(p_amount_cents, v_available);
+
+  IF v_amount < c_min_payout_cents THEN
+    RAISE EXCEPTION 'PAYOUT_BELOW_MINIMUM: % cents is payable, the minimum is %',
+      v_amount, c_min_payout_cents
+      USING ERRCODE = 'P0001';
+  END IF;
+
   v_problem := payout_recipient_problem(v_recipient);
   IF v_problem IS NOT NULL THEN
     RAISE EXCEPTION 'PAYOUT_RECIPIENT_INELIGIBLE: %', v_problem USING ERRCODE = 'P0001';
@@ -724,15 +744,6 @@ BEGIN
   SELECT b.id INTO v_bank_id
     FROM organization_bank_accounts b
     WHERE b.organization_id = v_recipient AND b.is_active AND b.status = 'verified';
-
-  v_available := available_payout_cents(p_tournament_id);
-  v_amount    := LEAST(COALESCE(p_amount_cents, v_available), v_available);
-
-  IF v_amount < c_min_payout_cents THEN
-    RAISE EXCEPTION 'PAYOUT_BELOW_MINIMUM: % cents is payable, the minimum is %',
-      v_amount, c_min_payout_cents
-      USING ERRCODE = 'P0001';
-  END IF;
 
   INSERT INTO payouts (
     tournament_id, organization_id, recipient_organization_id, bank_account_id,

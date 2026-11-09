@@ -282,14 +282,22 @@ BEGIN
   END IF;
   RAISE NOTICE '9b PASS — unaccepted nomination redirects nothing';
 
-  -- ===== Q: queue_payout's refusals and clamp ================================
+  -- ===== Q: queue_payout's refusals ==========================================
   INSERT INTO users (email, first_name, last_name) VALUES ('po-pq@test.local', 'V', 'T') RETURNING id INTO v_player2;
   v_t := pg_temp.paid_tournament(v_org, v_player2);
 
-  -- Clamped to what is available, never above it.
-  v_id := queue_payout(v_t, 'automatic', 999999, v_org_owner);
+  -- An explicit amount above what is available is refused, not reduced (#560).
+  BEGIN
+    PERFORM queue_payout(v_t, 'automatic', 10001, v_org_owner);
+    RAISE EXCEPTION 'Q FAIL: payout above the available balance queued';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'PAYOUT_EXCEEDS_AVAILABLE: 10001 cents requested, 10000 cents is available%' THEN RAISE; END IF;
+  END;
+
+  -- Exactly what is available is fine.
+  v_id := queue_payout(v_t, 'automatic', 10000, v_org_owner);
   IF (SELECT amount_cents FROM payouts WHERE id = v_id) <> 10000 THEN
-    RAISE EXCEPTION 'Q FAIL: amount not clamped to available';
+    RAISE EXCEPTION 'Q FAIL: the full available amount was not queued as asked';
   END IF;
   DELETE FROM payouts WHERE id = v_id;
 
@@ -313,6 +321,13 @@ BEGIN
     RAISE EXCEPTION 'Q FAIL: payout queued to an unverified bank account';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM NOT LIKE 'PAYOUT_RECIPIENT_INELIGIBLE: bank_account_not_verified%' THEN RAISE; END IF;
+  END;
+  -- A bad amount is the admin's own mistake, so it is reported before the recipient's.
+  BEGIN
+    PERFORM queue_payout(v_t, 'automatic', 10001, v_org_owner);
+    RAISE EXCEPTION 'Q FAIL: payout above the available balance queued';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'PAYOUT_EXCEEDS_AVAILABLE%' THEN RAISE; END IF;
   END;
   UPDATE organization_bank_accounts SET status = 'verified', verified_at = now() WHERE organization_id = v_org;
 
@@ -353,7 +368,7 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM NOT LIKE 'PAYOUT_BLOCKED: tournament_cancelled%' THEN RAISE; END IF;
   END;
-  RAISE NOTICE 'Q PASS — clamp and every queue_payout refusal hold';
+  RAISE NOTICE 'Q PASS — every queue_payout refusal holds';
 
   -- ===== R: the read helpers ================================================
   -- Overview: an organizer sees its own; a beneficiary sees only what it accepted.
