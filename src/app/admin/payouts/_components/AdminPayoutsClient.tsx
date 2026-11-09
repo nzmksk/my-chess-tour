@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatCalendarDate } from "@/lib/datetime";
+import { MIN_PAYOUT_CENTS } from "@/services/payouts/constants";
 import type {
   AdminPayout,
   AdminPayoutCandidate,
@@ -69,8 +70,18 @@ function CandidateCard({ candidate }: { candidate: AdminPayoutCandidate }) {
 
   const trimmed = amount.trim();
   const cents = trimmed === "" ? null : Math.round(Number(trimmed) * 100);
-  const amountInvalid =
-    cents !== null && (!Number.isSafeInteger(cents) || cents <= 0);
+  // Caught here so a mistyped amount never reaches the server. queue_payout
+  // refuses the same amounts, so this is a convenience, not the guard.
+  let amountError: string | null = null;
+  if (cents !== null) {
+    if (!Number.isSafeInteger(cents) || cents <= 0) {
+      amountError = "Enter an amount in ringgit, e.g. 50.00.";
+    } else if (cents > candidate.available_cents) {
+      amountError = `That is more than the ${formatCents(candidate.available_cents)} available to pay out.`;
+    } else if (cents < MIN_PAYOUT_CENTS) {
+      amountError = `The minimum payout is ${formatCents(MIN_PAYOUT_CENTS)}.`;
+    }
+  }
   const payingCents = cents ?? candidate.available_cents;
 
   function pay() {
@@ -160,27 +171,44 @@ function CandidateCard({ candidate }: { candidate: AdminPayoutCandidate }) {
             <input
               id={`amount-${candidate.tournament_id}`}
               type="number"
-              min="10"
+              min={MIN_PAYOUT_CENTS / 100}
+              max={candidate.available_cents / 100}
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="Full amount"
+              aria-invalid={amountError !== null}
+              aria-describedby={
+                amountError
+                  ? `amount-error-${candidate.tournament_id}`
+                  : undefined
+              }
               className="font-lato bg-bg-base border-border text-text-primary placeholder:text-text-muted focus:border-gold-bright w-36 rounded-lg border px-3 py-2 text-sm focus:outline-none"
             />
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              disabled={amountInvalid}
+              disabled={amountError !== null}
               className="btn-primary rounded-md disabled:opacity-50"
             >
               Pay Out
             </button>
           </div>
-          {cents !== null && (
-            <p className="font-lato text-warning text-right text-xs">
-              A tournament gets one automatic payout, so paying part of it leaves
-              the rest with no way to be paid.
+          {amountError ? (
+            <p
+              id={`amount-error-${candidate.tournament_id}`}
+              role="alert"
+              className="font-lato text-danger text-right text-xs"
+            >
+              {amountError}
             </p>
+          ) : (
+            cents !== null && (
+              <p className="font-lato text-warning text-right text-xs">
+                A tournament gets one automatic payout, so paying part of it
+                leaves the rest with no way to be paid.
+              </p>
+            )
           )}
         </div>
       )}

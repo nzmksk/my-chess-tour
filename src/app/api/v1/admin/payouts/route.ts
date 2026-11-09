@@ -57,6 +57,12 @@ export async function GET(): Promise<NextResponse> {
   return NextResponse.json({ data }, { status: 200 });
 }
 
+const ringgit = (cents: string) =>
+  `RM ${(Number(cents) / 100).toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 // queue_payout raises "SENTINEL: detail". The detail may be a code, so turn the
 // known ones into something an admin can act on.
 function queueErrorMessage(message: string): string {
@@ -69,6 +75,12 @@ function queueErrorMessage(message: string): string {
       return describeRecipientProblem(detail);
     case "PAYOUT_BELOW_MINIMUM":
       return `Below the minimum payout: ${detail}.`;
+    case "PAYOUT_EXCEEDS_AVAILABLE": {
+      const match = detail.match(/^(\d+) cents requested, (-?\d+) cents is available$/);
+      return match
+        ? `${ringgit(match[1])} is more than the ${ringgit(match[2])} available to pay out.`
+        : `More than is available to pay out: ${detail}.`;
+    }
     default:
       return message;
   }
