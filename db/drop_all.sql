@@ -40,10 +40,25 @@ DROP POLICY IF EXISTS "Org documents readable by uploader or admin" ON storage.o
 -- and KYB documents are scanned identity documents, so leaving them in a "full
 -- teardown" is the wrong default. Objects first: they FK to buckets. 005
 -- recreates the buckets (ON CONFLICT DO NOTHING), so this is safe to re-apply.
+--
+-- Supabase guards both tables with statement triggers (protect_objects_delete /
+-- protect_buckets_delete → storage.protect_delete()) that reject any direct
+-- DELETE unless storage.allow_delete_query = 'true'. That setting is the guard's
+-- own opt-in, so it is turned on for exactly these two statements and reset
+-- straight after. SET/RESET rather than SET LOCAL so it works whether or not the
+-- SQL editor wraps the script in a transaction.
+--
+-- NOTE: this removes the storage METADATA rows only. The files themselves live
+-- in Supabase's object store and are not deleted by SQL — that is what the
+-- guard is warning about. They become unreachable (no row, no bucket), but to
+-- actually erase them — the OKU and KYB scans especially — empty the three
+-- buckets from the dashboard or the Storage API BEFORE running this script.
+SET storage.allow_delete_query = 'true';
 DELETE FROM storage.objects
   WHERE bucket_id IN ('avatars', 'oku-documents', 'organization-documents');
 DELETE FROM storage.buckets
   WHERE id        IN ('avatars', 'oku-documents', 'organization-documents');
+RESET storage.allow_delete_query;
 
 -- -----------------------------------------------------------------------------
 -- 2. Auth trigger this app adds to auth.users (migration 003)
