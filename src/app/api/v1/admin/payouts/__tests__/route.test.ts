@@ -178,6 +178,10 @@ describe("POST", () => {
     ["PAYOUT_BLOCKED: refund_pending", /refund has not settled/i],
     ["PAYOUT_RECIPIENT_INELIGIBLE: agreement_not_current", /Organizer Agreement/],
     ["PAYOUT_BELOW_MINIMUM: 500 cents is payable, the minimum is 1000", /minimum payout/i],
+    [
+      "PAYOUT_EXCEEDS_AVAILABLE: 10000 cents requested, 6400 cents is available",
+      /^RM 100\.00 is more than the RM 64\.00 available to pay out\.$/,
+    ],
   ])("409s on %s, in words", async (message, expected) => {
     mockRpc.mockResolvedValue({ data: null, error: { code: "P0001", message } });
     const res = await POST(post({ tournament_id: TOURNAMENT_ID }));
