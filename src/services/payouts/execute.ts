@@ -9,7 +9,7 @@ import {
   increaseChipSendLimit,
   toChipSendDescription,
 } from "@/services/chip/send";
-import { MIN_PAYOUT_CENTS } from "./constants";
+import { CHIP_SEND_FEE_CENTS, MIN_PAYOUT_CENTS } from "./constants";
 import { settlePayout } from "./settle";
 
 // Sends one queued payout through CHIP Send. Shared by the admin trigger, the
@@ -156,8 +156,11 @@ async function awaitBudget(
     }
   }
 
+  // CHIP takes its fee from the same balance, so budget for the payout alone would
+  // still leave it short.
+  const requestCents = amountCents + CHIP_SEND_FEE_CENTS;
   try {
-    const limit = await increaseChipSendLimit(amountCents);
+    const limit = await increaseChipSendLimit(requestCents);
     const { error } = await supabaseAdmin
       .from("payouts")
       .update({ chip_send_limit_id: limit.id })
@@ -170,7 +173,7 @@ async function awaitBudget(
       );
     }
     console.warn(
-      `Payout ${payout.id}: requested send limit ${limit.id} for ${amountCents} cents; left pending until it is approved`,
+      `Payout ${payout.id}: requested send limit ${limit.id} for ${requestCents} cents (${amountCents} payout + ${CHIP_SEND_FEE_CENTS} fee); left pending until it is approved`,
     );
   } catch (err) {
     console.error(

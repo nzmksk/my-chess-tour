@@ -321,7 +321,7 @@ describe("awaiting budget", () => {
     givenPayout();
     mockAccounts.mockResolvedValue(balance(99.99));
     expect(await executePayout(ID)).toBe("awaiting_budget");
-    expect(mockIncrease).toHaveBeenCalledWith(10000);
+    expect(mockIncrease).toHaveBeenCalledWith(10100);
     expect(updates).toContainEqual({ chip_send_limit_id: 77 });
     expect(mockCreate).not.toHaveBeenCalled();
     expect(mockSettle).not.toHaveBeenCalled();
@@ -381,7 +381,7 @@ describe("awaiting budget", () => {
     givenPayout();
     mockCreate.mockRejectedValue(err);
     expect(await executePayout(ID)).toBe("awaiting_budget");
-    expect(mockIncrease).toHaveBeenCalledWith(10000);
+    expect(mockIncrease).toHaveBeenCalledWith(10100);
     expect(mockSettle).not.toHaveBeenCalled();
   });
 });
@@ -563,7 +563,9 @@ describe("logging", () => {
     mockAccounts.mockResolvedValue(balance(50));
     await executePayout(ID);
     expect(logged("warn")).toContain("balance 5000 cents is below the 10000 cents payout");
-    expect(logged("warn")).toContain("requested send limit 77");
+    expect(logged("warn")).toContain(
+      "requested send limit 77 for 10100 cents (10000 payout + 100 fee)",
+    );
   });
 
   it("logs a payout still waiting on an earlier budget request", async () => {
