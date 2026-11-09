@@ -4,8 +4,8 @@
 --
 -- Scope: drops everything this app owns in `public`, the avatars,
 -- oku-documents and organization-documents storage buckets and their policies,
--- the auth trigger this app adds to auth.users, and the seed
--- accounts. It does NOT touch Supabase-managed schemas (auth/storage) beyond
+-- the auth trigger this app adds to auth.users, and every auth account. It
+-- does NOT otherwise touch Supabase-managed schemas (auth/storage) beyond
 -- those app-owned objects, and does NOT drop the `public` schema itself (so
 -- role grants / extensions stay intact).
 --
@@ -120,12 +120,17 @@ DROP TYPE IF EXISTS public.payout_kind          CASCADE;
 DROP TYPE IF EXISTS public.payout_status        CASCADE;
 
 -- -----------------------------------------------------------------------------
--- 7. Seed accounts (migration 006). Deleting from auth.users cascades to
---    auth.identities. Scoped to seed/admin emails only.
+-- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
+--
+--    ALL of them, not just the seed accounts (migration 006). public.users is
+--    dropped above, and on_auth_user_created only fires on INSERT, so any
+--    account left here comes back from 001 → 007 with no users record linked
+--    to it. Such an account can still sign in but has no profile, and is
+--    invisible to every lookup keyed on public.users — e.g. inviting it to an
+--    organization fails with "already been registered" (#565). A teardown that
+--    keeps some accounts therefore leaves them broken, not preserved.
 -- -----------------------------------------------------------------------------
-DELETE FROM auth.users
-WHERE email LIKE '%@mct.com'
-   OR email = 'review@chip.com';
+DELETE FROM auth.users;
 
 -- -----------------------------------------------------------------------------
 -- Verification (all should return 0)
@@ -156,9 +161,8 @@ SELECT 'public_functions' AS check, count(*)
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public';
 
-SELECT 'seed_auth_users' AS check, count(*)
-FROM auth.users
-WHERE email LIKE '%@mct.com' OR email = 'review@chip.com';
+SELECT 'auth_users' AS check, count(*)
+FROM auth.users;
 
 SELECT 'app_buckets' AS check, count(*)
 FROM storage.buckets
