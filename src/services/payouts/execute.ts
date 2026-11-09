@@ -359,10 +359,12 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     return "error";
   }
   // current_balance is a JSON number in ringgit.
+  // The fee comes out of the same balance, so it has to cover both.
   const balanceCents = Math.round(account.current_balance * 100);
-  if (balanceCents < amountCents) {
+  const neededCents = amountCents + CHIP_SEND_FEE_CENTS;
+  if (balanceCents < neededCents) {
     console.warn(
-      `Payout ${payoutId}: CHIP Send balance ${balanceCents} cents is below the ${amountCents} cents payout`,
+      `Payout ${payoutId}: CHIP Send balance ${balanceCents} cents is below the ${amountCents} cents payout plus ${CHIP_SEND_FEE_CENTS} cents fee`,
     );
     return awaitBudget(payout, amountCents);
   }

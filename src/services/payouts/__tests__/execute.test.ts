@@ -327,9 +327,17 @@ describe("awaiting budget", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 
-  it("sends when the balance exactly covers it", async () => {
+  it("requests budget when the balance covers the payout but not the fee", async () => {
     givenPayout();
-    mockAccounts.mockResolvedValue(balance(100));
+    mockAccounts.mockResolvedValue(balance(100.99));
+    expect(await executePayout(ID)).toBe("awaiting_budget");
+    expect(mockIncrease).toHaveBeenCalledWith(10100);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("sends when the balance exactly covers the payout and the fee", async () => {
+    givenPayout();
+    mockAccounts.mockResolvedValue(balance(101));
     expect(await executePayout(ID)).toBe("sent");
   });
 
@@ -562,7 +570,9 @@ describe("logging", () => {
     givenPayout();
     mockAccounts.mockResolvedValue(balance(50));
     await executePayout(ID);
-    expect(logged("warn")).toContain("balance 5000 cents is below the 10000 cents payout");
+    expect(logged("warn")).toContain(
+      "balance 5000 cents is below the 10000 cents payout plus 100 cents fee",
+    );
     expect(logged("warn")).toContain(
       "requested send limit 77 for 10100 cents (10000 payout + 100 fee)",
     );
