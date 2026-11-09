@@ -32,7 +32,7 @@ What can stop a payout:
 | Recipient not approved, no entity type, stale agreement, bank account not verified | queue, nominate, accept | Refused. |
 | Bank account replaced since queueing | send | Terminal. The retry uses the new account. |
 | Less than `MIN_PAYOUT_CENTS` available | queue, send | Refused at queue. Terminal at send. |
-| CHIP Send balance too low | send | Budget requested, held `pending`. |
+| CHIP Send balance below payout + fee | send | Budget requested, held `pending`. |
 
 ## Deliberate differences from refunds
 
@@ -45,6 +45,7 @@ What can stop a payout:
 
 - **Insufficient balance is a 400 in practice, not the documented 403.** The sandbox answers create-send-instruction with `400 {"message":"Balance not enough. Please increase your Send Limit"}`. `ChipSendError.insufficientBalance` covers both.
 - 401, 408, 429 and 5xx stay retryable. Other 4xx are terminal.
+- **Each successful transfer costs RM1 (`CHIP_SEND_FEE_CENTS`), taken from the Send balance.** The pre-send balance check and the budget request both use payout + fee, or an approved allocation would still leave the payout short.
 - A budget request emails every approver, so a re-run won't send another while one is pending. An expired one is replaced.
 - **The webhook delivery body is undocumented.** The handler assumes the fields of the `SendInstruction` resource, at the top level or under `data`, and falls back to the recorded amount. Check this against a real delivery.
 
