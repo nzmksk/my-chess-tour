@@ -4,6 +4,7 @@ import NavBar from "@/components/NavBar";
 import { selfApiFetch } from "@/lib/self-fetch";
 import { getAuthClaims } from "@/services/supabase/permission";
 import DashboardClient from "./_components/DashboardClient";
+import type { PendingNomination } from "./_components/PendingNominations";
 
 export const metadata: Metadata = {
   title: "Organizer Dashboard",
@@ -53,6 +54,19 @@ async function fetchDashboard(orgId: string): Promise<DashboardData | null> {
   }
 }
 
+// Best-effort, and gated on payout.request: anyone who can't accept a nomination
+// gets a 403 here, which simply means no panel.
+async function fetchPendingNominations(orgId: string): Promise<PendingNomination[]> {
+  try {
+    const res = await selfApiFetch(`/api/v1/organizations/${orgId}/nominations`);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export default async function OrganizerDashboardPage({
   params,
 }: {
@@ -66,7 +80,10 @@ export default async function OrganizerDashboardPage({
     redirect("/auth/login");
   }
 
-  const data = await fetchDashboard(orgId);
+  const [data, pendingNominations] = await Promise.all([
+    fetchDashboard(orgId),
+    fetchPendingNominations(orgId),
+  ]);
 
   if (!data) {
     notFound();
@@ -75,7 +92,7 @@ export default async function OrganizerDashboardPage({
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <DashboardClient data={data} />
+      <DashboardClient data={data} pendingNominations={pendingNominations} />
     </div>
   );
 }

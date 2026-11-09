@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { selfApiFetch } from "@/lib/self-fetch";
-import { getAuthClaims } from "@/services/supabase/permission";
+import { getAuthClaims, hasOrgPermission } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "./_components/TournamentWizardContext";
 import WizardShell from "./_components/WizardShell";
 
@@ -39,7 +39,10 @@ export default async function CreateTournamentPage({
     redirect("/auth/login");
   }
 
-  const data = await fetchOrg(orgId);
+  const [data, canNominate] = await Promise.all([
+    fetchOrg(orgId),
+    hasOrgPermission(claims.id, orgId, "payout.request"),
+  ]);
 
   if (!data) {
     notFound();
@@ -50,7 +53,7 @@ export default async function CreateTournamentPage({
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
-      <TournamentWizardProvider orgId={orgId}>
+      <TournamentWizardProvider orgId={orgId} canNominate={canNominate}>
         <WizardShell orgId={orgId} orgName={orgName} />
       </TournamentWizardProvider>
     </div>

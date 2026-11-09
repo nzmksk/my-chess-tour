@@ -93,7 +93,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Production error monitoring / alerting | S6 | ❌ | 🔴 | Add Sentry (or similar) + an uptime monitor before taking real money. |
 | Audit-log PII redaction + privacy-policy alignment | S3, P5 | ❌ | 🔴 | None — redaction can't be applied retroactively, and every day of traffic writes more (#503). |
 | Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | Code landed (#501); migration `009` still needs applying (#161). Follow-on #513. |
-| Organizer payout disbursement | O9, P7 | ⚠️ view only | 🔴 | Manual bank transfer + record it. Nothing is *due* until the first tournament ends — but define it now. |
+| Organizer payout disbursement | O9, P7 | ⚠️ admin-triggered | 🔴 | CHIP Send payouts exist, triggered by a platform admin. Automatic sweep and early payouts are #522 and #521. |
 | Prize disbursement to players | P14, P7 | ❌ | 🟡 | Manual; same timing/mechanism as payouts. |
 | Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ❌ | 🟡 | Reconstruct a tier change from `audit_logs` by hand if a dispute arises (#502). |
 | Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅; player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510, #511, #512). |
@@ -282,11 +282,12 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 - **Entry:** tournament manage page → `getTournamentManageData` (roster with statuses, live expiry sweep).
 - **Gaps:** ❌ **no CSV/Excel export** (MVP Flow 4) — organizers need participant lists to seed pairing software 🟡 (#90); ❌ no per-row "refund" / "cancel registration" actions (MVP Flow 4) — this would be the first code to actually check the `refund.manage` permission (#510).
 
-### O9. Payout — ⚠️ Partial (recipient exists; no disbursement)
+### O9. Payout — ⚠️ Partial (admin-triggered; no automatic sweep)
 - **Entry:** the `tournament_payout_summary` **view** aggregates the payments ledger into `net_payout_cents`, surfaced as the dashboard "Pending Payout" stat.
 - **Since #518** there is a **recipient**: `organization_bank_accounts` holds one active row per org, superseded (never edited) on change so a `verified` stamp can't outlive the details it verified, and unique on `(bank_code, account_number)` among active rows so one account can't be two organizations' payout destination. Row ids are the deterministic CHIP Send `reference`.
-- **Gaps:** ❌ **nothing verifies a bank account** — `chip_bank_account_id` and the move to `verified` are Phase 4 (#519), so every row sits at `pending` today; ❌ **no `/my/organizations/[orgId]/payouts` page** (MVP Flow 5 — the directory doesn't exist); ❌ **no disbursement** — no payout route, no `organizer_payout`/`player_prize` rows are ever *created* by code, no CHIP payout call, no status machine. The organizer sees an amount owed; the actual money movement is manual, out-of-band, and unrecorded.
-- **Priority:** 🔴 — nothing is *due* until the first tournament ends, but the process (even if manual) must be defined and recorded before launch.
+- **Since #520** money can actually leave: a platform admin triggers a payout from `/admin/payouts`, it goes out through CHIP Send, and `settle_payout` books the `organizer_payout` ledger row. Organizers follow it at `/my/organizations/[orgId]/payouts`, and may nominate another approved organization as beneficiary. See [payout-flow.md](./payout-flow.md).
+- **Gaps:** ❌ **no automatic payout** after the tournament ends, and no reconciler for a payout stuck in `processing` (#522); ❌ **no early payouts** (#521); ❌ no admin alert when a payout is parked waiting for budget, only a log line (#521).
+- **Priority:** 🔴 — nothing is *due* until the first tournament ends, but until the sweep ships every payout depends on an admin remembering to trigger it.
 
 ---
 

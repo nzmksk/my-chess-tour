@@ -12,6 +12,7 @@ import BasicInfoStep from "./steps/BasicInfoStep";
 import FormatStep from "./steps/FormatStep";
 import FeesStep from "./steps/FeesStep";
 import PrizesStep from "./steps/PrizesStep";
+import PayoutStep from "./steps/PayoutStep";
 import ReviewStep from "./steps/ReviewStep";
 
 const STEP_COMPONENTS = [
@@ -19,6 +20,7 @@ const STEP_COMPONENTS = [
   FormatStep,
   FeesStep,
   PrizesStep,
+  PayoutStep,
   ReviewStep,
 ];
 
@@ -53,6 +55,9 @@ export default function WizardShell({
     formatData,
     feesData,
     prizesData,
+    payoutData,
+    setPayoutData,
+    canNominate,
     tournamentId,
     setTournamentId,
     clearWizardStorage,
@@ -234,6 +239,50 @@ export default function WizardShell({
     return { ok: true, id: json.data.id };
   }
 
+  /**
+   * Sends the nomination, if it changed. Separate from the tournament body because
+   * it takes payout.request, which org admins editing a tournament don't hold.
+   */
+  async function syncBeneficiary(id: string): Promise<SaveResult> {
+    const chosen = payoutData.beneficiaryOrgId;
+    if (!canNominate || chosen === payoutData.savedBeneficiaryOrgId) {
+      return { ok: true, id };
+    }
+
+    const res = await fetch(
+      `/api/v1/organizations/${orgId}/tournaments/${id}/beneficiary`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ beneficiary_organization_id: chosen }),
+      },
+    );
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: await errorMessageFrom(
+          res,
+          "Your tournament was saved, but the payout nomination failed.",
+        ),
+      };
+    }
+    setPayoutData((prev) => ({
+      ...prev,
+      savedBeneficiaryOrgId: chosen,
+      accepted: false,
+    }));
+    return { ok: true, id };
+  }
+
+  // Remembers the id before nominating: if the nomination fails on a new tournament,
+  // the next attempt must update that tournament rather than create a second one.
+  async function saveAll(): Promise<SaveResult> {
+    const saved = await saveDraftToApi();
+    if (!saved.ok) return saved;
+    setTournamentId(saved.id);
+    return syncBeneficiary(saved.id);
+  }
+
   const afterSaveRedirect = redirectPath ?? `/my/organizations/${orgId}`;
 
   // A rejected save must leave the organizer on the wizard with their edits
@@ -248,12 +297,11 @@ export default function WizardShell({
     }
     setIsSaving(true);
     try {
-      const result = await saveDraftToApi();
+      const result = await saveAll();
       if (!result.ok) {
         setFormError(result.message);
         return;
       }
-      setTournamentId(result.id);
       clearWizardStorage();
       router.push(afterSaveRedirect);
     } finally {
@@ -269,12 +317,11 @@ export default function WizardShell({
         router.push(afterSaveRedirect);
         return;
       }
-      const saved = await saveDraftToApi();
+      const saved = await saveAll();
       if (!saved.ok) {
         setFormError(saved.message);
         return;
       }
-      setTournamentId(saved.id);
       const res = await fetch(
         `/api/v1/organizations/${orgId}/tournaments/${saved.id}/publish`,
         { method: "POST" },

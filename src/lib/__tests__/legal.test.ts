@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   ORGANIZER_AGREEMENT_HISTORY,
@@ -44,6 +46,22 @@ describe("legal version constants", () => {
       expect(parsed.getUTCDate()).toBe(day);
     },
   );
+});
+
+describe("current_organizer_agreement_version()", () => {
+  it("matches ORGANIZER_AGREEMENT_VERSION", () => {
+    // The money functions refuse a stale agreement in SQL, which can't import
+    // this module. Bump both together: if they drift, every payout is refused
+    // (SQL older) or stale organizations are paid (SQL newer than nothing).
+    const sql = fs.readFileSync(
+      path.join(process.cwd(), "db/migrations/003_functions_triggers.sql"),
+      "utf-8",
+    );
+    const match = sql.match(
+      /FUNCTION current_organizer_agreement_version\(\)[\s\S]*?SELECT '([^']+)'/,
+    );
+    expect(match?.[1]).toBe(ORGANIZER_AGREEMENT_VERSION);
+  });
 });
 
 describe("formatLegalVersion", () => {

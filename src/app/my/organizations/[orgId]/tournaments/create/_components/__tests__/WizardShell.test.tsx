@@ -27,6 +27,7 @@ vi.mock("../steps/BasicInfoStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/FormatStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/FeesStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/PrizesStep", () => ({ default: () => <div /> }));
+vi.mock("../steps/PayoutStep", () => ({ default: () => <div /> }));
 vi.mock("../steps/ReviewStep", () => ({ default: () => <div /> }));
 
 const mockFetch = vi.fn();
@@ -63,20 +64,28 @@ const INITIAL: PersistedState = {
   prizesData: { categories: [], specialPrizes: [], distribution: "organizer" },
   tournamentId: TOUR_ID,
   // The Review step is the only one that shows "Save Changes".
-  currentStepIndex: 4,
-  completedSteps: [0, 1, 2, 3],
+  currentStepIndex: 5,
+  completedSteps: [0, 1, 2, 3, 4],
 };
 
-function renderEditWizard(
+function renderEditWizard({
   status = "published",
-  currentStepIndex = INITIAL.currentStepIndex,
-) {
+  initialData = INITIAL,
+  currentStepIndex = initialData.currentStepIndex,
+  canNominate = false,
+}: {
+  status?: "draft" | "published";
+  initialData?: PersistedState;
+  currentStepIndex?: number;
+  canNominate?: boolean;
+} = {}) {
   return render(
     <TournamentWizardProvider
       orgId={ORG_ID}
-      initialData={{ ...INITIAL, currentStepIndex }}
+      initialData={{ ...initialData, currentStepIndex }}
       storageKeySuffix={`edit-${TOUR_ID}`}
       excludeId={TOUR_ID}
+      canNominate={canNominate}
     >
       <WizardShell
         orgId={ORG_ID}
@@ -205,7 +214,7 @@ describe("WizardShell — editing a draft", () => {
   // and the dashboard sends drafts straight to it, so a draft saved earlier had
   // no way to be published.
   it("ends in Publish rather than Save Changes", async () => {
-    renderEditWizard("draft");
+    renderEditWizard({ status: "draft" });
 
     expect(
       await screen.findByRole("button", { name: /^publish$/i }),
@@ -222,7 +231,7 @@ describe("WizardShell — editing a draft", () => {
         jsonResponse(200, { data: { id: TOUR_ID, status: "published" } }),
       );
 
-    renderEditWizard("draft");
+    renderEditWizard({ status: "draft" });
     fireEvent.click(await screen.findByRole("button", { name: /^publish$/i }));
 
     await waitFor(() =>
@@ -254,7 +263,7 @@ describe("WizardShell — editing a draft", () => {
         }),
       );
 
-    renderEditWizard("draft");
+    renderEditWizard({ status: "draft" });
     fireEvent.click(await screen.findByRole("button", { name: /^publish$/i }));
 
     expect((await screen.findByRole("alert")).textContent).toBe(
@@ -268,7 +277,7 @@ describe("WizardShell — editing a published tournament", () => {
   // A published tournament has no draft: the secondary button saves straight
   // to the live tournament, so "Save Draft" misdescribed what it did.
   it("labels the save button Save Changes on earlier steps", async () => {
-    renderEditWizard("published", 0);
+    renderEditWizard({ currentStepIndex: 0 });
 
     expect(
       await screen.findByRole("button", { name: /save changes/i }),
@@ -277,7 +286,7 @@ describe("WizardShell — editing a published tournament", () => {
   });
 
   it("shows a single Save Changes button on the last step", async () => {
-    renderEditWizard("published");
+    renderEditWizard();
 
     await screen.findByRole("button", { name: /save changes/i });
     expect(
@@ -285,5 +294,84 @@ describe("WizardShell — editing a published tournament", () => {
     ).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /save draft/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^publish$/i })).toBeNull();
+  });
+});
+
+describe("WizardShell — payout nomination", () => {
+  const NOMINEE = "33333333-3333-4333-8333-333333333333";
+
+  const withPayout = (
+    beneficiaryOrgId: string | null,
+    savedBeneficiaryOrgId: string | null,
+  ): PersistedState => ({
+    ...INITIAL,
+    payoutData: {
+      beneficiaryOrgId,
+      beneficiaryOrgName: beneficiaryOrgId ? "Penang Chess" : "",
+      savedBeneficiaryOrgId,
+      accepted: false,
+      locked: false,
+    },
+  });
+
+  const beneficiaryCalls = () =>
+    mockFetch.mock.calls.filter(([url]) => String(url).endsWith("/beneficiary"));
+
+  async function save(initial: PersistedState, canNominate = true) {
+    renderEditWizard({ initialData: initial, canNominate });
+    fireEvent.click(await screen.findByRole("button", { name: /save changes/i }));
+  }
+
+  it("nominates after saving the tournament, when the choice changed", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(NOMINEE, null));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    const [url, init] = beneficiaryCalls()[0];
+    expect(url).toBe(`/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}/beneficiary`);
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body)).toEqual({ beneficiary_organization_id: NOMINEE });
+    // The tournament first: a new one has no id to nominate on until it is saved.
+    expect(String(mockFetch.mock.calls[0][0])).not.toContain("/beneficiary");
+  });
+
+  it("withdraws with null when the choice was removed", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(null, NOMINEE));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(JSON.parse(beneficiaryCalls()[0][1].body)).toEqual({
+      beneficiary_organization_id: null,
+    });
+  });
+
+  it("sends nothing when the choice is unchanged", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(NOMINEE, NOMINEE));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(beneficiaryCalls()).toHaveLength(0);
+  });
+
+  it("sends nothing for someone without payout.request", async () => {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: {} }));
+    await save(withPayout(NOMINEE, null), false);
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(beneficiaryCalls()).toHaveLength(0);
+  });
+
+  it("keeps the organizer on the wizard when the nomination is refused", async () => {
+    mockFetch.mockImplementation(async (url: string) =>
+      url.endsWith("/beneficiary")
+        ? jsonResponse(409, {
+            error: { message: "The payout recipient is locked once a player has paid" },
+          })
+        : jsonResponse(200, { data: {} }),
+    );
+    await save(withPayout(NOMINEE, null));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/locked once a player has paid/i);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

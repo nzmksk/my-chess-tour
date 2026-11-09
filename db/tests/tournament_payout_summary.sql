@@ -129,7 +129,7 @@ BEGIN
   END IF;
   RAISE NOTICE 'S2 PASS — executed payout zeroes pending payout';
 
-  -- ===== S3: refunds net out; prizes reduce the payout ======================
+  -- ===== S3: refunds net out; prizes are ring-fenced from the payout ========
   v_res  := create_registration_with_payment(v_user_d, v_t3, 'standard', 10000);
   v_pay  := (v_res->>'payment_id')::uuid;
   SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay;
@@ -144,7 +144,11 @@ BEGIN
   INSERT INTO payments (type, tournament_id, organization_id, user_id,
     gross_amount_cents, platform_fee_cents, net_amount_cents, status)
   VALUES ('refund', v_t3, v_org, v_user_e, 11000, 1000, 10000, 'paid');
-  -- ... and pay out a RM5 player prize.
+  -- ... a sponsor pays RM20 into the prize pool ...
+  INSERT INTO payments (type, tournament_id, organization_id,
+    gross_amount_cents, platform_fee_cents, net_amount_cents, status)
+  VALUES ('prize_funding', v_t3, v_org, 2000, 0, 2000, 'paid');
+  -- ... and a RM5 player prize is paid out of it.
   INSERT INTO payments (type, tournament_id, organization_id, user_id,
     gross_amount_cents, platform_fee_cents, net_amount_cents, status)
   VALUES ('player_prize', v_t3, v_org, v_user_d, 500, 0, 500, 'paid');
@@ -159,10 +163,18 @@ BEGIN
   IF v_row.total_prizes_cents <> 500 THEN
     RAISE EXCEPTION 'S3 FAIL: total_prizes_cents=% (expected 500)', v_row.total_prizes_cents;
   END IF;
-  IF v_row.net_payout_cents <> 9500 THEN
-    RAISE EXCEPTION 'S3 FAIL: net_payout_cents=% (expected 9500 — 10000 revenue minus 500 prize)', v_row.net_payout_cents;
+  IF v_row.total_prize_funding_cents <> 2000 THEN
+    RAISE EXCEPTION 'S3 FAIL: total_prize_funding_cents=% (expected 2000)', v_row.total_prize_funding_cents;
   END IF;
-  RAISE NOTICE 'S3 PASS — refunds netted, prizes deducted';
+  -- The regression that matters: prize money, in either direction, must not
+  -- move what the organizer is owed.
+  IF v_row.net_payout_cents <> 10000 THEN
+    RAISE EXCEPTION 'S3 FAIL: net_payout_cents=% (expected 10000 — prize money never touches organizer revenue)', v_row.net_payout_cents;
+  END IF;
+  IF v_row.prize_pool_balance_cents <> 1500 THEN
+    RAISE EXCEPTION 'S3 FAIL: prize_pool_balance_cents=% (expected 1500 — 2000 funded minus 500 paid)', v_row.prize_pool_balance_cents;
+  END IF;
+  RAISE NOTICE 'S3 PASS — refunds netted, prizes ring-fenced in their own balance';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;

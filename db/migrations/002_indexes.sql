@@ -36,6 +36,11 @@ CREATE INDEX idx_org_memberships_role ON organization_memberships (role_id);
 -- Tournaments
 CREATE INDEX idx_tournaments_status_start ON tournaments (status, start_date);
 CREATE INDEX idx_tournaments_organizer ON tournaments (organization_id);
+-- The payout sweep filters on end_date; only (status, start_date) is indexed above.
+CREATE INDEX idx_tournaments_status_end ON tournaments (status, end_date);
+-- "Which tournaments nominate this organization?" (pending-nomination panel).
+CREATE INDEX idx_tournaments_beneficiary ON tournaments (beneficiary_organization_id)
+  WHERE beneficiary_organization_id IS NOT NULL;
 -- Public URL slug. NULLs allowed (drafts have no slug); also serves slug lookups.
 CREATE UNIQUE INDEX tournaments_slug_key ON tournaments (slug);
 
@@ -67,7 +72,7 @@ CREATE INDEX idx_payments_registration ON payments (registration_id);
 CREATE INDEX idx_payments_payout_summary ON payments (tournament_id, organization_id, type)
   INCLUDE (gross_amount_cents)
   WHERE status = 'paid'
-  AND type IN ('registration', 'player_prize', 'refund', 'organizer_payout');
+  AND type IN ('registration', 'player_prize', 'prize_funding', 'refund', 'organizer_payout');
 
 -- At most one paid refund per registration. Defence-in-depth alongside the
 -- unique chip_transaction_id index: even if two settlement paths (sync response
@@ -81,3 +86,30 @@ CREATE UNIQUE INDEX uniq_paid_refund_per_registration ON payments (registration_
 -- against this index to stay idempotent; a rejected refund may be re-created.
 CREATE UNIQUE INDEX uniq_active_refund_per_registration ON refunds (registration_id)
   WHERE status <> 'rejected';
+
+-- Payouts
+CREATE UNIQUE INDEX uniq_payouts_chip_send_instruction
+  ON payouts (chip_send_instruction_id) WHERE chip_send_instruction_id IS NOT NULL;
+
+-- MAX 2 EARLY REQUESTS PER TOURNAMENT. A partial unique index can't express
+-- "at most 2", so the cap is carried by request_seq (1|2, CHECKed on the table)
+-- which request_early_payout assigns under a tournament-row lock; this index is
+-- the last line of defence, exactly like uniq_active_refund_per_registration.
+-- Partial on superseded_by IS NULL so retrying a FAILED early payout inherits
+-- the same seq without burning a slot.
+CREATE UNIQUE INDEX uniq_early_payout_seq_per_tournament
+  ON payouts (tournament_id, request_seq) WHERE kind = 'early' AND superseded_by IS NULL;
+
+CREATE UNIQUE INDEX uniq_live_early_payout_per_tournament
+  ON payouts (tournament_id)
+  WHERE kind = 'early' AND approval <> 'rejected' AND status IN ('pending', 'processing');
+
+-- queue_payout relies on ON CONFLICT against this to stay idempotent. A failed
+-- automatic payout falls out of the index, so it can be re-queued as a new row.
+CREATE UNIQUE INDEX uniq_automatic_payout_per_tournament
+  ON payouts (tournament_id) WHERE kind = 'automatic' AND status <> 'failed';
+
+CREATE INDEX idx_payouts_org_status       ON payouts (organization_id, status, created_at);
+CREATE INDEX idx_payouts_recipient_status ON payouts (recipient_organization_id, status, created_at);
+CREATE INDEX idx_payouts_pending_review   ON payouts (requested_at) WHERE approval = 'pending';
+CREATE INDEX idx_payouts_in_flight        ON payouts (status, updated_at) WHERE status = 'processing';

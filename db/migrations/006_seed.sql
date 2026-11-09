@@ -48,6 +48,8 @@ DECLARE
   p_payment_view      integer;
   p_refund_manage     integer;
   p_bank_account_manage integer;
+  p_payout_view       integer;
+  p_payout_request    integer;
 BEGIN
   -- Roles
   INSERT INTO roles (name, scope) VALUES ('platform_admin', 'global') RETURNING id INTO r_platform_admin;
@@ -69,6 +71,10 @@ BEGIN
   -- Owner-only. Where the organization's money lands is not something a
   -- delegated org `admin` should be able to read or redirect.
   INSERT INTO permissions (key) VALUES ('bank_account.manage') RETURNING id INTO p_bank_account_manage;
+  -- Payouts. Viewing is shared with org admins, but anything that moves money to
+  -- a bank account is owner-only, the same tier as org.manage.
+  INSERT INTO permissions (key) VALUES ('payout.view') RETURNING id INTO p_payout_view;
+  INSERT INTO permissions (key) VALUES ('payout.request') RETURNING id INTO p_payout_request;
 
   -- platform_admin: platform.manage (implies all)
   INSERT INTO role_permissions (role_id, permission_id) VALUES (r_platform_admin, p_platform_manage);
@@ -84,9 +90,12 @@ BEGIN
     (r_owner, p_registration_view),
     (r_owner, p_payment_view),
     (r_owner, p_refund_manage),
-    (r_owner, p_bank_account_manage);
+    (r_owner, p_bank_account_manage),
+    (r_owner, p_payout_view),
+    (r_owner, p_payout_request);
 
-  -- admin: all except org.manage, tournament.delete and bank_account.manage
+  -- admin: all except org.manage, tournament.delete, bank_account.manage and
+  -- payout.request
   INSERT INTO role_permissions (role_id, permission_id) VALUES
     (r_admin, p_org_invite),
     (r_admin, p_tournament_create),
@@ -94,14 +103,15 @@ BEGIN
     (r_admin, p_tournament_view),
     (r_admin, p_registration_view),
     (r_admin, p_payment_view),
-    (r_admin, p_refund_manage);
+    (r_admin, p_refund_manage),
+    (r_admin, p_payout_view);
 
   -- member: view-only
   INSERT INTO role_permissions (role_id, permission_id) VALUES
     (r_member, p_tournament_view),
     (r_member, p_registration_view);
 
-  RAISE NOTICE '[0/4] RBAC seeded: 4 roles, 11 permissions';
+  RAISE NOTICE '[0/4] RBAC seeded: 4 roles, 13 permissions';
 END;
 $$;
 

@@ -62,6 +62,7 @@ DROP VIEW IF EXISTS public.tournament_payout_summary CASCADE;
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS public.audit_logs              CASCADE;
 DROP TABLE IF EXISTS public.tournament_cancellation_requests CASCADE;
+DROP TABLE IF EXISTS public.payouts                 CASCADE;
 DROP TABLE IF EXISTS public.refunds                 CASCADE;
 DROP TABLE IF EXISTS public.payments                CASCADE;
 DROP TABLE IF EXISTS public.registrations           CASCADE;
@@ -115,6 +116,8 @@ DROP TYPE IF EXISTS public.registration_status  CASCADE;
 DROP TYPE IF EXISTS public.payment_type         CASCADE;
 DROP TYPE IF EXISTS public.payment_status       CASCADE;
 DROP TYPE IF EXISTS public.refund_status        CASCADE;
+DROP TYPE IF EXISTS public.payout_kind          CASCADE;
+DROP TYPE IF EXISTS public.payout_status        CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 7. Seed accounts (migration 006). Deleting from auth.users cascades to
@@ -134,7 +137,7 @@ WHERE table_schema = 'public'
     'roles','permissions','role_permissions','users','user_global_roles',
     'player_profiles','organizations','organization_memberships',
     'organization_bank_accounts','organization_documents','tournaments',
-    'registrations','payments','refunds','tournament_cancellation_requests',
+    'registrations','payments','refunds','payouts','tournament_cancellation_requests',
     'audit_logs','waitlist'
   );
 
@@ -146,7 +149,7 @@ WHERE n.nspname = 'public'
     'role_scope','gender','chess_title','oku_status','approval_status',
     'org_entity_type','org_document_type','bank_account_status',
     'tournament_status','registration_status','payment_type','payment_status',
-    'refund_status'
+    'refund_status','payout_kind','payout_status'
   );
 
 SELECT 'public_functions' AS check, count(*)
