@@ -412,6 +412,99 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancel
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 -- =============================================
+-- ACCOUNT DELETION: AUDIT-LOG ANONYMISATION (#503)
+--
+-- Deleting or anonymising a users / player_profiles row does not reach
+-- audit_logs: every write to those tables left a full snapshot behind (email,
+-- name, DOB, gender, nationality, FIDE/MCF ids, bank holder, OKU status and the
+-- admin's free-text rejection reason). /privacy promises personal data is gone
+-- within 30 days of a deletion request, so the deletion runbook
+-- (wiki/account-deletion.md) ends by calling this.
+--
+-- What it does, for one user:
+--   1. In that user's own users / player_profiles audit rows, every snapshot key
+--      except an allowlist of ids, flags and timestamps becomes '[anonymised]'.
+--      The rows stay, so the history of WHEN the account changed survives.
+--      An allowlist rather than a list of PII columns: a column added later is
+--      anonymised by default instead of leaking until someone remembers it.
+--   2. Rows the user authored (changed_by) keep everything except the
+--      reference, which is set to NULL. The FK is ON DELETE SET NULL, so a
+--      hard delete of the users row does this by itself; this covers a soft
+--      delete, where the row survives.
+--
+-- What it deliberately leaves alone: payments, refunds, payouts and
+-- registrations audit rows, including their changed_by. They are financial
+-- records under the 7-year obligation, which overrides the deletion request.
+-- Their snapshots hold ids and amounts, not profile data, and once the account
+-- is deleted a changed_by there resolves to nothing personal.
+--
+-- Run it LAST, in the same transaction as the delete/anonymise. Any later write
+-- to the user's rows writes a fresh snapshot, and the delete itself writes one
+-- carrying the full pre-delete row. It refuses an account that still has
+-- deleted_at NULL, so it cannot strip the history of a live account by mistake.
+-- Re-running it is safe; a second call reports zero rows.
+-- =============================================
+CREATE OR REPLACE FUNCTION anonymise_jsonb_except(p_data jsonb, p_keep text[])
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_data IS NULL THEN NULL
+    ELSE (
+      SELECT jsonb_object_agg(
+        e.key,
+        CASE WHEN e.key = ANY(p_keep) THEN e.value ELSE to_jsonb('[anonymised]'::text) END
+      )
+      FROM jsonb_each(p_data) AS e(key, value)
+    )
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION anonymise_user_audit_logs(p_user_id uuid)
+RETURNS TABLE (snapshots_anonymised integer, changed_by_cleared integer)
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  c_keep_users           constant text[] := ARRAY[
+    'id', 'is_verified', 'verified_at', 'terms_version', 'terms_accepted_at',
+    'created_at', 'updated_at', 'deleted_at'
+  ];
+  c_keep_player_profiles constant text[] := ARRAY['user_id', 'created_at', 'updated_at'];
+  c_financial            constant text[] := ARRAY['payments', 'refunds', 'payouts', 'registrations'];
+BEGIN
+  IF p_user_id IS NULL THEN
+    RAISE EXCEPTION 'USER_ID_REQUIRED' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM users WHERE id = p_user_id AND deleted_at IS NULL) THEN
+    RAISE EXCEPTION 'USER_NOT_DELETED'
+      USING ERRCODE = 'P0001',
+            DETAIL  = 'Delete the users row, or set deleted_at, before anonymising its audit history.';
+  END IF;
+
+  UPDATE audit_logs a
+  SET old_data = anonymise_jsonb_except(a.old_data, k.keep),
+      new_data = anonymise_jsonb_except(a.new_data, k.keep)
+  FROM (VALUES ('users', c_keep_users), ('player_profiles', c_keep_player_profiles)) AS k(table_name, keep)
+  WHERE a.table_name = k.table_name
+    AND a.record_id  = p_user_id::text
+    AND (   a.old_data IS DISTINCT FROM anonymise_jsonb_except(a.old_data, k.keep)
+         OR a.new_data IS DISTINCT FROM anonymise_jsonb_except(a.new_data, k.keep));
+  GET DIAGNOSTICS snapshots_anonymised = ROW_COUNT;
+
+  UPDATE audit_logs
+  SET changed_by = NULL
+  WHERE changed_by = p_user_id
+    AND table_name <> ALL (c_financial);
+  GET DIAGNOSTICS changed_by_cleared = ROW_COUNT;
+
+  RETURN NEXT;
+END;
+$$;
+
+-- =============================================
 -- TOURNAMENT EDIT FREEZE (money fields)
 -- entry_fees/prizes/max_participants and the commission split define what a
 -- player is buying. Once anyone has paid, changing them rewrites a concluded
@@ -1201,6 +1294,11 @@ $$;
 -- (RLS policies and the user-session permission checks depend on them) and
 -- get_participant_counts (read-only, public counts).
 --
+-- anonymise_user_audit_logs is not SECURITY DEFINER, and audit_logs has no
+-- UPDATE policy, so a client call would change nothing. It is revoked anyway:
+-- it is an operator tool for the deletion runbook, not something a client has
+-- any reason to reach.
+--
 -- assert_tournament_capacity is revoked too. The enforce_tournament_capacity
 -- trigger calls it with the inserting role's rights, but clients can no longer
 -- insert registrations (004_rls.sql), so it only ever fires inside the
@@ -1217,6 +1315,7 @@ REVOKE EXECUTE ON FUNCTION assert_tournament_capacity      FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION payout_recipient_problem        FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION nominate_payout_beneficiary     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
@@ -1226,3 +1325,4 @@ GRANT EXECUTE ON FUNCTION assert_tournament_capacity      TO service_role;
 GRANT EXECUTE ON FUNCTION payout_recipient_problem        TO service_role;
 GRANT EXECUTE ON FUNCTION nominate_payout_beneficiary     TO service_role;
 GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
+GRANT EXECUTE ON FUNCTION anonymise_user_audit_logs       TO service_role;
