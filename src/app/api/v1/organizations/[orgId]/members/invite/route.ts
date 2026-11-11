@@ -130,12 +130,22 @@ export async function POST(
     );
   }
 
-  const { data: existingUser } = await supabaseAdmin
+  const { data: existingUser, error: existingUserError } = await supabaseAdmin
     .from("users")
     .select("id")
     .eq("email", email)
     .is("deleted_at", null)
     .maybeSingle();
+
+  // A failed lookup must not read as "no such user": falling through to the
+  // invite would send an existing member down the new-account path, and the
+  // email_exists that GoTrue then returns would be misreported as drift below.
+  if (existingUserError) {
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: existingUserError.message } },
+      { status: 500 },
+    );
+  }
 
   const invitedAt = new Date().toISOString();
 
@@ -204,6 +214,28 @@ export async function POST(
     await supabaseAdmin.auth.admin.inviteUserByEmail(email);
 
   if (inviteError) {
+    // The lookup above succeeded and found no live users record, yet Auth
+    // already holds an account for this email: the account and the users table
+    // have drifted apart (e.g. a schema reset that kept auth.users). There is
+    // no users.id to attach a membership to, and GoTrue's own wording ("already
+    // been registered") reads to the inviter as if the invite should have
+    // worked — so say what is actually wrong instead of surfacing it as a 500.
+    if (inviteError.code === "email_exists") {
+      console.error(
+        "Invite target has an auth account but no linked users record",
+        inviteError,
+      );
+      return NextResponse.json(
+        {
+          error: {
+            code: "ACCOUNT_UNLINKED",
+            message:
+              "This email belongs to an account that is missing its profile, so it can't be added yet. Please contact support.",
+          },
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: inviteError.message } },
       { status: 500 },
