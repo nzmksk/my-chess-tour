@@ -224,6 +224,15 @@ export default function PrivacyPage() {
                       </td>
                     </tr>
                     <tr>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        Audit and change-history records
+                      </td>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        Personal fields anonymised alongside the account;
+                        records relating to payments retained for 7 years
+                      </td>
+                    </tr>
+                    <tr>
                       <td className="text-text-secondary px-3 py-2">
                         Business verification documents (organisers)
                       </td>
