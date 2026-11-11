@@ -285,8 +285,11 @@ BEGIN
     -- storage_path is capability-bearing: anyone holding it can be issued a
     -- signed URL to a private-bucket identity document. The last-4 suffix that
     -- survives redaction is the file extension, which reveals nothing.
-    v_old := redact_jsonb_columns(v_old, ARRAY['storage_path']);
-    v_new := redact_jsonb_columns(v_new, ARRAY['storage_path']);
+    -- original_filename is whatever the uploader called the file, and for an
+    -- identity document that is often the IC number or full name
+    -- ("MyKad_880101-14-5678.pdf"). Same treatment: only the extension survives.
+    v_old := redact_jsonb_columns(v_old, ARRAY['storage_path', 'original_filename']);
+    v_new := redact_jsonb_columns(v_new, ARRAY['storage_path', 'original_filename']);
   END IF;
 
   -- Resolve organization_id based on source table

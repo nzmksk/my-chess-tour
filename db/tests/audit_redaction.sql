@@ -15,10 +15,13 @@
 --       path, not just a label
 --   R5  NULL stays NULL, so "cleared" is still distinguishable from "set"
 --   R6  a non-redacted table (tournaments) is unaffected
+--   R7  organization_documents.original_filename is redacted (#503): the
+--       uploader names the file, and an identity document's name often
+--       carries an IC number
 --
--- The other two redacted columns — organization_bank_accounts.account_number
--- and organization_documents.storage_path (#518) — are covered by scenario A1
--- in db/tests/organizer_onboarding.sql, alongside the organization_id scoping
+-- organization_bank_accounts.account_number and organization_documents.
+-- storage_path (#518) are covered by scenario A1 in
+-- db/tests/organizer_onboarding.sql, alongside the organization_id scoping
 -- they need. Redaction is the same mechanism; only the column list differs.
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
@@ -156,6 +159,27 @@ BEGIN
     RAISE EXCEPTION 'R6 FAIL: tournaments snapshot was altered (venue_name=%)', v_got;
   END IF;
   RAISE NOTICE 'R6 PASS — non-redacted tables unaffected';
+
+  -- ---- R7: original_filename is redacted ----------------------------------
+  INSERT INTO organization_documents (organization_id, doc_type, storage_path, original_filename)
+    VALUES (v_org, 'identity_document', 'users/x/org-kyb/id.pdf', 'MyKad_880101-14-5678.pdf');
+
+  SELECT new_data ->> 'original_filename' INTO v_got
+  FROM audit_logs
+  WHERE table_name = 'organization_documents' AND organization_id = v_org AND action = 'INSERT'
+  ORDER BY id DESC LIMIT 1;
+
+  IF v_got IS DISTINCT FROM '****.pdf' THEN
+    RAISE EXCEPTION 'R7 FAIL: original_filename=% (expected ****.pdf)', v_got;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM audit_logs
+    WHERE table_name = 'organization_documents' AND organization_id = v_org
+      AND new_data::text LIKE '%880101%'
+  ) THEN
+    RAISE EXCEPTION 'R7 FAIL: the IC number in the filename survives in audit_logs';
+  END IF;
+  RAISE NOTICE 'R7 PASS — uploaded filename redacted to its extension';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;
