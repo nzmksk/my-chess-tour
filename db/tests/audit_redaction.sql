@@ -7,7 +7,8 @@
 -- "did this value change?", never enough to reconstruct the secret.
 --
 -- Covers:
---   R1  redact_jsonb_columns masks listed keys and leaves the rest untouched
+--   R1  redact_jsonb_columns masks listed keys, leaves the rest untouched, and
+--       is idempotent (the maintenance scrub re-applies it)
 --   R2  INSERT on player_profiles redacts bank_account_number in new_data
 --   R3  UPDATE redacts BOTH old_data and new_data (the old value is the one
 --       that would otherwise sit in the log forever)
@@ -57,7 +58,20 @@ BEGIN
   IF jsonb_typeof(v_json -> 'rating') <> 'number' THEN
     RAISE EXCEPTION 'R1 FAIL: numeric key changed type to %', jsonb_typeof(v_json -> 'rating');
   END IF;
-  RAISE NOTICE 'R1 PASS — helper masks listed keys only, preserves types';
+  -- Re-applying it is a no-op, including for a value shorter than 4 characters
+  -- (the maintenance scrub runs it over rows that are already redacted).
+  v_json := '{"a": "1234567890", "b": "ab", "c": null}'::jsonb;
+  IF redact_jsonb_columns(redact_jsonb_columns(v_json, ARRAY['a','b','c']), ARRAY['a','b','c'])
+     IS DISTINCT FROM redact_jsonb_columns(v_json, ARRAY['a','b','c']) THEN
+    RAISE EXCEPTION 'R1 FAIL: redacting twice differs from redacting once (%)',
+      redact_jsonb_columns(redact_jsonb_columns(v_json, ARRAY['a','b','c']), ARRAY['a','b','c']);
+  END IF;
+  -- ...but a raw value that merely starts with four stars is still masked.
+  v_json := redact_jsonb_columns('{"f": "****MyKad_880101-14-5678.pdf"}'::jsonb, ARRAY['f']);
+  IF v_json ->> 'f' <> '****.pdf' THEN
+    RAISE EXCEPTION 'R1 FAIL: star-prefixed raw value slipped through as %', v_json ->> 'f';
+  END IF;
+  RAISE NOTICE 'R1 PASS — helper masks listed keys only, preserves types, is idempotent';
 
   -- ---- fixtures (service role: RLS not enforced) --------------------------
   INSERT INTO users (auth_user_id, email, first_name, last_name)

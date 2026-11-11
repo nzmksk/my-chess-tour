@@ -220,6 +220,13 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 -- "did this value change?" without retaining the secret itself.
 -- Keys absent from the row are ignored; NULL values stay NULL so the audit
 -- trail still distinguishes "cleared" from "set to something".
+--
+-- Idempotent: a value already in masked form ('****' plus at most 4 characters)
+-- is left alone, so re-applying it to rows that are already redacted (see
+-- db/maintenance/scrub_pre_redaction_audit_rows.sql) changes nothing. Without
+-- that, a short value would gain stars on every pass ('****ab' -> '******ab').
+-- The shape test cannot be used to smuggle a raw value past redaction: anything
+-- that passes it already shows no more than the 4 characters masking would keep.
 -- =============================================
 CREATE OR REPLACE FUNCTION redact_jsonb_columns(p_data jsonb, p_cols text[])
 RETURNS jsonb
@@ -233,12 +240,40 @@ AS $$
         e.key,
         CASE
           WHEN e.key = ANY(p_cols) AND jsonb_typeof(e.value) = 'string'
+               AND (e.value #>> '{}') !~ '^\*{4}.{0,4}$'
             THEN to_jsonb('****' || right(e.value #>> '{}', 4))
           ELSE e.value
         END
       )
       FROM jsonb_each(p_data) AS e(key, value)
     )
+  END;
+$$;
+
+-- Which columns of each audited table are redacted. The single list read by
+-- both audit_trigger_func (on the way in) and
+-- db/maintenance/scrub_pre_redaction_audit_rows.sql (rows written before a
+-- column was added here), so the two cannot drift apart. Tables not listed
+-- return an empty array, which redact_jsonb_columns treats as "nothing to mask".
+-- Any new sensitive column belongs here in the same PR that adds the column.
+--   player_profiles.bank_account_number, organization_bank_accounts.
+--     account_number: masked to the last 4 digits.
+--   player_profiles.oku_document_path, organization_documents.storage_path:
+--     capability-bearing; anyone holding one can be issued a signed URL to a
+--     private-bucket document. The surviving suffix is the file extension.
+--   organization_documents.original_filename: whatever the uploader called the
+--     file, which for an identity document is often the IC number or full name
+--     ("MyKad_880101-14-5678.pdf"). Only the extension survives.
+CREATE OR REPLACE FUNCTION audit_redacted_columns(p_table_name text)
+RETURNS text[]
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE p_table_name
+    WHEN 'player_profiles'            THEN ARRAY['bank_account_number', 'oku_document_path']
+    WHEN 'organization_bank_accounts' THEN ARRAY['account_number']
+    WHEN 'organization_documents'     THEN ARRAY['storage_path', 'original_filename']
+    ELSE ARRAY[]::text[]
   END;
 $$;
 
@@ -259,6 +294,7 @@ DECLARE
   v_new        jsonb;
   v_changed_by uuid;
   v_pk_col     text := COALESCE(TG_ARGV[0], 'id');
+  v_redact     text[];
 BEGIN
   -- Build row snapshots
   IF TG_OP IN ('UPDATE', 'DELETE') THEN
@@ -275,21 +311,12 @@ BEGIN
   -- record_id extraction so a redacted column can never be the PK. Without this
   -- every bank-account write is copied verbatim into audit_logs, which is
   -- retained far longer than the row itself.
-  IF TG_TABLE_NAME = 'player_profiles' THEN
-    v_old := redact_jsonb_columns(v_old, ARRAY['bank_account_number', 'oku_document_path']);
-    v_new := redact_jsonb_columns(v_new, ARRAY['bank_account_number', 'oku_document_path']);
-  ELSIF TG_TABLE_NAME = 'organization_bank_accounts' THEN
-    v_old := redact_jsonb_columns(v_old, ARRAY['account_number']);
-    v_new := redact_jsonb_columns(v_new, ARRAY['account_number']);
-  ELSIF TG_TABLE_NAME = 'organization_documents' THEN
-    -- storage_path is capability-bearing: anyone holding it can be issued a
-    -- signed URL to a private-bucket identity document. The last-4 suffix that
-    -- survives redaction is the file extension, which reveals nothing.
-    -- original_filename is whatever the uploader called the file, and for an
-    -- identity document that is often the IC number or full name
-    -- ("MyKad_880101-14-5678.pdf"). Same treatment: only the extension survives.
-    v_old := redact_jsonb_columns(v_old, ARRAY['storage_path', 'original_filename']);
-    v_new := redact_jsonb_columns(v_new, ARRAY['storage_path', 'original_filename']);
+  -- The column list per table lives in audit_redacted_columns, which the
+  -- maintenance scrub reads too. Most tables have none, so skip the rebuild.
+  v_redact := audit_redacted_columns(TG_TABLE_NAME);
+  IF cardinality(v_redact) > 0 THEN
+    v_old := redact_jsonb_columns(v_old, v_redact);
+    v_new := redact_jsonb_columns(v_new, v_redact);
   END IF;
 
   -- Resolve organization_id based on source table
