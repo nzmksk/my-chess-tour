@@ -500,6 +500,20 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       errSpy.mockRestore();
     });
 
+    it("returns 500 without inviting when the users lookup fails", async () => {
+      // A failed lookup must not be read as "no such user" — otherwise an
+      // existing member would be invited, GoTrue would answer email_exists,
+      // and the route would misreport it as ACCOUNT_UNLINKED.
+      setTargetUserResult(null, { message: "DB error" });
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error.code).toBe("INTERNAL_ERROR");
+      expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+    });
+
     it("returns 500 when membership insert fails for new user", async () => {
       setInsertResult(null, { message: "Insert error" });
       const res = await POST(makeRequest(), {
