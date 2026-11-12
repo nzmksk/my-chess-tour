@@ -45,7 +45,7 @@ The `console.error` row matters most. Most failures in this app never throw: a r
 ### 1. Create the Sentry organization
 
 1. Sign up at sentry.io on the **Developer** (free) plan. Use a shared/ops mailbox rather than a personal one, so ownership survives people changes.
-2. **Choose the data storage region.** This can't be changed later. Pick it deliberately, because it decides where error data, which may contain personal data, is stored. Record the choice in the privacy wording (step 8).
+2. **Choose the data storage region.** This can't be changed later. Pick it deliberately, because it decides where error data, which may contain personal data, is stored. The org was created in the **US** region, and the privacy policy says so (step 8).
 3. Name the organization (e.g. `my-chess-tour`). Its slug is `SENTRY_ORG`.
 
 ### 2. Create the project
@@ -110,16 +110,25 @@ If a team chat is used for ops, add it under **Settings → Integrations** and r
 
 **Settings → Subscription / Spend:** confirm there is **no on-demand / pay-as-you-go budget**. On the free plan, events over quota are dropped rather than billed.
 
-### 8. Privacy policy (needs review before it ships)
+### 8. Privacy policy (wording added; review before launch)
 
-Sentry is a processor that receives personal data: error messages can contain a user id, an email in a validation error, or a quoted row value. `/privacy` §7 "Sharing of Data" doesn't mention it. That section also doesn't list the other service providers (Supabase, Netlify, Resend, Upstash). Fix both at once rather than adding Sentry alone.
+Sentry is a processor that receives personal data: error messages can contain a user id, an email in a validation error, or a quoted row value. The policy now discloses it, in both `/privacy` and the signup `PrivacyModal.tsx`, which must stay identical:
 
-Draft line for §7, to adapt with the region chosen in step 1:
+- **§7 Sharing of Data:** a Sentry entry covering what it receives, that its servers are in the **United States** (so reports are processed outside Malaysia), that IPs and cookies aren't sent, and that reports are deleted after **30 days**.
+- **§4 Data Retention:** a row for *Error reports (Sentry): 30 days, then deleted automatically*.
+- The first-version summary in `src/lib/legal.ts` mentions Sentry alongside CHIP.
 
-> **Service providers** — we use third-party infrastructure to run the platform: hosting (Netlify), database and authentication (Supabase), email delivery (Resend), and error monitoring (Sentry, servers located in &lt;region&gt;). They process data only on our instructions and only to provide their service. Error reports are retained for up to &lt;retention period&gt;.
+`TERMS_VERSION` was **not** bumped. Nothing has been published to users yet, so there's no earlier wording to re-accept; the #503 policy change followed the same rule. Once the platform is live, a change like this needs a new `TERMS_HISTORY` entry.
 
-- Fill in the retention period from the plan's data-retention setting before publishing. The account-deletion promise is 30 days. If Sentry retention is longer, either delete a user's events by hand when processing a deletion ([account-deletion.md](./account-deletion.md)), or state the longer period.
-- §9 commits to 14 days' notice for significant changes. Decide whether this counts, and have a second person review the wording, as with the #503 retention change.
+**If the setup changes, change the policy with it:**
+
+- The org is in Sentry's **US** region. A move to another region means a new org, and new wording.
+- **30 days** must match the org's actual data retention. 30 days also matches the account-deletion promise ([account-deletion.md](./account-deletion.md)), so a deleted user's events age out on their own. If retention ever becomes longer, either delete a user's events by hand during a deletion, or state the longer period.
+
+**Still open:**
+
+- Have a second person review the wording before launch, as with #503. That includes whether the US transfer needs anything more under the PDPA's cross-border transfer rules (s129).
+- §7 still doesn't list the other infrastructure providers (Supabase, Netlify, Resend, Upstash). That's a separate decision, because their regions have to be confirmed first.
 
 ### 9. Verify on staging
 
