@@ -7,8 +7,16 @@ import { NextRequest } from "next/server";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, mockGetClaims, mockHasPermission, tables, eqCalls, ilikeCalls } =
-  vi.hoisted(() => {
+const {
+  mockFrom,
+  mockRpc,
+  mockGetClaims,
+  mockHasPermission,
+  mockNotifyNominated,
+  tables,
+  eqCalls,
+  ilikeCalls,
+} = vi.hoisted(() => {
     const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
     const eqCalls: Array<[string, unknown]> = [];
     const ilikeCalls: Array<[string, unknown]> = [];
@@ -45,6 +53,7 @@ const { mockFrom, mockRpc, mockGetClaims, mockHasPermission, tables, eqCalls, il
       mockRpc: vi.fn(),
       mockGetClaims: vi.fn(),
       mockHasPermission: vi.fn(),
+      mockNotifyNominated: vi.fn(),
     };
   });
 
@@ -54,6 +63,9 @@ vi.mock("@/services/supabase/admin", () => ({
 vi.mock("@/services/supabase/permission", () => ({
   getAuthClaims: mockGetClaims,
   hasOrgPermission: mockHasPermission,
+}));
+vi.mock("@/services/payouts/notify", () => ({
+  notifyBeneficiaryNominated: mockNotifyNominated,
 }));
 
 import { GET as listNominations } from "../route";
@@ -144,9 +156,15 @@ describe("PUT .../beneficiary", () => {
     });
   });
 
+  it("emails the nominee", async () => {
+    await callNominate({ beneficiary_organization_id: NOMINEE });
+    expect(mockNotifyNominated).toHaveBeenCalledWith(T_ID, NOMINEE);
+  });
+
   it("withdraws with null", async () => {
     await callNominate({ beneficiary_organization_id: null });
     expect(mockRpc.mock.calls[0][1].p_beneficiary_org_id).toBeNull();
+    expect(mockNotifyNominated).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -184,6 +202,7 @@ describe("PUT .../beneficiary", () => {
     const res = await callNominate({ beneficiary_organization_id: NOMINEE });
     expect(res.status).toBe(status);
     expect((await res.json()).error.message).toMatch(expected);
+    expect(mockNotifyNominated).not.toHaveBeenCalled();
   });
 });
 

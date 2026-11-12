@@ -2,8 +2,13 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import {
   type AdminPayoutAlert,
   sendAdminPayoutAlertEmail,
+  sendBeneficiaryNominationEmail,
 } from "@/services/email/email";
-import { loadPlatformAdminRecipients, sendToAll } from "./recipients";
+import {
+  loadOrganizationRecipients,
+  loadPlatformAdminRecipients,
+  sendToAll,
+} from "./recipients";
 
 // Payout emails other than settlement (settle.ts). Each is best-effort and never
 // throws: it runs after the action it reports on has committed.
@@ -76,6 +81,59 @@ export async function notifyAdminsOfPayout(
   } catch (err) {
     console.error(
       `Payout ${payoutId}: admin alert failed`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+/**
+ * Asks a nominated organization's payout managers to accept a tournament's
+ * payout. Nothing is redirected until one of them does, so an organization that
+ * never hears about it simply never receives the money.
+ */
+export async function notifyBeneficiaryNominated(
+  tournamentId: string,
+  nomineeOrgId: string,
+): Promise<void> {
+  try {
+    const [tournamentRes, nomineeRes] = await Promise.all([
+      supabaseAdmin
+        .from("tournaments")
+        .select("name, organizer:organizations!organization_id(name)")
+        .eq("id", tournamentId)
+        .single(),
+      supabaseAdmin.from("organizations").select("name").eq("id", nomineeOrgId).single(),
+    ]);
+    const error = tournamentRes.error ?? nomineeRes.error;
+    if (error || !tournamentRes.data || !nomineeRes.data) {
+      console.error(
+        `Tournament ${tournamentId}: failed to load nomination email data`,
+        error?.message,
+      );
+      return;
+    }
+    const tournament = tournamentRes.data as unknown as {
+      name: string | null;
+      organizer: { name: string | null } | null;
+    };
+    const nominee = nomineeRes.data as { name: string | null };
+
+    const recipients = await loadOrganizationRecipients([nomineeOrgId]);
+    await sendToAll(
+      recipients,
+      (r) =>
+        sendBeneficiaryNominationEmail(r.email, {
+          recipientName: r.name,
+          nomineeOrgId,
+          nomineeName: nominee.name ?? "your organization",
+          organizerName: tournament.organizer?.name ?? "An organization",
+          tournamentName: tournament.name ?? "a tournament",
+        }),
+      `nomination email(s) for tournament ${tournamentId}`,
+    );
+  } catch (err) {
+    console.error(
+      `Tournament ${tournamentId}: nomination email failed`,
       err instanceof Error ? err.message : err,
     );
   }
