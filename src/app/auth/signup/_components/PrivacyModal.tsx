@@ -211,6 +211,13 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
                 </td>
               </tr>
               <tr>
+                <td>Audit and change-history records</td>
+                <td>
+                  Personal fields anonymised alongside the account; records
+                  relating to payments retained for 7 years
+                </td>
+              </tr>
+              <tr>
                 <td>Business verification documents (organisers)</td>
                 <td>7 years after the organiser relationship ends</td>
               </tr>

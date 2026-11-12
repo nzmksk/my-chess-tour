@@ -3,11 +3,13 @@
 --
 -- audit_trigger_func (003_functions_triggers.sql) writes full row snapshots into
 -- audit_logs, a table retained far longer than the rows it mirrors. Sensitive
--- columns must be masked to a last-4 suffix on the way in — enough to answer
+-- columns must be masked on the way in (numbers to a last-4 suffix, filenames
+-- and paths to an accepted extension) — enough to answer
 -- "did this value change?", never enough to reconstruct the secret.
 --
 -- Covers:
---   R1  redact_jsonb_columns masks listed keys and leaves the rest untouched
+--   R1  redact_jsonb_columns masks listed keys, leaves the rest untouched, and
+--       is idempotent (the maintenance scrub re-applies it)
 --   R2  INSERT on player_profiles redacts bank_account_number in new_data
 --   R3  UPDATE redacts BOTH old_data and new_data (the old value is the one
 --       that would otherwise sit in the log forever)
@@ -15,10 +17,16 @@
 --       path, not just a label
 --   R5  NULL stays NULL, so "cleared" is still distinguishable from "set"
 --   R6  a non-redacted table (tournaments) is unaffected
+--   R7  organization_documents.original_filename is redacted (#503): the
+--       uploader names the file, and an identity document's name often
+--       carries an IC number
+--   R8  filenames and paths keep ONLY an accepted extension, never "the last
+--       4 characters": a name with no extension, or one whose "extension" is
+--       really the end of an IC number, masks to a bare '****'
 --
--- The other two redacted columns — organization_bank_accounts.account_number
--- and organization_documents.storage_path (#518) — are covered by scenario A1
--- in db/tests/organizer_onboarding.sql, alongside the organization_id scoping
+-- organization_bank_accounts.account_number and organization_documents.
+-- storage_path (#518) are covered by scenario A1 in
+-- db/tests/organizer_onboarding.sql, alongside the organization_id scoping
 -- they need. Redaction is the same mechanism; only the column list differs.
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
@@ -54,7 +62,20 @@ BEGIN
   IF jsonb_typeof(v_json -> 'rating') <> 'number' THEN
     RAISE EXCEPTION 'R1 FAIL: numeric key changed type to %', jsonb_typeof(v_json -> 'rating');
   END IF;
-  RAISE NOTICE 'R1 PASS — helper masks listed keys only, preserves types';
+  -- Re-applying it is a no-op, including for a value shorter than 4 characters
+  -- (the maintenance scrub runs it over rows that are already redacted).
+  v_json := '{"a": "1234567890", "b": "ab", "c": null}'::jsonb;
+  IF redact_jsonb_columns(redact_jsonb_columns(v_json, ARRAY['a','b','c']), ARRAY['a','b','c'])
+     IS DISTINCT FROM redact_jsonb_columns(v_json, ARRAY['a','b','c']) THEN
+    RAISE EXCEPTION 'R1 FAIL: redacting twice differs from redacting once (%)',
+      redact_jsonb_columns(redact_jsonb_columns(v_json, ARRAY['a','b','c']), ARRAY['a','b','c']);
+  END IF;
+  -- ...but a raw value that merely starts with four stars is still masked.
+  v_json := redact_jsonb_columns('{"f": "****MyKad_880101-14-5678.pdf"}'::jsonb, ARRAY['f']);
+  IF v_json ->> 'f' <> '****.pdf' THEN
+    RAISE EXCEPTION 'R1 FAIL: star-prefixed raw value slipped through as %', v_json ->> 'f';
+  END IF;
+  RAISE NOTICE 'R1 PASS — helper masks listed keys only, preserves types, is idempotent';
 
   -- ---- fixtures (service role: RLS not enforced) --------------------------
   INSERT INTO users (auth_user_id, email, first_name, last_name)
@@ -156,6 +177,60 @@ BEGIN
     RAISE EXCEPTION 'R6 FAIL: tournaments snapshot was altered (venue_name=%)', v_got;
   END IF;
   RAISE NOTICE 'R6 PASS — non-redacted tables unaffected';
+
+  -- ---- R7: original_filename is redacted ----------------------------------
+  INSERT INTO organization_documents (organization_id, doc_type, storage_path, original_filename)
+    VALUES (v_org, 'identity_document', 'users/x/org-kyb/id.pdf', 'MyKad_880101-14-5678.pdf');
+
+  SELECT new_data ->> 'original_filename' INTO v_got
+  FROM audit_logs
+  WHERE table_name = 'organization_documents' AND organization_id = v_org AND action = 'INSERT'
+  ORDER BY id DESC LIMIT 1;
+
+  IF v_got IS DISTINCT FROM '****.pdf' THEN
+    RAISE EXCEPTION 'R7 FAIL: original_filename=% (expected ****.pdf)', v_got;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM audit_logs
+    WHERE table_name = 'organization_documents' AND organization_id = v_org
+      AND new_data::text LIKE '%880101%'
+  ) THEN
+    RAISE EXCEPTION 'R7 FAIL: the IC number in the filename survives in audit_logs';
+  END IF;
+  RAISE NOTICE 'R7 PASS — uploaded filename redacted to its extension';
+
+  -- ---- R8: only an accepted extension survives ---------------------------
+  -- The last-4 rule would keep '5678' from each of the first two.
+  v_json := redact_jsonb_filenames(
+    '{"a": "MyKad 880101-14-5678", "b": "880101-14.5678", "c": "Scan.JPEG",
+      "d": "users/x/org-kyb/880101145678", "e": "id.pdf.exe", "f": null, "g": "keep"}'::jsonb,
+    ARRAY['a', 'b', 'c', 'd', 'e', 'f']
+  );
+  IF v_json ->> 'a' <> '****' OR v_json ->> 'b' <> '****' OR v_json ->> 'd' <> '****'
+     OR v_json ->> 'e' <> '****' THEN
+    RAISE EXCEPTION 'R8 FAIL: a name without an accepted extension kept characters: %', v_json;
+  END IF;
+  IF v_json ->> 'c' <> '****.jpeg' THEN
+    RAISE EXCEPTION 'R8 FAIL: accepted extension not kept (lower-cased): %', v_json ->> 'c';
+  END IF;
+  IF jsonb_typeof(v_json -> 'f') <> 'null' OR v_json ->> 'g' <> 'keep' THEN
+    RAISE EXCEPTION 'R8 FAIL: NULL or an unlisted key was altered: %', v_json;
+  END IF;
+  IF redact_jsonb_filenames(v_json, ARRAY['a', 'b', 'c', 'd', 'e', 'f']) IS DISTINCT FROM v_json THEN
+    RAISE EXCEPTION 'R8 FAIL: redacting a filename twice changed it';
+  END IF;
+
+  -- And through the trigger, for both an uploaded name and a storage path.
+  INSERT INTO organization_documents (organization_id, doc_type, storage_path, original_filename)
+    VALUES (v_org, 'identity_document', 'users/x/org-kyb/990202-10-4321', 'IC 990202-10-4321');
+  IF EXISTS (
+    SELECT 1 FROM audit_logs
+    WHERE table_name = 'organization_documents' AND organization_id = v_org
+      AND new_data::text LIKE '%4321%'
+  ) THEN
+    RAISE EXCEPTION 'R8 FAIL: trailing IC digits survive in an organization_documents snapshot';
+  END IF;
+  RAISE NOTICE 'R8 PASS — filenames and paths keep only an accepted extension';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;

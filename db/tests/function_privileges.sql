@@ -52,7 +52,8 @@ DECLARE
     'settle_payout',
     'list_organization_payout_overview',
     'list_pending_payout_nominations',
-    'list_admin_payout_candidates'
+    'list_admin_payout_candidates',
+    'anonymise_user_audit_logs'
   ];
   -- SECURITY DEFINER functions clients may call. Adding to this list is a
   -- security decision: the function must check the caller itself or expose
