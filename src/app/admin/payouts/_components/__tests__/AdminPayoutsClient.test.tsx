@@ -3,7 +3,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import AdminPayoutsClient from "../AdminPayoutsClient";
-import type { AdminPayoutCandidate } from "@/services/payouts/admin-queue";
+import type { AdminPayout, AdminPayoutCandidate } from "@/services/payouts/admin-queue";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -80,5 +80,55 @@ describe("AdminPayoutsClient amount", () => {
     expect(screen.getByText(/moves real money/).textContent).toMatch(
       /^Send RM 64\.00 to Org\?/,
     );
+  });
+});
+
+describe("AdminPayoutsClient early payouts", () => {
+  const EARLY: AdminPayout = {
+    id: "bbbbbbbb-0000-0000-0000-000000000001",
+    kind: "early",
+    status: "pending",
+    approval: "pending",
+    amount_cents: 250000,
+    failure_reason: null,
+    receipt_url: null,
+    awaiting_budget: false,
+    requested_at: "2026-11-01T00:00:00Z",
+    processed_at: null,
+    tournament: { id: "t1", name: "Selangor Open" },
+    organizer: { id: "o1", name: "Org" },
+    recipient: { id: "o1", name: "Org" },
+    is_beneficiary: false,
+    bank: null,
+  };
+
+  it("labels a request waiting for review and links to it", () => {
+    render(<AdminPayoutsClient data={{ candidates: [], payouts: [EARLY] }} />);
+    expect(screen.getByText("Awaiting review")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Review request →" }).getAttribute("href"),
+    ).toBe(`/admin/payouts/${EARLY.id}`);
+  });
+
+  it("labels a rejected request as rejected, not pending", () => {
+    render(
+      <AdminPayoutsClient
+        data={{ candidates: [], payouts: [{ ...EARLY, approval: "rejected" }] }}
+      />,
+    );
+    expect(screen.getByText("Rejected")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "View request" })).toBeTruthy();
+  });
+
+  it("gives automatic payouts no review link", () => {
+    render(
+      <AdminPayoutsClient
+        data={{
+          candidates: [],
+          payouts: [{ ...EARLY, kind: "automatic", approval: "approved" }],
+        }}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /request/ })).toBeNull();
   });
 });

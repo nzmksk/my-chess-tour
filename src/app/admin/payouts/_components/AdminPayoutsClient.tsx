@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { formatCalendarDate } from "@/lib/datetime";
 import { MIN_PAYOUT_CENTS } from "@/services/payouts/constants";
 import type {
@@ -219,8 +220,24 @@ function CandidateCard({ candidate }: { candidate: AdminPayoutCandidate }) {
   );
 }
 
+// An early request waiting for review hasn't been queued to send, whatever its
+// status says, so it gets its own label.
+const AWAITING_REVIEW = {
+  label: "Awaiting review",
+  className: "bg-warning/15 text-warning border border-warning/20",
+};
+const REJECTED = {
+  label: "Rejected",
+  className: "bg-danger/15 text-danger border border-danger/20",
+};
+
 function PayoutCard({ payout }: { payout: AdminPayout }) {
-  const status = STATUS_CONFIG[payout.status];
+  const status =
+    payout.approval === "pending"
+      ? AWAITING_REVIEW
+      : payout.approval === "rejected"
+        ? REJECTED
+        : STATUS_CONFIG[payout.status];
   return (
     <div className="card flex flex-col gap-2 px-5 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -280,6 +297,14 @@ function PayoutCard({ payout }: { payout: AdminPayout }) {
         >
           View CHIP receipt
         </a>
+      )}
+      {payout.kind === "early" && (
+        <Link
+          href={`/admin/payouts/${payout.id}`}
+          className="font-lato text-gold-bright text-xs hover:underline"
+        >
+          {payout.approval === "pending" ? "Review request →" : "View request"}
+        </Link>
       )}
     </div>
   );
