@@ -218,6 +218,10 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
                 </td>
               </tr>
               <tr>
+                <td>Error reports (Sentry)</td>
+                <td>30 days, then deleted automatically</td>
+              </tr>
+              <tr>
                 <td>Business verification documents (organisers)</td>
                 <td>7 years after the organiser relationship ends</td>
               </tr>
@@ -311,6 +315,15 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               processor, which receives the details needed to collect entry fees
               and to disburse organiser payouts and prizes, including bank
               account details.
+            </li>
+            <li>
+              <strong>Sentry (sentry.io)</strong> — our error-monitoring
+              service. When something goes wrong on the platform, it receives a
+              technical report of the error, which may include details from the
+              request that failed, such as an account identifier or information
+              you submitted. Sentry&apos;s servers are in the United States, so
+              these reports are processed outside Malaysia. We do not send your
+              IP address or cookies, and reports are deleted after 30 days.
             </li>
           </ul>
           <p className="modal-paragraph">
