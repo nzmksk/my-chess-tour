@@ -954,10 +954,13 @@ AS $$
     COALESCE(s.net_revenue_cents, 0),
     COALESCE(s.total_payouts_cents, 0),
     available_payout_cents(v.id),
+    -- The slots uniq_early_payout_seq_per_tournament holds: rejected and failed
+    -- requests moved no money, so they don't count.
     (
       SELECT count(DISTINCT p.request_seq)::integer
       FROM payouts p
-      WHERE p.tournament_id = v.id AND p.kind = 'early' AND p.approval <> 'rejected'
+      WHERE p.tournament_id = v.id AND p.kind = 'early'
+        AND p.approval <> 'rejected' AND p.status <> 'failed'
     ),
     payout_recipient_problem(v.recipient_id)
   FROM visible v

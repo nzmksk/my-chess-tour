@@ -95,10 +95,16 @@ CREATE UNIQUE INDEX uniq_payouts_chip_send_instruction
 -- "at most 2", so the cap is carried by request_seq (1|2, CHECKed on the table)
 -- which request_early_payout assigns under a tournament-row lock; this index is
 -- the last line of defence, exactly like uniq_active_refund_per_registration.
--- Partial on superseded_by IS NULL so retrying a FAILED early payout inherits
--- the same seq without burning a slot.
+--
+-- Only a request that is awaiting review, in flight or paid holds its slot. A
+-- rejected one never moved money, and a failed one moved none either, so both
+-- fall out and the next request reuses the seq. This is deliberately NOT keyed on
+-- superseded_by: the failed row can only be linked to its retry after the retry
+-- is inserted, and the insert would already have collided with it (a partial
+-- unique index cannot be deferred).
 CREATE UNIQUE INDEX uniq_early_payout_seq_per_tournament
-  ON payouts (tournament_id, request_seq) WHERE kind = 'early' AND superseded_by IS NULL;
+  ON payouts (tournament_id, request_seq)
+  WHERE kind = 'early' AND approval <> 'rejected' AND status <> 'failed';
 
 CREATE UNIQUE INDEX uniq_live_early_payout_per_tournament
   ON payouts (tournament_id)
