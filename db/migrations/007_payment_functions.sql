@@ -1065,6 +1065,122 @@ END;
 $$;
 
 -- =============================================
+-- REVIEW PAYOUT REQUEST
+-- A platform admin approves or rejects an early payout request. Modelled on
+-- review_tournament_cancellation: the row is locked, a missing one is P0002 and
+-- one already reviewed is P0001 (PAYOUT_ALREADY_REVIEWED).
+--
+-- Approve re-runs every check request_early_payout made, because days may have
+-- passed: a cancellation may now be pending, refunds may have landed, the
+-- organizer may have lapsed on the agreement, availability may have collapsed.
+-- The request's own reservation and slot are excluded so it isn't counted against
+-- itself. A refusal raises the same sentinels as request_early_payout and leaves
+-- the request pending, so the admin can reject it with a reason instead.
+--
+-- Approve does NOT move money. A network call can't run in this transaction (the
+-- same constraint as review_tournament_cancellation), so it only sets
+-- approval='approved', leaving status 'pending', and the route fires
+-- executePayout afterwards, best-effort. The bank account is re-snapshotted here:
+-- if the organizer replaced theirs while the request waited, the new verified one
+-- is where they want the money, and the old one would only fail at send time.
+--
+-- Reject unlinks any failed request this one had superseded, so that row reads as
+-- un-retried again; the slot itself was never held (see
+-- uniq_early_payout_seq_per_tournament).
+--
+-- Locks the tournament before the payout, the same order as request_early_payout,
+-- so the two can't deadlock.
+-- =============================================
+CREATE OR REPLACE FUNCTION review_payout_request(
+  p_payout_id        uuid,
+  p_reviewer_id      uuid,
+  p_action           text,
+  p_rejection_reason text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament_id uuid;
+  v_payout        payouts;
+  v_problem       text;
+  v_cap           integer;
+  v_bank_id       uuid;
+  v_new_approval  approval_status;
+  v_reviewed_at   timestamptz := now();
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('approve', 'reject') THEN
+    RAISE EXCEPTION 'action must be approve or reject, got %', p_action USING ERRCODE = '22023';
+  END IF;
+  IF p_action = 'reject' AND (p_rejection_reason IS NULL OR btrim(p_rejection_reason) = '') THEN
+    RAISE EXCEPTION 'a rejection reason is required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT tournament_id INTO v_tournament_id FROM payouts WHERE id = p_payout_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'payout % not found', p_payout_id USING ERRCODE = 'P0002';
+  END IF;
+
+  PERFORM 1 FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
+  SELECT * INTO v_payout FROM payouts WHERE id = p_payout_id FOR UPDATE;
+
+  -- Automatic payouts are created approved, so they land here too.
+  IF v_payout.approval <> 'pending' THEN
+    RAISE EXCEPTION 'PAYOUT_ALREADY_REVIEWED: payout % already reviewed', p_payout_id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_action = 'approve' THEN
+    v_problem := early_payout_problem(v_payout.tournament_id, p_payout_id);
+    IF v_problem IS NOT NULL THEN
+      RAISE EXCEPTION 'EARLY_PAYOUT_NOT_ALLOWED: %', v_problem USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT c.cap_cents INTO v_cap FROM early_payout_cap(v_payout.tournament_id, p_payout_id) c;
+    IF v_payout.amount_cents > v_cap THEN
+      RAISE EXCEPTION 'EARLY_PAYOUT_EXCEEDS_CAP: % cents requested, % cents can be paid early',
+        v_payout.amount_cents, v_cap
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    -- early_payout_problem guarantees there is one.
+    SELECT b.id INTO v_bank_id
+      FROM organization_bank_accounts b
+      WHERE b.organization_id = v_payout.recipient_organization_id AND b.is_active AND b.status = 'verified';
+
+    v_new_approval := 'approved';
+    UPDATE payouts
+      SET approval        = v_new_approval,
+          reviewed_by     = p_reviewer_id,
+          reviewed_at     = v_reviewed_at,
+          bank_account_id = v_bank_id
+      WHERE id = p_payout_id;
+  ELSE
+    v_new_approval := 'rejected';
+    UPDATE payouts
+      SET approval         = v_new_approval,
+          reviewed_by      = p_reviewer_id,
+          reviewed_at      = v_reviewed_at,
+          rejection_reason = btrim(p_rejection_reason)
+      WHERE id = p_payout_id;
+
+    UPDATE payouts SET superseded_by = NULL WHERE superseded_by = p_payout_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'id',              v_payout.id,
+    'tournament_id',   v_payout.tournament_id,
+    'organization_id', v_payout.organization_id,
+    'amount_cents',    v_payout.amount_cents,
+    'approval',        v_new_approval,
+    'reviewed_at',     v_reviewed_at
+  );
+END;
+$$;
+
+-- =============================================
 -- SETTLE PAYOUT (idempotent, keyed by a specific payout row)
 -- The settle_refund twin, called by both the sync response and the webhook:
 --   paid  → the money left: book one type='organizer_payout' ledger row, which is
@@ -1370,6 +1486,7 @@ REVOKE EXECUTE ON FUNCTION queue_payout                      FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION early_payout_cap                  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION early_payout_problem              FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION request_early_payout              FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_payout_request             FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_payout                     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_organization_payout_overview FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_pending_payout_nominations   FROM PUBLIC, anon, authenticated;
@@ -1388,6 +1505,7 @@ GRANT EXECUTE ON FUNCTION queue_payout                      TO service_role;
 GRANT EXECUTE ON FUNCTION early_payout_cap                  TO service_role;
 GRANT EXECUTE ON FUNCTION early_payout_problem              TO service_role;
 GRANT EXECUTE ON FUNCTION request_early_payout              TO service_role;
+GRANT EXECUTE ON FUNCTION review_payout_request             TO service_role;
 GRANT EXECUTE ON FUNCTION settle_payout                     TO service_role;
 GRANT EXECUTE ON FUNCTION list_organization_payout_overview TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_payout_nominations   TO service_role;

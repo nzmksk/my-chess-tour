@@ -698,6 +698,188 @@ BEGIN
   RAISE NOTICE 'E6 PASS — every request_early_payout refusal holds';
 END $$;
 
+-- =============================================================================
+-- EARLY PAYOUT REVIEW (#521): review_payout_request
+-- =============================================================================
+DO $$
+DECLARE
+  v_owner_role integer;
+  v_org      uuid;
+  v_owner    uuid;
+  v_reviewer uuid;
+  v_t        uuid;
+  v_id       uuid;
+  v_id2      uuid;
+  v_auto     uuid;
+  v_reg      uuid;
+  v_refund   uuid;
+  v_req      uuid;
+  v_new_bank uuid;
+  v_res      jsonb;
+  v_po       payouts;
+BEGIN
+  SELECT id INTO v_owner_role FROM roles WHERE name = 'owner' AND scope = 'organization';
+  INSERT INTO users (email, first_name, last_name) VALUES ('rv-owner@test.local', 'O', 'R') RETURNING id INTO v_owner;
+  INSERT INTO users (email, first_name, last_name) VALUES ('rv-admin@test.local', 'A', 'R') RETURNING id INTO v_reviewer;
+  INSERT INTO organizations (name, email, entity_type, agreement_version, agreement_accepted_at, approval_status)
+    VALUES ('RV ORG', 'rv-org@test.local', 'company', current_organizer_agreement_version(), now(), 'approved') RETURNING id INTO v_org;
+  INSERT INTO organization_bank_accounts (organization_id, bank_name, bank_code, account_holder, account_number, status, chip_bank_account_id, verified_at)
+    VALUES (v_org, 'Maybank', 'MBBEMYKL', 'Org', '514100000201', 'verified', 940001, now());
+  INSERT INTO organization_memberships (organization_id, user_id, role_id) VALUES (v_org, v_owner, v_owner_role);
+
+  -- ===== V1: approve sets approval only; a second review is refused ==========
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 4000, 'Venue deposit');
+  v_res := review_payout_request(v_id, v_reviewer, 'approve', NULL);
+  SELECT * INTO v_po FROM payouts WHERE id = v_id;
+  IF v_po.approval <> 'approved' OR v_po.status <> 'pending' OR v_po.reviewed_by <> v_reviewer
+     OR v_po.reviewed_at IS NULL OR v_po.processed_at IS NOT NULL OR v_res->>'approval' <> 'approved' THEN
+    RAISE EXCEPTION 'V1 FAIL: approve did not leave an approved, unsent payout: %', row_to_json(v_po);
+  END IF;
+  IF EXISTS (SELECT 1 FROM payments WHERE tournament_id = v_t AND type = 'organizer_payout') THEN
+    RAISE EXCEPTION 'V1 FAIL: approving booked a ledger row';
+  END IF;
+  BEGIN
+    PERFORM review_payout_request(v_id, v_reviewer, 'reject', 'too late');
+    RAISE EXCEPTION 'V1 FAIL: a reviewed payout was reviewed again';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLSTATE <> 'P0001' OR SQLERRM NOT LIKE 'PAYOUT_ALREADY_REVIEWED%' THEN RAISE; END IF;
+  END;
+  RAISE NOTICE 'V1 PASS — approve moves no money; reviewing twice is P0001';
+
+  -- ===== V2: reject frees the reservation and records why ===================
+  PERFORM settle_payout(v_id, 8001, true, 4000, NULL, NULL);
+  v_id := request_early_payout(v_t, v_owner, 3000, 'Arbiter fees');
+  IF available_payout_cents(v_t) <> 13000 THEN
+    RAISE EXCEPTION 'V2 FAIL: precondition, available=%', available_payout_cents(v_t);
+  END IF;
+  PERFORM review_payout_request(v_id, v_reviewer, 'reject', '  Send the invoice first  ');
+  SELECT * INTO v_po FROM payouts WHERE id = v_id;
+  IF v_po.approval <> 'rejected' OR v_po.rejection_reason <> 'Send the invoice first' OR v_po.reviewed_by <> v_reviewer THEN
+    RAISE EXCEPTION 'V2 FAIL: rejection not recorded: %', row_to_json(v_po);
+  END IF;
+  IF available_payout_cents(v_t) <> 16000 THEN
+    RAISE EXCEPTION 'V2 FAIL: a rejected request still reserves money: available=%', available_payout_cents(v_t);
+  END IF;
+  BEGIN
+    PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'V2 FAIL: a rejected payout was approved';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'PAYOUT_ALREADY_REVIEWED%' THEN RAISE; END IF;
+  END;
+  -- The rejection cost nothing: the second slot is still free.
+  v_id := request_early_payout(v_t, v_owner, 3000, 'Arbiter fees, with invoice');
+  IF (SELECT request_seq FROM payouts WHERE id = v_id) <> 2 THEN
+    RAISE EXCEPTION 'V2 FAIL: request after a rejection did not take seq 2';
+  END IF;
+  RAISE NOTICE 'V2 PASS — reject frees the reservation and the slot';
+
+  -- ===== V3: approve re-runs the guards =====================================
+  -- A cancellation filed while the request waited.
+  v_t := pg_temp.closed_tournament(v_org, 3);
+  v_id := request_early_payout(v_t, v_owner, 15000, 'Venue deposit');
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through') RETURNING id INTO v_req;
+  BEGIN
+    PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'V3 FAIL: approved during a pending cancellation';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'EARLY_PAYOUT_NOT_ALLOWED: cancellation_pending%' THEN RAISE; END IF;
+  END;
+  IF (SELECT approval FROM payouts WHERE id = v_id) <> 'pending' THEN
+    RAISE EXCEPTION 'V3 FAIL: a refused approval changed the request';
+  END IF;
+  DELETE FROM tournament_cancellation_requests WHERE id = v_req;
+
+  -- A refund that landed while it waited: net 30000 -> 20000, so the ceiling is 10000.
+  SELECT r.id INTO v_reg FROM registrations r WHERE r.tournament_id = v_t LIMIT 1;
+  INSERT INTO refunds (registration_id, refund_amount_cents, reason, status)
+    VALUES (v_reg, 11000, 'test', 'pending') RETURNING id INTO v_refund;
+  BEGIN
+    PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'V3 FAIL: approved with a refund outstanding';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'EARLY_PAYOUT_NOT_ALLOWED: refund_pending%' THEN RAISE; END IF;
+  END;
+  PERFORM settle_refund(v_refund, 'chip-refund-rv', true, NULL);
+  BEGIN
+    PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'V3 FAIL: approved above the collapsed cap';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'EARLY_PAYOUT_EXCEEDS_CAP: 15000 cents requested, 10000 cents can be paid early%' THEN RAISE; END IF;
+  END;
+
+  -- The organizer fell behind on the agreement.
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id2 := request_early_payout(v_t, v_owner, 2000, 'Venue deposit');
+  UPDATE organizations SET agreement_version = '2020-01-01' WHERE id = v_org;
+  BEGIN
+    PERFORM review_payout_request(v_id2, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'V3 FAIL: approved on a stale agreement';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'EARLY_PAYOUT_NOT_ALLOWED: agreement_not_current%' THEN RAISE; END IF;
+  END;
+  UPDATE organizations SET agreement_version = current_organizer_agreement_version() WHERE id = v_org;
+  RAISE NOTICE 'V3 PASS — approve re-runs cancellation, refund, cap and recipient checks';
+
+  -- ===== V4: approve re-snapshots the bank account ==========================
+  -- v_id2 still waits. The organizer replaces their account in the meantime.
+  UPDATE organization_bank_accounts SET is_active = false WHERE organization_id = v_org AND is_active;
+  INSERT INTO organization_bank_accounts (organization_id, bank_name, bank_code, account_holder, account_number, status, chip_bank_account_id, verified_at)
+    VALUES (v_org, 'CIMB', 'CIBBMYKL', 'Org', '800100000202', 'verified', 940002, now()) RETURNING id INTO v_new_bank;
+  PERFORM review_payout_request(v_id2, v_reviewer, 'approve', NULL);
+  IF (SELECT bank_account_id FROM payouts WHERE id = v_id2) IS DISTINCT FROM v_new_bank THEN
+    RAISE EXCEPTION 'V4 FAIL: approval kept the replaced bank account';
+  END IF;
+  RAISE NOTICE 'V4 PASS — approval sends to the current verified account';
+
+  -- ===== V5: missing, automatic and malformed reviews =======================
+  BEGIN
+    PERFORM review_payout_request(gen_random_uuid(), v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'V5 FAIL: reviewed a payout that does not exist';
+  EXCEPTION WHEN no_data_found THEN
+    NULL;
+  END;
+  v_t := pg_temp.closed_tournament(v_org, 1);
+  v_auto := queue_payout(v_t, 'automatic', NULL, v_reviewer);
+  BEGIN
+    PERFORM review_payout_request(v_auto, v_reviewer, 'reject', 'no');
+    RAISE EXCEPTION 'V5 FAIL: an automatic payout was reviewed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'PAYOUT_ALREADY_REVIEWED%' THEN RAISE; END IF;
+  END;
+  BEGIN
+    PERFORM review_payout_request(v_id, v_reviewer, 'reject', '  ');
+    RAISE EXCEPTION 'V5 FAIL: rejected without a reason';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+  BEGIN
+    PERFORM review_payout_request(v_id, v_reviewer, 'delete', NULL);
+    RAISE EXCEPTION 'V5 FAIL: accepted an unknown action';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+  RAISE NOTICE 'V5 PASS — missing is P0002; automatic and malformed reviews refused';
+
+  -- ===== V6: rejecting a retry unlinks the failed request it superseded =====
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 5000, 'Venue deposit');
+  PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+  PERFORM settle_payout(v_id, 8002, false, NULL, NULL, 'send_instruction_rejected');
+  v_id2 := request_early_payout(v_t, v_owner, 5000, 'Venue deposit again');
+  PERFORM review_payout_request(v_id2, v_reviewer, 'reject', 'Wrong amount');
+  IF (SELECT superseded_by FROM payouts WHERE id = v_id) IS NOT NULL THEN
+    RAISE EXCEPTION 'V6 FAIL: the failed request still points at a rejected retry';
+  END IF;
+  v_id2 := request_early_payout(v_t, v_owner, 4000, 'Venue deposit, corrected');
+  IF (SELECT superseded_by FROM payouts WHERE id = v_id) IS DISTINCT FROM v_id2
+     OR (SELECT request_seq FROM payouts WHERE id = v_id2) <> 1 THEN
+    RAISE EXCEPTION 'V6 FAIL: the next request did not take over the failed slot';
+  END IF;
+  RAISE NOTICE 'V6 PASS — a rejected retry hands the failed slot back';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'ALL SCENARIOS PASSED'; END $$;
 
 ROLLBACK;
