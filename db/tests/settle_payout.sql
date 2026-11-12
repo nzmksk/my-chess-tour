@@ -1,6 +1,7 @@
 -- =============================================================================
--- DB money-state regression test for organizer payouts (#520):
+-- DB money-state regression test for organizer payouts (#520, #521):
 --   * available_payout_cents, queue_payout, settle_payout (007_payment_functions.sql)
+--   * request_early_payout, early_payout_cap, early_payout_problem (#521)
 --   * the payouts unique indexes (002_indexes.sql)
 --   * tournament_payout_summary draining on a settled payout
 --
@@ -436,8 +437,267 @@ BEGIN
   EXECUTE 'RESET ROLE';
   PERFORM set_config('request.jwt.claims', '{}', true);
   RAISE NOTICE 'W PASS — org owner cannot insert a payout through PostgREST';
-
-  RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;
+
+-- =============================================================================
+-- EARLY PAYOUTS (#521): request_early_payout, early_payout_cap/_problem and the
+-- request_seq index.
+-- =============================================================================
+
+-- A published tournament whose registration has closed, with p_players paid
+-- registrations (net 10000 each). Optionally nominates a beneficiary first, since
+-- the nomination freezes at the first paid registration.
+CREATE FUNCTION pg_temp.closed_tournament(p_org uuid, p_players integer, p_nominate uuid DEFAULT NULL, p_nominator uuid DEFAULT NULL)
+RETURNS uuid
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_t      uuid;
+  v_player uuid;
+  v_res    jsonb;
+BEGIN
+  INSERT INTO tournaments (
+    organization_id, name, venue_name, venue_state, venue_address,
+    start_date, end_date, registration_deadline,
+    format, time_control, entry_fees, max_participants, status
+  ) VALUES (
+    p_org, 'EARLY T', 'Venue', 'Selangor', 'Address',
+    current_date + 30, current_date + 31, now() + interval '20 days',
+    '{"type":"classical"}', '{"base_minutes":90}', '{"standard": {"amount_cents": 10000}}', 100, 'published'
+  ) RETURNING id INTO v_t;
+
+  IF p_nominate IS NOT NULL THEN
+    PERFORM nominate_payout_beneficiary(v_t, p_nominate, p_nominator);
+  END IF;
+
+  FOR i IN 1..p_players LOOP
+    INSERT INTO users (email, first_name, last_name)
+      VALUES ('early-' || gen_random_uuid() || '@test.local', 'E', 'T') RETURNING id INTO v_player;
+    v_res := create_registration_with_payment(v_player, v_t, 'standard', 10000);
+    PERFORM settle_registration_payment((v_res->>'payment_id')::uuid, true, 11000);
+  END LOOP;
+
+  -- now() is the transaction's start, so "closed" has to be strictly before it.
+  UPDATE tournaments SET registration_closed_at = now() - interval '1 minute' WHERE id = v_t;
+  RETURN v_t;
+END $$;
+
+-- Asserts that request_early_payout refuses with a message starting p_expected.
+CREATE FUNCTION pg_temp.expect_early_refusal(p_label text, p_t uuid, p_user uuid, p_amount integer, p_expected text)
+RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+  BEGIN
+    PERFORM request_early_payout(p_t, p_user, p_amount, 'Venue deposit');
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE p_expected || '%' THEN
+      RETURN;
+    END IF;
+    RAISE EXCEPTION '% FAIL: expected "%", got "%"', p_label, p_expected, SQLERRM;
+  END;
+  RAISE EXCEPTION '% FAIL: early payout accepted, expected "%"', p_label, p_expected;
+END $$;
+
+DO $$
+DECLARE
+  v_owner_role integer;
+  v_admin_role integer;
+  v_org      uuid;
+  v_ben      uuid;
+  v_owner    uuid;
+  v_admin    uuid;
+  v_ben_owner uuid;
+  v_t        uuid;
+  v_id       uuid;
+  v_id2      uuid;
+  v_reg      uuid;
+  v_refund   uuid;
+  v_req      uuid;
+  v_po       payouts;
+  v_cap      record;
+BEGIN
+  SELECT id INTO v_owner_role FROM roles WHERE name = 'owner' AND scope = 'organization';
+  SELECT id INTO v_admin_role FROM roles WHERE name = 'admin' AND scope = 'organization';
+
+  INSERT INTO users (email, first_name, last_name) VALUES ('ep-owner@test.local', 'O', 'E') RETURNING id INTO v_owner;
+  INSERT INTO users (email, first_name, last_name) VALUES ('ep-admin@test.local', 'A', 'E') RETURNING id INTO v_admin;
+  INSERT INTO users (email, first_name, last_name) VALUES ('ep-ben@test.local', 'B', 'E') RETURNING id INTO v_ben_owner;
+
+  INSERT INTO organizations (name, email, entity_type, agreement_version, agreement_accepted_at, approval_status)
+    VALUES ('EP ORG', 'ep-org@test.local', 'company', current_organizer_agreement_version(), now(), 'approved') RETURNING id INTO v_org;
+  INSERT INTO organizations (name, email, entity_type, agreement_version, agreement_accepted_at, approval_status)
+    VALUES ('EP BEN', 'ep-ben-org@test.local', 'society', current_organizer_agreement_version(), now(), 'approved') RETURNING id INTO v_ben;
+  INSERT INTO organization_bank_accounts (organization_id, bank_name, bank_code, account_holder, account_number, status, chip_bank_account_id, verified_at)
+    VALUES (v_org, 'Maybank', 'MBBEMYKL', 'Org', '514100000101', 'verified', 930001, now()),
+           (v_ben, 'Maybank', 'MBBEMYKL', 'Ben', '514100000102', 'verified', 930002, now());
+  INSERT INTO organization_memberships (organization_id, user_id, role_id) VALUES
+    (v_org, v_owner, v_owner_role),
+    (v_org, v_admin, v_admin_role),
+    (v_ben, v_ben_owner, v_owner_role);
+
+  -- ===== E1: a request reserves its amount and waits for review =============
+  -- Two players: net revenue 20000, so the 50% ceiling is 10000.
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  SELECT * INTO v_cap FROM early_payout_cap(v_t);
+  IF v_cap.net_revenue_cents <> 20000 OR v_cap.ceiling_cents <> 10000 OR v_cap.cap_cents <> 10000 THEN
+    RAISE EXCEPTION 'E1 FAIL: cap arithmetic wrong: %', row_to_json(v_cap);
+  END IF;
+
+  v_id := request_early_payout(v_t, v_owner, 4000, '  Venue deposit  ');
+  SELECT * INTO v_po FROM payouts WHERE id = v_id;
+  IF v_po.kind <> 'early' OR v_po.request_seq <> 1 OR v_po.approval <> 'pending'
+     OR v_po.status <> 'pending' OR v_po.amount_cents <> 4000 OR v_po.reason <> 'Venue deposit'
+     OR v_po.recipient_organization_id <> v_org OR v_po.organization_id <> v_org
+     OR v_po.bank_account_id IS DISTINCT FROM (SELECT id FROM organization_bank_accounts WHERE organization_id = v_org)
+     OR v_po.requested_by <> v_owner THEN
+    RAISE EXCEPTION 'E1 FAIL: early payout row wrong: %', row_to_json(v_po);
+  END IF;
+  IF available_payout_cents(v_t) <> 16000 THEN
+    RAISE EXCEPTION 'E1 FAIL: a pending request must reserve its amount: available=%', available_payout_cents(v_t);
+  END IF;
+  RAISE NOTICE 'E1 PASS — request created pending review, amount reserved';
+
+  -- ===== E2: one live request at a time =====================================
+  PERFORM pg_temp.expect_early_refusal('E2', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: early_payout_in_flight');
+  BEGIN
+    INSERT INTO payouts (tournament_id, organization_id, recipient_organization_id, kind, request_seq, amount_cents, reason)
+      VALUES (v_t, v_org, v_org, 'early', 2, 2000, 'hand-rolled');
+    RAISE EXCEPTION 'E2 FAIL: a second live early payout was inserted';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+  RAISE NOTICE 'E2 PASS — a second live request is refused, and the index backs it';
+
+  -- ===== E3: a rejected request does not consume a slot =====================
+  UPDATE payouts SET approval = 'rejected', reviewed_by = v_owner, reviewed_at = now(), rejection_reason = 'typo' WHERE id = v_id;
+  IF (SELECT o.early_requests_used FROM list_organization_payout_overview(v_org) o WHERE o.tournament_id = v_t) <> 0 THEN
+    RAISE EXCEPTION 'E3 FAIL: a rejected request is counted as used';
+  END IF;
+  v_id2 := request_early_payout(v_t, v_owner, 4000, 'Venue deposit, corrected');
+  IF (SELECT request_seq FROM payouts WHERE id = v_id2) <> 1 THEN
+    RAISE EXCEPTION 'E3 FAIL: the request after a rejection took seq % (expected 1)', (SELECT request_seq FROM payouts WHERE id = v_id2);
+  END IF;
+  RAISE NOTICE 'E3 PASS — a rejected request leaves its slot free';
+
+  -- ===== E4: the cap counts committed early money; a third request is refused
+  UPDATE payouts SET approval = 'approved', reviewed_at = now() WHERE id = v_id2;
+  PERFORM settle_payout(v_id2, 7001, true, 4000, NULL, NULL);
+
+  -- Ceiling 10000, 4000 already paid early: 6000 left.
+  PERFORM pg_temp.expect_early_refusal('E4', v_t, v_owner, 6001, 'EARLY_PAYOUT_EXCEEDS_CAP: 6001 cents requested, 6000 cents can be paid early');
+  v_id := request_early_payout(v_t, v_owner, 3000, 'Arbiter fees');
+  IF (SELECT request_seq FROM payouts WHERE id = v_id) <> 2 THEN
+    RAISE EXCEPTION 'E4 FAIL: second request took seq % (expected 2)', (SELECT request_seq FROM payouts WHERE id = v_id);
+  END IF;
+  UPDATE payouts SET approval = 'approved', reviewed_at = now() WHERE id = v_id;
+  PERFORM settle_payout(v_id, 7002, true, 3000, NULL, NULL);
+
+  PERFORM pg_temp.expect_early_refusal('E4', v_t, v_owner, 1000, 'EARLY_PAYOUT_NOT_ALLOWED: early_payout_limit_reached');
+  IF (SELECT o.early_requests_used FROM list_organization_payout_overview(v_org) o WHERE o.tournament_id = v_t) <> 2 THEN
+    RAISE EXCEPTION 'E4 FAIL: overview does not show both slots used';
+  END IF;
+  -- The index is the last line of defence. Nothing is live, so only the seq index can fire.
+  BEGIN
+    INSERT INTO payouts (tournament_id, organization_id, recipient_organization_id, kind, request_seq, amount_cents, reason, approval)
+      VALUES (v_t, v_org, v_org, 'early', 1, 1000, 'hand-rolled', 'approved');
+    RAISE EXCEPTION 'E4 FAIL: a duplicate (tournament, request_seq) was inserted';
+  EXCEPTION WHEN unique_violation THEN
+    IF SQLERRM NOT LIKE '%uniq_early_payout_seq_per_tournament%' THEN RAISE; END IF;
+  END;
+  RAISE NOTICE 'E4 PASS — cap counts paid early money; third request and duplicate seq refused';
+
+  -- ===== E5: a failed request's retry reuses its seq ========================
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 5000, 'Venue deposit');
+  UPDATE payouts SET approval = 'approved', reviewed_at = now() WHERE id = v_id;
+  PERFORM settle_payout(v_id, 7003, false, NULL, NULL, 'send_instruction_rejected');
+
+  v_id2 := request_early_payout(v_t, v_owner, 5000, 'Venue deposit, new account');
+  IF (SELECT request_seq FROM payouts WHERE id = v_id2) <> 1 THEN
+    RAISE EXCEPTION 'E5 FAIL: retry took seq % (expected the failed request''s 1)', (SELECT request_seq FROM payouts WHERE id = v_id2);
+  END IF;
+  IF (SELECT superseded_by FROM payouts WHERE id = v_id) IS DISTINCT FROM v_id2 THEN
+    RAISE EXCEPTION 'E5 FAIL: failed request not linked to its retry';
+  END IF;
+  IF (SELECT o.early_requests_used FROM list_organization_payout_overview(v_org) o WHERE o.tournament_id = v_t) <> 1 THEN
+    RAISE EXCEPTION 'E5 FAIL: the failed request and its retry count as two slots';
+  END IF;
+  -- The failed 5000 is not committed; only the retry is.
+  IF (SELECT c.early_committed_cents FROM early_payout_cap(v_t) c) <> 5000 THEN
+    RAISE EXCEPTION 'E5 FAIL: a failed request counted against the cap';
+  END IF;
+  RAISE NOTICE 'E5 PASS — a failed request''s retry reuses its seq, linked via superseded_by';
+
+  -- ===== E6: every refusal =================================================
+  v_t := pg_temp.closed_tournament(v_org, 2);
+
+  PERFORM pg_temp.expect_early_refusal('E6 over cap', v_t, v_owner, 10001, 'EARLY_PAYOUT_EXCEEDS_CAP: 10001 cents requested, 10000 cents');
+  PERFORM pg_temp.expect_early_refusal('E6 below min', v_t, v_owner, 999, 'PAYOUT_BELOW_MINIMUM: 999 cents requested');
+  PERFORM pg_temp.expect_early_refusal('E6 no amount', v_t, v_owner, 0, 'EARLY_PAYOUT_INVALID');
+  BEGIN
+    PERFORM request_early_payout(v_t, v_owner, 2000, '   ');
+    RAISE EXCEPTION 'E6 FAIL: a request with a blank reason was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'EARLY_PAYOUT_INVALID: a reason is required%' THEN RAISE; END IF;
+  END;
+  -- payout.request is owner-only; an org admin holds payout.view.
+  BEGIN
+    PERFORM request_early_payout(v_t, v_admin, 2000, 'Venue deposit');
+    RAISE EXCEPTION 'E6 FAIL: an org admin requested an early payout';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  UPDATE tournaments SET registration_closed_at = now() + interval '1 day' WHERE id = v_t;
+  PERFORM pg_temp.expect_early_refusal('E6 registration open', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: registration_open');
+  UPDATE tournaments SET registration_closed_at = NULL WHERE id = v_t;
+  PERFORM pg_temp.expect_early_refusal('E6 never closed', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: registration_open');
+  UPDATE tournaments SET registration_closed_at = now() - interval '1 minute' WHERE id = v_t;
+
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through') RETURNING id INTO v_req;
+  PERFORM pg_temp.expect_early_refusal('E6 cancellation', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: cancellation_pending');
+  DELETE FROM tournament_cancellation_requests WHERE id = v_req;
+
+  SELECT r.id INTO v_reg FROM registrations r WHERE r.tournament_id = v_t LIMIT 1;
+  INSERT INTO refunds (registration_id, refund_amount_cents, reason, status)
+    VALUES (v_reg, 11000, 'test', 'pending') RETURNING id INTO v_refund;
+  PERFORM pg_temp.expect_early_refusal('E6 live refund', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: refund_pending');
+  IF (SELECT c.live_refund_cents FROM early_payout_cap(v_t) c) <> 11000 THEN
+    RAISE EXCEPTION 'E6 FAIL: live refund exposure not reported';
+  END IF;
+  DELETE FROM refunds WHERE id = v_refund;
+
+  UPDATE organization_bank_accounts SET status = 'pending', verified_at = NULL WHERE organization_id = v_org;
+  PERFORM pg_temp.expect_early_refusal('E6 unverified bank', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: bank_account_not_verified');
+  UPDATE organization_bank_accounts SET status = 'verified', verified_at = now() WHERE organization_id = v_org;
+
+  UPDATE organizations SET entity_type = NULL WHERE id = v_org;
+  PERFORM pg_temp.expect_early_refusal('E6 entity type', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: entity_type_missing');
+  UPDATE organizations SET entity_type = 'company' WHERE id = v_org;
+
+  UPDATE organizations SET agreement_version = '2020-01-01' WHERE id = v_org;
+  PERFORM pg_temp.expect_early_refusal('E6 stale agreement', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: agreement_not_current');
+  UPDATE organizations SET agreement_version = current_organizer_agreement_version() WHERE id = v_org;
+
+  -- Still requestable once every obstacle is cleared.
+  PERFORM request_early_payout(v_t, v_owner, 2000, 'Venue deposit');
+
+  -- A beneficiary, even one never accepted, makes payouts final-only.
+  v_t := pg_temp.closed_tournament(v_org, 2, v_ben, v_owner);
+  PERFORM pg_temp.expect_early_refusal('E6 beneficiary', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: beneficiary_set');
+
+  -- One player: ceiling 5000. Less than RM10 of it left means nothing is payable early.
+  v_t := pg_temp.closed_tournament(v_org, 1);
+  v_id := request_early_payout(v_t, v_owner, 4500, 'Venue deposit');
+  UPDATE payouts SET approval = 'approved', reviewed_at = now() WHERE id = v_id;
+  PERFORM settle_payout(v_id, 7004, true, 4500, NULL, NULL);
+  PERFORM pg_temp.expect_early_refusal('E6 nothing payable', v_t, v_owner, 1000, 'EARLY_PAYOUT_NOT_ALLOWED: nothing_payable_early');
+
+  UPDATE tournaments SET status = 'cancelled' WHERE id = v_t;
+  PERFORM pg_temp.expect_early_refusal('E6 cancelled', v_t, v_owner, 1000, 'EARLY_PAYOUT_NOT_ALLOWED: tournament_cancelled');
+  RAISE NOTICE 'E6 PASS — every request_early_payout refusal holds';
+END $$;
+
+DO $$ BEGIN RAISE NOTICE 'ALL SCENARIOS PASSED'; END $$;
 
 ROLLBACK;
