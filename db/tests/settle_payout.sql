@@ -880,6 +880,86 @@ BEGIN
   RAISE NOTICE 'V6 PASS — a rejected retry hands the failed slot back';
 END $$;
 
+-- =============================================================================
+-- CANCELLATION GUARD (#521): review_tournament_cancellation refuses once an
+-- organizer payout has been paid or is being sent.
+-- =============================================================================
+DO $$
+DECLARE
+  v_owner_role integer;
+  v_org      uuid;
+  v_owner    uuid;
+  v_reviewer uuid;
+  v_t        uuid;
+  v_id       uuid;
+  v_req      uuid;
+BEGIN
+  SELECT id INTO v_owner_role FROM roles WHERE name = 'owner' AND scope = 'organization';
+  INSERT INTO users (email, first_name, last_name) VALUES ('cg-owner@test.local', 'O', 'C') RETURNING id INTO v_owner;
+  INSERT INTO users (email, first_name, last_name) VALUES ('cg-admin@test.local', 'A', 'C') RETURNING id INTO v_reviewer;
+  INSERT INTO organizations (name, email, entity_type, agreement_version, agreement_accepted_at, approval_status)
+    VALUES ('CG ORG', 'cg-org@test.local', 'company', current_organizer_agreement_version(), now(), 'approved') RETURNING id INTO v_org;
+  INSERT INTO organization_bank_accounts (organization_id, bank_name, bank_code, account_holder, account_number, status, chip_bank_account_id, verified_at)
+    VALUES (v_org, 'Maybank', 'MBBEMYKL', 'Org', '514100000301', 'verified', 950001, now());
+  INSERT INTO organization_memberships (organization_id, user_id, role_id) VALUES (v_org, v_owner, v_owner_role);
+
+  -- ===== C1: a paid early payout blocks approval, with the shortfall ========
+  -- Two players paid 22000 gross; 4000 left early. Refunding both needs 22000,
+  -- 18000 is held, so the refunds are 4000 short.
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 4000, 'Venue deposit');
+  PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+  PERFORM settle_payout(v_id, 9001, true, 4000, NULL, NULL);
+
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through') RETURNING id INTO v_req;
+  BEGIN
+    PERFORM review_tournament_cancellation(v_req, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'C1 FAIL: cancellation approved after a paid payout';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLSTATE <> 'P0001'
+       OR SQLERRM NOT LIKE 'CANCELLATION_BLOCKED_BY_PAYOUT: 4000 cents paid out, 4000 cents short of the refunds%' THEN
+      RAISE;
+    END IF;
+  END;
+  IF (SELECT status FROM tournaments WHERE id = v_t) <> 'published'
+     OR (SELECT status FROM tournament_cancellation_requests WHERE id = v_req) <> 'pending'
+     OR EXISTS (SELECT 1 FROM refunds rf JOIN registrations r ON r.id = rf.registration_id WHERE r.tournament_id = v_t) THEN
+    RAISE EXCEPTION 'C1 FAIL: a refused approval changed something';
+  END IF;
+  -- Rejecting is still possible.
+  PERFORM review_tournament_cancellation(v_req, v_reviewer, 'reject', 'Recover the payout first');
+  RAISE NOTICE 'C1 PASS — a paid payout blocks cancellation approval, reporting the shortfall';
+
+  -- ===== C2: a payout being sent blocks it too =============================
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 4000, 'Venue deposit');
+  PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+  UPDATE payouts SET status = 'processing', chip_send_instruction_id = 9002 WHERE id = v_id;
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through') RETURNING id INTO v_req;
+  BEGIN
+    PERFORM review_tournament_cancellation(v_req, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'C2 FAIL: cancellation approved with a payout in flight';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'CANCELLATION_BLOCKED_BY_PAYOUT: a payout is being sent%' THEN RAISE; END IF;
+  END;
+  RAISE NOTICE 'C2 PASS — a payout being sent blocks cancellation approval';
+
+  -- ===== C3: a payout not yet sent doesn't ==================================
+  -- executePayout fails it on the cancelled tournament instead.
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 4000, 'Venue deposit');
+  PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through') RETURNING id INTO v_req;
+  PERFORM review_tournament_cancellation(v_req, v_reviewer, 'approve', NULL);
+  IF (SELECT status FROM tournaments WHERE id = v_t) <> 'cancelled' THEN
+    RAISE EXCEPTION 'C3 FAIL: an unsent payout blocked cancellation';
+  END IF;
+  RAISE NOTICE 'C3 PASS — an approved but unsent payout does not block cancellation';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'ALL SCENARIOS PASSED'; END $$;
 
 ROLLBACK;
