@@ -90,7 +90,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 
 | Feature | Flow(s) | Status | Priority | Interim option |
 |---|---|---|---|---|
-| Production error monitoring / alerting | S6 | ❌ | 🔴 | Add Sentry (or similar) + an uptime monitor before taking real money. |
+| Production error monitoring / alerting | S6 | ⚠️ code built, account not set up | 🔴 | Sentry SDK is wired in and inert until configured: follow [error-monitoring.md](./error-monitoring.md) §Setup (#125). Uptime monitor still needed. |
 | Audit-log PII redaction + privacy-policy alignment | S3, P5 | ⚠️ built, scrub not yet run | 🟡 | Run the check in `db/maintenance/scrub_pre_redaction_audit_rows.sql` against staging and production, and get the `/privacy` wording reviewed (#503). |
 | Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | Code landed (#501); migration `009` still needs applying (#161). Follow-on #513. |
 | Organizer payout disbursement | O9, P7 | ⚠️ admin-triggered | 🔴 | CHIP Send payouts exist, triggered by a platform admin. Automatic sweep and early payouts are #522 and #521. |
@@ -344,9 +344,10 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 ### S5. Notifications (in-app / SMS / push) — ❌ Not built
 - No `notifications` table or service, no SMS, no web-push. 🟢
 
-### S6. Observability (error monitoring / analytics) — ❌ Not built
-- No Sentry, no Plausible/Umami — nothing in dependencies or code. For a launch that handles money, **error monitoring + alerting is operationally important** (it's also where P10's "logged for manual ops" reconciliations would surface).
-- **Priority:** 🔴 (operational) — add basic error monitoring + an uptime check before launch.
+### S6. Observability (error monitoring / analytics) — ⚠️ Partial (Sentry code built, not switched on)
+- **Sentry is wired in (#125)** but sends nothing until `NEXT_PUBLIC_SENTRY_DSN` is set. It covers thrown server errors (`onRequestError`), every handled `console.error` (`captureConsoleIntegration`), so P10's "logged for manual ops" reconciliations and failed refund settlements (#499) now surface, plus uncaught browser errors and the root error boundary. The remaining work is account and Netlify setup: [error-monitoring.md](./error-monitoring.md) §Setup, including a privacy-policy addition that needs review.
+- **Gaps:** no uptime monitor; no analytics (Plausible/Umami), which is 🟢.
+- **Priority:** 🔴 (operational) — complete the Sentry setup + add an uptime check before launch.
 
 ### S7. Schema groundwork (identity indirection + ledger integrity) — ❌ Not built
 Not a user flow — two schema items whose cost depends on *when* they're done, which is why they sit
@@ -363,7 +364,7 @@ on the pre-launch list despite being invisible to users. Neither changes behavio
 ## 9. Cross-cutting gaps (prioritized)
 
 1. **Money-out — 🔴/🟡.** Organizer payouts (O9, #375) and prize disbursement (P14) are unbuilt and captured banking (P7) is unused — those remain 🔴 and manual. Refunds are **no longer blocked**: the cancellation path moves money automatically (P13), leaving 🟡 gaps for player/organizer-initiated refunds (#509, #510) and refund visibility (#511). *Interim for payouts/prizes:* manual disbursement + a tracking sheet, but **define and record the process** before taking real money.
-2. **Observability — 🔴 (operational).** No error monitoring/alerting (S6) for a money-handling app. *Interim:* none — add Sentry + uptime before launch. Now doubly relevant: refunds settle asynchronously and a failed one is currently silent (#499).
+2. **Observability — 🔴 (operational).** Sentry is built but not switched on (S6). Until the [setup](./error-monitoring.md#setup) is done, a failed asynchronous refund settlement is still silent (#499). *Interim:* none — finish the Sentry setup + add an uptime check before launch.
 3. **Data protection — 🟡 (compliance).** Sensitive columns are redacted on the way into `audit_logs` (#516/#518/#503), account deletion anonymises the user's audit history ([runbook](./account-deletion.md)), and `/privacy` now lists audit records in its retention table (S3, #503). Left: run the pre-redaction check against staging and production, and have a second person review the retention wording. Retention/pruning (#507) is the 🟢 follow-on.
 4. **Cheap-now, expensive-later schema — 🟡.** Identity indirection (#501) is **done** — the sweep landed while it was still small. Ledger integrity (#502) remains: two real gaps in the money trail that get worse once there are payments to reconstruct (S7). *Interim:* none — that's the point of the priority.
 5. **Communications — 🟡.** Auth + cancellation emails exist (S4); most MVP-promised emails don't. *Interim:* rely on the CHIP receipt for payments; manually email organizers on approval and players on OKU decisions. Recommend at least registration-confirmation, application/OKU-result, and refund-outcome (#512) emails.
