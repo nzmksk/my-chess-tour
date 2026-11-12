@@ -5,8 +5,15 @@ import { NextRequest } from "next/server";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, mockGetClaims, mockHasPermission, tables, orCalls } =
-  vi.hoisted(() => {
+const {
+  mockFrom,
+  mockRpc,
+  mockGetClaims,
+  mockHasPermission,
+  mockNotifyAdmins,
+  tables,
+  orCalls,
+} = vi.hoisted(() => {
     const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
     const orCalls: string[] = [];
 
@@ -37,6 +44,7 @@ const { mockFrom, mockRpc, mockGetClaims, mockHasPermission, tables, orCalls } =
       mockRpc: vi.fn(),
       mockGetClaims: vi.fn(),
       mockHasPermission: vi.fn(),
+      mockNotifyAdmins: vi.fn(),
     };
   });
 
@@ -47,8 +55,11 @@ vi.mock("@/services/supabase/permission", () => ({
   getAuthClaims: mockGetClaims,
   hasOrgPermission: mockHasPermission,
 }));
+vi.mock("@/services/payouts/notify", () => ({
+  notifyAdminsOfPayout: mockNotifyAdmins,
+}));
 
-import { GET } from "../route";
+import { GET, POST } from "../route";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -221,5 +232,108 @@ describe("GET /organizations/[orgId]/payouts", () => {
   it("500s when the history fails", async () => {
     tables.payouts = [{ data: null, error: { message: "db down" } }];
     expect((await call()).status).toBe(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST: early payout request
+// ---------------------------------------------------------------------------
+
+const PAYOUT_ID = "eeeeeeee-0000-4000-8000-000000000001";
+const validBody = { tournament_id: T_ID, amount_cents: 250000, reason: "  Venue deposit  " };
+
+const post = (body: unknown, orgId = ORG_ID) =>
+  POST(
+    new NextRequest(`http://localhost/api/v1/organizations/${orgId}/payouts`, {
+      method: "POST",
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ orgId }) },
+  );
+
+describe("POST /organizations/[orgId]/payouts", () => {
+  beforeEach(() => {
+    tables.tournaments = [{ data: { id: T_ID }, error: null }];
+    mockRpc.mockResolvedValue({ data: PAYOUT_ID, error: null });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("requires payout.request, which org admins don't hold", async () => {
+    mockHasPermission.mockResolvedValue(false);
+    const res = await post(validBody);
+    expect(res.status).toBe(403);
+    expect(mockHasPermission).toHaveBeenCalledWith(USER_ID, ORG_ID, "payout.request");
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("401s without a session", async () => {
+    mockGetClaims.mockResolvedValue(null);
+    expect((await post(validBody)).status).toBe(401);
+  });
+
+  it("files the request with the acting user and a trimmed reason", async () => {
+    const res = await post(validBody);
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ data: { payout_id: PAYOUT_ID } });
+    expect(mockRpc).toHaveBeenCalledWith("request_early_payout", {
+      p_tournament_id: T_ID,
+      p_user_id: USER_ID,
+      p_amount_cents: 250000,
+      p_reason: "Venue deposit",
+    });
+  });
+
+  it("alerts the platform admins about the new request", async () => {
+    await post(validBody);
+    expect(mockNotifyAdmins).toHaveBeenCalledWith(PAYOUT_ID, "early_request");
+  });
+
+  it("404s on another organization's tournament, without calling the function", async () => {
+    tables.tournaments = [{ data: null, error: null }];
+    expect((await post(validBody)).status).toBe(404);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["invalid JSON", "{nope"],
+    ["an array", []],
+    ["a malformed tournament id", { ...validBody, tournament_id: "nope" }],
+    ["a fractional amount", { ...validBody, amount_cents: 10.5 }],
+    ["a zero amount", { ...validBody, amount_cents: 0 }],
+    ["an amount as a string", { ...validBody, amount_cents: "1000" }],
+    ["a blank reason", { ...validBody, reason: "   " }],
+    ["no reason", { tournament_id: T_ID, amount_cents: 1000 }],
+    ["an overlong reason", { ...validBody, reason: "x".repeat(1001) }],
+  ])("400s on %s", async (_label, body) => {
+    const res = await post(body);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_ERROR");
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: early_payout_limit_reached", 409, "PAYOUT_LIMIT_REACHED", /both early payouts/i],
+    ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: early_payout_in_flight", 409, "PAYOUT_IN_FLIGHT", /already waiting/i],
+    ["23505", 'duplicate key value violates unique constraint "uniq_live_early_payout_per_tournament"', 409, "PAYOUT_IN_FLIGHT", /already waiting/i],
+    ["23505", 'duplicate key value violates unique constraint "uniq_early_payout_seq_per_tournament"', 409, "PAYOUT_LIMIT_REACHED", /both early payouts/i],
+    ["P0001", "EARLY_PAYOUT_EXCEEDS_CAP: 600100 cents requested, 600000 cents can be paid early", 400, "PAYOUT_EXCEEDS_CAP", /RM 6,001\.00 is more than the RM 6,000\.00/],
+    ["P0001", "PAYOUT_BELOW_MINIMUM: 999 cents requested, the minimum is 1000", 400, "PAYOUT_BELOW_MINIMUM", /minimum payout is RM 10\.00/],
+    ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: registration_open", 409, "EARLY_PAYOUT_NOT_ALLOWED", /registration has closed/i],
+    ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: beneficiary_set", 409, "EARLY_PAYOUT_NOT_ALLOWED", /nominated organization/i],
+    ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: cancellation_pending", 409, "EARLY_PAYOUT_NOT_ALLOWED", /cancellation request/i],
+    ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: bank_account_not_verified", 409, "EARLY_PAYOUT_NOT_ALLOWED", /verified payout bank/i],
+    ["P0002", "tournament x not found", 404, "NOT_FOUND", /not found/i],
+    ["42501", "PAYOUT_FORBIDDEN: x", 403, "FORBIDDEN", /owner/i],
+    ["40001", "serialization failure", 500, "INTERNAL_ERROR", /serialization/i],
+  ])("maps %s %s to %i %s", async (code, message, status, errorCode, expected) => {
+    mockRpc.mockResolvedValue({ data: null, error: { code, message } });
+    const res = await post(validBody);
+    expect(res.status).toBe(status);
+    const body = await res.json();
+    expect(body.error.code).toBe(errorCode);
+    expect(body.error.message).toMatch(expected);
+    expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 });
