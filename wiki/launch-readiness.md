@@ -90,7 +90,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 
 | Feature | Flow(s) | Status | Priority | Interim option |
 |---|---|---|---|---|
-| Production error monitoring / alerting | S6 | ⚠️ code built, account not set up | 🔴 | Sentry SDK is wired in and inert until configured: follow [error-monitoring.md](./error-monitoring.md) §Setup (#125). Uptime monitor still needed. |
+| Production error monitoring / alerting | S6 | ⚠️ code built, account not set up | 🔴 | Sentry SDK is wired in and inert until configured: follow [error-monitoring.md](./error-monitoring.md) §Setup (#125). Uptime monitor still needed (#572). |
 | Audit-log PII redaction + privacy-policy alignment | S3, P5 | ⚠️ built, scrub not yet run | 🟡 | Run the check in `db/maintenance/scrub_pre_redaction_audit_rows.sql` against staging and production, and get the `/privacy` wording reviewed (#503). |
 | Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | Code landed (#501); migration `009` still needs applying (#161). Follow-on #513. |
 | Organizer payout disbursement | O9, P7 | ⚠️ admin-triggered | 🔴 | CHIP Send payouts exist, triggered by a platform admin. Automatic sweep and early payouts are #522 and #521. |
@@ -346,7 +346,7 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 
 ### S6. Observability (error monitoring / analytics) — ⚠️ Partial (Sentry code built, not switched on)
 - **Sentry is wired in (#125)** but sends nothing until `NEXT_PUBLIC_SENTRY_DSN` is set. It covers thrown server errors (`onRequestError`), every handled `console.error` (`captureConsoleIntegration`), so P10's "logged for manual ops" reconciliations and failed refund settlements (#499) now surface, plus uncaught browser errors and the root error boundary. The remaining work is account and Netlify setup: [error-monitoring.md](./error-monitoring.md) §Setup, including a privacy-policy addition that needs review.
-- **Gaps:** no uptime monitor; no analytics (Plausible/Umami), which is 🟢.
+- **Gaps:** no uptime monitor (#572); no analytics (Plausible/Umami), which is 🟢.
 - **Priority:** 🔴 (operational) — complete the Sentry setup + add an uptime check before launch.
 
 ### S7. Schema groundwork (identity indirection + ledger integrity) — ❌ Not built

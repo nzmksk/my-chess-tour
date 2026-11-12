@@ -153,5 +153,5 @@ Then repeat step 9.1 against production once, right after its first deploy with 
 
 ## Not covered here
 
-- **Uptime monitoring.** Launch-readiness S6 pairs error monitoring with an uptime check. Sentry errors only fire when the app is up enough to run code. A separate uptime monitor (Sentry Uptime if the plan includes a monitor, otherwise any free external pinger) against `https://www.mychesstour.com` covers the site being down. Track it separately.
+- **Uptime monitoring.** Launch-readiness S6 pairs error monitoring with an uptime check. Sentry errors only fire when the app is up enough to run code. A separate uptime monitor (Sentry Uptime if the plan includes a monitor, otherwise any free external pinger) against `https://www.mychesstour.com` covers the site being down. Tracked in #572.
 - **User context.** Events carry no user id. Attaching the pseudonymous `users.id` with `Sentry.setUser({ id })` would make support lookups easier. Decide on it together with the step 8 privacy review.
