@@ -2,7 +2,7 @@
 
 How an organization receives its tournament revenue through **CHIP Send**. As in the [payment](./payment-flow.md) and [refund](./refund-flow.md) flows, money state is enforced in Postgres (SECURITY DEFINER functions + row locks), network calls happen outside those transactions, and settlement is idempotent so the synchronous response and the webhook can't double-book.
 
-Scope: the payout machine and the admin trigger (#520). Early payouts and their review are #521, the automatic sweep is #522, platform-managed prizes are #523.
+Scope: the payout machine and the admin trigger (#520), early payouts and their review (#521). The automatic sweep is #522, platform-managed prizes are #523.
 
 ## What is owed
 
@@ -33,7 +33,41 @@ What can stop a payout:
 | Bank account replaced since queueing | send | Terminal. The retry uses the new account. |
 | Requested amount above what is available | queue | Refused, before the recipient is checked. |
 | Less than `MIN_PAYOUT_CENTS` available | queue, send | Refused at queue. Terminal at send. |
-| CHIP Send balance below payout + fee | send | Budget requested, held `pending`. |
+| CHIP Send balance below payout + fee | send | Budget requested, held `pending`, platform admins emailed. |
+
+## Early payouts
+
+An organization owner can ask for part of a tournament's revenue before it ends, from `/my/organizations/[orgId]/payouts` (`POST /api/v1/organizations/[orgId]/payouts`). A platform admin approves or rejects it at `/admin/payouts/[id]` (`PATCH /api/v1/admin/payouts/[id]`).
+
+```
+ceiling = FLOOR(net_revenue * 50 / 100)            EARLY_PAYOUT_MAX_PCT
+cap     = LEAST(available, ceiling - committed)    early_payout_cap
+```
+
+`committed` is every early payout awaiting review, in flight or paid. The review page lays this arithmetic out line by line.
+
+1. **Request.** `request_early_payout` locks the tournament, checks `payout.request` itself, and refuses with `EARLY_PAYOUT_NOT_ALLOWED: <code>` from `early_payout_problem` (below), or an amount over the cap or under the minimum. The row is `approval='pending'`, `status='pending'`, and **reserves its amount at once**: `available_payout_cents` counts it. Every platform admin is emailed.
+2. **Review.** `review_payout_request` locks the tournament, then the row. Reject records the reason and frees the money. Approve **re-runs every check**, since days may have passed, and re-snapshots the bank account in case the organizer replaced it. It only sets `approval='approved'`: no money moves in that transaction.
+3. **Send.** The route then calls `executePayout`, exactly as for an automatic payout, and returns its outcome. The organization is emailed the decision first, then the usual processed/failed email once it settles.
+
+What `early_payout_problem` refuses, in order: tournament cancelled or not published; registration not yet closed; **a beneficiary nominated** (third-party payouts are final-only, since the organizing org would owe any claw-back); a cancellation or refund pending; the organization not eligible to be paid; both requests used; another early request in flight; less than `MIN_PAYOUT_CENTS` payable early. The organizer's dashboard shows the same reason before they ask.
+
+**Two per tournament.** `request_seq` (1 or 2) carries the limit, and `uniq_early_payout_seq_per_tournament` backs it. Only a request awaiting review, in flight or paid holds its slot: a **rejected** one moved no money, so a typo doesn't cost the organizer a request, and a **failed** one moved none either, so the next request takes its seq and is linked from it via `superseded_by`. `uniq_live_early_payout_per_tournament` allows one in flight at a time.
+
+## Cancellation after a payout
+
+Cancelling refunds every confirmed player their full **gross** from the Collect balance, but money already sent to the organizer has left through CHIP Send and there is no automated claw-back. So `review_tournament_cancellation` refuses approval (`CANCELLATION_BLOCKED_BY_PAYOUT`, a 409 that names the shortfall) once an organizer payout has been **paid**, or while one is **being sent**. A payout approved but not yet sent doesn't block it: `executePayout` fails it on the cancelled tournament. Recovering the money is a manual `payment_type='adjustment'` row and an ops process; then the cancellation can be approved.
+
+## Emails
+
+| Email | To | When |
+|---|---|---|
+| Payout processed / failed | Recipient org, and the organizing org if a beneficiary was paid | Settlement |
+| Early payout approved / declined | Organizing org | Review |
+| Admin payout alert | Every platform admin | Early request filed; payout parked on budget (once per budget request) |
+| Payout nomination | Nominated org | Nomination |
+
+Organization emails go to owners, admins and the contact address (`loadOrganizationRecipients`). None of them carries more than the last 4 digits of an account number.
 
 ## Deliberate differences from refunds
 
