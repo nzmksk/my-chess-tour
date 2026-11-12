@@ -233,6 +233,14 @@ export default function PrivacyPage() {
                       </td>
                     </tr>
                     <tr>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        Error reports (Sentry)
+                      </td>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        30 days, then deleted automatically
+                      </td>
+                    </tr>
+                    <tr>
                       <td className="text-text-secondary px-3 py-2">
                         Business verification documents (organisers)
                       </td>
@@ -347,6 +355,16 @@ export default function PrivacyPage() {
                   processor, which receives the details needed to collect entry
                   fees and to disburse organiser payouts and prizes, including
                   bank account details.
+                </li>
+                <li>
+                  <strong>Sentry (sentry.io)</strong> — our error-monitoring
+                  service. When something goes wrong on the platform, it
+                  receives a technical report of the error, which may include
+                  details from the request that failed, such as an account
+                  identifier or information you submitted. Sentry&apos;s servers
+                  are in the United States, so these reports are processed
+                  outside Malaysia. We do not send your IP address or cookies,
+                  and reports are deleted after 30 days.
                 </li>
               </ul>
               <p className="text-text-secondary mt-2">
