@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 
 export async function register() {
-  const { initServerSentry } = await import("@/lib/sentry/server");
+  const { initServerSentry } = await import("@/services/sentry/server");
   initServerSentry();
 }
 

@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { sentryBaseOptions } from "@/lib/sentry/options";
+import { sentryBaseOptions } from "@/services/sentry/options";
 
 // Uncaught errors and unhandled rejections in the browser. Session Replay and
 // tracing are deliberately left off: Replay records what users see and type

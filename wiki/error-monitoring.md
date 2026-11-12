@@ -9,18 +9,18 @@ The code is in place and does **nothing** until `NEXT_PUBLIC_SENTRY_DSN` is set 
 | Source | How it reaches Sentry | Where |
 | -- | -- | -- |
 | Errors thrown in Server Components, Route Handlers, Server Actions, the proxy | `onRequestError` → `Sentry.captureRequestError` | `src/instrumentation.ts` |
-| Handled failures logged with `console.error` (CHIP calls, refund settlement, payouts, webhook reconciliation, auth) | `captureConsoleIntegration({ levels: ["error"] })` | `src/lib/sentry/server.ts` |
+| Handled failures logged with `console.error` (CHIP calls, refund settlement, payouts, webhook reconciliation, auth) | `captureConsoleIntegration({ levels: ["error"] })` | `src/services/sentry/server.ts` |
 | Uncaught errors and unhandled promise rejections in the browser | Browser SDK global handlers | `src/instrumentation-client.ts` |
 | Render errors caught by the root error boundary | `Sentry.captureException` in the boundary | `src/app/global-error.tsx` |
 
 The `console.error` row matters most. Most failures in this app never throw: a route catches the error, logs it, and returns a 4xx/5xx. Without that integration none of them would show up. A `console.error` that includes an `Error` becomes an exception event with a stack trace; one without becomes a message event. Either way, every argument that was logged is attached as `extra.arguments`.
 
-**Netlify flush.** Sentry sends events in the background and only forces a flush before the function freezes on Vercel and Cloudflare. `src/lib/sentry/flush-after-response.ts` schedules `Sentry.flush()` with Next's `after()` for every captured event, so Netlify keeps the function alive until the event is sent. Step 9 below verifies this on real infrastructure. It is the one part that tests can't cover.
+**Netlify flush.** Sentry sends events in the background and only forces a flush before the function freezes on Vercel and Cloudflare. `src/services/sentry/flush-after-response.ts` schedules `Sentry.flush()` with Next's `after()` for every captured event, so Netlify keeps the function alive until the event is sent. Step 9 below verifies this on real infrastructure. It is the one part that tests can't cover.
 
 **Deliberately off:**
 
 - **Session Replay.** It records what users see and type, which is PII, and it uses up the free quota.
-- **Tracing / performance.** Also quota. Turning it on later only needs `tracesSampleRate` in `src/lib/sentry/options.ts`.
+- **Tracing / performance.** Also quota. Turning it on later only needs `tracesSampleRate` in `src/services/sentry/options.ts`.
 - **`sendDefaultPii`.** No IP addresses, cookies, or request bodies are sent.
 - **Ad-blocker tunnel (`tunnelRoute`).** Some browser events will be blocked by ad-blockers. A tunnel would route them through our own functions (more invocations), and the proxy matcher would have to exclude it. Revisit if browser coverage turns out to be poor.
 
