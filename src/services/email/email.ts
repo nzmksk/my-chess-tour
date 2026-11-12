@@ -289,3 +289,157 @@ export async function sendPayoutFailedEmail(
     throw new Error(`Failed to send payout failed email: ${error.message}`);
   }
 }
+
+// Tells an organization the outcome of its early payout request. Approval means
+// the transfer is being sent, not that it has landed: sendPayoutProcessedEmail
+// follows once it settles. One function with a boolean branch, like
+// sendCancellationReviewEmail.
+export async function sendPayoutReviewEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    amountCents: number;
+    approved: boolean;
+    rejectionReason?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const template = params.approved
+    ? "payout-request-approved.html"
+    : "payout-request-rejected.html";
+
+  let html = loadTemplate(template)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{dashboardUrl\}\}/g, `${siteUrl}/my/organizations`);
+
+  if (!params.approved) {
+    html = html.replace(
+      /\{\{rejectionReason\}\}/g,
+      escapeHtml(params.rejectionReason ?? ""),
+    );
+  }
+
+  const subject = params.approved
+    ? `Your early payout request for ${params.tournamentName} was approved`
+    : `Your early payout request for ${params.tournamentName} was declined`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send payout review email:", error);
+    throw new Error(`Failed to send payout review email: ${error.message}`);
+  }
+}
+
+/**
+ * What a platform admin is being alerted to:
+ *   early_request    an organizer filed an early payout request to review
+ *   awaiting_budget  a payout is parked until a CHIP Send budget request is approved
+ */
+export type AdminPayoutAlert = "early_request" | "awaiting_budget";
+
+const ADMIN_ALERTS: Record<
+  AdminPayoutAlert,
+  { headline: string; intro: string; subject: string; ctaLabel: string }
+> = {
+  early_request: {
+    headline: "Early Payout Request",
+    intro: "An organizer has asked for an early payout. It is waiting for your review.",
+    subject: "Early payout request to review",
+    ctaLabel: "Review Request",
+  },
+  awaiting_budget: {
+    headline: "Payout Awaiting Budget",
+    intro:
+      "A payout could not be sent because the CHIP Send balance is too low. A budget increase has been requested; the payout goes out on the next run once it is approved.",
+    subject: "Payout waiting on CHIP Send budget",
+    ctaLabel: "View Payouts",
+  },
+};
+
+// Alerts a platform admin to a payout that needs a person. `path` is where the
+// button leads, relative to the site (e.g. /admin/payouts/<id>).
+export async function sendAdminPayoutAlertEmail(
+  email: string,
+  params: {
+    alert: AdminPayoutAlert;
+    recipientName: string;
+    tournamentName: string;
+    organizationName: string;
+    amountCents: number;
+    detail?: string;
+    path: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const copy = ADMIN_ALERTS[params.alert];
+
+  const html = loadTemplate("admin-payout-alert.html")
+    .replace(/\{\{headline\}\}/g, copy.headline)
+    .replace(/\{\{intro\}\}/g, copy.intro)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{organizationName\}\}/g, escapeHtml(params.organizationName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{detail\}\}/g, escapeHtml(params.detail ?? ""))
+    .replace(/\{\{ctaUrl\}\}/g, escapeHtml(`${siteUrl}${params.path}`))
+    .replace(/\{\{ctaLabel\}\}/g, copy.ctaLabel)
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${copy.subject}: ${params.tournamentName}`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send admin payout alert email:", error);
+    throw new Error(`Failed to send admin payout alert email: ${error.message}`);
+  }
+}
+
+// Asks a nominated organization to accept a tournament's payout. Sent to the
+// NOMINEE: nothing is redirected until one of its payout managers accepts on the
+// dashboard this links to.
+export async function sendBeneficiaryNominationEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    nomineeOrgId: string;
+    nomineeName: string;
+    organizerName: string;
+    tournamentName: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const dashboardUrl = `${siteUrl}/my/organizations/${encodeURIComponent(params.nomineeOrgId)}`;
+
+  const html = loadTemplate("beneficiary-nomination.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{nomineeName\}\}/g, escapeHtml(params.nomineeName))
+    .replace(/\{\{organizerName\}\}/g, escapeHtml(params.organizerName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{dashboardUrl\}\}/g, dashboardUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${params.organizerName} nominated ${params.nomineeName} to receive a tournament payout`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send beneficiary nomination email:", error);
+    throw new Error(`Failed to send beneficiary nomination email: ${error.message}`);
+  }
+}
