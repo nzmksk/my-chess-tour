@@ -1,11 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import * as Sentry from "@sentry/nextjs";
 
 export const metadata: Metadata = {
   title: "Page Not Found",
 };
 
 export default function NotFound() {
+  Sentry.logger.info("User triggered test log", { log_source: "sentry_test" });
+
   return (
     <main className="bg-bg-base flex h-screen flex-col items-center justify-center gap-8 px-6 text-center">
       {/* Decorative chess piece */}
