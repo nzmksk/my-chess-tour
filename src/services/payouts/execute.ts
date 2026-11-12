@@ -10,6 +10,8 @@ import {
   toChipSendDescription,
 } from "@/services/chip/send";
 import { CHIP_SEND_FEE_CENTS, MIN_PAYOUT_CENTS } from "./constants";
+import { formatRinggit } from "./format";
+import { notifyAdminsOfPayout } from "./notify";
 import { settlePayout } from "./settle";
 
 // Sends one queued payout through CHIP Send. Shared by the admin trigger, the
@@ -174,6 +176,13 @@ async function awaitBudget(
     }
     console.warn(
       `Payout ${payout.id}: requested send limit ${limit.id} for ${requestCents} cents (${amountCents} payout + ${CHIP_SEND_FEE_CENTS} fee); left pending until it is approved`,
+    );
+    // Once per budget request, like CHIP's own approver email: a re-run that
+    // finds this limit still pending returns above without alerting again.
+    await notifyAdminsOfPayout(
+      payout.id,
+      "awaiting_budget",
+      `A CHIP Send budget increase of ${formatRinggit(requestCents)} (payout plus the ${formatRinggit(CHIP_SEND_FEE_CENTS)} transfer fee) is waiting for an approver.`,
     );
   } catch (err) {
     console.error(

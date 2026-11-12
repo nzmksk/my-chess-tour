@@ -175,6 +175,20 @@ RETURNS boolean AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
+-- Who to alert when something needs a platform admin (an early payout to review,
+-- a payout parked on CHIP Send budget): every live account holding the given
+-- global permission. Server-only, see the privileges block at the end.
+CREATE OR REPLACE FUNCTION list_global_permission_holders(p_permission varchar(50))
+RETURNS TABLE (user_id uuid, email varchar(255), first_name varchar(255)) AS $$
+  SELECT DISTINCT u.id, u.email, u.first_name
+  FROM user_global_roles ugr
+  JOIN role_permissions rp ON rp.role_id = ugr.role_id
+  JOIN permissions p ON p.id = rp.permission_id
+  JOIN users u ON u.id = ugr.user_id
+  WHERE p.key = p_permission
+    AND u.deleted_at IS NULL;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
 -- Check if user has permission within a specific organization
 CREATE OR REPLACE FUNCTION has_org_permission(p_user_id uuid, p_org_id uuid, p_permission text)
 RETURNS boolean AS $$
@@ -1399,6 +1413,7 @@ REVOKE EXECUTE ON FUNCTION payout_recipient_problem        FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION nominate_payout_beneficiary     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
@@ -1409,3 +1424,4 @@ GRANT EXECUTE ON FUNCTION payout_recipient_problem        TO service_role;
 GRANT EXECUTE ON FUNCTION nominate_payout_beneficiary     TO service_role;
 GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
 GRANT EXECUTE ON FUNCTION anonymise_user_audit_logs       TO service_role;
+GRANT EXECUTE ON FUNCTION list_global_permission_holders  TO service_role;

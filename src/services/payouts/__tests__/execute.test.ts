@@ -15,6 +15,7 @@ const {
   mockGetLimit,
   mockIncrease,
   mockSettle,
+  mockNotifyAdmins,
 } = vi.hoisted(() => {
   const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
   const updates: Array<Record<string, unknown>> = [];
@@ -55,6 +56,7 @@ const {
     mockGetLimit: vi.fn(),
     mockIncrease: vi.fn(),
     mockSettle: vi.fn(),
+    mockNotifyAdmins: vi.fn(),
   };
 });
 
@@ -74,6 +76,7 @@ vi.mock("@/services/chip/send", async (importOriginal) => {
 });
 
 vi.mock("../settle", () => ({ settlePayout: mockSettle }));
+vi.mock("../notify", () => ({ notifyAdminsOfPayout: mockNotifyAdmins }));
 
 import { ChipSendError } from "@/services/chip/send";
 import { executePayout } from "../execute";
@@ -327,6 +330,18 @@ describe("awaiting budget", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 
+  it("alerts the platform admins once, when the budget is requested", async () => {
+    givenPayout();
+    mockAccounts.mockResolvedValue(balance(1));
+    await executePayout(ID);
+    expect(mockNotifyAdmins).toHaveBeenCalledOnce();
+    expect(mockNotifyAdmins).toHaveBeenCalledWith(
+      ID,
+      "awaiting_budget",
+      expect.stringContaining("RM 101.00"),
+    );
+  });
+
   it("requests budget when the balance covers the payout but not the fee", async () => {
     givenPayout();
     mockAccounts.mockResolvedValue(balance(100.99));
@@ -348,6 +363,7 @@ describe("awaiting budget", () => {
     expect(await executePayout(ID)).toBe("awaiting_budget");
     expect(mockGetLimit).toHaveBeenCalledWith(77);
     expect(mockIncrease).not.toHaveBeenCalled();
+    expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 
   it("replaces an expired allocation, so the payout can't stall forever", async () => {
@@ -373,6 +389,7 @@ describe("awaiting budget", () => {
     mockIncrease.mockRejectedValue(new ChipSendError(400, "no convertible balance"));
     expect(await executePayout(ID)).toBe("awaiting_budget");
     expect(mockSettle).not.toHaveBeenCalled();
+    expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 
   it.each([
