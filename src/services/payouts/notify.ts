@@ -3,6 +3,7 @@ import {
   type AdminPayoutAlert,
   sendAdminPayoutAlertEmail,
   sendBeneficiaryNominationEmail,
+  sendPayoutReviewEmail,
 } from "@/services/email/email";
 import {
   loadOrganizationRecipients,
@@ -134,6 +135,60 @@ export async function notifyBeneficiaryNominated(
   } catch (err) {
     console.error(
       `Tournament ${tournamentId}: nomination email failed`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+/**
+ * Tells the organization the outcome of its early payout request. Goes to the
+ * same people as the settlement email, which follows an approval once the money
+ * lands.
+ */
+export async function notifyPayoutReviewed(payoutId: string): Promise<void> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("payouts")
+      .select(
+        "id, approval, amount_cents, rejection_reason, organization_id, tournament:tournaments(name)",
+      )
+      .eq("id", payoutId)
+      .single();
+    if (error || !data) {
+      console.error(
+        `Payout ${payoutId}: failed to load review email data`,
+        error?.message,
+      );
+      return;
+    }
+    const payout = data as unknown as {
+      approval: string;
+      amount_cents: number;
+      rejection_reason: string | null;
+      organization_id: string;
+      tournament: { name: string | null } | null;
+    };
+    if (payout.approval === "pending") {
+      console.error(`Payout ${payoutId}: review email requested for an unreviewed payout`);
+      return;
+    }
+
+    const recipients = await loadOrganizationRecipients([payout.organization_id]);
+    await sendToAll(
+      recipients,
+      (r) =>
+        sendPayoutReviewEmail(r.email, {
+          recipientName: r.name,
+          tournamentName: payout.tournament?.name ?? "your tournament",
+          amountCents: payout.amount_cents,
+          approved: payout.approval === "approved",
+          rejectionReason: payout.rejection_reason ?? undefined,
+        }),
+      `payout review email(s) for payout ${payoutId}`,
+    );
+  } catch (err) {
+    console.error(
+      `Payout ${payoutId}: review email failed`,
       err instanceof Error ? err.message : err,
     );
   }

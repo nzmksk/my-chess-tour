@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockFrom, mockRpc, tables, mockAlert, mockNomination } = vi.hoisted(() => {
+const { mockFrom, mockRpc, tables, mockAlert, mockNomination, mockReview } = vi.hoisted(() => {
   const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
 
   function makeBuilder(table: string) {
@@ -25,6 +25,7 @@ const { mockFrom, mockRpc, tables, mockAlert, mockNomination } = vi.hoisted(() =
     mockRpc: vi.fn(),
     mockAlert: vi.fn(),
     mockNomination: vi.fn(),
+    mockReview: vi.fn(),
   };
 });
 
@@ -35,9 +36,14 @@ vi.mock("@/services/supabase/admin", () => ({
 vi.mock("@/services/email/email", () => ({
   sendAdminPayoutAlertEmail: mockAlert,
   sendBeneficiaryNominationEmail: mockNomination,
+  sendPayoutReviewEmail: mockReview,
 }));
 
-import { notifyAdminsOfPayout, notifyBeneficiaryNominated } from "../notify";
+import {
+  notifyAdminsOfPayout,
+  notifyBeneficiaryNominated,
+  notifyPayoutReviewed,
+} from "../notify";
 
 const ID = "11111111-1111-1111-1111-111111111111";
 
@@ -67,6 +73,7 @@ beforeEach(() => {
   for (const k of Object.keys(tables)) delete tables[k];
   mockAlert.mockResolvedValue(undefined);
   mockNomination.mockResolvedValue(undefined);
+  mockReview.mockResolvedValue(undefined);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -216,5 +223,58 @@ describe("notifyBeneficiaryNominated", () => {
       expect.stringContaining("failed to load nomination email data"),
       "db down",
     );
+  });
+});
+
+describe("notifyPayoutReviewed", () => {
+  function givenReviewed(overrides: Record<string, unknown> = {}) {
+    tables.payouts = [
+      {
+        data: {
+          id: ID,
+          approval: "rejected",
+          amount_cents: 250000,
+          rejection_reason: "Send the invoice first",
+          organization_id: "org-1",
+          tournament: { name: "KL Open" },
+          ...overrides,
+        },
+        error: null,
+      },
+    ];
+    tables.organization_memberships = [
+      {
+        data: [{ user: { email: "owner@x.test", first_name: "Olivia" }, roles: { name: "owner" } }],
+        error: null,
+      },
+    ];
+    tables.organizations = [{ data: [], error: null }];
+  }
+
+  it("emails the organizing organization the rejection and its reason", async () => {
+    givenReviewed();
+    await notifyPayoutReviewed(ID);
+    expect(mockReview).toHaveBeenCalledWith("owner@x.test", {
+      recipientName: "Olivia",
+      tournamentName: "KL Open",
+      amountCents: 250000,
+      approved: false,
+      rejectionReason: "Send the invoice first",
+    });
+  });
+
+  it("emails an approval", async () => {
+    givenReviewed({ approval: "approved", rejection_reason: null });
+    await notifyPayoutReviewed(ID);
+    expect(mockReview).toHaveBeenCalledWith(
+      "owner@x.test",
+      expect.objectContaining({ approved: true, rejectionReason: undefined }),
+    );
+  });
+
+  it("sends nothing for a payout that hasn't been reviewed", async () => {
+    givenReviewed({ approval: "pending" });
+    await notifyPayoutReviewed(ID);
+    expect(mockReview).not.toHaveBeenCalled();
   });
 });
