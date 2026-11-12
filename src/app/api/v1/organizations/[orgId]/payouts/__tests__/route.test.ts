@@ -89,6 +89,8 @@ const overviewRow = {
   available_cents: 60000,
   early_requests_used: 1,
   recipient_problem: null,
+  early_payout_cap_cents: 10000,
+  early_payout_problem: null,
 };
 
 const historyRow = {
@@ -167,6 +169,7 @@ describe("GET /organizations/[orgId]/payouts", () => {
         paid_payouts_cents: 40000,
         available_cents: 60000,
         early_requests_used: 1,
+        early_payout: { cap_cents: 10000, blocked: null },
       },
     ]);
     expect(data.payouts[0]).toMatchObject({
@@ -174,6 +177,58 @@ describe("GET /organizations/[orgId]/payouts", () => {
       amount_cents: 39000, // what actually settled, not what was requested
       receipt_url: "https://chip.test/r/1",
       is_beneficiary: false,
+    });
+  });
+
+  it("says why an early payout can't be requested", async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ ...overviewRow, early_payout_cap_cents: 0, early_payout_problem: "registration_open" }],
+      error: null,
+    });
+    const { data } = await (await call()).json();
+    expect(data.tournaments[0].early_payout).toEqual({
+      cap_cents: 0,
+      blocked: expect.stringMatching(/registration has closed/),
+    });
+  });
+
+  it("offers no early payout on a tournament this org only receives as beneficiary", async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ ...overviewRow, is_beneficiary: true, early_payout_problem: "beneficiary_set" }],
+      error: null,
+    });
+    const { data } = await (await call()).json();
+    expect(data.tournaments[0].early_payout).toBeNull();
+  });
+
+  it("tells the viewer whether they may request one (payout.request)", async () => {
+    mockHasPermission.mockImplementation(async (_u: string, _o: string, key: string) =>
+      key === "payout.view",
+    );
+    const { data } = await (await call()).json();
+    expect(data.can_request_early_payout).toBe(false);
+    expect(mockHasPermission).toHaveBeenCalledWith(USER_ID, ORG_ID, "payout.request");
+  });
+
+  it("shows an early request's reason, and a rejection's", async () => {
+    tables.payouts = [
+      {
+        data: [
+          {
+            ...historyRow,
+            status: "pending",
+            approval: "rejected",
+            reason: "Venue deposit",
+            rejection_reason: "Send the invoice",
+          },
+        ],
+        error: null,
+      },
+    ];
+    const { data } = await (await call()).json();
+    expect(data.payouts[0]).toMatchObject({
+      reason: "Venue deposit",
+      rejection_reason: "Send the invoice",
     });
   });
 

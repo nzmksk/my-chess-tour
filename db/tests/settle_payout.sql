@@ -541,6 +541,13 @@ BEGIN
   IF v_cap.net_revenue_cents <> 20000 OR v_cap.ceiling_cents <> 10000 OR v_cap.cap_cents <> 10000 THEN
     RAISE EXCEPTION 'E1 FAIL: cap arithmetic wrong: %', row_to_json(v_cap);
   END IF;
+  -- The organizer's overview offers it before they ask.
+  IF NOT EXISTS (
+    SELECT 1 FROM list_organization_payout_overview(v_org) o
+    WHERE o.tournament_id = v_t AND o.early_payout_cap_cents = 10000 AND o.early_payout_problem IS NULL
+  ) THEN
+    RAISE EXCEPTION 'E1 FAIL: overview does not offer the early payout';
+  END IF;
 
   v_id := request_early_payout(v_t, v_owner, 4000, '  Venue deposit  ');
   SELECT * INTO v_po FROM payouts WHERE id = v_id;
@@ -558,6 +565,10 @@ BEGIN
 
   -- ===== E2: one live request at a time =====================================
   PERFORM pg_temp.expect_early_refusal('E2', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: early_payout_in_flight');
+  IF (SELECT o.early_payout_problem FROM list_organization_payout_overview(v_org) o WHERE o.tournament_id = v_t)
+     IS DISTINCT FROM 'early_payout_in_flight' THEN
+    RAISE EXCEPTION 'E2 FAIL: overview does not say a request is in flight';
+  END IF;
   BEGIN
     INSERT INTO payouts (tournament_id, organization_id, recipient_organization_id, kind, request_seq, amount_cents, reason)
       VALUES (v_t, v_org, v_org, 'early', 2, 2000, 'hand-rolled');

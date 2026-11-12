@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { hasOrgPermission } from "@/services/supabase/permission";
 import { authorizeOrgPermission } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { describePayoutFailure } from "@/services/payouts/failure-reason";
 import {
@@ -28,6 +29,8 @@ interface OverviewRow {
   available_cents: number;
   early_requests_used: number;
   recipient_problem: string | null;
+  early_payout_cap_cents: number;
+  early_payout_problem: string | null;
 }
 
 interface PayoutHistoryRow {
@@ -38,6 +41,8 @@ interface PayoutHistoryRow {
   settled_amount_cents: number | null;
   status: string;
   approval: string;
+  reason: string | null;
+  rejection_reason: string | null;
   failure_reason: string | null;
   chip_receipt_url: string | null;
   requested_at: string;
@@ -52,6 +57,9 @@ interface PayoutHistoryRow {
  *
  * Gated on payout.view, which org admins hold. Bank details are deliberately absent:
  * where the money lands is bank_account.manage, owner only.
+ *
+ * `early_payout` says how much could be requested early and, if nothing can, why.
+ * `can_request_early_payout` is whether this viewer holds payout.request (owners).
  */
 export async function GET(
   _request: NextRequest,
@@ -62,15 +70,16 @@ export async function GET(
   const auth = await authorizeOrgPermission(orgId, "payout.view");
   if (!auth.ok) return auth.response;
 
-  const [overview, history] = await Promise.all([
+  const [overview, history, canRequest] = await Promise.all([
     supabaseAdmin.rpc("list_organization_payout_overview", { p_org_id: orgId }),
     supabaseAdmin
       .from("payouts")
       .select(
-        "id, tournament_id, kind, amount_cents, settled_amount_cents, status, approval, failure_reason, chip_receipt_url, requested_at, processed_at, organization_id, recipient_organization_id",
+        "id, tournament_id, kind, amount_cents, settled_amount_cents, status, approval, reason, rejection_reason, failure_reason, chip_receipt_url, requested_at, processed_at, organization_id, recipient_organization_id",
       )
       .or(`organization_id.eq.${orgId},recipient_organization_id.eq.${orgId}`)
       .order("requested_at", { ascending: false }),
+    hasOrgPermission(auth.userId, orgId, "payout.request"),
   ]);
 
   const error = overview.error ?? history.error;
@@ -99,6 +108,15 @@ export async function GET(
     paid_payouts_cents: row.paid_payouts_cents,
     available_cents: row.available_cents,
     early_requests_used: row.early_requests_used,
+    // Only the organizing org can ask; a beneficiary is paid in full at the end.
+    early_payout: row.is_beneficiary
+      ? null
+      : {
+          cap_cents: row.early_payout_cap_cents,
+          blocked: row.early_payout_problem
+            ? describeEarlyPayoutProblem(row.early_payout_problem)
+            : null,
+        },
   }));
 
   const names = new Map(tournaments.map((t) => [t.tournament_id, t.name]));
@@ -111,6 +129,8 @@ export async function GET(
     amount_cents: p.settled_amount_cents ?? p.amount_cents,
     status: p.status,
     approval: p.approval,
+    reason: p.kind === "early" ? p.reason : null,
+    rejection_reason: p.approval === "rejected" ? p.rejection_reason : null,
     // In words: the stored value can hold CHIP's raw response.
     failure_reason:
       p.status === "failed" ? describePayoutFailure(p.failure_reason) : null,
@@ -120,7 +140,10 @@ export async function GET(
     is_beneficiary: p.organization_id !== orgId,
   }));
 
-  return NextResponse.json({ data: { tournaments, payouts } }, { status: 200 });
+  return NextResponse.json(
+    { data: { tournaments, payouts, can_request_early_payout: canRequest } },
+    { status: 200 },
+  );
 }
 
 const errorResponse = (code: string, message: string, status: number) =>

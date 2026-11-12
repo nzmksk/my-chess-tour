@@ -153,7 +153,10 @@ const CASES: { name: string; markup: () => string }[] = [
     name: "PayoutsClient",
     markup: () =>
       renderToStaticMarkup(
-        <PayoutsClient orgId={ORG_ID} data={{ tournaments: [], payouts: [] }} />,
+        <PayoutsClient
+          orgId={ORG_ID}
+          data={{ tournaments: [], payouts: [], can_request_early_payout: false }}
+        />,
       ),
   },
   {

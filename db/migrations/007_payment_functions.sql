@@ -1316,7 +1316,8 @@ $$;
 -- organized, plus those whose payout it has accepted as beneficiary. Drafts have no
 -- money to show. recipient_problem is surfaced so that a recipient which has lapsed
 -- (agreement bumped, bank account replaced) shows up on both dashboards instead of
--- failing silently in the sweep.
+-- failing silently in the sweep. early_payout_cap_cents / early_payout_problem
+-- answer "can we ask for money early, and how much".
 CREATE OR REPLACE FUNCTION list_organization_payout_overview(p_org_id uuid)
 RETURNS TABLE (
   tournament_id              uuid,
@@ -1331,7 +1332,9 @@ RETURNS TABLE (
   paid_payouts_cents         bigint,
   available_cents            integer,
   early_requests_used        integer,
-  recipient_problem          text
+  recipient_problem          text,
+  early_payout_cap_cents     integer,
+  early_payout_problem       text
 )
 LANGUAGE sql
 STABLE
@@ -1371,7 +1374,11 @@ AS $$
       WHERE p.tournament_id = v.id AND p.kind = 'early'
         AND p.approval <> 'rejected' AND p.status <> 'failed'
     ),
-    payout_recipient_problem(v.recipient_id)
+    payout_recipient_problem(v.recipient_id),
+    -- So the dashboard can offer an early payout, or say why it can't, before
+    -- the organizer tries.
+    (SELECT c.cap_cents FROM early_payout_cap(v.id) c),
+    early_payout_problem(v.id)
   FROM visible v
   LEFT JOIN organizations organizer ON organizer.id = v.organization_id
   LEFT JOIN organizations recipient ON recipient.id = v.recipient_id
