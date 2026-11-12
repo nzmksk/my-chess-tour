@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { resolveTimeZone } from "@/lib/datetime";
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
 interface TournamentRow {
   id: string;
@@ -28,6 +29,8 @@ interface ParticipantCount {
 }
 
 export async function GET() {
+  Sentry.logger.info("Fetching published tournaments", { log_source: "sentry_test" });
+  console.error("dummy error log for testing Sentry logging");
   const { data: rows, error } = await supabaseAdmin
     .from("tournaments")
     .select(
