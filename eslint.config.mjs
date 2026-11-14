@@ -20,7 +20,7 @@ const eslintConfig = defineConfig([
   },
   // src/lib holds framework-agnostic helpers shared across the app, so it must
   // sit below the UI and state layers: it may not import components, stores,
-  // or app code (which all import lib). This keeps the flat folder organised.
+  // or app code (which all import lib).
   {
     files: ["src/lib/**"],
     rules: {
