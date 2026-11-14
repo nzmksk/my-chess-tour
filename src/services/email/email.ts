@@ -443,3 +443,59 @@ export async function sendBeneficiaryNominationEmail(
     throw new Error(`Failed to send beneficiary nomination email: ${error.message}`);
   }
 }
+
+// Tells an organizer applicant the outcome of their organization application —
+// approved (they are now its owner) or declined, with the admin's reason and a
+// link back to their applications so they can apply again. One function with a
+// boolean branch, like sendCancellationReviewEmail.
+export async function sendOrganizerApplicationReviewEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    organizationName: string;
+    orgId: string;
+    approved: boolean;
+    rejectionReason?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const template = params.approved
+    ? "organizer-application-approved.html"
+    : "organizer-application-rejected.html";
+
+  let html = loadTemplate(template)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{organizationName\}\}/g, escapeHtml(params.organizationName))
+    .replace(
+      /\{\{dashboardUrl\}\}/g,
+      `${siteUrl}/my/organizations/${encodeURIComponent(params.orgId)}`,
+    )
+    .replace(/\{\{applicationsUrl\}\}/g, `${siteUrl}/my/organizations/applications`)
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  if (!params.approved) {
+    html = html.replace(
+      /\{\{rejectionReason\}\}/g,
+      escapeHtml(params.rejectionReason ?? ""),
+    );
+  }
+
+  const subject = params.approved
+    ? `${params.organizationName} is approved on MY Chess Tour`
+    : `Your application for ${params.organizationName} was declined`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send organizer application review email:", error);
+    throw new Error(
+      `Failed to send organizer application review email: ${error.message}`,
+    );
+  }
+}

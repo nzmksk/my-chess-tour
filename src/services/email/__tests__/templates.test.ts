@@ -50,6 +50,7 @@ describe("email templates", () => {
     ["tournament-cancellation-rejected.html", "{{rejectionReason}}"],
     ["bank-account-verification-failed.html", "{{rejectionReason}}"],
     ["beneficiary-nomination.html", "{{dashboardUrl}}"],
+    ["organizer-application-rejected.html", "{{rejectionReason}}"],
   ])("%s renders %s", (name, placeholder) => {
     expect(read(name)).toContain(placeholder);
   });

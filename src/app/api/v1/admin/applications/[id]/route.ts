@@ -2,7 +2,11 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { registerActiveOrganizationBankAccount } from "@/services/payouts/bank-account";
+import { notifyApplicationReviewed } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
+
+// Reviewing emails the applicant, and email templates are read from disk.
+export const runtime = "nodejs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -210,6 +214,9 @@ export async function PATCH(
   if (action === "approve") {
     await registerActiveOrganizationBankAccount(id);
   }
+
+  // Best-effort and never throws, like the bank registration above.
+  await notifyApplicationReviewed(id);
 
   return NextResponse.json({ data }, { status: 200 });
 }

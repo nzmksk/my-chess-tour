@@ -7,6 +7,22 @@ export interface EmailRecipient {
 }
 
 /**
+ * Adds a recipient keyed by lowercased address, keeping the first entry for an
+ * address so a person reached two ways (e.g. a member who is also the
+ * organization's contact address) is emailed once, by their own name.
+ */
+export function addRecipient(
+  recipients: Map<string, EmailRecipient>,
+  email: string | null | undefined,
+  name: string | null | undefined,
+): void {
+  if (!email) return;
+  const key = email.toLowerCase();
+  if (recipients.has(key)) return;
+  recipients.set(key, { email, name: name ?? "there" });
+}
+
+/**
  * Sends one email per recipient, best-effort, and logs any that failed. Never
  * throws: the caller's action has already happened.
  */

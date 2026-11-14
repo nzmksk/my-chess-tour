@@ -25,6 +25,7 @@ import {
   sendBankVerificationEmail,
   sendBeneficiaryNominationEmail,
   sendCancellationReviewEmail,
+  sendOrganizerApplicationReviewEmail,
   sendPasswordResetEmail,
   sendPayoutFailedEmail,
   sendPayoutProcessedEmail,
@@ -760,5 +761,69 @@ describe("sendBeneficiaryNominationEmail", () => {
     });
     expect(sent().html).toContain("&lt;b&gt;Org&lt;/b&gt;");
     expect(sent().html).toContain("A &amp; B");
+  });
+});
+
+describe("sendOrganizerApplicationReviewEmail", () => {
+  const base = {
+    recipientName: "Aisha",
+    organizationName: "KL Chess Club",
+    orgId: "22222222-2222-2222-2222-222222222222",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{organizationName}}|{{dashboardUrl}}|{{applicationsUrl}}|{{siteUrl}}|{{rejectionReason}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("uses the approved template, linking to the new organization's dashboard", async () => {
+    await sendOrganizerApplicationReviewEmail("a@example.com", { ...base, approved: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("organizer-application-approved.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("a@example.com");
+    expect(sent().subject).toBe("KL Chess Club is approved on MY Chess Tour");
+    expect(sent().html).toContain(
+      "/my/organizations/22222222-2222-2222-2222-222222222222|",
+    );
+  });
+
+  it("uses the rejected template with the escaped reason and a link to reapply", async () => {
+    await sendOrganizerApplicationReviewEmail("a@example.com", {
+      ...base,
+      approved: false,
+      rejectionReason: "Attach the <SSM> certificate",
+    });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("organizer-application-rejected.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toBe("Your application for KL Chess Club was declined");
+    expect(sent().html).toContain("Attach the &lt;SSM&gt; certificate");
+    expect(sent().html).toContain("/my/organizations/applications|");
+  });
+
+  it("escapes the applicant-supplied organization name", async () => {
+    await sendOrganizerApplicationReviewEmail("a@example.com", {
+      ...base,
+      organizationName: "<b>Club</b>",
+      approved: true,
+    });
+    expect(sent().html).toContain("&lt;b&gt;Club&lt;/b&gt;");
+    expect(sent().html).not.toContain("<b>");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendOrganizerApplicationReviewEmail("a@example.com", { ...base, approved: true }),
+    ).rejects.toThrow(/nope/);
   });
 });

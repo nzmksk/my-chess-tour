@@ -66,6 +66,12 @@ vi.mock("@/services/payouts/bank-account", () => ({
   registerActiveOrganizationBankAccount: mockRegisterBank,
 }));
 
+const { mockNotifyReviewed } = vi.hoisted(() => ({ mockNotifyReviewed: vi.fn() }));
+
+vi.mock("@/services/organizations/notify", () => ({
+  notifyApplicationReviewed: mockNotifyReviewed,
+}));
+
 import { GET, PATCH } from "../route";
 
 // ---------------------------------------------------------------------------
@@ -382,6 +388,17 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
         mockRegisterBank.mock.invocationCallOrder[0],
       );
     });
+
+    it("emails the applicant after approving", async () => {
+      await PATCH(makePatchRequest(APP_ID, { action: "approve" }), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
+      expect(mockNotifyReviewed).toHaveBeenCalledOnce();
+      expect(mockNotifyReviewed).toHaveBeenCalledWith(APP_ID);
+      expect(mockAdminRpc.mock.invocationCallOrder[0]).toBeLessThan(
+        mockNotifyReviewed.mock.invocationCallOrder[0],
+      );
+    });
   });
 
   // ── Reject ────────────────────────────────────────────────────────────────
@@ -419,6 +436,17 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       );
       expect(mockRegisterBank).not.toHaveBeenCalled();
     });
+
+    it("emails the applicant after rejecting", async () => {
+      await PATCH(
+        makePatchRequest(APP_ID, {
+          action: "reject",
+          rejection_reason: "Insufficient information",
+        }),
+        { params: Promise.resolve({ id: APP_ID }) },
+      );
+      expect(mockNotifyReviewed).toHaveBeenCalledWith(APP_ID);
+    });
   });
 
   // ── Error handling ────────────────────────────────────────────────────────
@@ -445,6 +473,7 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       });
       expect(res.status).toBe(500);
       expect(mockRegisterBank).not.toHaveBeenCalled();
+      expect(mockNotifyReviewed).not.toHaveBeenCalled();
     });
   });
 });
