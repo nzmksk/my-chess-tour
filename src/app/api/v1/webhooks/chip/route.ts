@@ -14,6 +14,7 @@ import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Needs the Node.js runtime for `crypto` and access to the raw request body.
 export const runtime = "nodejs";
@@ -96,9 +97,9 @@ async function handleRefundEvent(
     .eq("type", "registration")
     .maybeSingle();
   if (regErr) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: regErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      `CHIP webhook: failed to look up the registration payment for refunded purchase ${originalPurchaseId}; asking CHIP to redeliver`,
+      regErr,
     );
   }
   if (!regPayment?.registration_id) {
@@ -117,9 +118,9 @@ async function handleRefundEvent(
     .neq("status", "rejected")
     .maybeSingle();
   if (refundErr) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: refundErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      `CHIP webhook: failed to look up the refund for registration ${regPayment.registration_id}; asking CHIP to redeliver`,
+      refundErr,
     );
   }
   if (!refund?.id) {
@@ -143,9 +144,9 @@ async function handleRefundEvent(
     p_payment_method: payload.transaction_data?.payment_method ?? null,
   });
   if (rpcErr) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: rpcErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      `CHIP webhook: settle_refund failed for refund ${refund.id} (${paid ? "refunded" : "failed"}); asking CHIP to redeliver`,
+      rpcErr,
     );
   }
 
@@ -245,9 +246,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .maybeSingle();
     if (error) {
       // Transient DB error — return 5xx so CHIP retries delivery.
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: error.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        `CHIP webhook: failed to look up payment for purchase ${purchaseId}; asking CHIP to redeliver`,
+        error,
       );
     }
     payment = data;
@@ -260,9 +261,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .eq("id", reference)
       .maybeSingle();
     if (error) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: error.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        `CHIP webhook: failed to look up payment ${reference}; asking CHIP to redeliver`,
+        error,
       );
     }
     // Each attempt is its own immutable payment row whose id is its `reference`,
@@ -291,9 +292,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   );
 
   if (rpcErr) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: rpcErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      `CHIP webhook: settle_registration_payment failed for payment ${payment.id} (${paid ? "paid" : "failed"}); asking CHIP to redeliver`,
+      rpcErr,
     );
   }
 

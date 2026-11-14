@@ -9,6 +9,7 @@ import { settlePayout } from "@/services/payouts/settle";
 import { normalizePublicKey } from "@/services/chip/public-key";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // CHIP Send webhook. A SEPARATE route from the Collect webhook
 // (webhooks/chip/route.ts). Both use RSA, but they differ:
@@ -160,7 +161,12 @@ async function handleBankAccountEvent(
       .select("id")
       .eq("id", obj.reference)
       .maybeSingle();
-    if (error) return serverError(error.message);
+    if (error) {
+      return internalErrorResponse(
+        `CHIP Send webhook: failed to look up bank account ${obj.reference}; asking CHIP to redeliver`,
+        error,
+      );
+    }
     bankAccountId = (data as { id: string } | null)?.id ?? null;
   }
 
@@ -174,7 +180,12 @@ async function handleBankAccountEvent(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (error) return serverError(error.message);
+    if (error) {
+      return internalErrorResponse(
+        `CHIP Send webhook: failed to look up the bank account for recipient ${chipId}; asking CHIP to redeliver`,
+        error,
+      );
+    }
     bankAccountId = (data as { id: string } | null)?.id ?? null;
   }
 
@@ -197,7 +208,10 @@ async function handleBankAccountEvent(
     // The row vanished between lookup and settle — nothing to retry for.
     if (error.code === "P0002") return ack();
     // Transient DB failure: 500 so CHIP re-delivers.
-    return serverError(error.message);
+    return internalErrorResponse(
+      `CHIP Send webhook: failed to settle bank account ${bankAccountId}; asking CHIP to redeliver`,
+      error,
+    );
   }
 
   return ack();
@@ -234,11 +248,10 @@ async function handleSendInstructionEvent(
       .eq("id", obj.reference)
       .maybeSingle();
     if (error) {
-      console.error(
+      return internalErrorResponse(
         `CHIP Send webhook: failed to look up payout ${obj.reference}; asking CHIP to redeliver`,
-        error.message,
+        error,
       );
-      return serverError(error.message);
     }
     payoutId = (data as { id: string } | null)?.id ?? null;
   }
@@ -250,11 +263,10 @@ async function handleSendInstructionEvent(
       .eq("chip_send_instruction_id", chipId)
       .maybeSingle();
     if (error) {
-      console.error(
+      return internalErrorResponse(
         `CHIP Send webhook: failed to look up the payout for instruction ${chipId}; asking CHIP to redeliver`,
-        error.message,
+        error,
       );
-      return serverError(error.message);
     }
     payoutId = (data as { id: string } | null)?.id ?? null;
   }
@@ -294,11 +306,10 @@ async function handleSendInstructionEvent(
     }
     // A DB failure: 500 so CHIP re-delivers. The money may already have left, so
     // this must not be swallowed.
-    console.error(
+    return internalErrorResponse(
       `CHIP Send webhook: settle_payout failed for payout ${payoutId} (${paid ? "paid" : "failed"}); asking CHIP to redeliver`,
-      error.code ? `${error.code}: ${error.message}` : error.message,
+      error,
     );
-    return serverError(error.message);
   }
 
   return ack();

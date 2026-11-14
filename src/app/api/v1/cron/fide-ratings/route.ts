@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { syncFidePlayer } from "@/services/fide/fide";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Session-less background job (mirrors the CHIP webhook): uses supabaseAdmin
 // only and needs the Node runtime.
@@ -62,9 +63,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: error.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        `FIDE ratings cron: failed to load player profiles from offset ${from}`,
+        error,
       );
     }
 
