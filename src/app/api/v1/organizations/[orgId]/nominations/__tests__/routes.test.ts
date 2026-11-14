@@ -13,6 +13,7 @@ const {
   mockGetClaims,
   mockHasPermission,
   mockNotifyNominated,
+  mockNotifyResponded,
   tables,
   eqCalls,
   ilikeCalls,
@@ -54,6 +55,7 @@ const {
       mockGetClaims: vi.fn(),
       mockHasPermission: vi.fn(),
       mockNotifyNominated: vi.fn(),
+      mockNotifyResponded: vi.fn(),
     };
   });
 
@@ -66,10 +68,11 @@ vi.mock("@/services/supabase/permission", () => ({
 }));
 vi.mock("@/services/payouts/notify", () => ({
   notifyBeneficiaryNominated: mockNotifyNominated,
+  notifyNominationResponded: mockNotifyResponded,
 }));
 
 import { GET as listNominations } from "../route";
-import { POST as acceptNomination } from "../[tournamentId]/route";
+import { DELETE as declineNomination, POST as acceptNomination } from "../[tournamentId]/route";
 import { PUT as nominate } from "../../tournaments/[id]/beneficiary/route";
 import { GET as searchOrgs } from "../../../search/route";
 
@@ -91,6 +94,12 @@ const callList = () =>
 const callAccept = (tournamentId = T_ID) =>
   acceptNomination(
     new NextRequest(`${URL_BASE}/${ORG_ID}/nominations/${tournamentId}`, { method: "POST" }),
+    { params: Promise.resolve({ orgId: ORG_ID, tournamentId }) },
+  );
+
+const callDecline = (tournamentId = T_ID) =>
+  declineNomination(
+    new NextRequest(`${URL_BASE}/${ORG_ID}/nominations/${tournamentId}`, { method: "DELETE" }),
     { params: Promise.resolve({ orgId: ORG_ID, tournamentId }) },
   );
 
@@ -125,6 +134,7 @@ beforeEach(() => {
 describe.each([
   ["list", () => callList()],
   ["accept", () => callAccept()],
+  ["decline", () => callDecline()],
   ["nominate", () => callNominate({ beneficiary_organization_id: NOMINEE })],
 ])("%s gate", (_label, call) => {
   it("401s without a session", async () => {
@@ -239,6 +249,18 @@ describe("POST .../nominations/[tournamentId]", () => {
     });
   });
 
+  it("emails the organizer that the nomination was accepted", async () => {
+    mockRpc.mockResolvedValue({ data: { already_accepted: false }, error: null });
+    await callAccept();
+    expect(mockNotifyResponded).toHaveBeenCalledWith(T_ID, ORG_ID, true);
+  });
+
+  it("emails no one for a repeated accept", async () => {
+    mockRpc.mockResolvedValue({ data: { already_accepted: true }, error: null });
+    expect((await callAccept()).status).toBe(200);
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
+  });
+
   it("400s on a malformed tournament id", async () => {
     expect((await callAccept("nope")).status).toBe(400);
   });
@@ -255,6 +277,50 @@ describe("POST .../nominations/[tournamentId]", () => {
       error: { code: "P0001", message: "these fields are locked: beneficiary_accepted_at" },
     });
     expect((await callAccept()).status).toBe(409);
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE .../nominations/[tournamentId]", () => {
+  it("declines on behalf of the nominee", async () => {
+    const res = await callDecline();
+    expect(res.status).toBe(200);
+    expect(eqCalls).toContainEqual(["beneficiary_organization_id", ORG_ID]);
+    expect(mockRpc).toHaveBeenCalledWith("decline_payout_nomination", {
+      p_tournament_id: T_ID,
+      p_user_id: USER_ID,
+    });
+    expect(mockNotifyResponded).toHaveBeenCalledWith(T_ID, ORG_ID, false);
+  });
+
+  it("400s on a malformed tournament id", async () => {
+    expect((await callDecline("nope")).status).toBe(400);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("404s when the tournament doesn't nominate this organization", async () => {
+    tables.tournaments = [{ data: null, error: null }];
+    expect((await callDecline()).status).toBe(404);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("409s with a pointer to the organizer once the nomination is accepted", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "NOMINATION_ACCEPTED: an accepted nomination can only be withdrawn by the organizer" },
+    });
+    const res = await callDecline();
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toMatch(/ask the organizer/i);
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
+  });
+
+  it("409s once a player has paid", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "these fields are locked: beneficiary_organization_id" },
+    });
+    expect((await callDecline()).status).toBe(409);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   PAYMENT_TIMEOUT_MINUTES,
 } from "@/services/chip/chip";
 import type { RegistrationRow } from "../types";
+import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
 
 export type PaymentState = "confirmed" | "pending" | "failed" | "none";
 
@@ -150,13 +151,24 @@ export async function resolvePaymentState(
       },
     );
 
+    const result = settled as {
+      amount_mismatch?: boolean;
+      newly_confirmed?: boolean;
+    } | null;
+
     // The amount CHIP charged didn't match what we recorded — settlement left
     // the payment as-is for manual reconciliation, so don't claim success.
-    if ((settled as { amount_mismatch?: boolean } | null)?.amount_mismatch) {
+    if (result?.amount_mismatch) {
       return {
         state: isTerminalFailed ? "failed" : "pending",
         registration: reg,
       };
+    }
+
+    // This reconcile beat the webhook to the confirmation, so the email is ours
+    // to send (the webhook's settle will then report nothing new). Never throws.
+    if (result?.newly_confirmed) {
+      await notifyRegistrationConfirmed(reg.id);
     }
 
     return {

@@ -636,8 +636,9 @@ CREATE TRIGGER guard_money_fields BEFORE UPDATE ON tournaments
 -- and redirect the payout with no acceptance, past both functions below.
 --
 -- Same test as guard_users_identity_columns: auth.uid() IS NOT NULL means a user
--- JWT is driving the statement. nominate_payout_beneficiary and
--- accept_payout_nomination run through the service role, which has no `sub`.
+-- JWT is driving the statement. nominate_payout_beneficiary,
+-- accept_payout_nomination and decline_payout_nomination run through the
+-- service role, which has no `sub`.
 -- =============================================
 CREATE OR REPLACE FUNCTION guard_tournament_beneficiary_columns()
 RETURNS TRIGGER
@@ -1368,6 +1369,55 @@ BEGIN
 END;
 $$;
 
+-- The nominee turning a pending nomination down. Clears it, so the payout stays
+-- with the organizing org exactly as if it had never been made. Only a pending
+-- nomination can be declined: once accepted the organizer is relying on it, and
+-- unwinding it is the organizer's call (nominate NULL). Same actor check as
+-- accept_payout_nomination, and the paid-registration freeze still applies.
+CREATE OR REPLACE FUNCTION decline_payout_nomination(
+  p_tournament_id uuid,
+  p_user_id       uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_tournament.beneficiary_organization_id IS NULL THEN
+    RAISE EXCEPTION 'NOMINATION_NOT_FOUND: this tournament has no pending nomination' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, v_tournament.beneficiary_organization_id, 'payout.request') THEN
+    RAISE EXCEPTION 'NOMINATION_FORBIDDEN: payout.request is required on the nominated organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_tournament.beneficiary_accepted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'NOMINATION_ACCEPTED: an accepted nomination can only be withdrawn by the organizer'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE tournaments
+    SET beneficiary_organization_id = NULL,
+        beneficiary_accepted_at     = NULL
+    WHERE id = p_tournament_id;
+
+  RETURN jsonb_build_object(
+    'tournament_id',            p_tournament_id,
+    'declined_organization_id', v_tournament.beneficiary_organization_id
+  );
+END;
+$$;
+
 -- =============================================
 -- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
 -- Postgres grants EXECUTE on every new function to PUBLIC, and Supabase's
@@ -1413,6 +1463,7 @@ REVOKE EXECUTE ON FUNCTION assert_tournament_capacity      FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION payout_recipient_problem        FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION nominate_payout_beneficiary     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION decline_payout_nomination       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, authenticated;
 
@@ -1424,5 +1475,6 @@ GRANT EXECUTE ON FUNCTION assert_tournament_capacity      TO service_role;
 GRANT EXECUTE ON FUNCTION payout_recipient_problem        TO service_role;
 GRANT EXECUTE ON FUNCTION nominate_payout_beneficiary     TO service_role;
 GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
+GRANT EXECUTE ON FUNCTION decline_payout_nomination       TO service_role;
 GRANT EXECUTE ON FUNCTION anonymise_user_audit_logs       TO service_role;
 GRANT EXECUTE ON FUNCTION list_global_permission_holders  TO service_role;

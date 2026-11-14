@@ -4,7 +4,8 @@ import {
   sendPayoutProcessedEmail,
 } from "@/services/email/email";
 import { describePayoutFailure } from "./failure-reason";
-import { loadOrganizationRecipients, sendToAll } from "./recipients";
+import { sendToAll } from "@/services/email/recipients";
+import { loadOrganizationRecipients } from "./recipients";
 
 // Settlement is reached from two paths that must agree: the synchronous response
 // in executePayout, and the CHIP Send webhook. Both come through settlePayout, so

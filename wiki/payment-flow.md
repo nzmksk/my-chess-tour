@@ -37,6 +37,7 @@ net    = gross - platform_fee         -- what the organizer nets
 5. **Confirm** — `settle_registration_payment(payment_id, paid, amount_cents)` (`007`) locks the payment row, then:
   - `paid=true` → settles **any non-`paid` row** (idempotent: a row already `paid` is a no-op): payment `paid` (+`paid_at`), registration `confirmed` (+`confirmed_at`), pointing `current_payment_id` at the paid attempt — **but only if** `amount_cents` matches the recorded `gross_amount_cents` (guards a stale/re-priced purchase). A mismatch leaves it as-is and returns `amount_mismatch` for ops to reconcile. Honoring `paid` over a `failed` row is the **"real money wins"** guarantee: a late `paid` rescues a row that was marked `failed` by supersession or by a decline the payer then retried on the same purchase. See [Outcome mapping](#outcome-mapping).
   - `paid=false` → only terminalizes a still-`pending` row (never overrides a `paid` one): payment `failed`, and registration `failed_payment` **only if** this is its current attempt.
+6. **Confirmation email** — the result carries `newly_confirmed`, true only for the one call that actually flipped the registration to `confirmed`. Every settling path (the webhook, the return-page reconcile in `resolvePaymentState`, and `settleFreeRegistration` for a zero-gross tier) calls `notifyRegistrationConfirmed()` (`src/services/registrations/notify.ts`) when it sees it, so the player gets exactly one "You're registered" email (tournament, venue-local dates, venue, fee paid) however the settles race. The payment row lock serializes them. Best-effort: a failed send is logged and never fails the settle (#119).
 
 ## Outcome mapping
 
@@ -114,6 +115,7 @@ The vitest layer can't reach the settlement/supersession/expiry SQL (it mocks th
 - **S2** supersede A with B via `start_new_payment_attempt`, then a late `paid` for A → `confirmed`, `current_payment_id` points at A.
 - **S3a** duplicate `paid` is idempotent. **S3b** amount mismatch leaves it `pending_payment`/`pending` + `amount_mismatch=true`. **S3c** a stray late failure never overrides a `paid` row.
 - **S4** a stale hold expires to `cancelled_payment` while the payment stays `pending`. **S5** a late `paid` then rescues that just-expired registration.
+- **S6** two paid attempts on one registration: only the first reports `newly_confirmed` (S1, S3a and S3b also assert it), so the confirmation email is sent once.
 
 ### C. End-to-end manual (CHIP sandbox)
 

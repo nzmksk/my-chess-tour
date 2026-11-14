@@ -25,10 +25,14 @@ import {
   sendBankVerificationEmail,
   sendBeneficiaryNominationEmail,
   sendCancellationReviewEmail,
+  sendNominationResponseEmail,
+  sendOkuReviewEmail,
+  sendOrganizerApplicationReviewEmail,
   sendPasswordResetEmail,
   sendPayoutFailedEmail,
   sendPayoutProcessedEmail,
   sendPayoutReviewEmail,
+  sendRegistrationConfirmationEmail,
   sendTournamentCancellationEmail,
   sendVerificationEmail,
 } from "../email";
@@ -760,5 +764,240 @@ describe("sendBeneficiaryNominationEmail", () => {
     });
     expect(sent().html).toContain("&lt;b&gt;Org&lt;/b&gt;");
     expect(sent().html).toContain("A &amp; B");
+  });
+});
+
+describe("sendOrganizerApplicationReviewEmail", () => {
+  const base = {
+    recipientName: "Aisha",
+    organizationName: "KL Chess Club",
+    orgId: "22222222-2222-2222-2222-222222222222",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{organizationName}}|{{dashboardUrl}}|{{applicationsUrl}}|{{siteUrl}}|{{rejectionReason}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("uses the approved template, linking to the new organization's dashboard", async () => {
+    await sendOrganizerApplicationReviewEmail("a@example.com", { ...base, approved: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("organizer-application-approved.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("a@example.com");
+    expect(sent().subject).toBe("KL Chess Club is approved on MY Chess Tour");
+    expect(sent().html).toContain(
+      "/my/organizations/22222222-2222-2222-2222-222222222222|",
+    );
+  });
+
+  it("uses the rejected template with the escaped reason and a link to reapply", async () => {
+    await sendOrganizerApplicationReviewEmail("a@example.com", {
+      ...base,
+      approved: false,
+      rejectionReason: "Attach the <SSM> certificate",
+    });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("organizer-application-rejected.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toBe("Your application for KL Chess Club was declined");
+    expect(sent().html).toContain("Attach the &lt;SSM&gt; certificate");
+    expect(sent().html).toContain("/my/organizations/applications|");
+  });
+
+  it("escapes the applicant-supplied organization name", async () => {
+    await sendOrganizerApplicationReviewEmail("a@example.com", {
+      ...base,
+      organizationName: "<b>Club</b>",
+      approved: true,
+    });
+    expect(sent().html).toContain("&lt;b&gt;Club&lt;/b&gt;");
+    expect(sent().html).not.toContain("<b>");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendOrganizerApplicationReviewEmail("a@example.com", { ...base, approved: true }),
+    ).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendOkuReviewEmail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{settingsUrl}}|{{browseUrl}}|{{rejectionReason}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("uses the verified template", async () => {
+    await sendOkuReviewEmail("p@example.com", { recipientName: "Farid", verified: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("oku-verified.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("p@example.com");
+    expect(sent().subject).toBe("Your OKU status is verified");
+    expect(sent().html).toContain("Farid|");
+    expect(sent().html).toContain("/tournaments|");
+  });
+
+  it("uses the rejected template with the escaped reason and a link to settings", async () => {
+    await sendOkuReviewEmail("p@example.com", {
+      recipientName: "Farid",
+      verified: false,
+      rejectionReason: "Card <expired>",
+    });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("oku-rejected.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toBe("We couldn't verify your OKU card");
+    expect(sent().html).toContain("Card &lt;expired&gt;");
+    expect(sent().html).toContain("/settings|");
+  });
+
+  it("escapes the player's name", async () => {
+    await sendOkuReviewEmail("p@example.com", { recipientName: "<i>F</i>", verified: true });
+    expect(sent().html).toContain("&lt;i&gt;F&lt;/i&gt;");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendOkuReviewEmail("p@example.com", { recipientName: "Farid", verified: true }),
+    ).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendRegistrationConfirmationEmail", () => {
+  const base = {
+    playerName: "Farid",
+    tournamentName: "KL Open",
+    tournamentSlug: "kl-open-2026",
+    tournamentDates: "10 Aug – 12 Aug 2026 (MYT)",
+    venue: "Dewan Besar, Selangor",
+    feePaidCents: 5500,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{playerName}}|{{tournamentName}}|{{tournamentDates}}|{{venue}}|{{feePaid}}|{{tournamentUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("renders the tournament, dates, venue and fee paid", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", base);
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("registration-confirmed.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("p@example.com");
+    expect(sent().subject).toBe("You're registered for KL Open");
+    expect(sent().html).toContain("Farid|KL Open|10 Aug – 12 Aug 2026 (MYT)|Dewan Besar, Selangor|RM 55.00|");
+    expect(sent().html).toContain("/tournaments/kl-open-2026|");
+  });
+
+  it("shows a free entry as Free", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", { ...base, feePaidCents: 0 });
+    expect(sent().html).toContain("|Free|");
+  });
+
+  it("falls back to the tournaments list without a slug", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", { ...base, tournamentSlug: null });
+    expect(sent().html).toMatch(/\/tournaments\|/);
+  });
+
+  it("escapes organizer- and player-supplied values", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", {
+      ...base,
+      tournamentName: "<b>Open</b>",
+      venue: "<script>x</script>",
+    });
+    expect(sent().html).toContain("&lt;b&gt;Open&lt;/b&gt;");
+    expect(sent().html).not.toContain("<script>");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(sendRegistrationConfirmationEmail("p@example.com", base)).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendNominationResponseEmail", () => {
+  const base = {
+    recipientName: "Aisha",
+    organizerOrgId: "org-1",
+    tournamentId: "t-1",
+    nomineeName: "Selangor Chess Association",
+    tournamentName: "KL Open",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{nomineeName}}|{{tournamentName}}|{{tournamentUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("uses the accepted template, linking to the organizer's tournament", async () => {
+    await sendNominationResponseEmail("o@example.com", { ...base, accepted: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("nomination-accepted.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("o@example.com");
+    expect(sent().subject).toBe(
+      "Selangor Chess Association accepted the payout nomination for KL Open",
+    );
+    expect(sent().html).toContain("/my/organizations/org-1/tournaments/t-1");
+  });
+
+  it("uses the declined template", async () => {
+    await sendNominationResponseEmail("o@example.com", { ...base, accepted: false });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("nomination-declined.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toMatch(/declined the payout nomination for KL Open/);
+  });
+
+  it("escapes organization-supplied names", async () => {
+    await sendNominationResponseEmail("o@example.com", {
+      ...base,
+      nomineeName: "<b>Club</b>",
+      accepted: true,
+    });
+    expect(sent().html).toContain("&lt;b&gt;Club&lt;/b&gt;");
+    expect(sent().html).not.toContain("<b>");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendNominationResponseEmail("o@example.com", { ...base, accepted: true }),
+    ).rejects.toThrow(/nope/);
   });
 });

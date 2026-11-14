@@ -46,6 +46,7 @@ DECLARE
     'payout_recipient_problem',
     'nominate_payout_beneficiary',
     'accept_payout_nomination',
+    'decline_payout_nomination',
     'available_payout_cents',
     'tournament_payout_block_reason',
     'queue_payout',

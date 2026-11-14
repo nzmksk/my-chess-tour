@@ -1,12 +1,8 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
+import type { EmailRecipient } from "@/services/email/recipients";
 
 // Who hears about a payout. Shared by settlement, review, the budget alert and
 // nominations, so every payout email reaches the same people.
-
-export interface EmailRecipient {
-  email: string;
-  name: string;
-}
 
 // The members who can act on a payout problem, as for bank verification and
 // cancellation reviews.
@@ -83,27 +79,4 @@ export async function loadPlatformAdminRecipients(): Promise<Map<string, EmailRe
     });
   }
   return recipients;
-}
-
-/**
- * Sends one email per recipient, best-effort, and logs any that failed. Never
- * throws: the caller's action has already happened.
- */
-export async function sendToAll(
-  recipients: Map<string, EmailRecipient>,
-  send: (recipient: EmailRecipient) => Promise<unknown>,
-  context: string,
-): Promise<void> {
-  const results = await Promise.allSettled([...recipients.values()].map(send));
-  const failures = results.flatMap((r) =>
-    r.status === "rejected"
-      ? [r.reason instanceof Error ? r.reason.message : String(r.reason)]
-      : [],
-  );
-  if (failures.length > 0) {
-    console.error(
-      `Failed to send ${failures.length}/${recipients.size} ${context}`,
-      failures,
-    );
-  }
 }

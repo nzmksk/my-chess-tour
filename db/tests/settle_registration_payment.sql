@@ -19,7 +19,7 @@ DECLARE
   v_org        uuid;
   v_tournament uuid;
   v_user_a uuid; v_user_b uuid; v_user_c uuid; v_user_d uuid; v_user_e uuid;
-  v_user_f uuid;
+  v_user_f uuid; v_user_g uuid;
   v_res    jsonb;
   v_reg    uuid;
   v_pay_a  uuid;
@@ -38,6 +38,7 @@ BEGIN
   INSERT INTO users (email, first_name, last_name) VALUES ('verify-d@test.local','D','T') RETURNING id INTO v_user_d;
   INSERT INTO users (email, first_name, last_name) VALUES ('verify-e@test.local','E','T') RETURNING id INTO v_user_e;
   INSERT INTO users (email, first_name, last_name) VALUES ('verify-f@test.local','F','T') RETURNING id INTO v_user_f;
+  INSERT INTO users (email, first_name, last_name) VALUES ('verify-g@test.local','G','T') RETURNING id INTO v_user_g;
 
   INSERT INTO tournaments (
     organization_id, name, venue_name, venue_state, venue_address,
@@ -59,7 +60,10 @@ BEGIN
   SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay_a;
 
   PERFORM settle_registration_payment(v_pay_a, false, NULL);                 -- purchase.payment_failure
-  PERFORM settle_registration_payment(v_pay_a, true,  v_gross, 'fpx_b2c');   -- retry clears the same purchase
+  v_res := settle_registration_payment(v_pay_a, true,  v_gross, 'fpx_b2c');  -- retry clears the same purchase
+  IF (v_res->>'newly_confirmed')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'S1 FAIL: the rescuing paid settle should report newly_confirmed, got %', v_res;
+  END IF;
 
   SELECT status, payment_method INTO v_pay, v_method FROM payments WHERE id = v_pay_a;
   SELECT status INTO v_regst FROM registrations WHERE id = v_reg;
@@ -97,8 +101,14 @@ BEGIN
   v_reg   := (v_res->>'registration_id')::uuid;
   v_pay_a := (v_res->>'payment_id')::uuid;
   SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay_a;
-  PERFORM settle_registration_payment(v_pay_a, true, v_gross, 'visa');
-  PERFORM settle_registration_payment(v_pay_a, true, v_gross, NULL);  -- late dup w/o method
+  v_res := settle_registration_payment(v_pay_a, true, v_gross, 'visa');
+  IF (v_res->>'newly_confirmed')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'S3a FAIL: first paid settle should report newly_confirmed, got %', v_res;
+  END IF;
+  v_res := settle_registration_payment(v_pay_a, true, v_gross, NULL);  -- late dup w/o method
+  IF (v_res->>'newly_confirmed')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'S3a FAIL: duplicate paid settle must not report newly_confirmed, got %', v_res;
+  END IF;
   SELECT status, payment_method INTO v_pay, v_method FROM payments WHERE id = v_pay_a;
   SELECT status INTO v_regst FROM registrations WHERE id = v_reg;
   IF v_pay <> 'paid' OR v_regst <> 'confirmed' THEN
@@ -116,6 +126,9 @@ BEGIN
   v_pay_a := (v_res->>'payment_id')::uuid;
   SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay_a;
   v_res := settle_registration_payment(v_pay_a, true, v_gross + 1);  -- wrong amount
+  IF (v_res->>'newly_confirmed')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'S3b FAIL: a mismatched amount must not report newly_confirmed, got %', v_res;
+  END IF;
   IF (v_res->>'amount_mismatch')::boolean IS NOT TRUE THEN
     RAISE EXCEPTION 'S3b FAIL: expected amount_mismatch=true';
   END IF;
@@ -167,6 +180,28 @@ BEGIN
     RAISE EXCEPTION 'S5 FAIL: payment=% registration=% (expected paid/confirmed)', v_pay, v_regst;
   END IF;
   RAISE NOTICE 'S5 PASS — late paid rescued an expired registration';
+
+  -- ===== S6: a second paid attempt on a confirmed registration =============
+  -- Both attempts were paid (e.g. the player paid twice). The registration is
+  -- confirmed once; the second settle records its money but must not report a
+  -- fresh confirmation, or the player is emailed twice.
+  v_res   := create_registration_with_payment(v_user_g, v_tournament, 'standard', 4000);
+  v_reg   := (v_res->>'registration_id')::uuid;
+  v_pay_a := (v_res->>'payment_id')::uuid;
+  SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay_a;
+  v_res   := start_new_payment_attempt(v_reg, 'standard', 4000);
+  v_pay_b := (v_res->>'payment_id')::uuid;
+
+  v_res := settle_registration_payment(v_pay_b, true, v_gross);
+  IF (v_res->>'newly_confirmed')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'S6 FAIL: first paid attempt should report newly_confirmed, got %', v_res;
+  END IF;
+  v_res := settle_registration_payment(v_pay_a, true, v_gross);
+  SELECT status INTO v_pay FROM payments WHERE id = v_pay_a;
+  IF v_pay <> 'paid' OR (v_res->>'newly_confirmed')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'S6 FAIL: second paid attempt payment=% result=% (expected paid, not newly_confirmed)', v_pay, v_res;
+  END IF;
+  RAISE NOTICE 'S6 PASS — a second paid attempt does not re-confirm';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;

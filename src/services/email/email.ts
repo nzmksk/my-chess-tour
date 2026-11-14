@@ -443,3 +443,191 @@ export async function sendBeneficiaryNominationEmail(
     throw new Error(`Failed to send beneficiary nomination email: ${error.message}`);
   }
 }
+
+// Tells an organizer applicant the outcome of their organization application —
+// approved (they are now its owner) or declined, with the admin's reason and a
+// link back to their applications so they can apply again. One function with a
+// boolean branch, like sendCancellationReviewEmail.
+export async function sendOrganizerApplicationReviewEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    organizationName: string;
+    orgId: string;
+    approved: boolean;
+    rejectionReason?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const template = params.approved
+    ? "organizer-application-approved.html"
+    : "organizer-application-rejected.html";
+
+  let html = loadTemplate(template)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{organizationName\}\}/g, escapeHtml(params.organizationName))
+    .replace(
+      /\{\{dashboardUrl\}\}/g,
+      `${siteUrl}/my/organizations/${encodeURIComponent(params.orgId)}`,
+    )
+    .replace(/\{\{applicationsUrl\}\}/g, `${siteUrl}/my/organizations/applications`)
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  if (!params.approved) {
+    html = html.replace(
+      /\{\{rejectionReason\}\}/g,
+      escapeHtml(params.rejectionReason ?? ""),
+    );
+  }
+
+  const subject = params.approved
+    ? `${params.organizationName} is approved on MY Chess Tour`
+    : `Your application for ${params.organizationName} was declined`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send organizer application review email:", error);
+    throw new Error(
+      `Failed to send organizer application review email: ${error.message}`,
+    );
+  }
+}
+
+// Tells a player the outcome of their OKU card review — verified, or rejected
+// with the admin's reason and a link back to settings to upload a new copy. One
+// function with a boolean branch, like sendCancellationReviewEmail.
+export async function sendOkuReviewEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    verified: boolean;
+    rejectionReason?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const template = params.verified ? "oku-verified.html" : "oku-rejected.html";
+
+  let html = loadTemplate(template)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{settingsUrl\}\}/g, `${siteUrl}/settings`)
+    .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/tournaments`);
+
+  if (!params.verified) {
+    html = html.replace(
+      /\{\{rejectionReason\}\}/g,
+      escapeHtml(params.rejectionReason ?? ""),
+    );
+  }
+
+  const subject = params.verified
+    ? "Your OKU status is verified"
+    : "We couldn't verify your OKU card";
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send OKU review email:", error);
+    throw new Error(`Failed to send OKU review email: ${error.message}`);
+  }
+}
+
+// Confirms a player's place in a tournament once their registration is confirmed
+// (paid, or free). `tournamentDates` arrives formatted in the venue's timezone by
+// the caller; `feePaidCents` is what the player actually paid, 0 for free entry.
+export async function sendRegistrationConfirmationEmail(
+  email: string,
+  params: {
+    playerName: string;
+    tournamentName: string;
+    tournamentSlug: string | null;
+    tournamentDates: string;
+    venue: string;
+    feePaidCents: number;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const tournamentUrl = params.tournamentSlug
+    ? `${siteUrl}/tournaments/${encodeURIComponent(params.tournamentSlug)}`
+    : `${siteUrl}/tournaments`;
+
+  const html = loadTemplate("registration-confirmed.html")
+    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{tournamentDates\}\}/g, escapeHtml(params.tournamentDates))
+    .replace(/\{\{venue\}\}/g, escapeHtml(params.venue))
+    .replace(
+      /\{\{feePaid\}\}/g,
+      params.feePaidCents > 0 ? formatRinggit(params.feePaidCents) : "Free",
+    )
+    .replace(/\{\{tournamentUrl\}\}/g, tournamentUrl)
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `You're registered for ${params.tournamentName}`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send registration confirmation email:", error);
+    throw new Error(
+      `Failed to send registration confirmation email: ${error.message}`,
+    );
+  }
+}
+
+// Tells the organizing organization how its payout nominee responded: accepted
+// (the payout now goes to the nominee) or declined (it stays with the organizer).
+// One function with a boolean branch, like sendCancellationReviewEmail.
+export async function sendNominationResponseEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    organizerOrgId: string;
+    tournamentId: string;
+    nomineeName: string;
+    tournamentName: string;
+    accepted: boolean;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const tournamentUrl = `${siteUrl}/my/organizations/${encodeURIComponent(params.organizerOrgId)}/tournaments/${encodeURIComponent(params.tournamentId)}`;
+
+  const html = loadTemplate(
+    params.accepted ? "nomination-accepted.html" : "nomination-declined.html",
+  )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{nomineeName\}\}/g, escapeHtml(params.nomineeName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{tournamentUrl\}\}/g, tournamentUrl);
+
+  const subject = params.accepted
+    ? `${params.nomineeName} accepted the payout nomination for ${params.tournamentName}`
+    : `${params.nomineeName} declined the payout nomination for ${params.tournamentName}`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send nomination response email:", error);
+    throw new Error(`Failed to send nomination response email: ${error.message}`);
+  }
+}

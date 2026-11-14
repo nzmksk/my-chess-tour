@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockFrom, mockRpc, tables, mockAlert, mockNomination, mockReview } = vi.hoisted(() => {
+const { mockFrom, mockRpc, tables, mockAlert, mockNomination, mockReview, mockResponse } = vi.hoisted(() => {
   const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
 
   function makeBuilder(table: string) {
@@ -26,6 +26,7 @@ const { mockFrom, mockRpc, tables, mockAlert, mockNomination, mockReview } = vi.
     mockAlert: vi.fn(),
     mockNomination: vi.fn(),
     mockReview: vi.fn(),
+    mockResponse: vi.fn(),
   };
 });
 
@@ -37,11 +38,13 @@ vi.mock("@/services/email/email", () => ({
   sendAdminPayoutAlertEmail: mockAlert,
   sendBeneficiaryNominationEmail: mockNomination,
   sendPayoutReviewEmail: mockReview,
+  sendNominationResponseEmail: mockResponse,
 }));
 
 import {
   notifyAdminsOfPayout,
   notifyBeneficiaryNominated,
+  notifyNominationResponded,
   notifyPayoutReviewed,
 } from "../notify";
 
@@ -74,6 +77,7 @@ beforeEach(() => {
   mockAlert.mockResolvedValue(undefined);
   mockNomination.mockResolvedValue(undefined);
   mockReview.mockResolvedValue(undefined);
+  mockResponse.mockResolvedValue(undefined);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -223,6 +227,71 @@ describe("notifyBeneficiaryNominated", () => {
       expect.stringContaining("failed to load nomination email data"),
       "db down",
     );
+  });
+});
+
+describe("notifyNominationResponded", () => {
+  const T_ID = "22222222-2222-2222-2222-222222222222";
+  const ORGANIZER = "44444444-4444-4444-4444-444444444444";
+  const NOMINEE = "33333333-3333-3333-3333-333333333333";
+
+  function givenResponse() {
+    tables.tournaments = [
+      { data: { name: "KL Open", organization_id: ORGANIZER }, error: null },
+    ];
+    tables.organizations = [
+      // The nominee's name, then the ORGANIZER's contact address.
+      { data: { name: "Selangor Chess" }, error: null },
+      { data: [{ name: "KL Chess Club", email: "hello@klchess.test" }], error: null },
+    ];
+    tables.organization_memberships = [
+      {
+        data: [
+          { user: { email: "owner@klchess.test", first_name: "Aisha" }, roles: { name: "owner" } },
+          { user: { email: "member@klchess.test", first_name: "Max" }, roles: { name: "member" } },
+        ],
+        error: null,
+      },
+    ];
+  }
+
+  it.each([true, false])(
+    "emails the organizer's owners/admins and contact address (accepted=%s)",
+    async (accepted) => {
+      givenResponse();
+      await notifyNominationResponded(T_ID, NOMINEE, accepted);
+
+      expect(mockResponse).toHaveBeenCalledTimes(2);
+      expect(mockResponse).toHaveBeenCalledWith("owner@klchess.test", {
+        recipientName: "Aisha",
+        organizerOrgId: ORGANIZER,
+        tournamentId: T_ID,
+        nomineeName: "Selangor Chess",
+        tournamentName: "KL Open",
+        accepted,
+      });
+      expect(mockResponse).toHaveBeenCalledWith(
+        "hello@klchess.test",
+        expect.objectContaining({ recipientName: "KL Chess Club", accepted }),
+      );
+      expect(mockResponse).not.toHaveBeenCalledWith("member@klchess.test", expect.anything());
+    },
+  );
+
+  it("never throws when the data can't be loaded", async () => {
+    tables.tournaments = [{ data: null, error: { message: "db down" } }];
+    await expect(notifyNominationResponded(T_ID, NOMINEE, true)).resolves.toBeUndefined();
+    expect(mockResponse).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("failed to load nomination response email data"),
+      "db down",
+    );
+  });
+
+  it("never throws when a send fails", async () => {
+    givenResponse();
+    mockResponse.mockRejectedValue(new Error("resend down"));
+    await expect(notifyNominationResponded(T_ID, NOMINEE, false)).resolves.toBeUndefined();
   });
 });
 
