@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { TERMS_VERSION, formatLegalVersion } from "@/lib/legal";
+import { TERMS_VERSION, formatLegalVersion } from "@/lib/reference/legal";
 
 interface TermsModalProps {
   onClose: () => void;

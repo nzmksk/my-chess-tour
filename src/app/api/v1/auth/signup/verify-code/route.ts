@@ -9,7 +9,7 @@ import {
   resetVerifyAttempts,
   MAX_VERIFY_ATTEMPTS,
 } from "@/services/redis/redis";
-import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
+import { SIGNUP_STEP_COOKIE } from "@/lib/auth/signup-cookie";
 
 export async function POST(request: NextRequest) {
   let body: unknown;

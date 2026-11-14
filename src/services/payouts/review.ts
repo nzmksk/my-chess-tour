@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
+import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 import { describePayoutFailure } from "./failure-reason";
 import { describeEarlyPayoutProblem } from "./recipient-problem";
 import { canResend } from "./resend";

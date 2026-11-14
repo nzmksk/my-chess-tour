@@ -116,7 +116,7 @@ Sentry is a processor that receives personal data: error messages can contain a 
 
 - **§7 Sharing of Data:** a Sentry entry covering what it receives, that its servers are in the **United States** (so reports are processed outside Malaysia), that IPs and cookies aren't sent, and that reports are deleted after **30 days**.
 - **§4 Data Retention:** a row for *Error reports (Sentry): 30 days, then deleted automatically*.
-- The first-version summary in `src/lib/legal.ts` mentions Sentry alongside CHIP.
+- The first-version summary in `src/lib/reference/legal.ts` mentions Sentry alongside CHIP.
 
 `TERMS_VERSION` was **not** bumped. Nothing has been published to users yet, so there's no earlier wording to re-accept; the #503 policy change followed the same rule. Once the platform is live, a change like this needs a new `TERMS_HISTORY` entry.
 

@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getTournamentDateState } from "@/app/tournaments/utils";
-import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
+import { getTodayInTimeZone, resolveTimeZone } from "@/lib/tournaments/datetime";
 import { authorizeTournamentManager } from "../_lib/authorize";
 import { NextRequest, NextResponse } from "next/server";
 

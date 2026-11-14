@@ -2,7 +2,7 @@ import { cache } from "react";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
-import { resolveTimeZone } from "@/lib/datetime";
+import { resolveTimeZone } from "@/lib/tournaments/datetime";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

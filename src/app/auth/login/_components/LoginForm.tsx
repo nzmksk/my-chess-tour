@@ -5,7 +5,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "../_actions/login";
 import { INITIAL_LOGIN_STATE } from "../types";
-import { SIGNUP_FORM_STORAGE_KEY } from "@/lib/signup-storage";
+import { SIGNUP_FORM_STORAGE_KEY } from "@/lib/auth/signup-storage";
 
 export default function LoginForm({
   successMessage,

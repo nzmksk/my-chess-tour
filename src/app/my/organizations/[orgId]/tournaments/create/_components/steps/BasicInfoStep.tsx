@@ -5,10 +5,10 @@ import {
   SUPPORTED_COUNTRIES,
   regionsForCountry,
   timeZoneForRegion,
-} from "@/lib/venues";
+} from "@/lib/tournaments/venues";
 import type { BasicInfoData } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
-import { timeZoneAbbreviation } from "@/lib/datetime";
+import { timeZoneAbbreviation } from "@/lib/tournaments/datetime";
 
 type NameStatus = "idle" | "checking" | "available" | "taken" | "error";
 

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { stripPersistence } from "@/lib/session-cookie";
+import { stripPersistence } from "@/lib/auth/session-cookie";
 
 // `sessionOnly` writes the Supabase auth cookies without `maxAge`/`expires`, so
 // the session clears when the browser closes (used when the user did not check

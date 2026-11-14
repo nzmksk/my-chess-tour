@@ -1,4 +1,11 @@
-import type { AuthUser } from "@/stores/auth-store";
+// The signed-in user's navbar identity, held in the auth store. Defined here
+// (not in the store) so lib code can build it without depending on stores.
+export type AuthUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  initials: string;
+};
 
 // Accepts either a JWT claims object (`sub`) or a Supabase session user (`id`),
 // both of which carry `user_metadata`, so the navbar identity is derived the

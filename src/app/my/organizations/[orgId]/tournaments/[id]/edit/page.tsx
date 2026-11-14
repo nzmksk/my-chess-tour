@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { selfApiFetch } from "@/lib/self-fetch";
+import { selfApiFetch } from "@/lib/http/self-fetch";
 import { getAuthClaims, hasOrgPermission } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
 import type {
@@ -12,13 +12,13 @@ import type {
 import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell";
 import { fromPersistedRestrictions } from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
 import { fromPersistedEntryFees } from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
-import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/datetime";
-import { DEFAULT_COUNTRY_CODE } from "@/lib/venues";
+import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/tournaments/datetime";
+import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
 import {
   isPrizeDistribution,
   isPrizeFundingSource,
   type PrizesJson,
-} from "@/lib/prize-funding";
+} from "@/lib/tournaments/prize-funding";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",

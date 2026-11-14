@@ -62,7 +62,7 @@ vi.mock("@/services/email/email", () => ({
 }));
 
 import { POST } from "../route";
-import { TERMS_VERSION } from "@/lib/legal";
+import { TERMS_VERSION } from "@/lib/reference/legal";
 
 // ---------------------------------------------------------------------------
 // Fixtures & helpers

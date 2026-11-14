@@ -16,7 +16,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { RoleBadge, getRoleConfig, type UserOrganization } from "@/lib/roles";
+import { RoleBadge } from "@/components/RoleBadge";
+import { getRoleConfig, type UserOrganization } from "@/lib/auth/roles";
 import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/auth/logout/_actions/logout";
 import { cn } from "@/lib/utils";

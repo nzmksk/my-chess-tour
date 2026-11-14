@@ -5,7 +5,7 @@ import "@/styles/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthProvider";
 import { getNavUser } from "@/services/supabase/permission";
-import { toAuthUser } from "@/lib/auth-user";
+import { toAuthUser } from "@/lib/auth/auth-user";
 
 const themeScript = `(function(){try{var t=localStorage.getItem("theme");if(t==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}})();`;
 

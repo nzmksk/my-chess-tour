@@ -1,17 +1,17 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
-import { ensureUniqueSlug, slugify } from "@/lib/slugs";
+import { ensureUniqueSlug, slugify } from "@/lib/tournaments/slugs";
 import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
-} from "@/lib/cache-tags";
-import { getTodayInTimeZone, resolveTimeZone } from "@/lib/datetime";
+} from "@/lib/tournaments/cache-tags";
+import { getTodayInTimeZone, resolveTimeZone } from "@/lib/tournaments/datetime";
 import {
   validatePrizeFunding,
   validatePrizeStructure,
   type PrizesJson,
-} from "@/lib/prize-funding";
+} from "@/lib/tournaments/prize-funding";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -234,7 +234,7 @@ export async function POST(
 
   // Entry fees are an administration fee and never fund prizes, so any prize
   // with money attached has to name where that money actually comes from. See
-  // src/lib/prize-funding.ts for the reasoning.
+  // src/lib/tournaments/prize-funding.ts for the reasoning.
   validationErrors.push(...validatePrizeFunding(t.prizes));
   // Special prizes attach to a placed result, so they cannot stand alone.
   validationErrors.push(...validatePrizeStructure(t.prizes));

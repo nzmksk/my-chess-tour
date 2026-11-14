@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { type RegistrationFields } from "@/services/auth/auth-validation";
-import { SIGNUP_FORM_STORAGE_KEY as STORAGE_KEY } from "@/lib/signup-storage";
+import { SIGNUP_FORM_STORAGE_KEY as STORAGE_KEY } from "@/lib/auth/signup-storage";
 
 // Persisted in sessionStorage (not localStorage) so the in-progress signup is
 // cleared when the tab closes and never leaks across tabs. The password and

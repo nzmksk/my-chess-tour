@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { getTodayInTimeZone } from "@/lib/datetime";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 // The real wizard mapping, so a round-trip test exercises what the client
 // actually sends rather than a hand-built approximation of it.
 import {

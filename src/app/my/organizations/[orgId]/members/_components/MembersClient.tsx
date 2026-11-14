@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { ROLE_CONFIG, getRoleConfig, type Role } from "@/lib/roles";
+import { ROLE_CONFIG, getRoleConfig, type Role } from "@/lib/auth/roles";
 
 interface Member {
   user_id: string;

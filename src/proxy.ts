@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { SIGNUP_STEP_COOKIE } from "@/lib/signup-cookie";
-import { SESSION_ONLY_COOKIE, stripPersistence } from "@/lib/session-cookie";
+import { SIGNUP_STEP_COOKIE } from "@/lib/auth/signup-cookie";
+import { SESSION_ONLY_COOKIE, stripPersistence } from "@/lib/auth/session-cookie";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

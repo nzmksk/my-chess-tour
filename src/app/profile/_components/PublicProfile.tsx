@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CircleFlag } from "react-circle-flags";
 import { FemaleIcon, MaleIcon } from "@/app/components/Icons";
-import { resolveCountry } from "@/lib/countries";
+import { resolveCountry } from "@/lib/reference/countries";
 import type { PublicPlayerProfile } from "@/app/profile/types";
 
 interface StatCardProps {

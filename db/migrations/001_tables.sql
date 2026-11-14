@@ -41,7 +41,7 @@ CREATE TABLE role_permissions (
 -- handle_new_user), so nothing depends on the nullability yet.
 -- terms_version records WHICH Terms of Service the user agreed to, not merely
 -- that they ticked a box. The version is written by the signup route from
--- src/lib/legal.ts (TERMS_VERSION) via handle_new_user — never from the request
+-- src/lib/reference/legal.ts (TERMS_VERSION) via handle_new_user — never from the request
 -- body, since a client-supplied version is not evidence of anything. NULL on
 -- rows created outside signup (seeds, admin-created players).
 CREATE TABLE users (
@@ -153,7 +153,7 @@ CREATE TABLE organizations (
   entity_type           org_entity_type,
   registration_number   varchar(100),
   -- Which version of the Organizer Agreement this organization is bound by.
-  -- Written server-side from src/lib/legal.ts (ORGANIZER_AGREEMENT_VERSION) at
+  -- Written server-side from src/lib/reference/legal.ts (ORGANIZER_AGREEMENT_VERSION) at
   -- application and on every re-acceptance; the request body never supplies it.
   --
   -- Bumping the constant is the re-acceptance mechanism: an organization whose
@@ -279,12 +279,12 @@ CREATE TABLE tournaments (
   -- money moves on, the timezone decides how its dates read. A country can span
   -- several zones, so neither derives from the other.
   -- The set an organizer may pick from is enforced in the app
-  -- (SUPPORTED_COUNTRIES in src/lib/venues.ts), which also owns venue_state.
+  -- (SUPPORTED_COUNTRIES in src/lib/tournaments/venues.ts), which also owns venue_state.
   venue_country               varchar(2)  NOT NULL DEFAULT 'MY',
   -- IANA timezone of the venue: a tournament's times belong to where it is played, not to whoever is reading them.
   -- start_date/end_date are calendar dates in this zone, timestamptz columns are instants displayed in it,
   -- and ongoing/upcoming/past is judged against "now" here.
-  -- The set an organizer may pick from is enforced in the app (VENUE_TIME_ZONES in src/lib/datetime.ts).
+  -- The set an organizer may pick from is enforced in the app (VENUE_TIME_ZONES in src/lib/tournaments/datetime.ts).
   timezone                    varchar(64) NOT NULL DEFAULT 'Asia/Kuala_Lumpur',
   start_date                  date NOT NULL,
   end_date                    date NOT NULL,
@@ -294,7 +294,7 @@ CREATE TABLE tournaments (
   is_fide_rated               boolean NOT NULL DEFAULT false,
   is_mcf_rated                boolean NOT NULL DEFAULT false,
   entry_fees                  jsonb NOT NULL, -- {"standard": {"amount_cents": 4000},"additional": [{"type": "early_bird","valid_until": "2026-02-19T00:00:00+00:00","valid_for":20,"amount_cents": 3200},{"type": "age_based","age_max": 12,"age_min": 0,"amount_cents": 2400}]}
-  -- Canonical shape is PrizesJson in src/lib/prize-funding.ts. Two lists:
+  -- Canonical shape is PrizesJson in src/lib/tournaments/prize-funding.ts. Two lists:
   -- `categories` are placed (1st/2nd/3rd) and hold `entries`; `special` prizes
   -- are flat, one name and one amount, with the eligibility rule carried in the
   -- name. `distribution` is who hands the money over — "organizer" (default) or
@@ -570,7 +570,7 @@ CREATE TABLE waitlist (
 --   prize_pool_balance = prize money paid in - prize money paid out
 --
 -- Prizes are NOT part of net_payout. Entry fees never fund prizes (see
--- src/lib/prize-funding.ts), so subtracting them would charge sponsor-funded
+-- src/lib/tournaments/prize-funding.ts), so subtracting them would charge sponsor-funded
 -- prize money to the organizer's own revenue and underpay them by the whole pool.
 --
 -- This view only knows the ledger, so it subtracts PAID payouts only. How much

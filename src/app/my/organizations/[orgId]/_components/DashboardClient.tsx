@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatCalendarDate } from "@/lib/datetime";
+import { formatCalendarDate } from "@/lib/tournaments/datetime";
 import AgreementGate from "./AgreementGate";
 import BankAccountNotice, {
   type BankAccountStatus,

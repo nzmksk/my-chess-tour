@@ -9,7 +9,7 @@ import {
 } from "@/services/redis/redis";
 import { sendVerificationEmail } from "@/services/email/email";
 import { validateEmail } from "@/services/auth/auth-validation";
-import { getClientIp } from "@/lib/request-ip";
+import { getClientIp } from "@/lib/http/request-ip";
 import { generateCode } from "@/services/auth/verification-code";
 
 // A single response shared by every account-state outcome (missing account,

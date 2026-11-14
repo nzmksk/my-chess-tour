@@ -1,5 +1,5 @@
 import NavBar from "@/components/NavBar";
-import { ORGANIZER_AGREEMENT_VERSION, formatLegalVersion } from "@/lib/legal";
+import { ORGANIZER_AGREEMENT_VERSION, formatLegalVersion } from "@/lib/reference/legal";
 
 export const metadata = {
   title: "Organizer Agreement",

@@ -5,7 +5,7 @@ The app builds absolute URLs for two different jobs, and each one needs a differ
 | Job                                                               | Who follows the URL                     | Origin comes from                              |
 | ----------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------- |
 | **Outbound link**: an email, a password reset, a payment redirect | A person, later, from outside the app   | `NEXT_PUBLIC_SITE_URL`                         |
-| **Internal API call**: a server component fetching `/api/v1/...`  | This server, during the current request | The incoming request (`src/lib/self-fetch.ts`) |
+| **Internal API call**: a server component fetching `/api/v1/...`  | This server, during the current request | The incoming request (`src/lib/http/self-fetch.ts`) |
 
 Using the wrong source in either case is a bug. Each mistake shows up differently.
 
@@ -49,7 +49,7 @@ When the origins differ, the page silently reads the other build's API. If that 
 ### Usage
 
 ```ts
-import { selfApiFetch } from "@/lib/self-fetch";
+import { selfApiFetch } from "@/lib/http/self-fetch";
 
 const res = await selfApiFetch(`/api/v1/organizations/${orgId}/dashboard`);
 ```

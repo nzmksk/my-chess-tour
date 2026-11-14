@@ -1,6 +1,6 @@
 "use client";
 
-import type { MalaysianBank } from "@/lib/malaysian-banks";
+import type { MalaysianBank } from "@/lib/reference/malaysian-banks";
 
 // The three fields that identify a payout destination, plus the rules that
 // govern them. Extracted from BankingForm so the organizer application, the

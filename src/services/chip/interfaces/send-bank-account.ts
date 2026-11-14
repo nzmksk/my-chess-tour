@@ -2,7 +2,7 @@
 export interface ChipBankAccountRequest {
   /** Digits only, no spaces or dashes. Length depends on the bank. */
   account_number: string;
-  /** SWIFT/BIC — must be one of the codes in src/lib/malaysian-banks.ts. */
+  /** SWIFT/BIC — must be one of the codes in src/lib/reference/malaysian-banks.ts. */
   bank_code: string;
   /** Account holder name as it appears at the bank. */
   name: string;

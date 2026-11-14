@@ -14,8 +14,8 @@ import {
 } from "@/app/tournaments/utils";
 import type { RatingContext } from "@/app/tournaments/utils";
 import type { EntryFeeBreakdown } from "@/services/payments/fees";
-import { nationalityMatches, resolveCountry } from "@/lib/countries";
-import { formatInstantDate, resolveTimeZone } from "@/lib/datetime";
+import { nationalityMatches, resolveCountry } from "@/lib/reference/countries";
+import { formatInstantDate, resolveTimeZone } from "@/lib/tournaments/datetime";
 import type { RegistrationRow, PlayerProfile } from "../types";
 import RegistrationPending from "./RegistrationPending";
 import CompleteProfilePrompt, {

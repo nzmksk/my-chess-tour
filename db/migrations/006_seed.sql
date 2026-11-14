@@ -253,7 +253,7 @@ DECLARE
   -- Payout destinations. Seeded as 'verified' because every payout phase from
   -- #519 onward needs a usable recipient to develop against, and because an
   -- unverified seed org would open its dashboard behind the bank-account banner.
-  -- SWIFT codes must exist in MALAYSIAN_BANKS (src/lib/malaysian-banks.ts).
+  -- SWIFT codes must exist in MALAYSIAN_BANKS (src/lib/reference/malaysian-banks.ts).
   org_bank_codes   text[] := ARRAY['MBBEMYKL','CIBBMYKL','PBBEMYKL','RHBBMYKL','HLBBMYKL'];
   org_bank_names   text[] := ARRAY['Maybank','CIMB Bank','Public Bank','RHB Bank','Hong Leong Bank'];
   -- tournaments.organizer_commission_pct per organizer: how much of the
@@ -275,7 +275,7 @@ DECLARE
   ];
   -- Venues carry their own state/region and timezone: a tournament's dates are
   -- calendar dates at its venue, so the two have to agree (tournaments.timezone;
-  -- picklist in VENUE_TIME_ZONES, src/lib/datetime.ts).
+  -- picklist in VENUE_TIME_ZONES, src/lib/tournaments/datetime.ts).
   --
   -- Positions 7–9 are outside Malaysia. Venue index is (idx - 1) % 11 and
   -- tournaments 7–9 are published and upcoming, so those three non-Malaysian
@@ -320,7 +320,7 @@ DECLARE
   -- country can span several zones, so neither derives from the other.
   --
   -- Positions 7–9 are TH/ID/SG, which are NOT in SUPPORTED_COUNTRIES
-  -- (src/lib/venues.ts is MY-only today) — exactly as their venue_states above
+  -- (src/lib/tournaments/venues.ts is MY-only today) — exactly as their venue_states above
   -- already sit outside the Malaysian region list. They exist to exercise
   -- cross-country reads; editing one through the creation wizard would fall back
   -- to MY, which is the accepted cost of seeding venues the picklist cannot yet
@@ -331,7 +331,7 @@ DECLARE
     'TH','ID','SG',
     'MY','MY'
   ];
-  -- Prize funding. Entry fees never fund prizes (src/lib/prize-funding.ts), so
+  -- Prize funding. Entry fees never fund prizes (src/lib/tournaments/prize-funding.ts), so
   -- every category carrying money must name an external source and the party
   -- putting it up. Publish validation rejects one that doesn't, so seeded
   -- tournaments have to declare it or they could not be re-published.
@@ -381,7 +381,7 @@ BEGIN
     '{"provider":"email","providers":["email"]}',
     -- terms_version rides in the metadata exactly as the signup route sends it,
     -- so handle_new_user records the acceptance the same way it does in
-    -- production. Keep in step with TERMS_VERSION in src/lib/legal.ts.
+    -- production. Keep in step with TERMS_VERSION in src/lib/reference/legal.ts.
     json_build_object('first_name', 'CHIP', 'last_name', 'Review',
                       'terms_version', '2026-08-02'),
     now(), now(),
@@ -469,7 +469,7 @@ BEGIN
 
     -- Seeded organizations accept the current Organizer Agreement, otherwise
     -- every seeded dashboard opens behind the re-acceptance gate. Keep this
-    -- literal in step with ORGANIZER_AGREEMENT_VERSION in src/lib/legal.ts —
+    -- literal in step with ORGANIZER_AGREEMENT_VERSION in src/lib/reference/legal.ts —
     -- a mismatch here surfaces as the gate appearing on every seeded org.
     INSERT INTO public.organizations (
       name, description, email,
@@ -689,7 +689,7 @@ BEGIN
         org_profile_ids[i],
         t_names[idx],
         -- Published tournaments get a public slug (matches slugify() in
-        -- src/lib/slugs.ts); drafts have none. Seed names are unique → no collision.
+        -- src/lib/tournaments/slugs.ts); drafts have none. Seed names are unique → no collision.
         CASE
           WHEN t_status = 'published'::tournament_status
           THEN regexp_replace(
@@ -750,7 +750,7 @@ BEGIN
             )
           ),
           -- Special prizes are flat — one name, one amount, its own funding —
-          -- not category-shaped (SpecialPrizeJson, src/lib/prize-funding.ts).
+          -- not category-shaped (SpecialPrizeJson, src/lib/tournaments/prize-funding.ts).
           -- The eligibility rule lives in the name because nothing reads a
           -- structured condition: the wizard's SpecialPrize has no field for one.
           'special', json_build_array(

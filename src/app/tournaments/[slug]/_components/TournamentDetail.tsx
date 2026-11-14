@@ -9,9 +9,9 @@ import {
   formatInstantDate,
   getTodayInTimeZone,
   resolveTimeZone,
-} from "@/lib/datetime";
-import { resolveCountry } from "@/lib/countries";
-import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
+} from "@/lib/tournaments/datetime";
+import { resolveCountry } from "@/lib/reference/countries";
+import { registrationStatus as computeRegistrationStatus } from "@/lib/tournaments/registration-status";
 import TournamentTabs from "./TournamentTabs";
 import StartingRankTab from "./StartingRankTab";
 

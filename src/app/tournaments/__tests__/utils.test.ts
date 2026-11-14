@@ -10,7 +10,7 @@ import {
   getTournamentDateState,
   getMinFeeCents,
 } from "../utils";
-import { getTodayInTimeZone } from "@/lib/datetime";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 import type { EntryFees } from "../types";
 
 describe("getTournamentDateState", () => {

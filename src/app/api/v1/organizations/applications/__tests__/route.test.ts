@@ -63,7 +63,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { GET, POST } from "../route";
-import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
+import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 
 // ---------------------------------------------------------------------------
 // Fixtures

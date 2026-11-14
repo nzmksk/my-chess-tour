@@ -4,12 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef, useTransition } from "react";
-import { closeDrawer, getIsDrawerOpen, openDrawer } from "@/lib/nav-bar-state";
+import { closeDrawer, getIsDrawerOpen, openDrawer } from "./nav-bar-state";
 import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/auth/logout/_actions/logout";
 import { ThemeToggle } from "./ThemeToggle";
 import OrgSwitcher from "./OrgSwitcher";
-import { RoleBadge } from "@/lib/roles";
+import { RoleBadge } from "@/components/RoleBadge";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 
 const NAV_LINKS = [

@@ -7,8 +7,8 @@ import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { redis } from "@/services/redis/redis";
 import { sendSignupVerificationCode } from "@/services/auth/verification-code";
-import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/signup-cookie";
-import { SESSION_ONLY_COOKIE } from "@/lib/session-cookie";
+import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/auth/signup-cookie";
+import { SESSION_ONLY_COOKIE } from "@/lib/auth/session-cookie";
 import type { LoginState } from "../types";
 
 const MAX_ATTEMPTS = 5;

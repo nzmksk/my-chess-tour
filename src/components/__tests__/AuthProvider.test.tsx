@@ -29,11 +29,11 @@ vi.mock("@/services/supabase/client", () => ({
   })),
 }));
 
-vi.mock("@/lib/auth-user", () => ({
+vi.mock("@/lib/auth/auth-user", () => ({
   toAuthUser: mocks.toAuthUser,
 }));
 
-vi.mock("@/lib/avatar-cache", () => ({
+vi.mock("@/lib/auth/avatar-cache", () => ({
   subscribeAvatar: mocks.subscribeAvatar,
 }));
 

@@ -3,7 +3,7 @@ import {
   BANK_SWIFT_CODES,
   MALAYSIAN_BANKS,
   bankNameForSwift,
-} from "@/lib/malaysian-banks";
+} from "@/lib/reference/malaysian-banks";
 
 // Shape assertions, plus one that pins the exact set. MALAYSIAN_BANKS is a 1:1
 // mirror of CHIP Send's documented BankCode list, so drift in either direction
