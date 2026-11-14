@@ -110,16 +110,12 @@ function RequestCard({ req }: { req: CancellationRequest }) {
         <div className="min-w-0">
           <h3 className="font-lato text-text-primary text-sm font-semibold">
             {req.tournament ? (
-              req.tournament.slug ? (
-                <Link
-                  href={`/tournaments/${req.tournament.slug}`}
-                  className="hover:text-gold-bright transition-colors"
-                >
-                  {req.tournament.name}
-                </Link>
-              ) : (
-                req.tournament.name
-              )
+              <Link
+                href={`/admin/tournaments/${req.tournament.id}`}
+                className="hover:text-gold-bright transition-colors"
+              >
+                {req.tournament.name}
+              </Link>
             ) : (
               "Unknown tournament"
             )}
