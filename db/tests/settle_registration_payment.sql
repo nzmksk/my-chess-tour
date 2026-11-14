@@ -19,7 +19,7 @@ DECLARE
   v_org        uuid;
   v_tournament uuid;
   v_user_a uuid; v_user_b uuid; v_user_c uuid; v_user_d uuid; v_user_e uuid;
-  v_user_f uuid; v_user_g uuid;
+  v_user_f uuid; v_user_g uuid; v_user_h uuid; v_user_i uuid;
   v_res    jsonb;
   v_reg    uuid;
   v_pay_a  uuid;
@@ -29,6 +29,10 @@ DECLARE
   v_regst  text;
   v_method text;
   v_rows   integer;
+  v_tier_a text;
+  v_tier_b text;
+  v_cancelled_at timestamptz;
+  v_reason       text;
 BEGIN
   -- ---- fixtures -----------------------------------------------------------
   INSERT INTO organizations (name) VALUES ('VERIFY ORG') RETURNING id INTO v_org;
@@ -39,6 +43,8 @@ BEGIN
   INSERT INTO users (email, first_name, last_name) VALUES ('verify-e@test.local','E','T') RETURNING id INTO v_user_e;
   INSERT INTO users (email, first_name, last_name) VALUES ('verify-f@test.local','F','T') RETURNING id INTO v_user_f;
   INSERT INTO users (email, first_name, last_name) VALUES ('verify-g@test.local','G','T') RETURNING id INTO v_user_g;
+  INSERT INTO users (email, first_name, last_name) VALUES ('verify-h@test.local','H','T') RETURNING id INTO v_user_h;
+  INSERT INTO users (email, first_name, last_name) VALUES ('verify-i@test.local','I','T') RETURNING id INTO v_user_i;
 
   INSERT INTO tournaments (
     organization_id, name, venue_name, venue_state, venue_address,
@@ -202,6 +208,71 @@ BEGIN
     RAISE EXCEPTION 'S6 FAIL: second paid attempt payment=% result=% (expected paid, not newly_confirmed)', v_pay, v_res;
   END IF;
   RAISE NOTICE 'S6 PASS — a second paid attempt does not re-confirm';
+
+  -- ===== S7: each attempt records the tier it was charged at ===============
+  -- The player's tier changes between a failed attempt and the retry (e.g. a
+  -- corrected DOB moves them off the junior rate). The ledger must keep both
+  -- tiers; registrations.fee_tier only follows the current attempt.
+  v_res   := create_registration_with_payment(v_user_h, v_tournament, 'age_based', 2000);
+  v_reg   := (v_res->>'registration_id')::uuid;
+  v_pay_a := (v_res->>'payment_id')::uuid;
+  PERFORM settle_registration_payment(v_pay_a, false, NULL);
+  v_res   := start_new_payment_attempt(v_reg, 'standard', 4000);
+  v_pay_b := (v_res->>'payment_id')::uuid;
+
+  SELECT fee_tier INTO v_tier_a FROM payments WHERE id = v_pay_a;
+  SELECT fee_tier INTO v_tier_b FROM payments WHERE id = v_pay_b;
+  IF v_tier_a IS DISTINCT FROM 'age_based' OR v_tier_b IS DISTINCT FROM 'standard' THEN
+    RAISE EXCEPTION 'S7 FAIL: payment tiers A=% B=% (expected age_based/standard)', v_tier_a, v_tier_b;
+  END IF;
+  IF (SELECT fee_tier FROM registrations WHERE id = v_reg) <> 'standard' THEN
+    RAISE EXCEPTION 'S7 FAIL: registration fee_tier should follow the current attempt';
+  END IF;
+  RAISE NOTICE 'S7 PASS — each attempt keeps the tier it was charged at';
+
+  -- ===== S8: cancelled_at must agree with the status ======================
+  -- chk_cancelled_fields_consistent. Reuses S7's live pending_payment row; each
+  -- write is in its own sub-block so the rejected change rolls back alone.
+  BEGIN
+    UPDATE registrations SET status = 'confirmed', confirmed_at = now(), cancelled_at = now()
+      WHERE id = v_reg;
+    RAISE EXCEPTION 'S8 FAIL: confirmed with a cancelled_at was accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE registrations SET status = 'cancelled_payment' WHERE id = v_reg;
+    RAISE EXCEPTION 'S8 FAIL: cancelled_payment without a cancelled_at was accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE registrations SET status = 'failed_payment', cancelled_at = now() WHERE id = v_reg;
+    RAISE EXCEPTION 'S8 FAIL: failed_payment with a cancelled_at was accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  RAISE NOTICE 'S8 PASS — cancelled_at and status cannot disagree';
+
+  -- ===== S9: a late paid rescue clears both cancellation fields ============
+  v_res   := create_registration_with_payment(v_user_i, v_tournament, 'standard', 4000);
+  v_reg   := (v_res->>'registration_id')::uuid;
+  v_pay_a := (v_res->>'payment_id')::uuid;
+  SELECT gross_amount_cents INTO v_gross FROM payments WHERE id = v_pay_a;
+  UPDATE registrations SET registered_at = now() - interval '20 minutes' WHERE id = v_reg;
+  PERFORM expire_stale_pending_payments('10 minutes', NULL, v_reg, NULL);
+
+  SELECT cancelled_at, cancellation_reason INTO v_cancelled_at, v_reason
+    FROM registrations WHERE id = v_reg;
+  IF v_cancelled_at IS NULL OR v_reason IS DISTINCT FROM 'payment_expired' THEN
+    RAISE EXCEPTION 'S9 FAIL: expiry should stamp cancelled_at and the reason, got % / %', v_cancelled_at, v_reason;
+  END IF;
+
+  PERFORM settle_registration_payment(v_pay_a, true, v_gross);
+  SELECT status, cancelled_at, cancellation_reason INTO v_regst, v_cancelled_at, v_reason
+    FROM registrations WHERE id = v_reg;
+  IF v_regst <> 'confirmed' OR v_cancelled_at IS NOT NULL OR v_reason IS NOT NULL THEN
+    RAISE EXCEPTION 'S9 FAIL: rescued registration=% cancelled_at=% reason=% (expected confirmed/NULL/NULL)',
+      v_regst, v_cancelled_at, v_reason;
+  END IF;
+  RAISE NOTICE 'S9 PASS — late paid rescue clears cancelled_at and the reason';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;

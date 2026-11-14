@@ -92,6 +92,7 @@ BEGIN
     organizer_commission_cents,
     player_commission_cents,
     net_amount_cents,
+    fee_tier,
     currency,
     status
   ) VALUES (
@@ -105,6 +106,7 @@ BEGIN
     v_amounts.organizer_commission_cents,
     v_amounts.player_commission_cents,
     v_amounts.net_amount_cents,
+    p_fee_tier,
     'MYR',
     'pending'
   )
@@ -177,12 +179,12 @@ BEGIN
   INSERT INTO payments (
     type, tournament_id, registration_id, user_id, organization_id,
     gross_amount_cents, platform_fee_cents, organizer_commission_cents,
-    player_commission_cents, net_amount_cents, currency, status
+    player_commission_cents, net_amount_cents, fee_tier, currency, status
   ) VALUES (
     'registration', v_reg.tournament_id, v_reg.id, v_reg.user_id, v_organization_id,
     v_amounts.gross_amount_cents, v_amounts.platform_fee_cents,
     v_amounts.organizer_commission_cents, v_amounts.player_commission_cents,
-    v_amounts.net_amount_cents, 'MYR', 'pending'
+    v_amounts.net_amount_cents, p_fee_tier, 'MYR', 'pending'
   )
   RETURNING id INTO v_payment_id;
 
