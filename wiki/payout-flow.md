@@ -20,7 +20,7 @@ The view only subtracts **paid** payouts. How much may leave right now is `avail
 ## The flow
 
 1. **Queue.** `queue_payout` locks the tournament, refuses if anything is in the way (below), checks the requested amount against what is available, resolves the recipient and its verified bank account, and inserts the row. An omitted amount means everything available; an explicit one above that is refused, not reduced. A live automatic payout already there means it returns NULL. This row is what reserves the money.
-2. **Send.** `executePayout` (`src/services/payouts/execute.ts`) re-checks blocks and the bank account, re-clamps the amount, and creates the send instruction with `reference` = the payout id. It never throws: anything transient leaves the row `pending` and safe to re-run.
+2. **Send.** `executePayout` (`src/services/payouts/execute.ts`) re-checks blocks and the bank account, re-clamps the amount and checks the balance. Then `claim_payout_send` re-checks the blocks **under the tournament lock** and marks the row `processing`, and only then is the send instruction created, with `reference` = the payout id. It never throws, and a re-run is always safe (see [Claims and retries](#claims-and-retries)).
 3. **Settle.** `settle_payout` books one `type='organizer_payout'` row in `payments`, which drains `net_payout_cents`, and sends the "payout processed" email. It is reached from the synchronous response or the webhook (`webhooks/chip/send`), whichever comes first. The other is a no-op on `processed_at`.
 
 What can stop a payout:
@@ -34,6 +34,20 @@ What can stop a payout:
 | Requested amount above what is available | queue | Refused, before the recipient is checked. |
 | Less than `MIN_PAYOUT_CENTS` available | queue, send | Refused at queue. Terminal at send. |
 | CHIP Send balance below payout + fee | send | Budget requested, held `pending`, platform admins emailed. |
+
+## Claims and retries
+
+The claim closes a race. Without it, a cancellation approved after `executePayout`'s block check but before CHIP is called would queue refunds while the transfer still went out. `claim_payout_send` and `review_tournament_cancellation` both lock the tournament, so one of them always sees the other: the claim refuses a cancelled or cancelling tournament, or the cancellation refuses a `processing` payout.
+
+`processing` with no `chip_send_instruction_id` means **claimed, and CHIP may or may not have the instruction**. What happens after a failed send:
+
+| CHIP's answer | Row left | Why |
+|---|---|---|
+| Insufficient balance; 401; 429 | `pending` (claim released) | CHIP certainly created nothing |
+| 408, 5xx, network failure | `processing`, no instruction | The request may have landed |
+| Other 4xx | `failed` | Terminal |
+
+A re-run of a claimed row checks nothing and sends the same reference again, which returns the existing instruction if there is one. The claim was the commitment point.
 
 ## Early payouts
 
@@ -56,7 +70,7 @@ What `early_payout_problem` refuses, in order: tournament cancelled or not publi
 
 ## Cancellation after a payout
 
-Cancelling refunds every confirmed player their full **gross** from the Collect balance, but money already sent to the organizer has left through CHIP Send and there is no automated claw-back. So `review_tournament_cancellation` refuses approval (`CANCELLATION_BLOCKED_BY_PAYOUT`, a 409 that names the shortfall) once an organizer payout has been **paid**, or while one is **being sent**. A payout approved but not yet sent doesn't block it: `executePayout` fails it on the cancelled tournament. Recovering the money is a manual `payment_type='adjustment'` row and an ops process; then the cancellation can be approved.
+Cancelling refunds every confirmed player their full **gross** from the Collect balance, but money already sent to the organizer has left through CHIP Send and there is no automated claw-back. So `review_tournament_cancellation` refuses approval (`CANCELLATION_BLOCKED_BY_PAYOUT`, a 409 that names the shortfall) once an organizer payout has been **paid**, or while one is **being sent** (claimed or out with CHIP). A payout approved but not yet claimed doesn't block it: its claim refuses, and `executePayout` fails it on the cancelled tournament. Recovering the money is a manual `payment_type='adjustment'` row and an ops process; then the cancellation can be approved.
 
 ## Emails
 

@@ -1099,7 +1099,8 @@ BEGIN
   -- claw-back. So approval is refused, with the shortfall, until ops have
   -- recovered it (a payment_type='adjustment' row). A payout still being sent
   -- may complete at any moment, so it blocks too. Locking the tournament
-  -- serializes this with queue_payout and request_early_payout.
+  -- serializes this with queue_payout, request_early_payout and
+  -- claim_payout_send, which marks a payout 'processing' before CHIP is called.
   IF p_action = 'approve' THEN
     PERFORM 1 FROM tournaments WHERE id = v_request.tournament_id FOR UPDATE;
 

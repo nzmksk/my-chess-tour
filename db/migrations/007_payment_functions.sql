@@ -1181,6 +1181,62 @@ END;
 $$;
 
 -- =============================================
+-- CLAIM PAYOUT SEND
+-- executePayout calls this immediately before it asks CHIP for the transfer. It
+-- re-checks the blocks and moves the row from 'pending' to 'processing' in one
+-- step, under the same tournament lock that review_tournament_cancellation takes.
+-- Without that lock, a cancellation could be approved after executePayout's own
+-- block check but before CHIP is called, and both the refunds and the transfer
+-- would go ahead. With it, one of two things happens: the claim sees the
+-- cancellation and refuses, or the cancellation sees 'processing' and refuses.
+--
+-- 'processing' with no chip_send_instruction_id means the row has been claimed
+-- and CHIP may or may not have created the instruction. executePayout resumes
+-- such a row by sending again: `reference` dedupes the transfer, so a second send
+-- returns the existing instruction instead of paying twice. The row goes back to
+-- 'pending' only when CHIP definitely refused the send.
+--
+-- Returns NULL once the row is claimed. Otherwise returns why it wasn't: a
+-- tournament_payout_block_reason code, or 'not_claimable' when the row is
+-- missing, unapproved, settled or already claimed.
+-- =============================================
+CREATE OR REPLACE FUNCTION claim_payout_send(p_payout_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament_id uuid;
+  v_payout        payouts;
+  v_block         text;
+BEGIN
+  SELECT tournament_id INTO v_tournament_id FROM payouts WHERE id = p_payout_id;
+  IF NOT FOUND THEN
+    RETURN 'not_claimable';
+  END IF;
+
+  -- Tournament first, then the payout: the lock order every payout function uses.
+  PERFORM 1 FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
+  SELECT * INTO v_payout FROM payouts WHERE id = p_payout_id FOR UPDATE;
+
+  IF v_payout.processed_at IS NOT NULL
+     OR v_payout.approval <> 'approved'
+     OR v_payout.status <> 'pending' THEN
+    RETURN 'not_claimable';
+  END IF;
+
+  v_block := tournament_payout_block_reason(v_tournament_id);
+  IF v_block IS NOT NULL THEN
+    RETURN v_block;
+  END IF;
+
+  UPDATE payouts SET status = 'processing' WHERE id = p_payout_id;
+  RETURN NULL;
+END;
+$$;
+
+-- =============================================
 -- SETTLE PAYOUT (idempotent, keyed by a specific payout row)
 -- The settle_refund twin, called by both the sync response and the webhook:
 --   paid  → the money left: book one type='organizer_payout' ledger row, which is
@@ -1494,6 +1550,7 @@ REVOKE EXECUTE ON FUNCTION early_payout_cap                  FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION early_payout_problem              FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION request_early_payout              FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_payout_request             FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION claim_payout_send                 FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_payout                     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_organization_payout_overview FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_pending_payout_nominations   FROM PUBLIC, anon, authenticated;
@@ -1513,6 +1570,7 @@ GRANT EXECUTE ON FUNCTION early_payout_cap                  TO service_role;
 GRANT EXECUTE ON FUNCTION early_payout_problem              TO service_role;
 GRANT EXECUTE ON FUNCTION request_early_payout              TO service_role;
 GRANT EXECUTE ON FUNCTION review_payout_request             TO service_role;
+GRANT EXECUTE ON FUNCTION claim_payout_send                 TO service_role;
 GRANT EXECUTE ON FUNCTION settle_payout                     TO service_role;
 GRANT EXECUTE ON FUNCTION list_organization_payout_overview TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_payout_nominations   TO service_role;

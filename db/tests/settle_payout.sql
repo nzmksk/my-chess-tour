@@ -904,6 +904,7 @@ DECLARE
   v_t        uuid;
   v_id       uuid;
   v_req      uuid;
+  v_claim    text;
 BEGIN
   SELECT id INTO v_owner_role FROM roles WHERE name = 'owner' AND scope = 'organization';
   INSERT INTO users (email, first_name, last_name) VALUES ('cg-owner@test.local', 'O', 'C') RETURNING id INTO v_owner;
@@ -969,6 +970,55 @@ BEGIN
     RAISE EXCEPTION 'C3 FAIL: an unsent payout blocked cancellation';
   END IF;
   RAISE NOTICE 'C3 PASS — an approved but unsent payout does not block cancellation';
+
+  -- ===== C4: claiming a send is what blocks the cancellation ===============
+  -- executePayout's block check and its call to CHIP are far apart; the claim
+  -- closes that gap by re-checking and marking the row 'processing' together.
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 4000, 'Venue deposit');
+  IF claim_payout_send(v_id) IS DISTINCT FROM 'not_claimable' THEN
+    RAISE EXCEPTION 'C4 FAIL: claimed a request nobody approved';
+  END IF;
+  PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+  -- In its own statement: a subquery in the same expression reads the snapshot
+  -- from before the claim's UPDATE.
+  v_claim := claim_payout_send(v_id);
+  IF v_claim IS NOT NULL
+     OR (SELECT status FROM payouts WHERE id = v_id) <> 'processing'
+     OR (SELECT chip_send_instruction_id FROM payouts WHERE id = v_id) IS NOT NULL THEN
+    RAISE EXCEPTION 'C4 FAIL: an approved payout was not claimed';
+  END IF;
+  IF claim_payout_send(v_id) IS DISTINCT FROM 'not_claimable' THEN
+    RAISE EXCEPTION 'C4 FAIL: a payout was claimed twice';
+  END IF;
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through') RETURNING id INTO v_req;
+  BEGIN
+    PERFORM review_tournament_cancellation(v_req, v_reviewer, 'approve', NULL);
+    RAISE EXCEPTION 'C4 FAIL: cancellation approved while a send was claimed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'CANCELLATION_BLOCKED_BY_PAYOUT: a payout is being sent%' THEN RAISE; END IF;
+  END;
+  RAISE NOTICE 'C4 PASS — a claimed send blocks cancellation, and is claimed once';
+
+  -- ===== C5: a claim re-checks the blocks ===================================
+  -- The cancellation was approved after executePayout's own check: the claim
+  -- refuses, and nothing is marked as being sent.
+  v_t := pg_temp.closed_tournament(v_org, 2);
+  v_id := request_early_payout(v_t, v_owner, 4000, 'Venue deposit');
+  PERFORM review_payout_request(v_id, v_reviewer, 'approve', NULL);
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through') RETURNING id INTO v_req;
+  IF claim_payout_send(v_id) IS DISTINCT FROM 'cancellation_pending' THEN
+    RAISE EXCEPTION 'C5 FAIL: claimed with a cancellation request open';
+  END IF;
+  PERFORM review_tournament_cancellation(v_req, v_reviewer, 'approve', NULL);
+  v_claim := claim_payout_send(v_id);
+  IF v_claim IS DISTINCT FROM 'tournament_cancelled'
+     OR (SELECT status FROM payouts WHERE id = v_id) <> 'pending' THEN
+    RAISE EXCEPTION 'C5 FAIL: claimed the payout of a cancelled tournament';
+  END IF;
+  RAISE NOTICE 'C5 PASS — a claim refuses a cancelled or cancelling tournament';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'ALL SCENARIOS PASSED'; END $$;
