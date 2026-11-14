@@ -389,7 +389,7 @@ CREATE TABLE registrations (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id               uuid REFERENCES users(id)                ON DELETE SET NULL,
   tournament_id         uuid NOT NULL REFERENCES tournaments(id) ON DELETE RESTRICT,
-  fee_tier              varchar(50) NOT NULL,
+  fee_tier              varchar(50) NOT NULL,                -- tier of the CURRENT attempt; overwritten on retry. History is payments.fee_tier
   status                registration_status NOT NULL DEFAULT 'pending_payment',
   registered_at         timestamptz NOT NULL DEFAULT now(), -- imply when player initiates registration (payment could be pending)
   confirmed_at          timestamptz,                        -- when payment is confirmed and registration is finalized
@@ -434,7 +434,14 @@ CREATE TABLE payments (
   organizer_commission_cents  integer NOT NULL DEFAULT 0,         -- organizer's absorbed share of commission
   player_commission_cents     integer NOT NULL DEFAULT 0,         -- player's share of commission
   net_amount_cents            integer NOT NULL,                   -- what the recipient nets. net_amount = gross_amount - platform_fee
-  currency                    varchar(3) NOT NULL DEFAULT 'MYR',
+  -- The fee tier this attempt was priced at, so the ledger records why it
+  -- charged what it did. registrations.fee_tier is the tier of the CURRENT
+  -- attempt only and changes on a retry (a corrected DOB, an OKU verification
+  -- landing between attempts); this is the tier AS CHARGED, and never changes.
+  -- Count tiers from here, not from registrations. NULL on non-registration
+  -- rows, and on registration rows written before this column existed.
+  fee_tier                    varchar(50),
+  currency                   varchar(3) NOT NULL DEFAULT 'MYR',
   payment_method              varchar(50),
   chip_transaction_id         varchar(255),
   checkout_url                text,                               -- CHIP checkout link, reused while the attempt is live

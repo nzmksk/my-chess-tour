@@ -895,13 +895,14 @@ BEGIN
         type, tournament_id, registration_id, user_id, organization_id,
         gross_amount_cents, platform_fee_cents,
         organizer_commission_cents, player_commission_cents, net_amount_cents,
-        currency, payment_method, chip_transaction_id,
+        fee_tier, currency, payment_method, chip_transaction_id,
         status, paid_at, created_at
       ) VALUES (
         'registration', v_t.id, new_reg_id, player_user_ids[i], v_t.organization_id,
         v_amounts.gross_amount_cents, v_amounts.platform_fee_cents,
         v_amounts.organizer_commission_cents, v_amounts.player_commission_cents,
         v_amounts.net_amount_cents,
+        v_tier,
         'MYR',
         -- CHIP's transaction_data.payment_method values, as the webhook records them.
         CASE WHEN reg_status = 'confirmed'
