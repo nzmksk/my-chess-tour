@@ -8,7 +8,7 @@ import { nameToAlpha3 } from "@/lib/countries";
 import { createClient } from "@/services/supabase/client";
 import OkuVerificationCard from "./OkuVerificationCard";
 import BankingCard from "./BankingCard";
-import { broadcastAvatar } from "@/lib/avatar-cache";
+import { broadcastAvatar } from "@/lib/auth/avatar-cache";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   Dialog,

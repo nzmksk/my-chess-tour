@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/services/supabase/server";
-import { SESSION_ONLY_COOKIE } from "@/lib/session-cookie";
+import { SESSION_ONLY_COOKIE } from "@/lib/auth/session-cookie";
 
 export async function logout(): Promise<never> {
   const supabase = await createClient();

@@ -242,7 +242,7 @@ check has passed.
 state in a Zustand store:
 
 1. **Seed from server:** the layout resolves the user via `getNavUser()` and
-   passes it down; `toAuthUser()` (`src/lib/auth-user.ts`) normalizes either a
+   passes it down; `toAuthUser()` (`src/lib/auth/auth-user.ts`) normalizes either a
    JWT-claims shape (`sub`) or a session-user shape (`id`) into the store. No
    client round trip needed for first paint.
 2. **Stay live:** a single `supabase.auth.onAuthStateChange` subscription updates
@@ -268,7 +268,7 @@ state in a Zustand store:
 - Unchecked → `createClient({ sessionOnly: true })` writes the `sb-*` cookies
   **without** `maxAge`/`expires`, so they're **session cookies** (cleared when the
   browser closes). A `SESSION_ONLY_COOKIE` marker is set so the middleware keeps
-  *refreshed* cookies session-scoped too (`stripPersistence`, `src/lib/session-cookie.ts`).
+  *refreshed* cookies session-scoped too (`stripPersistence`, `src/lib/auth/session-cookie.ts`).
 - Checked → persistent cookies; the marker is deleted.
 
 ---
@@ -302,7 +302,7 @@ await supabase.rpc("has_global_permission", { p_user_id: claims.id, p_permission
 - `src/proxy.ts` — middleware: session refresh + route protection
 - `src/services/supabase/permission.ts` — `getAuthClaims`, `getNavUser`, RBAC helpers
 - `src/services/supabase/{server,client,admin}.ts` — the three clients
-- `src/lib/session-cookie.ts` — "Keep me signed in" persistence
-- `src/lib/auth-user.ts` — claims/session → store identity
+- `src/lib/auth/session-cookie.ts` — "Keep me signed in" persistence
+- `src/lib/auth/auth-user.ts` — claims/session → store identity
 - `src/components/AuthProvider.tsx` — client auth state
 - `src/app/auth/login/_actions/login.ts` — login + rate limiting

@@ -1,4 +1,4 @@
-import { getRoleConfig } from "@/lib/roles";
+import { getRoleConfig } from "@/lib/auth/roles";
 
 /** Pill badge for an organization role (Owner / Admin / Member). */
 export function RoleBadge({

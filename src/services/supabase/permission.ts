@@ -2,7 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { lookupAppUserId } from "@/services/supabase/identity";
-import type { UserOrganization } from "@/lib/roles";
+import type { UserOrganization } from "@/lib/auth/roles";
 
 export type AuthIdentity = {
   /**

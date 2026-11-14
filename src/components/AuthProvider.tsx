@@ -3,9 +3,9 @@
 import { useEffect } from "react";
 import { createClient } from "@/services/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
-import type { UserOrganization } from "@/lib/roles";
-import { toAuthUser, type AuthUser } from "@/lib/auth-user";
-import { subscribeAvatar } from "@/lib/avatar-cache";
+import type { UserOrganization } from "@/lib/auth/roles";
+import { toAuthUser, type AuthUser } from "@/lib/auth/auth-user";
+import { subscribeAvatar } from "@/lib/auth/avatar-cache";
 
 type Props = {
   initialUser: AuthUser | null;
