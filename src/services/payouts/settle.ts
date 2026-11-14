@@ -4,20 +4,12 @@ import {
   sendPayoutProcessedEmail,
 } from "@/services/email/email";
 import { describePayoutFailure } from "./failure-reason";
+import { loadOrganizationRecipients, sendToAll } from "./recipients";
 
 // Settlement is reached from two paths that must agree: the synchronous response
 // in executePayout, and the CHIP Send webhook. Both come through settlePayout, so
 // whichever arrives first books the ledger row and sends the email, and the other
 // is a no-op (settle_payout's processed_at check).
-
-// The same roles notified about bank verification and cancellation reviews: the
-// members who can act on a payout problem.
-const NOTIFY_ROLES = ["owner", "admin"];
-
-interface MembershipRecipient {
-  user: { email: string | null; first_name: string | null } | null;
-  roles: { name: string } | null;
-}
 
 export interface SettlePayoutInput {
   payoutId: string;
@@ -115,53 +107,6 @@ interface PayoutEmailRow {
   bank: { account_number: string } | null;
 }
 
-/** Owner/admin members of each org plus its contact address, deduped by address. */
-async function loadRecipients(
-  organizationIds: string[],
-): Promise<Map<string, { email: string; name: string }>> {
-  const [membersRes, orgsRes] = await Promise.all([
-    supabaseAdmin
-      .from("organization_memberships")
-      .select("user:users(email, first_name), roles!inner(name)")
-      .in("organization_id", organizationIds),
-    supabaseAdmin
-      .from("organizations")
-      .select("name, email")
-      .in("id", organizationIds),
-  ]);
-
-  if (membersRes.error) throw new Error(membersRes.error.message);
-  if (orgsRes.error) {
-    // Members can still be told, so carry on without the contact addresses.
-    console.error(
-      "Payout emails: failed to load organization contact addresses",
-      orgsRes.error.message,
-    );
-  }
-
-  const recipients = new Map<string, { email: string; name: string }>();
-  for (const m of membersRes.data as unknown as MembershipRecipient[]) {
-    if (!m.roles || !NOTIFY_ROLES.includes(m.roles.name)) continue;
-    const email = m.user?.email;
-    if (!email) continue;
-    recipients.set(email.toLowerCase(), {
-      email,
-      name: m.user?.first_name ?? "there",
-    });
-  }
-
-  const orgs = (orgsRes.data ?? []) as { name: string | null; email: string | null }[];
-  for (const org of orgs) {
-    if (org.email && !recipients.has(org.email.toLowerCase())) {
-      recipients.set(org.email.toLowerCase(), {
-        email: org.email,
-        name: org.name ?? "there",
-      });
-    }
-  }
-  return recipients;
-}
-
 /**
  * Emails the outcome to the recipient org and, when a beneficiary was paid, the
  * organizing org too: it stays liable for that money, so it should hear about it.
@@ -188,7 +133,7 @@ async function notifyPayoutSettled(payoutId: string): Promise<void> {
   }
 
   const payout = data as unknown as PayoutEmailRow;
-  const recipients = await loadRecipients([
+  const recipients = await loadOrganizationRecipients([
     ...new Set([payout.organization_id, payout.recipient_organization_id]),
   ]);
 
@@ -197,8 +142,9 @@ async function notifyPayoutSettled(payoutId: string): Promise<void> {
   // Last 4 only: the full number never leaves this function.
   const accountLast4 = payout.bank?.account_number.slice(-4) ?? "";
 
-  const results = await Promise.allSettled(
-    [...recipients.values()].map((r) =>
+  await sendToAll(
+    recipients,
+    (r) =>
       paid
         ? sendPayoutProcessedEmail(r.email, {
             recipientName: r.name,
@@ -214,18 +160,6 @@ async function notifyPayoutSettled(payoutId: string): Promise<void> {
             amountCents: payout.amount_cents,
             failureReason: describePayoutFailure(payout.failure_reason),
           }),
-    ),
+    `payout email(s) for payout ${payoutId}`,
   );
-
-  const failures = results.flatMap((r) =>
-    r.status === "rejected"
-      ? [r.reason instanceof Error ? r.reason.message : String(r.reason)]
-      : [],
-  );
-  if (failures.length > 0) {
-    console.error(
-      `Failed to send ${failures.length}/${recipients.size} payout email(s) for payout ${payoutId}`,
-      failures,
-    );
-  }
 }

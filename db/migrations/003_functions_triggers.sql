@@ -175,6 +175,20 @@ RETURNS boolean AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
+-- Who to alert when something needs a platform admin (an early payout to review,
+-- a payout parked on CHIP Send budget): every live account holding the given
+-- global permission. Server-only, see the privileges block at the end.
+CREATE OR REPLACE FUNCTION list_global_permission_holders(p_permission varchar(50))
+RETURNS TABLE (user_id uuid, email varchar(255), first_name varchar(255)) AS $$
+  SELECT DISTINCT u.id, u.email, u.first_name
+  FROM user_global_roles ugr
+  JOIN role_permissions rp ON rp.role_id = ugr.role_id
+  JOIN permissions p ON p.id = rp.permission_id
+  JOIN users u ON u.id = ugr.user_id
+  WHERE p.key = p_permission
+    AND u.deleted_at IS NULL;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
 -- Check if user has permission within a specific organization
 CREATE OR REPLACE FUNCTION has_org_permission(p_user_id uuid, p_org_id uuid, p_permission text)
 RETURNS boolean AS $$
@@ -1042,6 +1056,9 @@ $$;
 -- afterwards by the app (see initiateCancellationRefunds) and settled by
 -- settle_refund (007_payment_functions.sql) — a network call can't run in this
 -- transaction.
+--
+-- Approve is refused (P0001, CANCELLATION_BLOCKED_BY_PAYOUT) once an organizer
+-- payout has been paid or is being sent: see the guard in the body.
 -- =============================================
 CREATE OR REPLACE FUNCTION review_tournament_cancellation(
   p_request_id        uuid,
@@ -1058,6 +1075,9 @@ DECLARE
   v_request      tournament_cancellation_requests;
   v_new_status   approval_status;
   v_reviewed_at  timestamptz := now();
+  v_paid_out     bigint;
+  v_refunds_due  bigint;
+  v_held         bigint;
 BEGIN
   -- Lock the request row so concurrent reviews serialize.
   SELECT * INTO v_request
@@ -1071,6 +1091,51 @@ BEGIN
 
   IF v_request.status <> 'pending' THEN
     RAISE EXCEPTION 'cancellation request % already reviewed', p_request_id USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Money already sent to the organizer makes the refunds unfundable: every
+  -- confirmed player gets their full GROSS back from the Collect balance, but the
+  -- organizer's NET has left through CHIP Send, and there is no automated
+  -- claw-back. So approval is refused, with the shortfall, until ops have
+  -- recovered it (a payment_type='adjustment' row). A payout still being sent
+  -- may complete at any moment, so it blocks too. Locking the tournament
+  -- serializes this with queue_payout, request_early_payout and
+  -- claim_payout_send, which marks a payout 'processing' before CHIP is called.
+  IF p_action = 'approve' THEN
+    PERFORM 1 FROM tournaments WHERE id = v_request.tournament_id FOR UPDATE;
+
+    SELECT COALESCE(SUM(p.gross_amount_cents), 0) INTO v_paid_out
+      FROM payments p
+      WHERE p.tournament_id = v_request.tournament_id
+        AND p.type = 'organizer_payout'
+        AND p.status = 'paid';
+
+    IF v_paid_out > 0 THEN
+      -- Shortfall = refunds this approval would queue - what the platform still
+      -- holds for the tournament (gross collected, net of refunds and payouts).
+      SELECT COALESCE(SUM(p.gross_amount_cents), 0) INTO v_refunds_due
+        FROM registrations r
+        JOIN payments p ON p.id = r.current_payment_id
+        WHERE r.tournament_id = v_request.tournament_id
+          AND r.status = 'confirmed'
+          AND p.type = 'registration'
+          AND p.status = 'paid';
+      SELECT COALESCE(SUM(s.net_collected_cents), 0) - v_paid_out INTO v_held
+        FROM tournament_payout_summary s
+        WHERE s.tournament_id = v_request.tournament_id;
+
+      RAISE EXCEPTION 'CANCELLATION_BLOCKED_BY_PAYOUT: % cents paid out, % cents short of the refunds',
+        v_paid_out, GREATEST(v_refunds_due - v_held, 0)
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM payouts po
+      WHERE po.tournament_id = v_request.tournament_id AND po.status = 'processing'
+    ) THEN
+      RAISE EXCEPTION 'CANCELLATION_BLOCKED_BY_PAYOUT: a payout is being sent'
+        USING ERRCODE = 'P0001';
+    END IF;
   END IF;
 
   v_new_status := CASE p_action WHEN 'approve' THEN 'approved' ELSE 'rejected' END;
@@ -1349,6 +1414,7 @@ REVOKE EXECUTE ON FUNCTION payout_recipient_problem        FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION nominate_payout_beneficiary     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
@@ -1359,3 +1425,4 @@ GRANT EXECUTE ON FUNCTION payout_recipient_problem        TO service_role;
 GRANT EXECUTE ON FUNCTION nominate_payout_beneficiary     TO service_role;
 GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
 GRANT EXECUTE ON FUNCTION anonymise_user_audit_logs       TO service_role;
+GRANT EXECUTE ON FUNCTION list_global_permission_holders  TO service_role;

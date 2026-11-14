@@ -7,6 +7,7 @@ import {
   sendCancellationReviewEmail,
   sendTournamentCancellationEmail,
 } from "@/services/email/email";
+import { formatRinggit, parseSentinel } from "@/services/payouts/format";
 import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
@@ -253,6 +254,27 @@ async function notifyCancellationReviewers(
   }
 }
 
+// review_tournament_cancellation refuses approval once organizer money has left,
+// because the refunds would then be unfundable. Its detail is either
+// "<n> cents paid out, <m> cents short of the refunds" or "a payout is being sent".
+function payoutBlockMessage(detail: string): string {
+  const paid = detail.match(/^(\d+) cents paid out, (\d+) cents short of the refunds$/);
+  if (paid) {
+    const shortfall = Number(paid[2]);
+    return (
+      `${formatRinggit(Number(paid[1]))} has already been paid out to the organizer` +
+      (shortfall > 0
+        ? `, so refunding every player would be ${formatRinggit(shortfall)} short.`
+        : ".") +
+      " Recover the payout before approving this cancellation."
+    );
+  }
+  if (detail.startsWith("a payout is being sent")) {
+    return "A payout to the organizer is being sent. Wait for it to settle before approving this cancellation.";
+  }
+  return "A payout has already been sent for this tournament, so it can't be cancelled yet.";
+}
+
 async function checkAdminAccess(
   supabase: Awaited<ReturnType<typeof createClient>>,
 ) {
@@ -372,6 +394,21 @@ export async function PATCH(
           },
         },
         { status: 404 },
+      );
+    }
+    const blocked = parseSentinel(error.message);
+    if (
+      error.code === "P0001" &&
+      blocked?.sentinel === "CANCELLATION_BLOCKED_BY_PAYOUT"
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "PAYOUT_ALREADY_SENT",
+            message: payoutBlockMessage(blocked.detail),
+          },
+        },
+        { status: 409 },
       );
     }
     if (error.code === "P0001") {

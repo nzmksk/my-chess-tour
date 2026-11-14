@@ -303,6 +303,46 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     expect(res.status).toBe(409);
   });
 
+  it("returns 409 with the shortfall when a payout has already been paid", async () => {
+    mockAdminRpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message:
+          "CANCELLATION_BLOCKED_BY_PAYOUT: 400000 cents paid out, 250050 cents short of the refunds",
+      },
+    });
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("PAYOUT_ALREADY_SENT");
+    expect(body.error.message).toContain("RM 4,000.00 has already been paid out");
+    expect(body.error.message).toContain("RM 2,500.50 short");
+    // Nothing downstream runs for a refused approval.
+    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
+    expect(mockSendCancellationEmail).not.toHaveBeenCalled();
+    expect(mockSendReviewEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when a payout is still being sent", async () => {
+    mockAdminRpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "CANCELLATION_BLOCKED_BY_PAYOUT: a payout is being sent",
+      },
+    });
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("PAYOUT_ALREADY_SENT");
+    expect(body.error.message).toContain("being sent");
+  });
+
   it("emails every registered player on approval", async () => {
     await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),

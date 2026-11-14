@@ -15,6 +15,7 @@ const {
   mockGetLimit,
   mockIncrease,
   mockSettle,
+  mockNotifyAdmins,
 } = vi.hoisted(() => {
   const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
   const updates: Array<Record<string, unknown>> = [];
@@ -55,6 +56,7 @@ const {
     mockGetLimit: vi.fn(),
     mockIncrease: vi.fn(),
     mockSettle: vi.fn(),
+    mockNotifyAdmins: vi.fn(),
   };
 });
 
@@ -74,6 +76,7 @@ vi.mock("@/services/chip/send", async (importOriginal) => {
 });
 
 vi.mock("../settle", () => ({ settlePayout: mockSettle }));
+vi.mock("../notify", () => ({ notifyAdminsOfPayout: mockNotifyAdmins }));
 
 import { ChipSendError } from "@/services/chip/send";
 import { executePayout } from "../execute";
@@ -93,6 +96,7 @@ function payout(overrides: Record<string, unknown> = {}) {
     approval: "approved",
     status: "pending",
     processed_at: null,
+    chip_send_instruction_id: null,
     chip_send_limit_id: null,
     tournament: { name: "KL Open" },
     recipient: { email: "org@x.test" },
@@ -109,10 +113,12 @@ function givenRpc({
   blocked = null,
   problem = null,
   available = 10000,
+  claim = { data: null, error: null },
 }: {
   blocked?: string | null;
   problem?: string | null;
   available?: number;
+  claim?: { data: string | null; error: unknown };
 } = {}) {
   mockRpc.mockImplementation((name: string) =>
     Promise.resolve(
@@ -120,10 +126,16 @@ function givenRpc({
         ? { data: blocked, error: null }
         : name === "payout_recipient_problem"
           ? { data: problem, error: null }
-          : { data: available, error: null },
+          : name === "claim_payout_send"
+            ? claim
+            : { data: available, error: null },
     ),
   );
 }
+
+const claimCalls = () =>
+  mockRpc.mock.calls.filter(([name]) => name === "claim_payout_send");
+const released = () => updates.some((u) => u.status === "pending");
 
 function instruction(overrides: Record<string, unknown> = {}) {
   return {
@@ -162,7 +174,7 @@ describe("nothing to do", () => {
   it.each([
     ["already settled", { processed_at: "2026-11-01T00:00:00Z" }],
     ["not approved", { approval: "pending" }],
-    ["already in flight", { status: "processing" }],
+    ["already in flight", { status: "processing", chip_send_instruction_id: 8 }],
   ])("skips a payout that is %s", async (_label, overrides) => {
     givenPayout(overrides);
     expect(await executePayout(ID)).toBe("skipped");
@@ -327,6 +339,18 @@ describe("awaiting budget", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 
+  it("alerts the platform admins once, when the budget is requested", async () => {
+    givenPayout();
+    mockAccounts.mockResolvedValue(balance(1));
+    await executePayout(ID);
+    expect(mockNotifyAdmins).toHaveBeenCalledOnce();
+    expect(mockNotifyAdmins).toHaveBeenCalledWith(
+      ID,
+      "awaiting_budget",
+      expect.stringContaining("RM 101.00"),
+    );
+  });
+
   it("requests budget when the balance covers the payout but not the fee", async () => {
     givenPayout();
     mockAccounts.mockResolvedValue(balance(100.99));
@@ -348,6 +372,7 @@ describe("awaiting budget", () => {
     expect(await executePayout(ID)).toBe("awaiting_budget");
     expect(mockGetLimit).toHaveBeenCalledWith(77);
     expect(mockIncrease).not.toHaveBeenCalled();
+    expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 
   it("replaces an expired allocation, so the payout can't stall forever", async () => {
@@ -373,6 +398,7 @@ describe("awaiting budget", () => {
     mockIncrease.mockRejectedValue(new ChipSendError(400, "no convertible balance"));
     expect(await executePayout(ID)).toBe("awaiting_budget");
     expect(mockSettle).not.toHaveBeenCalled();
+    expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -501,26 +527,134 @@ describe("sending", () => {
 
   it.each([
     ["401 (our credentials or clock)", 401],
-    ["408", 408],
     ["429 (rate limit)", 429],
-    ["500", 500],
-    ["503", 503],
-  ])("leaves the payout pending on %s", async (_label, status) => {
+  ])("hands the claim back on %s, since CHIP created nothing", async (_label, status) => {
     givenPayout();
     mockCreate.mockRejectedValue(new ChipSendError(status, "try later"));
     expect(await executePayout(ID)).toBe("error");
+    expect(updates).toContainEqual({ status: "pending" });
+    expect(isCalls).toContainEqual(["chip_send_instruction_id", null]);
     expect(mockSettle).not.toHaveBeenCalled();
   });
 
-  it("leaves the payout pending on a network failure", async () => {
+  it.each([
+    ["408", 408],
+    ["500", 500],
+    ["503", 503],
+  ])("keeps the claim on %s, since CHIP may have taken it", async (_label, status) => {
+    givenPayout();
+    mockCreate.mockRejectedValue(new ChipSendError(status, "try later"));
+    expect(await executePayout(ID)).toBe("error");
+    expect(released()).toBe(false);
+    expect(mockSettle).not.toHaveBeenCalled();
+  });
+
+  it("keeps the claim on a network failure", async () => {
     givenPayout();
     mockCreate.mockRejectedValue(new TypeError("fetch failed"));
     expect(await executePayout(ID)).toBe("error");
+    expect(released()).toBe(false);
     expect(mockSettle).not.toHaveBeenCalled();
   });
 
   it("leaves the payout pending when the recipient has no email", async () => {
     givenPayout({ recipient: { email: null } });
+    expect(await executePayout(ID)).toBe("error");
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockSettle).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Claiming: the last block check and `processing` happen together, under the
+// tournament lock, so a cancellation can't slip in before the send
+// ---------------------------------------------------------------------------
+
+describe("claiming", () => {
+  it("claims the row after its checks and before calling CHIP", async () => {
+    givenPayout();
+    const order: string[] = [];
+    mockRpc.mockImplementation((name: string) => {
+      order.push(name);
+      return Promise.resolve(
+        name === "claim_payout_send"
+          ? { data: null, error: null }
+          : name === "available_payout_cents"
+            ? { data: 10000, error: null }
+            : { data: null, error: null },
+      );
+    });
+    mockCreate.mockImplementation(() => {
+      order.push("create");
+      return Promise.resolve(instruction());
+    });
+    expect(await executePayout(ID)).toBe("sent");
+    expect(order.slice(-2)).toEqual(["claim_payout_send", "create"]);
+    expect(claimCalls()).toEqual([["claim_payout_send", { p_payout_id: ID }]]);
+  });
+
+  it("fails the payout of a tournament cancelled since the first check", async () => {
+    givenPayout();
+    givenRpc({ claim: { data: "tournament_cancelled", error: null } });
+    expect(await executePayout(ID)).toBe("failed");
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockSettle).toHaveBeenCalledWith(
+      expect.objectContaining({ paid: false, failureReason: "tournament_cancelled" }),
+    );
+  });
+
+  it("waits when a cancellation was requested since the first check", async () => {
+    givenPayout();
+    givenRpc({ claim: { data: "cancellation_pending", error: null } });
+    expect(await executePayout(ID)).toBe("blocked");
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockSettle).not.toHaveBeenCalled();
+  });
+
+  it("stands down when another run claimed it first", async () => {
+    givenPayout();
+    givenRpc({ claim: { data: "not_claimable", error: null } });
+    expect(await executePayout(ID)).toBe("skipped");
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not send when the claim itself fails", async () => {
+    givenPayout();
+    givenRpc({ claim: { data: null, error: { code: "40P01", message: "deadlock" } } });
+    expect(await executePayout(ID)).toBe("error");
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(logged("error")).toContain("40P01: deadlock");
+  });
+
+  it("does not claim a payout parked on budget", async () => {
+    givenPayout();
+    mockAccounts.mockResolvedValue(balance(1));
+    expect(await executePayout(ID)).toBe("awaiting_budget");
+    expect(claimCalls()).toHaveLength(0);
+  });
+
+  it("hands the claim back when CHIP refuses for balance", async () => {
+    givenPayout();
+    mockCreate.mockRejectedValue(new ChipSendError(403, "forbidden", true));
+    expect(await executePayout(ID)).toBe("awaiting_budget");
+    expect(updates).toContainEqual({ status: "pending" });
+  });
+
+  it("finishes a row an earlier run claimed, by sending the same reference again", async () => {
+    givenPayout({ status: "processing", amount_cents: 9000 });
+    givenRpc({ blocked: "cancellation_pending" });
+    expect(await executePayout(ID)).toBe("sent");
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ reference: ID, amountCents: 9000, bank_account_id: 42 }),
+    );
+    // Committed at the claim: nothing is re-checked, and it isn't claimed twice.
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockAccounts).not.toHaveBeenCalled();
+    expect(updates).toContainEqual({ chip_send_instruction_id: 8, status: "processing" });
+  });
+
+  it("leaves a claimed row alone when it can no longer be sent anywhere", async () => {
+    givenPayout({ status: "processing", recipient: { email: null } });
     expect(await executePayout(ID)).toBe("error");
     expect(mockCreate).not.toHaveBeenCalled();
     expect(mockSettle).not.toHaveBeenCalled();
@@ -601,7 +735,7 @@ describe("logging", () => {
   });
 
   it("logs a skipped payout's state", async () => {
-    givenPayout({ status: "processing" });
+    givenPayout({ status: "processing", chip_send_instruction_id: 8 });
     await executePayout(ID);
     expect(logged("info")).toContain("skipped (status processing");
   });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import EarlyPayoutRequest from "./EarlyPayoutRequest";
 
 export interface PayoutTournament {
   tournament_id: string;
@@ -15,6 +16,8 @@ export interface PayoutTournament {
   paid_payouts_cents: number;
   available_cents: number;
   early_requests_used: number;
+  /** Null on a tournament this org only receives as beneficiary. */
+  early_payout: { cap_cents: number; blocked: string | null } | null;
 }
 
 export interface PayoutHistoryItem {
@@ -25,6 +28,9 @@ export interface PayoutHistoryItem {
   amount_cents: number;
   status: "pending" | "processing" | "paid" | "failed";
   approval: "pending" | "approved" | "rejected";
+  /** The organizer's reason, for an early request. */
+  reason: string | null;
+  rejection_reason: string | null;
   failure_reason: string | null;
   receipt_url: string | null;
   requested_at: string;
@@ -35,6 +41,8 @@ export interface PayoutHistoryItem {
 export interface PayoutsData {
   tournaments: PayoutTournament[];
   payouts: PayoutHistoryItem[];
+  /** Whether this viewer holds payout.request (owners). */
+  can_request_early_payout: boolean;
 }
 
 const STATUS_CONFIG: Record<
@@ -90,9 +98,11 @@ function Figure({ label, value }: { label: string; value: string }) {
 function TournamentCard({
   tournament: t,
   orgId,
+  canRequest,
 }: {
   tournament: PayoutTournament;
   orgId: string;
+  canRequest: boolean;
 }) {
   return (
     <div className="card flex flex-col gap-3 px-5 py-4">
@@ -133,12 +143,39 @@ function TournamentCard({
           {t.recipient.problem}
         </p>
       )}
+
+      {t.early_payout && (
+        <EarlyPayoutRequest
+          orgId={orgId}
+          tournamentId={t.tournament_id}
+          capCents={t.early_payout.cap_cents}
+          requestsUsed={t.early_requests_used}
+          blocked={t.early_payout.blocked}
+          canRequest={canRequest}
+        />
+      )}
     </div>
   );
 }
 
+// An early request's review comes before its transfer, so it is labelled by the
+// review until it is approved.
+const AWAITING_REVIEW = {
+  label: "Awaiting review",
+  className: "bg-warning/15 text-warning border border-warning/20",
+};
+const DECLINED = {
+  label: "Declined",
+  className: "bg-danger/15 text-danger border border-danger/20",
+};
+
 function HistoryRow({ payout: p }: { payout: PayoutHistoryItem }) {
-  const status = STATUS_CONFIG[p.status];
+  const status =
+    p.approval === "pending"
+      ? AWAITING_REVIEW
+      : p.approval === "rejected"
+        ? DECLINED
+        : STATUS_CONFIG[p.status];
   return (
     <div className="border-border flex flex-col gap-1 border-b px-5 py-3.5 last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -163,6 +200,14 @@ function HistoryRow({ payout: p }: { payout: PayoutHistoryItem }) {
           </span>
         </div>
       </div>
+      {p.reason && (
+        <p className="font-lato text-text-muted text-xs">For: {p.reason}</p>
+      )}
+      {p.rejection_reason && (
+        <p className="font-lato text-danger text-xs">
+          Declined: {p.rejection_reason}
+        </p>
+      )}
       {p.failure_reason && (
         <p className="font-lato text-danger text-xs">{p.failure_reason}</p>
       )}
@@ -222,7 +267,12 @@ export default function PayoutsClient({
       ) : (
         <div className="mb-8 flex flex-col gap-3">
           {tournaments.map((t) => (
-            <TournamentCard key={t.tournament_id} tournament={t} orgId={orgId} />
+            <TournamentCard
+              key={t.tournament_id}
+              tournament={t}
+              orgId={orgId}
+              canRequest={data.can_request_early_payout}
+            />
           ))}
         </div>
       )}

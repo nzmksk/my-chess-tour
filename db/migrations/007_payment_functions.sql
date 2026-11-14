@@ -772,6 +772,471 @@ END;
 $$;
 
 -- =============================================
+-- EARLY PAYOUT CAP
+-- How much may be paid early for a tournament right now, with the arithmetic laid
+-- out so the admin review page can show why the ceiling is what it is:
+--
+--   ceiling = FLOOR(net_revenue * EARLY_PAYOUT_MAX_PCT / 100)
+--   cap     = LEAST(available, ceiling - early payouts already committed)
+--
+-- "Committed" is every early payout awaiting review, in flight or paid (its settled
+-- amount once paid). Rejected and failed ones moved no money. p_exclude_payout_id
+-- is the request under review, which must not count against itself.
+-- =============================================
+CREATE OR REPLACE FUNCTION early_payout_cap(
+  p_tournament_id     uuid,
+  p_exclude_payout_id uuid DEFAULT NULL
+)
+RETURNS TABLE (
+  net_revenue_cents     bigint,
+  paid_payouts_cents    bigint,
+  live_refund_cents     bigint,
+  max_pct               integer,
+  ceiling_cents         bigint,
+  early_committed_cents bigint,
+  available_cents       integer,
+  cap_cents             integer
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH figures AS (
+    SELECT
+      COALESCE((
+        SELECT SUM(s.net_revenue_cents) FROM tournament_payout_summary s
+        WHERE s.tournament_id = p_tournament_id
+      ), 0)::bigint AS net_revenue,
+      COALESCE((
+        SELECT SUM(s.total_payouts_cents) FROM tournament_payout_summary s
+        WHERE s.tournament_id = p_tournament_id
+      ), 0)::bigint AS paid_payouts,
+      -- Refunds not yet settled. Any of these blocks an early payout outright, but
+      -- the reviewer should see how much is at stake.
+      COALESCE((
+        SELECT SUM(rf.refund_amount_cents) FROM refunds rf
+        JOIN registrations r ON r.id = rf.registration_id
+        WHERE r.tournament_id = p_tournament_id
+          AND rf.status <> 'rejected'
+          AND rf.processed_at IS NULL
+      ), 0)::bigint AS live_refunds,
+      -- Mirrors EARLY_PAYOUT_MAX_PCT in src/services/payouts/constants.ts.
+      50 AS pct,
+      COALESCE((
+        SELECT SUM(CASE WHEN p.status = 'paid'
+                        THEN COALESCE(p.settled_amount_cents, p.amount_cents)
+                        ELSE p.amount_cents END)
+        FROM payouts p
+        WHERE p.tournament_id = p_tournament_id
+          AND p.kind = 'early'
+          AND p.approval <> 'rejected'
+          AND p.status <> 'failed'
+          AND p.id IS DISTINCT FROM p_exclude_payout_id
+      ), 0)::bigint AS committed,
+      available_payout_cents(p_tournament_id, p_exclude_payout_id) AS available
+  )
+  SELECT
+    f.net_revenue,
+    f.paid_payouts,
+    f.live_refunds,
+    f.pct,
+    GREATEST(0, FLOOR(f.net_revenue * f.pct / 100.0))::bigint,
+    f.committed,
+    f.available,
+    GREATEST(0, LEAST(f.available::bigint, FLOOR(f.net_revenue * f.pct / 100.0)::bigint - f.committed))::integer
+  FROM figures f;
+$$;
+
+-- =============================================
+-- EARLY PAYOUT PROBLEM
+-- Why an early payout cannot be requested (or approved) for this tournament right
+-- now, or NULL if it can. One definition shared by request_early_payout,
+-- review_payout_request and the organizer's payout overview, so the dashboard
+-- explains a refusal before the organizer hits it. In order:
+--
+--   tournament_not_found, tournament_cancelled, tournament_not_published
+--   registration_open        registration_closed_at unset or still in the future
+--   beneficiary_set          third-party payouts are final-only: the organizing org
+--                            would owe the claw-back on money that went elsewhere
+--   cancellation_pending, refund_pending      (tournament_payout_block_reason)
+--   organization_not_approved, entity_type_missing, agreement_not_current,
+--   bank_account_not_verified                 (payout_recipient_problem)
+--   early_payout_limit_reached   both request_seq slots are held
+--   early_payout_in_flight       another early request is awaiting review or in flight
+--   nothing_payable_early        the cap is below MIN_PAYOUT_CENTS
+--
+-- p_exclude_payout_id is the request under review: its own slot, reservation and
+-- liveness must not count against it.
+-- =============================================
+CREATE OR REPLACE FUNCTION early_payout_problem(
+  p_tournament_id     uuid,
+  p_exclude_payout_id uuid DEFAULT NULL
+)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  -- Mirrors MIN_PAYOUT_CENTS in src/services/payouts/constants.ts.
+  c_min_payout_cents CONSTANT integer := 1000;
+  v_tournament tournaments;
+  v_problem    text;
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id;
+
+  IF NOT FOUND THEN
+    RETURN 'tournament_not_found';
+  END IF;
+  IF v_tournament.status = 'cancelled' THEN
+    RETURN 'tournament_cancelled';
+  END IF;
+  IF v_tournament.status <> 'published' THEN
+    RETURN 'tournament_not_published';
+  END IF;
+  IF v_tournament.registration_closed_at IS NULL OR v_tournament.registration_closed_at > now() THEN
+    RETURN 'registration_open';
+  END IF;
+  IF v_tournament.beneficiary_organization_id IS NOT NULL THEN
+    RETURN 'beneficiary_set';
+  END IF;
+
+  v_problem := tournament_payout_block_reason(p_tournament_id);
+  IF v_problem IS NOT NULL THEN
+    RETURN v_problem;
+  END IF;
+
+  v_problem := payout_recipient_problem(v_tournament.organization_id);
+  IF v_problem IS NOT NULL THEN
+    RETURN v_problem;
+  END IF;
+
+  IF (
+    SELECT count(DISTINCT p.request_seq)
+    FROM payouts p
+    WHERE p.tournament_id = p_tournament_id
+      AND p.kind = 'early'
+      AND p.approval <> 'rejected'
+      AND p.status <> 'failed'
+      AND p.id IS DISTINCT FROM p_exclude_payout_id
+  ) >= 2 THEN
+    RETURN 'early_payout_limit_reached';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM payouts p
+    WHERE p.tournament_id = p_tournament_id
+      AND p.kind = 'early'
+      AND p.approval <> 'rejected'
+      AND p.status IN ('pending', 'processing')
+      AND p.id IS DISTINCT FROM p_exclude_payout_id
+  ) THEN
+    RETURN 'early_payout_in_flight';
+  END IF;
+
+  IF (SELECT c.cap_cents FROM early_payout_cap(p_tournament_id, p_exclude_payout_id) c) < c_min_payout_cents THEN
+    RETURN 'nothing_payable_early';
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+-- =============================================
+-- REQUEST EARLY PAYOUT
+-- An organizer asks for part of a tournament's net revenue before the automatic
+-- payout, up to EARLY_PAYOUT_MAX_PCT of it, at most twice. The row is created
+-- `pending` review and reserves its amount at once (available_payout_cents counts
+-- pending rows), so nothing else can promise the same money while it waits.
+--
+-- Takes the tournament-row lock first, the assert_tournament_capacity idiom, so
+-- concurrent requests serialize and the slot count below can't race. Checks the
+-- actor's payout.request itself as a backstop to the route.
+--
+-- request_seq is the lowest free slot. Rejected and failed requests hold none
+-- (see uniq_early_payout_seq_per_tournament), so a typo'd amount the admin turns
+-- down, or a transfer the bank bounces, doesn't cost the organizer a request. A
+-- failed request taking the same seq is linked to this one via superseded_by.
+--
+-- Failures RAISE P0001 with a stable sentinel prefix for the route to map:
+--   EARLY_PAYOUT_NOT_ALLOWED: <early_payout_problem code>
+--   EARLY_PAYOUT_EXCEEDS_CAP: <n> cents requested, <m> cents can be paid early
+--   PAYOUT_BELOW_MINIMUM:     <n> cents requested, the minimum is <m>
+--   EARLY_PAYOUT_INVALID:     a missing reason or a non-positive amount
+-- =============================================
+CREATE OR REPLACE FUNCTION request_early_payout(
+  p_tournament_id uuid,
+  p_user_id       uuid,
+  p_amount_cents  integer,
+  p_reason        text
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  -- Mirrors MIN_PAYOUT_CENTS in src/services/payouts/constants.ts.
+  c_min_payout_cents CONSTANT integer := 1000;
+  v_tournament tournaments;
+  v_problem    text;
+  v_cap        integer;
+  v_seq        smallint;
+  v_bank_id    uuid;
+  v_id         uuid;
+BEGIN
+  IF p_amount_cents IS NULL OR p_amount_cents <= 0 THEN
+    RAISE EXCEPTION 'EARLY_PAYOUT_INVALID: the amount must be a positive number of cents'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_reason IS NULL OR btrim(p_reason) = '' THEN
+    RAISE EXCEPTION 'EARLY_PAYOUT_INVALID: a reason is required' USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, v_tournament.organization_id, 'payout.request') THEN
+    RAISE EXCEPTION 'PAYOUT_FORBIDDEN: payout.request is required on the organizing organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  v_problem := early_payout_problem(p_tournament_id);
+  IF v_problem IS NOT NULL THEN
+    RAISE EXCEPTION 'EARLY_PAYOUT_NOT_ALLOWED: %', v_problem USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT c.cap_cents INTO v_cap FROM early_payout_cap(p_tournament_id) c;
+
+  IF p_amount_cents > v_cap THEN
+    RAISE EXCEPTION 'EARLY_PAYOUT_EXCEEDS_CAP: % cents requested, % cents can be paid early',
+      p_amount_cents, v_cap
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_amount_cents < c_min_payout_cents THEN
+    RAISE EXCEPTION 'PAYOUT_BELOW_MINIMUM: % cents requested, the minimum is %',
+      p_amount_cents, c_min_payout_cents
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  -- early_payout_problem has already refused when both slots are held.
+  SELECT s INTO v_seq
+    FROM generate_series(1, 2) s
+    WHERE NOT EXISTS (
+      SELECT 1 FROM payouts p
+      WHERE p.tournament_id = p_tournament_id
+        AND p.kind = 'early'
+        AND p.approval <> 'rejected'
+        AND p.status <> 'failed'
+        AND p.request_seq = s
+    )
+    ORDER BY s
+    LIMIT 1;
+
+  SELECT b.id INTO v_bank_id
+    FROM organization_bank_accounts b
+    WHERE b.organization_id = v_tournament.organization_id AND b.is_active AND b.status = 'verified';
+
+  INSERT INTO payouts (
+    tournament_id, organization_id, recipient_organization_id, bank_account_id,
+    kind, request_seq, amount_cents, approval, reason, requested_by
+  ) VALUES (
+    p_tournament_id, v_tournament.organization_id, v_tournament.organization_id, v_bank_id,
+    'early', v_seq, p_amount_cents, 'pending', btrim(p_reason), p_user_id
+  )
+  RETURNING id INTO v_id;
+
+  -- This request is the retry of a failed one in the same slot, if there is one.
+  UPDATE payouts
+    SET superseded_by = v_id
+    WHERE tournament_id = p_tournament_id
+      AND kind = 'early'
+      AND request_seq = v_seq
+      AND status = 'failed'
+      AND superseded_by IS NULL;
+
+  RETURN v_id;
+END;
+$$;
+
+-- =============================================
+-- REVIEW PAYOUT REQUEST
+-- A platform admin approves or rejects an early payout request. Modelled on
+-- review_tournament_cancellation: the row is locked, a missing one is P0002 and
+-- one already reviewed is P0001 (PAYOUT_ALREADY_REVIEWED).
+--
+-- Approve re-runs every check request_early_payout made, because days may have
+-- passed: a cancellation may now be pending, refunds may have landed, the
+-- organizer may have lapsed on the agreement, availability may have collapsed.
+-- The request's own reservation and slot are excluded so it isn't counted against
+-- itself. A refusal raises the same sentinels as request_early_payout and leaves
+-- the request pending, so the admin can reject it with a reason instead.
+--
+-- Approve does NOT move money. A network call can't run in this transaction (the
+-- same constraint as review_tournament_cancellation), so it only sets
+-- approval='approved', leaving status 'pending', and the route fires
+-- executePayout afterwards, best-effort. The bank account is re-snapshotted here:
+-- if the organizer replaced theirs while the request waited, the new verified one
+-- is where they want the money, and the old one would only fail at send time.
+--
+-- Reject unlinks any failed request this one had superseded, so that row reads as
+-- un-retried again; the slot itself was never held (see
+-- uniq_early_payout_seq_per_tournament).
+--
+-- Locks the tournament before the payout, the same order as request_early_payout,
+-- so the two can't deadlock.
+-- =============================================
+CREATE OR REPLACE FUNCTION review_payout_request(
+  p_payout_id        uuid,
+  p_reviewer_id      uuid,
+  p_action           text,
+  p_rejection_reason text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament_id uuid;
+  v_payout        payouts;
+  v_problem       text;
+  v_cap           integer;
+  v_bank_id       uuid;
+  v_new_approval  approval_status;
+  v_reviewed_at   timestamptz := now();
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('approve', 'reject') THEN
+    RAISE EXCEPTION 'action must be approve or reject, got %', p_action USING ERRCODE = '22023';
+  END IF;
+  IF p_action = 'reject' AND (p_rejection_reason IS NULL OR btrim(p_rejection_reason) = '') THEN
+    RAISE EXCEPTION 'a rejection reason is required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT tournament_id INTO v_tournament_id FROM payouts WHERE id = p_payout_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'payout % not found', p_payout_id USING ERRCODE = 'P0002';
+  END IF;
+
+  PERFORM 1 FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
+  SELECT * INTO v_payout FROM payouts WHERE id = p_payout_id FOR UPDATE;
+
+  -- Automatic payouts are created approved, so they land here too.
+  IF v_payout.approval <> 'pending' THEN
+    RAISE EXCEPTION 'PAYOUT_ALREADY_REVIEWED: payout % already reviewed', p_payout_id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_action = 'approve' THEN
+    v_problem := early_payout_problem(v_payout.tournament_id, p_payout_id);
+    IF v_problem IS NOT NULL THEN
+      RAISE EXCEPTION 'EARLY_PAYOUT_NOT_ALLOWED: %', v_problem USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT c.cap_cents INTO v_cap FROM early_payout_cap(v_payout.tournament_id, p_payout_id) c;
+    IF v_payout.amount_cents > v_cap THEN
+      RAISE EXCEPTION 'EARLY_PAYOUT_EXCEEDS_CAP: % cents requested, % cents can be paid early',
+        v_payout.amount_cents, v_cap
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    -- early_payout_problem guarantees there is one.
+    SELECT b.id INTO v_bank_id
+      FROM organization_bank_accounts b
+      WHERE b.organization_id = v_payout.recipient_organization_id AND b.is_active AND b.status = 'verified';
+
+    v_new_approval := 'approved';
+    UPDATE payouts
+      SET approval        = v_new_approval,
+          reviewed_by     = p_reviewer_id,
+          reviewed_at     = v_reviewed_at,
+          bank_account_id = v_bank_id
+      WHERE id = p_payout_id;
+  ELSE
+    v_new_approval := 'rejected';
+    UPDATE payouts
+      SET approval         = v_new_approval,
+          reviewed_by      = p_reviewer_id,
+          reviewed_at      = v_reviewed_at,
+          rejection_reason = btrim(p_rejection_reason)
+      WHERE id = p_payout_id;
+
+    UPDATE payouts SET superseded_by = NULL WHERE superseded_by = p_payout_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'id',              v_payout.id,
+    'tournament_id',   v_payout.tournament_id,
+    'organization_id', v_payout.organization_id,
+    'amount_cents',    v_payout.amount_cents,
+    'approval',        v_new_approval,
+    'reviewed_at',     v_reviewed_at
+  );
+END;
+$$;
+
+-- =============================================
+-- CLAIM PAYOUT SEND
+-- executePayout calls this immediately before it asks CHIP for the transfer. It
+-- re-checks the blocks and moves the row from 'pending' to 'processing' in one
+-- step, under the same tournament lock that review_tournament_cancellation takes.
+-- Without that lock, a cancellation could be approved after executePayout's own
+-- block check but before CHIP is called, and both the refunds and the transfer
+-- would go ahead. With it, one of two things happens: the claim sees the
+-- cancellation and refuses, or the cancellation sees 'processing' and refuses.
+--
+-- 'processing' with no chip_send_instruction_id means the row has been claimed
+-- and CHIP may or may not have created the instruction. executePayout resumes
+-- such a row by sending again: `reference` dedupes the transfer, so a second send
+-- returns the existing instruction instead of paying twice. The row goes back to
+-- 'pending' only when CHIP definitely refused the send.
+--
+-- Returns NULL once the row is claimed. Otherwise returns why it wasn't: a
+-- tournament_payout_block_reason code, or 'not_claimable' when the row is
+-- missing, unapproved, settled or already claimed.
+-- =============================================
+CREATE OR REPLACE FUNCTION claim_payout_send(p_payout_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament_id uuid;
+  v_payout        payouts;
+  v_block         text;
+BEGIN
+  SELECT tournament_id INTO v_tournament_id FROM payouts WHERE id = p_payout_id;
+  IF NOT FOUND THEN
+    RETURN 'not_claimable';
+  END IF;
+
+  -- Tournament first, then the payout: the lock order every payout function uses.
+  PERFORM 1 FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
+  SELECT * INTO v_payout FROM payouts WHERE id = p_payout_id FOR UPDATE;
+
+  IF v_payout.processed_at IS NOT NULL
+     OR v_payout.approval <> 'approved'
+     OR v_payout.status <> 'pending' THEN
+    RETURN 'not_claimable';
+  END IF;
+
+  v_block := tournament_payout_block_reason(v_tournament_id);
+  IF v_block IS NOT NULL THEN
+    RETURN v_block;
+  END IF;
+
+  UPDATE payouts SET status = 'processing' WHERE id = p_payout_id;
+  RETURN NULL;
+END;
+$$;
+
+-- =============================================
 -- SETTLE PAYOUT (idempotent, keyed by a specific payout row)
 -- The settle_refund twin, called by both the sync response and the webhook:
 --   paid  → the money left: book one type='organizer_payout' ledger row, which is
@@ -907,7 +1372,8 @@ $$;
 -- organized, plus those whose payout it has accepted as beneficiary. Drafts have no
 -- money to show. recipient_problem is surfaced so that a recipient which has lapsed
 -- (agreement bumped, bank account replaced) shows up on both dashboards instead of
--- failing silently in the sweep.
+-- failing silently in the sweep. early_payout_cap_cents / early_payout_problem
+-- answer "can we ask for money early, and how much".
 CREATE OR REPLACE FUNCTION list_organization_payout_overview(p_org_id uuid)
 RETURNS TABLE (
   tournament_id              uuid,
@@ -922,7 +1388,9 @@ RETURNS TABLE (
   paid_payouts_cents         bigint,
   available_cents            integer,
   early_requests_used        integer,
-  recipient_problem          text
+  recipient_problem          text,
+  early_payout_cap_cents     integer,
+  early_payout_problem       text
 )
 LANGUAGE sql
 STABLE
@@ -954,12 +1422,19 @@ AS $$
     COALESCE(s.net_revenue_cents, 0),
     COALESCE(s.total_payouts_cents, 0),
     available_payout_cents(v.id),
+    -- The slots uniq_early_payout_seq_per_tournament holds: rejected and failed
+    -- requests moved no money, so they don't count.
     (
       SELECT count(DISTINCT p.request_seq)::integer
       FROM payouts p
-      WHERE p.tournament_id = v.id AND p.kind = 'early' AND p.approval <> 'rejected'
+      WHERE p.tournament_id = v.id AND p.kind = 'early'
+        AND p.approval <> 'rejected' AND p.status <> 'failed'
     ),
-    payout_recipient_problem(v.recipient_id)
+    payout_recipient_problem(v.recipient_id),
+    -- So the dashboard can offer an early payout, or say why it can't, before
+    -- the organizer tries.
+    (SELECT c.cap_cents FROM early_payout_cap(v.id) c),
+    early_payout_problem(v.id)
   FROM visible v
   LEFT JOIN organizations organizer ON organizer.id = v.organization_id
   LEFT JOIN organizations recipient ON recipient.id = v.recipient_id
@@ -1071,6 +1546,11 @@ REVOKE EXECUTE ON FUNCTION settle_bank_account_verification  FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION available_payout_cents            FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION tournament_payout_block_reason    FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION queue_payout                      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION early_payout_cap                  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION early_payout_problem              FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION request_early_payout              FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_payout_request             FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION claim_payout_send                 FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_payout                     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_organization_payout_overview FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_pending_payout_nominations   FROM PUBLIC, anon, authenticated;
@@ -1086,6 +1566,11 @@ GRANT EXECUTE ON FUNCTION settle_bank_account_verification  TO service_role;
 GRANT EXECUTE ON FUNCTION available_payout_cents            TO service_role;
 GRANT EXECUTE ON FUNCTION tournament_payout_block_reason    TO service_role;
 GRANT EXECUTE ON FUNCTION queue_payout                      TO service_role;
+GRANT EXECUTE ON FUNCTION early_payout_cap                  TO service_role;
+GRANT EXECUTE ON FUNCTION early_payout_problem              TO service_role;
+GRANT EXECUTE ON FUNCTION request_early_payout              TO service_role;
+GRANT EXECUTE ON FUNCTION review_payout_request             TO service_role;
+GRANT EXECUTE ON FUNCTION claim_payout_send                 TO service_role;
 GRANT EXECUTE ON FUNCTION settle_payout                     TO service_role;
 GRANT EXECUTE ON FUNCTION list_organization_payout_overview TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_payout_nominations   TO service_role;

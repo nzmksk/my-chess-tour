@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { describePayoutFailure } from "./failure-reason";
+import { canResend } from "./resend";
 import {
   describeBlockReason,
   describeRecipientProblem,
@@ -19,6 +20,8 @@ export interface AdminPayout {
   failure_reason: string | null;
   receipt_url: string | null;
   awaiting_budget: boolean;
+  /** Approved but not out with CHIP, so an admin can re-run the send. */
+  can_resend: boolean;
   requested_at: string;
   processed_at: string | null;
   tournament: { id: string; name: string } | null;
@@ -66,6 +69,7 @@ interface RawPayout {
   settled_amount_cents: number | null;
   failure_reason: string | null;
   chip_receipt_url: string | null;
+  chip_send_instruction_id: number | null;
   chip_send_limit_id: number | null;
   requested_at: string;
   processed_at: string | null;
@@ -106,7 +110,7 @@ export async function loadAdminPayoutQueue(): Promise<
       .from("payouts")
       .select(
         `id, kind, status, approval, amount_cents, settled_amount_cents, failure_reason,
-         chip_receipt_url, chip_send_limit_id, requested_at, processed_at,
+         chip_receipt_url, chip_send_instruction_id, chip_send_limit_id, requested_at, processed_at,
          organization_id, recipient_organization_id,
          tournament:tournaments(id, name),
          organizer:organizations!organization_id(id, name),
@@ -134,6 +138,7 @@ export async function loadAdminPayoutQueue(): Promise<
           p.status === "failed" ? describePayoutFailure(p.failure_reason) : null,
         receipt_url: p.chip_receipt_url,
         awaiting_budget: p.status === "pending" && p.chip_send_limit_id !== null,
+        can_resend: canResend(p),
         requested_at: p.requested_at,
         processed_at: p.processed_at,
         tournament: one(p.tournament),

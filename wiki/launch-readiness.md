@@ -93,7 +93,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Production error monitoring / alerting | S6 | ⚠️ code built, account not set up | 🔴 | Sentry SDK is wired in and inert until configured: follow [error-monitoring.md](./error-monitoring.md) §Setup (#125). Uptime monitor still needed (#572). |
 | Audit-log PII redaction + privacy-policy alignment | S3, P5 | ⚠️ built, scrub not yet run | 🟡 | Run the check in `db/maintenance/scrub_pre_redaction_audit_rows.sql` against staging and production, and get the `/privacy` wording reviewed (#503). |
 | Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | Code landed (#501); migration `009` still needs applying (#161). Follow-on #513. |
-| Organizer payout disbursement | O9, P7 | ⚠️ admin-triggered | 🔴 | CHIP Send payouts exist, triggered by a platform admin. Automatic sweep and early payouts are #522 and #521. |
+| Organizer payout disbursement | O9, P7 | ⚠️ admin-triggered | 🔴 | CHIP Send payouts exist, triggered by a platform admin; organizers can request admin-approved early payouts (#521). The automatic sweep is #522. |
 | Prize disbursement to players | P14, P7 | ❌ | 🟡 | Manual; same timing/mechanism as payouts. |
 | Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ❌ | 🟡 | Reconstruct a tier change from `audit_logs` by hand if a dispute arises (#502). |
 | Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅; player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510, #511, #512). |
@@ -275,7 +275,7 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 
 ### O7. Close registration / cancel tournament — ✅ Built
 - **Close registration early:** `POST .../tournaments/[id]/close-registration` — stamps `registration_closed_at`, which is also populated on publish (from `registration_deadline`) so the two paths can't drift. Checkout and the public detail page both read it.
-- **Cancel:** two-step, because cancelling a published tournament moves money. The organizer files a request via `POST .../tournaments/[id]/cancel` (blocked for ongoing/completed tournaments); a platform admin reviews it at `/admin/cancellations` → `PATCH /api/v1/admin/tournament-cancellations/[id]`. Approve runs `review_tournament_cancellation()`, which flips `tournaments.status='cancelled'` **and** queues a refund per paid registration in one transaction, then the route fires the CHIP refunds and emails every registered player.
+- **Cancel:** two-step, because cancelling a published tournament moves money. The organizer files a request via `POST .../tournaments/[id]/cancel` (blocked for ongoing/completed tournaments); a platform admin reviews it at `/admin/cancellations` → `PATCH /api/v1/admin/tournament-cancellations/[id]`. Approve runs `review_tournament_cancellation()`, which flips `tournaments.status='cancelled'` **and** queues a refund per paid registration in one transaction, then the route fires the CHIP refunds and emails every registered player. Approval is refused (409) once an organizer payout has been paid or is being sent, because the refunds would then be unfundable; the money has to be recovered by hand first (#521).
 - **Gaps:** none blocking. The refund fan-out runs inline in the admin request (#496) and there is no re-fire for a refund left `pending` (#497).
 
 ### O8. Participant roster / management — ⚠️ Partial
@@ -286,7 +286,8 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 - **Entry:** the `tournament_payout_summary` **view** aggregates the payments ledger into `net_payout_cents`, surfaced as the dashboard "Pending Payout" stat.
 - **Since #518** there is a **recipient**: `organization_bank_accounts` holds one active row per org, superseded (never edited) on change so a `verified` stamp can't outlive the details it verified, and unique on `(bank_code, account_number)` among active rows so one account can't be two organizations' payout destination. Row ids are the deterministic CHIP Send `reference`.
 - **Since #520** money can actually leave: a platform admin triggers a payout from `/admin/payouts`, it goes out through CHIP Send, and `settle_payout` books the `organizer_payout` ledger row. Organizers follow it at `/my/organizations/[orgId]/payouts`, and may nominate another approved organization as beneficiary. See [payout-flow.md](./payout-flow.md).
-- **Gaps:** ❌ **no automatic payout** after the tournament ends, and no reconciler for a payout stuck in `processing` (#522); ❌ **no early payouts** (#521); ❌ no admin alert when a payout is parked waiting for budget, only a log line (#521).
+- **Since #521** an owner can request up to 50% of net revenue early once registration has closed, at most twice, from the payouts page; a platform admin approves or rejects it at `/admin/payouts/[id]`, which spells out the cap. Admins are emailed when a request is filed and when a payout is parked waiting for CHIP Send budget. A cancellation can no longer be approved once organizer money has left (see O7).
+- **Gaps:** ❌ **no automatic payout** after the tournament ends, and no reconciler for a payout stuck in `processing` (#522).
 - **Priority:** 🔴 — nothing is *due* until the first tournament ends, but until the sweep ships every payout depends on an admin remembering to trigger it.
 
 ---

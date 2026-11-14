@@ -1,7 +1,11 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { authorizeOrgPermission, UUID_RE } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { nominationErrorResponse } from "@/app/api/v1/organizations/_lib/nomination-errors";
+import { notifyBeneficiaryNominated } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
+
+// Nominating emails the nominee, and email templates are read from disk.
+export const runtime = "nodejs";
 
 /**
  * Nominates another organization to receive this tournament's payout, or withdraws
@@ -81,6 +85,11 @@ export async function PUT(
 
   if (error) {
     return nominationErrorResponse(error, `nominating a beneficiary for tournament ${id}`);
+  }
+
+  // The nominee has to accept before anything is redirected, so tell it.
+  if (beneficiary) {
+    await notifyBeneficiaryNominated(id, beneficiary);
   }
 
   return NextResponse.json({ data }, { status: 200 });
