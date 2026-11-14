@@ -6,8 +6,8 @@ How a player pays to register for a tournament, end to end. Payments go through 
 
 Two rows track one registration's money (`db/migrations/001_tables.sql`):
 
-- **`registrations.status`** (`registration_status` enum): `pending_payment` → `confirmed` | `failed_payment` | `cancelled_payment`; plus `forfeited` (paid then forfeited). Key timestamps: `registered_at`, `confirmed_at`, `cancelled_at`, and `cancellation_reason` (text).
-- **`payments.status`** (`payment_status` enum): `pending` → `paid` | `failed`. The registration's money row is `type='registration'`. `chip_transaction_id` is the CHIP purchase id; a partial UNIQUE index on it (`002_indexes.sql`) guarantees one purchase maps to one payment.
+- **`registrations.status`** (`registration_status` enum): `pending_payment` → `confirmed` | `failed_payment` | `cancelled_payment`; plus `forfeited` (paid then forfeited). Key timestamps: `registered_at`, `confirmed_at`, `cancelled_at`, and `cancellation_reason` (text). `cancelled_at` is set exactly when the status is `cancelled_payment` or `forfeited` (`chk_cancelled_fields_consistent`), so anything that cancels a registration must stamp it and anything that revives one must clear it. `fee_tier` is the tier of the *current* attempt and is overwritten on retry.
+- **`payments.status`** (`payment_status` enum): `pending` → `paid` | `failed`. The registration's money row is `type='registration'`. `chip_transaction_id` is the CHIP purchase id; a partial UNIQUE index on it (`002_indexes.sql`) guarantees one purchase maps to one payment. `payments.fee_tier` is the tier that attempt was charged at and never changes, so tier history and tier counts come from here, not from `registrations`.
 
 There is **no `expired` status** in either enum — expiry reuses `cancelled_payment` (see [Expiry](#expiry-no-chip-event)). CHIP's *purchase* status does have `expired` (reachable because we send `due_strict`), but it never maps to a settlement outcome: `chipOutcome()` leaves it `pending` so the app-owned expiry path produces `cancelled_payment` rather than `failed_payment`.
 
