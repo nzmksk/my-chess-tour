@@ -400,7 +400,14 @@ CREATE TABLE registrations (
   CONSTRAINT chk_confirmed_at
     CHECK (confirmed_at IS NULL OR confirmed_at >= registered_at),
   CONSTRAINT chk_cancelled_at
-    CHECK (cancelled_at IS NULL OR cancelled_at >= registered_at)
+    CHECK (cancelled_at IS NULL OR cancelled_at >= registered_at),
+  -- A cancelled registration always says when, and nothing else carries a
+  -- cancelled_at. So every path that cancels must stamp it, and every path that
+  -- revives a row (a late `paid`, a new attempt) must clear it. failed_payment
+  -- is left out on purpose: it is retryable, not cancelled. If that changes,
+  -- change this constraint rather than working around it.
+  CONSTRAINT chk_cancelled_fields_consistent
+    CHECK ((status IN ('cancelled_payment', 'forfeited')) = (cancelled_at IS NOT NULL))
 );
 
 -- =============================================
