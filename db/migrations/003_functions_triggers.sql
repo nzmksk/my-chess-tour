@@ -45,7 +45,7 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON payouts
 -- invariant — a record created for someone without a login (see #504) will have
 -- a generated id and a NULL auth_user_id until it is claimed.
 -- terms_version comes through raw_user_meta_data the same way the names do, but
--- the signup route puts it there from a server constant (src/lib/legal.ts), not
+-- the signup route puts it there from a server constant (src/lib/reference/legal.ts), not
 -- from the request body. Writing it here rather than in a follow-up UPDATE keeps
 -- the acceptance in the same statement that creates the account, so there is no
 -- window in which a user exists with no record of what they agreed to.
@@ -1184,7 +1184,7 @@ $$;
 -- CURRENT ORGANIZER AGREEMENT VERSION
 -- The database has to refuse a stale agreement itself, even if a route is
 -- bypassed, and the money functions take no version argument to trust. This is
--- the SQL twin of ORGANIZER_AGREEMENT_VERSION in src/lib/legal.ts; bumping that
+-- the SQL twin of ORGANIZER_AGREEMENT_VERSION in src/lib/reference/legal.ts; bumping that
 -- constant means changing this too, and src/lib/__tests__/legal.test.ts fails
 -- until the two match.
 -- =============================================

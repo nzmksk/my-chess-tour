@@ -19,7 +19,7 @@
 // currency a tournament's money moves on, which is a question no timezone can
 // answer, and a country's regions can share a zone without sharing a currency.
 //
-// This is also deliberately NOT src/lib/countries.ts, which wraps
+// This is also deliberately NOT src/lib/reference/countries.ts, which wraps
 // `country-data-list` for player *nationality*. Venue country and player
 // nationality answer different questions and must not be conflated.
 

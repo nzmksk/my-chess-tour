@@ -10,7 +10,7 @@ import { CircleFlag } from "react-circle-flags";
 import { CheckIcon, ChevronDown, Globe } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { Country } from "@/lib/countries";
+import type { Country } from "@/lib/reference/countries";
 import { Button } from "@/components/ui/button";
 import {
   Command,

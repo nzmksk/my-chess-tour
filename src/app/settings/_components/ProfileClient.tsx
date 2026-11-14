@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
-import { nameToAlpha3 } from "@/lib/countries";
+import { nameToAlpha3 } from "@/lib/reference/countries";
 import { createClient } from "@/services/supabase/client";
 import OkuVerificationCard from "./OkuVerificationCard";
 import BankingCard from "./BankingCard";

@@ -10,7 +10,7 @@ import BankAccountFields, {
   validateBankAccount,
   type BankAccountValues,
 } from "@/components/BankAccountFields";
-import { MALAYSIAN_BANKS } from "@/lib/malaysian-banks";
+import { MALAYSIAN_BANKS } from "@/lib/reference/malaysian-banks";
 import type {
   MaskedBankAccount,
   OrgDocumentSummary,

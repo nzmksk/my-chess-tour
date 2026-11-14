@@ -9,7 +9,7 @@ import {
   resolvePlayerRating,
 } from "@/app/tournaments/utils";
 import type { RatingContext } from "@/app/tournaments/utils";
-import { nationalityMatches, resolveCountry } from "@/lib/countries";
+import { nationalityMatches, resolveCountry } from "@/lib/reference/countries";
 
 export interface EligibilityProfile {
   date_of_birth: string | null;

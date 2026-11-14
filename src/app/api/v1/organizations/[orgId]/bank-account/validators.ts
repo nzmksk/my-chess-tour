@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { BANK_SWIFT_CODES } from "@/lib/malaysian-banks";
+import { BANK_SWIFT_CODES } from "@/lib/reference/malaysian-banks";
 
 export interface BankAccountRequest {
   bank_code: string;
@@ -9,7 +9,7 @@ export interface BankAccountRequest {
 }
 
 // No bank_name field, deliberately: the server derives the display name from
-// the SWIFT code (src/lib/malaysian-banks.ts). A client-supplied name could
+// the SWIFT code (src/lib/reference/malaysian-banks.ts). A client-supplied name could
 // disagree with the code it arrived with, and the row would then read "Maybank"
 // while the money went to CIMB.
 export function validateBankAccountRequest(

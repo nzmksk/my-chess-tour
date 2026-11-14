@@ -6,7 +6,7 @@ import { useTournamentWizard } from "../TournamentWizardContext";
 import { newRowId } from "../rowId";
 import { RESTRICTION_KINDS, RESTRICTION_LABELS } from "../restrictions";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
-import { nameToAlpha3 } from "@/lib/countries";
+import { nameToAlpha3 } from "@/lib/reference/countries";
 import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 import { timeZoneForRegion } from "@/lib/tournaments/venues";
 

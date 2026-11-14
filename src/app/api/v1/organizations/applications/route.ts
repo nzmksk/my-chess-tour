@@ -3,8 +3,8 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { assertUploadedObject } from "@/services/supabase/storage";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApplyRequest } from "./validators";
-import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
-import { bankNameForSwift } from "@/lib/malaysian-banks";
+import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
+import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 
 // Must match the uploader in ApplyForm. Enforced here as well as there because
 // the browser check is a UX affordance, not a control — the file goes straight

@@ -1,5 +1,5 @@
 import NavBar from "@/components/NavBar";
-import { TERMS_VERSION, formatLegalVersion } from "@/lib/legal";
+import { TERMS_VERSION, formatLegalVersion } from "@/lib/reference/legal";
 
 export const metadata = {
   title: "Terms of Service",

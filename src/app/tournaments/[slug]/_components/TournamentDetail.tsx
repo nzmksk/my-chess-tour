@@ -10,7 +10,7 @@ import {
   getTodayInTimeZone,
   resolveTimeZone,
 } from "@/lib/tournaments/datetime";
-import { resolveCountry } from "@/lib/countries";
+import { resolveCountry } from "@/lib/reference/countries";
 import { registrationStatus as computeRegistrationStatus } from "@/lib/tournaments/registration-status";
 import TournamentTabs from "./TournamentTabs";
 import StartingRankTab from "./StartingRankTab";

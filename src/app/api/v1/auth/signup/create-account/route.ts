@@ -11,7 +11,7 @@ import {
   checkPasswordRequirements,
 } from "@/services/auth/auth-validation";
 import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/auth/signup-cookie";
-import { TERMS_VERSION } from "@/lib/legal";
+import { TERMS_VERSION } from "@/lib/reference/legal";
 import { getClientIp } from "@/lib/request-ip";
 import { generateCode } from "@/services/auth/verification-code";
 

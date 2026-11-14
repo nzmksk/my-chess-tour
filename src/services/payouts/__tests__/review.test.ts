@@ -41,7 +41,7 @@ vi.mock("@/services/supabase/admin", () => ({
   },
 }));
 
-import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
+import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 import { DOCUMENT_URL_TTL_SECONDS, loadPayoutReview } from "../review";
 
 const ID = "11111111-1111-1111-1111-111111111111";

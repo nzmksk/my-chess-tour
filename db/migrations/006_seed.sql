@@ -253,7 +253,7 @@ DECLARE
   -- Payout destinations. Seeded as 'verified' because every payout phase from
   -- #519 onward needs a usable recipient to develop against, and because an
   -- unverified seed org would open its dashboard behind the bank-account banner.
-  -- SWIFT codes must exist in MALAYSIAN_BANKS (src/lib/malaysian-banks.ts).
+  -- SWIFT codes must exist in MALAYSIAN_BANKS (src/lib/reference/malaysian-banks.ts).
   org_bank_codes   text[] := ARRAY['MBBEMYKL','CIBBMYKL','PBBEMYKL','RHBBMYKL','HLBBMYKL'];
   org_bank_names   text[] := ARRAY['Maybank','CIMB Bank','Public Bank','RHB Bank','Hong Leong Bank'];
   -- tournaments.organizer_commission_pct per organizer: how much of the
@@ -381,7 +381,7 @@ BEGIN
     '{"provider":"email","providers":["email"]}',
     -- terms_version rides in the metadata exactly as the signup route sends it,
     -- so handle_new_user records the acceptance the same way it does in
-    -- production. Keep in step with TERMS_VERSION in src/lib/legal.ts.
+    -- production. Keep in step with TERMS_VERSION in src/lib/reference/legal.ts.
     json_build_object('first_name', 'CHIP', 'last_name', 'Review',
                       'terms_version', '2026-08-02'),
     now(), now(),
@@ -469,7 +469,7 @@ BEGIN
 
     -- Seeded organizations accept the current Organizer Agreement, otherwise
     -- every seeded dashboard opens behind the re-acceptance gate. Keep this
-    -- literal in step with ORGANIZER_AGREEMENT_VERSION in src/lib/legal.ts —
+    -- literal in step with ORGANIZER_AGREEMENT_VERSION in src/lib/reference/legal.ts —
     -- a mismatch here surfaces as the gate appearing on every seeded org.
     INSERT INTO public.organizations (
       name, description, email,

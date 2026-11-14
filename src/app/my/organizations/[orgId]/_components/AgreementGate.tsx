@@ -6,7 +6,7 @@ import {
   ORGANIZER_AGREEMENT_HISTORY,
   ORGANIZER_AGREEMENT_VERSION,
   changesSince,
-} from "@/lib/legal";
+} from "@/lib/reference/legal";
 
 interface Props {
   organizationId: string;

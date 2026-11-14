@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateEmail } from "@/services/auth/auth-validation";
-import { BANK_SWIFT_CODES } from "@/lib/malaysian-banks";
+import { BANK_SWIFT_CODES } from "@/lib/reference/malaysian-banks";
 import { validateOrgLinks, type OrgLink } from "../_lib/org-fields";
 
 type OrgEntityType = "company" | "society" | "individual";
@@ -37,12 +37,12 @@ interface OrgDocumentInput {
 
 // Deliberately no agreement_version field. The applicant declares that they
 // accept the Organizer Agreement; WHICH version that acceptance is recorded
-// against is decided by the server from src/lib/legal.ts. Because this shape is
+// against is decided by the server from src/lib/reference/legal.ts. Because this shape is
 // what the route inserts, a version in the request body cannot reach the
 // database even by accident.
 //
 // Likewise no bank_name: the client sends a SWIFT code and the server derives
-// the display name from src/lib/malaysian-banks.ts, so the two cannot disagree.
+// the display name from src/lib/reference/malaysian-banks.ts, so the two cannot disagree.
 export interface ApplyRequest {
   name: string;
   description?: string | null;

@@ -4,7 +4,7 @@ import {
   getAuthClaims,
 } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
-import { bankNameForSwift } from "@/lib/malaysian-banks";
+import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 import { registerOrganizationBankAccount } from "@/services/payouts/bank-account";
 import { validateBankAccountRequest } from "./validators";
 

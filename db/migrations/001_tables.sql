@@ -41,7 +41,7 @@ CREATE TABLE role_permissions (
 -- handle_new_user), so nothing depends on the nullability yet.
 -- terms_version records WHICH Terms of Service the user agreed to, not merely
 -- that they ticked a box. The version is written by the signup route from
--- src/lib/legal.ts (TERMS_VERSION) via handle_new_user — never from the request
+-- src/lib/reference/legal.ts (TERMS_VERSION) via handle_new_user — never from the request
 -- body, since a client-supplied version is not evidence of anything. NULL on
 -- rows created outside signup (seeds, admin-created players).
 CREATE TABLE users (
@@ -153,7 +153,7 @@ CREATE TABLE organizations (
   entity_type           org_entity_type,
   registration_number   varchar(100),
   -- Which version of the Organizer Agreement this organization is bound by.
-  -- Written server-side from src/lib/legal.ts (ORGANIZER_AGREEMENT_VERSION) at
+  -- Written server-side from src/lib/reference/legal.ts (ORGANIZER_AGREEMENT_VERSION) at
   -- application and on every re-acceptance; the request body never supplies it.
   --
   -- Bumping the constant is the re-acceptance mechanism: an organization whose
