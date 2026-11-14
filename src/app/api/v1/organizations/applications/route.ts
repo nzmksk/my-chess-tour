@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateApplyRequest } from "./validators";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Must match the uploader in ApplyForm. Enforced here as well as there because
 // the browser check is a UX affordance, not a control — the file goes straight
@@ -38,9 +39,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "Org applications: failed to list applications",
+      error,
     );
   }
 
@@ -161,9 +162,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 400 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: rpcErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "Org applications: create_organization_application failed",
+      rpcErr,
     );
   }
 

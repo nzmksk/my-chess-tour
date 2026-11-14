@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
+import { INTERNAL_ERROR_MESSAGE } from "@/lib/http/internal-error";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -249,7 +250,7 @@ describe("GET /api/v1/organizations/applications", () => {
       expect(res.status).toBe(500);
       const json = await res.json();
       expect(json.error.code).toBe("INTERNAL_ERROR");
-      expect(json.error.message).toBe("DB connection failed");
+      expect(json.error.message).toBe(INTERNAL_ERROR_MESSAGE);
     });
   });
 });
@@ -720,6 +721,22 @@ describe("POST /api/v1/organizations/applications", () => {
       expect(res.status).toBe(500);
       const json = await res.json();
       expect(json.error.code).toBe("INTERNAL_ERROR");
+    });
+
+    it("does not show the database error to the applicant", async () => {
+      mockRpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "23503",
+          message:
+            'insert or update on table "organizations" violates foreign key constraint "organizations_created_by_fkey"',
+        },
+      });
+      const res = await POST(makePostRequest());
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.error.message).toBe(INTERNAL_ERROR_MESSAGE);
+      expect(json.error.message).not.toMatch(/constraint|organizations/);
     });
   });
 });
