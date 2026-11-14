@@ -36,11 +36,23 @@ export function internalErrorResponse(
  * route, server actions).
  */
 export function logInternalError(context: string, cause?: unknown): void {
+  // console.error formats its first argument printf-style whenever more
+  // arguments follow, and `context` often carries request values (ids from the
+  // URL, body or webhook payload). A "%c" in one would swallow the error detail
+  // from the log. So either log a single string, which is never formatted, or
+  // escape the context.
   if (cause === undefined) {
     console.error(context);
-  } else {
-    console.error(context, describeCause(cause));
+    return;
   }
+  const detail = describeCause(cause);
+  if (typeof detail === "string") {
+    console.error(`${context} ${detail}`);
+    return;
+  }
+  // An Error stays a separate argument so the log keeps its stack and Sentry
+  // records it as an exception rather than a message.
+  console.error(context.replaceAll("%", "%%"), detail);
 }
 
 // Supabase errors are plain objects ({ code, message, details, hint }), which

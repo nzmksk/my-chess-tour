@@ -198,8 +198,9 @@ describe("POST", () => {
     expect((await POST(post({ tournament_id: TOURNAMENT_ID }))).status).toBe(500);
     expect(mockExecute).not.toHaveBeenCalled();
     expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining(`queue_payout failed for tournament ${TOURNAMENT_ID}`),
-      "40001: serialization failure",
+      expect.stringMatching(
+        new RegExp(`queue_payout failed for tournament ${TOURNAMENT_ID} 40001: serialization failure$`),
+      ),
     );
   });
 

@@ -36,23 +36,33 @@ describe("internalErrorResponse", () => {
     });
 
     expect(consoleError).toHaveBeenCalledWith(
-      "Ctx",
-      "23503: fk violation | details: Key (created_by)=(x) is not present | hint: check the user row",
+      "Ctx 23503: fk violation | details: Key (created_by)=(x) is not present | hint: check the user row",
     );
   });
 
   it("logs a Supabase error without a code as its message alone", () => {
     internalErrorResponse("Ctx", { message: "boom", details: null, hint: "" });
-    expect(consoleError).toHaveBeenCalledWith("Ctx", "boom");
+    expect(consoleError).toHaveBeenCalledWith("Ctx boom");
   });
 
-  it("passes Errors and strings through to the log unchanged", () => {
+  it("keeps an Error as its own argument and appends a string", () => {
     const err = new Error("thrown");
     internalErrorResponse("Ctx", err);
     expect(consoleError).toHaveBeenLastCalledWith("Ctx", err);
 
     internalErrorResponse("Ctx", "plain");
-    expect(consoleError).toHaveBeenLastCalledWith("Ctx", "plain");
+    expect(consoleError).toHaveBeenLastCalledWith("Ctx plain");
+  });
+
+  // The context often interpolates request values; console.error would read
+  // "%c" in it as a directive and drop the next argument from the log.
+  it("does not let format directives in the context swallow the detail", () => {
+    internalErrorResponse("Payout %c lookup failed", { code: "23503", message: "fk" });
+    expect(consoleError).toHaveBeenLastCalledWith("Payout %c lookup failed 23503: fk");
+
+    const err = new Error("thrown");
+    internalErrorResponse("Payout %c lookup failed", err);
+    expect(consoleError).toHaveBeenLastCalledWith("Payout %%c lookup failed", err);
   });
 
   it("logs the context alone when there is no cause", () => {

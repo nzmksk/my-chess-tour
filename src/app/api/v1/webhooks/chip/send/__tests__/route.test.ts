@@ -433,8 +433,7 @@ describe("send instruction events", () => {
     expect(res.status).toBe(500);
     expect(mockSettlePayout).not.toHaveBeenCalled();
     expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining(`failed to look up payout ${PAYOUT_ID}`),
-      "db down",
+      expect.stringMatching(new RegExp(`failed to look up payout ${PAYOUT_ID};.* db down$`)),
     );
   });
 
@@ -447,8 +446,9 @@ describe("send instruction events", () => {
     const res = await POST(makeRequest(completedEvent));
     expect(res.status).toBe(500);
     expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining(`settle_payout failed for payout ${PAYOUT_ID} (paid)`),
-      "40001: serialization failure",
+      expect.stringMatching(
+        new RegExp(`settle_payout failed for payout ${PAYOUT_ID} \\(paid\\);.* 40001: serialization failure$`),
+      ),
     );
   });
 
