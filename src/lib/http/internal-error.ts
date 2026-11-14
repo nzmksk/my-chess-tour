@@ -23,15 +23,24 @@ export function internalErrorResponse(
   context: string,
   cause?: unknown,
 ): NextResponse {
+  logInternalError(context, cause);
+  return NextResponse.json(
+    { error: { code: "INTERNAL_ERROR", message: INTERNAL_ERROR_MESSAGE } },
+    { status: 500 },
+  );
+}
+
+/**
+ * The logging half of internalErrorResponse, for code that reports a failure
+ * without building the response itself (data loaders shared by a page and a
+ * route, server actions).
+ */
+export function logInternalError(context: string, cause?: unknown): void {
   if (cause === undefined) {
     console.error(context);
   } else {
     console.error(context, describeCause(cause));
   }
-  return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message: INTERNAL_ERROR_MESSAGE } },
-    { status: 500 },
-  );
 }
 
 // Supabase errors are plain objects ({ code, message, details, hint }), which
