@@ -18,7 +18,6 @@ interface PendingOrganization {
 
 interface RecentTournament {
   id: string;
-  slug: string | null;
   name: string;
   organization_name: string | null;
   start_date: string;
@@ -208,17 +207,11 @@ function TournamentRow({ tournament }: { tournament: RecentTournament }) {
     </>
   );
 
-  // Only published tournaments have a public slug/page; drafts and cancelled
-  // tournaments render as a non-clickable row.
-  if (!tournament.slug) {
-    return (
-      <div className="card flex items-center gap-4 px-5 py-4">{inner}</div>
-    );
-  }
-
+  // Every status opens the admin view: unlike the public page it shows the
+  // roster, and it is the only way to see a draft or cancelled tournament.
   return (
     <Link
-      href={`/tournaments/${tournament.slug}`}
+      href={`/admin/tournaments/${tournament.id}`}
       className="card flex items-center gap-4 px-5 py-4 no-underline transition-shadow duration-150 hover:shadow-[0_4px_20px_var(--color-grandiose-hover)]"
     >
       {inner}
