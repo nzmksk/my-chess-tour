@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { selfApiFetch } from "@/lib/self-fetch";
+import { selfApiFetch } from "@/lib/http/self-fetch";
 import { getAuthClaims, hasOrgPermission } from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
 import type {

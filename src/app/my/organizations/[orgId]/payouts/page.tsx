@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { selfApiFetch } from "@/lib/self-fetch";
+import { selfApiFetch } from "@/lib/http/self-fetch";
 import { getAuthClaims } from "@/services/supabase/permission";
 import PayoutsClient, { type PayoutsData } from "./_components/PayoutsClient";
 

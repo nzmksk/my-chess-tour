@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import { selfApiFetch } from "@/lib/self-fetch";
+import { selfApiFetch } from "@/lib/http/self-fetch";
 import { getAuthClaims } from "@/services/supabase/permission";
 import DashboardClient from "./_components/DashboardClient";
 import type { PendingNomination } from "./_components/PendingNominations";
