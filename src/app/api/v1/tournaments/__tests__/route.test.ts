@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "../route";
+import { INTERNAL_ERROR_MESSAGE } from "@/lib/http/internal-error";
 
 // ---------------------------------------------------------------------------
 // Mock Supabase
@@ -212,7 +213,7 @@ describe("GET /api/v1/tournaments", () => {
       const json = await res.json();
 
       expect(res.status).toBe(500);
-      expect(json.error.message).toBe("DB connection failed");
+      expect(json.error.message).toBe(INTERNAL_ERROR_MESSAGE);
     });
   });
 });

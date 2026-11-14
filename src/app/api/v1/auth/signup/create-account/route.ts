@@ -14,6 +14,7 @@ import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/auth/signup-cooki
 import { TERMS_VERSION } from "@/lib/reference/legal";
 import { getClientIp } from "@/lib/http/request-ip";
 import { generateCode } from "@/services/auth/verification-code";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Undo a freshly-created account when a post-creation step (storing/sending the
 // verification code) fails — otherwise the half-provisioned account would block
@@ -248,11 +249,7 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       );
     }
-    console.error("Failed to create auth user", authError);
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: authError.message } },
-      { status: 500 },
-    );
+    return internalErrorResponse("Failed to create auth user", authError);
   }
 
   const userId = created.user?.id;

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 import { GET } from "../route";
+import { INTERNAL_ERROR_MESSAGE } from "@/lib/http/internal-error";
 
 // ---------------------------------------------------------------------------
 // Mock Supabase server client (user auth)
@@ -410,7 +411,7 @@ describe("GET /api/v1/me/registrations", () => {
 
       expect(res.status).toBe(500);
       expect(json.error.code).toBe("INTERNAL_ERROR");
-      expect(json.error.message).toBe("DB connection failed");
+      expect(json.error.message).toBe(INTERNAL_ERROR_MESSAGE);
     });
   });
 });

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
 import { NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 interface TournamentRow {
   id: string;
@@ -39,9 +40,9 @@ export async function GET() {
     .order("start_date", { ascending: true });
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/tournaments: error",
+      error,
     );
   }
 

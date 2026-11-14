@@ -7,6 +7,7 @@ import {
   fetchFidePlayer,
   type FidePlayer,
 } from "@/services/fide/fide";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const VALID_GENDERS = new Set<string>(["male", "female"]);
 
@@ -343,9 +344,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       );
 
     if (error) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: error.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        "PATCH /api/v1/profile: error",
+        error,
       );
     }
   }
@@ -365,9 +366,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       .eq("id", claims.id);
 
     if (error) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: error.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        "PATCH /api/v1/profile: error",
+        error,
       );
     }
 

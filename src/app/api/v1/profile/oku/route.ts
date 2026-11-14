@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { assertUploadedObject } from "@/services/supabase/storage";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Must match the uploader in OkuVerificationCard.
 const OKU_MAX_BYTES = 5 * 1024 * 1024;
@@ -87,9 +88,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   );
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/profile/oku: error",
+      error,
     );
   }
 

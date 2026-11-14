@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeRestrictions } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 interface Organization {
   id: string;
@@ -68,9 +69,9 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/tournaments/[slug]: error",
+      error,
     );
   }
 
