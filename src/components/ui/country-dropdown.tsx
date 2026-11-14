@@ -10,6 +10,7 @@ import { CircleFlag } from "react-circle-flags";
 import { CheckIcon, ChevronDown, Globe } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type { Country } from "@/lib/countries";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -24,18 +25,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
-export interface Country {
-  alpha2: string;
-  alpha3: string;
-  name: string;
-  emoji?: string;
-  countryCallingCodes?: string[];
-  currencies?: string[];
-  ioc?: string;
-  languages?: string[];
-  status?: string;
-}
 
 interface CountryDropdownProps {
   options?: Country[];

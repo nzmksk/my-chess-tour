@@ -1,5 +1,17 @@
 import { countries } from "country-data-list";
-import type { Country } from "@/components/ui/country-dropdown";
+
+/** A country record as shipped by country-data-list. */
+export interface Country {
+  alpha2: string;
+  alpha3: string;
+  name: string;
+  emoji?: string;
+  countryCallingCodes?: string[];
+  currencies?: string[];
+  ioc?: string;
+  languages?: string[];
+  status?: string;
+}
 
 const ASSIGNED: Country[] = (countries.all as Country[]).filter(
   (c) => c.status === "assigned" && c.alpha2 && c.name,
