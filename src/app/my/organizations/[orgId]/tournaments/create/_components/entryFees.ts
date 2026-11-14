@@ -18,7 +18,7 @@ import {
   DEFAULT_TIME_ZONE,
   toCalendarDateInTimeZone,
   utcOffsetInTimeZone,
-} from "@/lib/datetime";
+} from "@/lib/tournaments/datetime";
 import type {
   FeesData,
   FeeTier,

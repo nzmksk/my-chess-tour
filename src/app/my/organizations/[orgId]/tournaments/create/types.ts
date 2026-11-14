@@ -10,7 +10,7 @@
 import type {
   PrizeDistribution,
   PrizeFundingSource,
-} from "@/lib/prize-funding";
+} from "@/lib/tournaments/prize-funding";
 
 // =============================================
 // WIZARD STATE
@@ -41,7 +41,7 @@ export interface BasicInfoData {
   /**
    * The venue's state / province. Together with `venueCountry` this also decides
    * the timezone every date in the wizard is entered in — see timeZoneForRegion
-   * in src/lib/venues.ts. There is deliberately no separate `timezone` field:
+   * in src/lib/tournaments/venues.ts. There is deliberately no separate `timezone` field:
    * the organizer states where the venue is, once.
    */
   venueState: string;
@@ -154,7 +154,7 @@ export interface PrizeCategory {
   id: string;
   name: string;
   prizes: PrizeRow[];
-  // Entry fees never fund prizes (see src/lib/prize-funding.ts), so any
+  // Entry fees never fund prizes (see src/lib/tournaments/prize-funding.ts), so any
   // category carrying money must declare where that money comes from. Empty
   // string = not chosen yet; publish rejects that.
   fundingSource: PrizeFundingSource | "";

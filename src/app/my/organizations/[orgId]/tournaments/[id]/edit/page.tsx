@@ -12,13 +12,13 @@ import type {
 import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell";
 import { fromPersistedRestrictions } from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
 import { fromPersistedEntryFees } from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
-import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/datetime";
-import { DEFAULT_COUNTRY_CODE } from "@/lib/venues";
+import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/tournaments/datetime";
+import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
 import {
   isPrizeDistribution,
   isPrizeFundingSource,
   type PrizesJson,
-} from "@/lib/prize-funding";
+} from "@/lib/tournaments/prize-funding";
 
 export const metadata: Metadata = {
   title: "Edit Tournament",

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Tournament } from "../types";
 import { formatRm, getMinFeeCents } from "../utils";
-import { formatCalendarDateRange, resolveTimeZone } from "@/lib/datetime";
+import { formatCalendarDateRange, resolveTimeZone } from "@/lib/tournaments/datetime";
 
 function capitalise(s: string): string {
   if (!s) return "";

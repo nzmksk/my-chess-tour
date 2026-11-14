@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { formatCalendarDate } from "@/lib/datetime";
+import { formatCalendarDate } from "@/lib/tournaments/datetime";
 import { MIN_PAYOUT_CENTS } from "@/services/payouts/constants";
 import type {
   AdminPayout,

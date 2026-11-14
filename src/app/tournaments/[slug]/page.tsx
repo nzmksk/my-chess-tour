@@ -11,13 +11,13 @@ import type {
 } from "./types";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
-import { formatCalendarDate } from "@/lib/datetime";
+import { registrationStatus as computeRegistrationStatus } from "@/lib/tournaments/registration-status";
+import { formatCalendarDate } from "@/lib/tournaments/datetime";
 import {
   ONE_DAY_SECONDS,
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
-} from "@/lib/cache-tags";
+} from "@/lib/tournaments/cache-tags";
 
 // Must be a literal — Next statically analyzes this export. Mirrors ONE_DAY_SECONDS (86400).
 export const revalidate = 86400;

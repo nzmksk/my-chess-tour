@@ -5,7 +5,7 @@ import {
   findCountry,
   isValidRegion,
   timeZoneForRegion,
-} from "@/lib/venues";
+} from "@/lib/tournaments/venues";
 import { NextRequest, NextResponse } from "next/server";
 
 const UUID_RE =

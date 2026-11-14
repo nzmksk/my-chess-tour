@@ -5,14 +5,14 @@ import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
-} from "@/lib/cache-tags";
-import { getTodayInTimeZone } from "@/lib/datetime";
+} from "@/lib/tournaments/cache-tags";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 import {
   DEFAULT_COUNTRY_CODE,
   findCountry,
   isValidRegion,
   timeZoneForRegion,
-} from "@/lib/venues";
+} from "@/lib/tournaments/venues";
 import { getTournamentDateState } from "@/app/tournaments/utils";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";

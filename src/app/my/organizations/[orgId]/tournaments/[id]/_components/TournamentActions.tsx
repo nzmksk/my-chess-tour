@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getTournamentDateState } from "@/app/tournaments/utils";
-import { formatInstantDate, getTodayInTimeZone } from "@/lib/datetime";
-import { registrationStatus as computeRegistrationStatus } from "@/lib/registration-status";
+import { formatInstantDate, getTodayInTimeZone } from "@/lib/tournaments/datetime";
+import { registrationStatus as computeRegistrationStatus } from "@/lib/tournaments/registration-status";
 
 interface Props {
   orgId: string;

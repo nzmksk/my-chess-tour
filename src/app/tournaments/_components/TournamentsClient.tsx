@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { SUPPORTED_COUNTRIES } from "@/lib/venues";
+import { SUPPORTED_COUNTRIES } from "@/lib/tournaments/venues";
 import type { Tournament } from "../types";
 import { getTournamentDateState } from "../utils";
 import {
@@ -10,7 +10,7 @@ import {
   getTodayInTimeZone,
   resolveTimeZone,
   startOfMonth,
-} from "@/lib/datetime";
+} from "@/lib/tournaments/datetime";
 import FilterBar from "./FilterBar";
 import TournamentCard from "./TournamentCard";
 

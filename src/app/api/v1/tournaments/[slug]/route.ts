@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeRestrictions } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
-import { resolveTimeZone } from "@/lib/datetime";
+import { resolveTimeZone } from "@/lib/tournaments/datetime";
 
 interface Organization {
   id: string;

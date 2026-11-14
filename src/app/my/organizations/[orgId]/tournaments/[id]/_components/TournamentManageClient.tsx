@@ -9,7 +9,7 @@ import {
   formatInstantDate,
   getTodayInTimeZone,
   resolveTimeZone,
-} from "@/lib/datetime";
+} from "@/lib/tournaments/datetime";
 
 type TournamentStatus =
   | "draft"

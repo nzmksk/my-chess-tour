@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { resolveTimeZone } from "@/lib/datetime";
+import { resolveTimeZone } from "@/lib/tournaments/datetime";
 import { NextResponse } from "next/server";
 
 interface TournamentRow {

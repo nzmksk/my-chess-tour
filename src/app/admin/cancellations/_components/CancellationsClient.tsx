@@ -8,7 +8,7 @@ import type {
   CancellationCounts,
   RequestStatus,
 } from "../page";
-import { formatCalendarDate } from "@/lib/datetime";
+import { formatCalendarDate } from "@/lib/tournaments/datetime";
 
 type TabKey = "all" | RequestStatus;
 

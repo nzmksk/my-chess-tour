@@ -18,7 +18,7 @@ import type {
   WizardStep,
 } from "../types";
 
-import { DEFAULT_COUNTRY_CODE } from "@/lib/venues";
+import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
 
 export const WIZARD_STEPS: WizardStep[] = [
   { id: "basic-info", label: "Basic Info" },

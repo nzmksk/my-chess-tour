@@ -275,7 +275,7 @@ DECLARE
   ];
   -- Venues carry their own state/region and timezone: a tournament's dates are
   -- calendar dates at its venue, so the two have to agree (tournaments.timezone;
-  -- picklist in VENUE_TIME_ZONES, src/lib/datetime.ts).
+  -- picklist in VENUE_TIME_ZONES, src/lib/tournaments/datetime.ts).
   --
   -- Positions 7–9 are outside Malaysia. Venue index is (idx - 1) % 11 and
   -- tournaments 7–9 are published and upcoming, so those three non-Malaysian
@@ -320,7 +320,7 @@ DECLARE
   -- country can span several zones, so neither derives from the other.
   --
   -- Positions 7–9 are TH/ID/SG, which are NOT in SUPPORTED_COUNTRIES
-  -- (src/lib/venues.ts is MY-only today) — exactly as their venue_states above
+  -- (src/lib/tournaments/venues.ts is MY-only today) — exactly as their venue_states above
   -- already sit outside the Malaysian region list. They exist to exercise
   -- cross-country reads; editing one through the creation wizard would fall back
   -- to MY, which is the accepted cost of seeding venues the picklist cannot yet
@@ -331,7 +331,7 @@ DECLARE
     'TH','ID','SG',
     'MY','MY'
   ];
-  -- Prize funding. Entry fees never fund prizes (src/lib/prize-funding.ts), so
+  -- Prize funding. Entry fees never fund prizes (src/lib/tournaments/prize-funding.ts), so
   -- every category carrying money must name an external source and the party
   -- putting it up. Publish validation rejects one that doesn't, so seeded
   -- tournaments have to declare it or they could not be re-published.
@@ -689,7 +689,7 @@ BEGIN
         org_profile_ids[i],
         t_names[idx],
         -- Published tournaments get a public slug (matches slugify() in
-        -- src/lib/slugs.ts); drafts have none. Seed names are unique → no collision.
+        -- src/lib/tournaments/slugs.ts); drafts have none. Seed names are unique → no collision.
         CASE
           WHEN t_status = 'published'::tournament_status
           THEN regexp_replace(
@@ -750,7 +750,7 @@ BEGIN
             )
           ),
           -- Special prizes are flat — one name, one amount, its own funding —
-          -- not category-shaped (SpecialPrizeJson, src/lib/prize-funding.ts).
+          -- not category-shaped (SpecialPrizeJson, src/lib/tournaments/prize-funding.ts).
           -- The eligibility rule lives in the name because nothing reads a
           -- structured condition: the wizard's SpecialPrize has no field for one.
           'special', json_build_array(

@@ -4,9 +4,9 @@ import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
-} from "@/lib/cache-tags";
+} from "@/lib/tournaments/cache-tags";
 import { revalidateTag } from "next/cache";
-import { registrationStatus } from "@/lib/registration-status";
+import { registrationStatus } from "@/lib/tournaments/registration-status";
 import { NextRequest, NextResponse } from "next/server";
 
 // Manually closes registration for a published tournament before its deadline.

@@ -10,7 +10,7 @@ import {
   normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
 import type { RegistrationRequest } from "@/app/tournaments/[slug]/register/types";
-import { registrationStatus } from "@/lib/registration-status";
+import { registrationStatus } from "@/lib/tournaments/registration-status";
 import {
   cancelChipPurchase,
   createChipPurchase,

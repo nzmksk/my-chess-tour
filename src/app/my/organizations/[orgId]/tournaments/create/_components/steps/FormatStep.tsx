@@ -7,8 +7,8 @@ import { newRowId } from "../rowId";
 import { RESTRICTION_KINDS, RESTRICTION_LABELS } from "../restrictions";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { nameToAlpha3 } from "@/lib/countries";
-import { getTodayInTimeZone } from "@/lib/datetime";
-import { timeZoneForRegion } from "@/lib/venues";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
+import { timeZoneForRegion } from "@/lib/tournaments/venues";
 
 const FORMAT_TYPES = ["Rapid", "Blitz", "Classical"];
 const SYSTEMS = ["Swiss", "Round Robin", "Knockout"];

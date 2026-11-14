@@ -14,7 +14,7 @@ import {
   PRIZE_FUNDING_SOURCES,
   type PrizeDistribution,
   type PrizeFundingSource,
-} from "@/lib/prize-funding";
+} from "@/lib/tournaments/prize-funding";
 
 type PrizeRowErrors = Partial<{ placement: string; amount: string }>;
 type CategoryErrors = Partial<{
@@ -60,7 +60,7 @@ function validate(data: PrizesData): PrizesErrors {
   }
 
   // A special prize qualifies a placed result, so it cannot be a tournament's
-  // only prize. Mirrors validatePrizeStructure (src/lib/prize-funding.ts),
+  // only prize. Mirrors validatePrizeStructure (src/lib/tournaments/prize-funding.ts),
   // which blocks publish on the same rule.
   if (
     data.specialPrizes.length > 0 &&

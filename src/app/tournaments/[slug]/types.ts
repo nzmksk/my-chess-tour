@@ -31,7 +31,7 @@ interface PrizesData {
   categories: PrizeCategory[];
   /**
    * Flat one-off prizes, the counterpart of `categories`. Named `special` to
-   * match PrizesJson (src/lib/prize-funding.ts) — the key the wizard writes and
+   * match PrizesJson (src/lib/tournaments/prize-funding.ts) — the key the wizard writes and
    * publish validation reads.
    */
   special?: SpecialPrize[] | null;

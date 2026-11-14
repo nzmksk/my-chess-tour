@@ -6,7 +6,7 @@ import TournamentsClient from "./_components/TournamentsClient";
 import TournamentsGridSkeleton from "./_components/TournamentsGridSkeleton";
 import ProfileNudge from "./_components/ProfileNudge";
 import type { Tournament } from "./types";
-import { ONE_DAY_SECONDS, TOURNAMENTS_LIST_TAG } from "@/lib/cache-tags";
+import { ONE_DAY_SECONDS, TOURNAMENTS_LIST_TAG } from "@/lib/tournaments/cache-tags";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { createClient } from "@/services/supabase/server";
 

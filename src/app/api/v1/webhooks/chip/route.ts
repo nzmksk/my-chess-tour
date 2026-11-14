@@ -9,7 +9,7 @@ import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
-} from "@/lib/cache-tags";
+} from "@/lib/tournaments/cache-tags";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatCalendarDate } from "@/lib/datetime";
+import { formatCalendarDate } from "@/lib/tournaments/datetime";
 
 export interface PendingNomination {
   tournament_id: string;

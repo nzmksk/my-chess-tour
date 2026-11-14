@@ -9,8 +9,8 @@ import {
   VENUE_TIME_ZONES,
   formatCalendarDate,
   timeZoneAbbreviation,
-} from "@/lib/datetime";
-import { timeZoneForRegion } from "@/lib/venues";
+} from "@/lib/tournaments/datetime";
+import { timeZoneForRegion } from "@/lib/tournaments/venues";
 
 const COMMISSION = 0.1;
 
