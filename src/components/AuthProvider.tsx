@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { createClient } from "@/services/supabase/client";
-import { useAuthStore, type AuthUser } from "@/stores/auth-store";
+import { useAuthStore } from "@/stores/auth-store";
 import type { UserOrganization } from "@/lib/roles";
-import { toAuthUser } from "@/lib/auth-user";
+import { toAuthUser, type AuthUser } from "@/lib/auth-user";
 import { subscribeAvatar } from "@/lib/avatar-cache";
 
 type Props = {
