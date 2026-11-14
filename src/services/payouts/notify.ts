@@ -5,10 +5,10 @@ import {
   sendBeneficiaryNominationEmail,
   sendPayoutReviewEmail,
 } from "@/services/email/email";
+import { sendToAll } from "@/services/email/recipients";
 import {
   loadOrganizationRecipients,
   loadPlatformAdminRecipients,
-  sendToAll,
 } from "./recipients";
 
 // Payout emails other than settlement (settle.ts). Each is best-effort and never
