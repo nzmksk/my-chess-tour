@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { lookupAppUserId } from "@/services/supabase/identity";
 import { NextRequest, NextResponse } from "next/server";
+import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
 import type { EntryFees } from "@/app/tournaments/types";
 import {
   checkRestrictions,
@@ -567,7 +568,7 @@ async function settleFreeRegistration(
   registrationId: string,
   tournamentSlug: string,
 ): Promise<NextResponse> {
-  const { error: settleErr } = await supabaseAdmin.rpc(
+  const { data: settled, error: settleErr } = await supabaseAdmin.rpc(
     "settle_registration_payment",
     {
       p_payment_id: paymentId,
@@ -584,6 +585,12 @@ async function settleFreeRegistration(
       { error: { code: "INTERNAL_ERROR", message: settleErr.message } },
       { status: 500 },
     );
+  }
+
+  // No webhook follows a free registration, so this is where it is confirmed.
+  // Best-effort: never throws.
+  if ((settled as { newly_confirmed?: boolean } | null)?.newly_confirmed) {
+    await notifyRegistrationConfirmed(registrationId);
   }
 
   return NextResponse.json(

@@ -117,6 +117,11 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+const { mockNotifyConfirmed } = vi.hoisted(() => ({ mockNotifyConfirmed: vi.fn() }));
+vi.mock("@/services/registrations/notify", () => ({
+  notifyRegistrationConfirmed: mockNotifyConfirmed,
+}));
+
 vi.mock("@/services/chip/chip", () => ({
   createChipPurchase: mockCreateChipPurchase,
   cancelChipPurchase: mockCancelChipPurchase,
@@ -581,6 +586,48 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_amount_cents: 0,
       p_payment_method: "free",
     });
+  });
+
+  it("emails the confirmation for a free tier only when the settle confirmed it", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({
+        entry_fees: {
+          standard: { amount_cents: 5000 },
+          additional: [{ type: "titled", amount_cents: 0 }],
+        },
+      }),
+      error: null,
+    });
+    setThen(mockExistingBuilder, { data: null, error: null });
+    setThen(mockPaymentSelectBuilder, {
+      data: { id: "pay-1", registration_id: "reg-1", gross_amount_cents: 0 },
+      error: null,
+    });
+    mockRpc.mockImplementation(((fn: string) =>
+      Promise.resolve(
+        fn === "settle_registration_payment"
+          ? { data: { registration_id: "reg-1", newly_confirmed: true }, error: null }
+          : { data: { registration_id: "reg-1", payment_id: "pay-1" }, error: null },
+      )) as never);
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "titled" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(mockNotifyConfirmed).toHaveBeenCalledOnce();
+    expect(mockNotifyConfirmed).toHaveBeenCalledWith("reg-1");
+  });
+
+  it("does not email for a paid tier at checkout (the webhook confirms it)", async () => {
+    setThen(mockExistingBuilder, { data: null, error: null });
+
+    const res = await POST(makeRequest(SLUG, { fee_tier: "standard" }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 
   it("builds the CHIP success/failure/cancel redirects from the slug, not the UUID", async () => {

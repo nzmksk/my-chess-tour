@@ -543,3 +543,49 @@ export async function sendOkuReviewEmail(
     throw new Error(`Failed to send OKU review email: ${error.message}`);
   }
 }
+
+// Confirms a player's place in a tournament once their registration is confirmed
+// (paid, or free). `tournamentDates` arrives formatted in the venue's timezone by
+// the caller; `feePaidCents` is what the player actually paid, 0 for free entry.
+export async function sendRegistrationConfirmationEmail(
+  email: string,
+  params: {
+    playerName: string;
+    tournamentName: string;
+    tournamentSlug: string | null;
+    tournamentDates: string;
+    venue: string;
+    feePaidCents: number;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const tournamentUrl = params.tournamentSlug
+    ? `${siteUrl}/tournaments/${encodeURIComponent(params.tournamentSlug)}`
+    : `${siteUrl}/tournaments`;
+
+  const html = loadTemplate("registration-confirmed.html")
+    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{tournamentDates\}\}/g, escapeHtml(params.tournamentDates))
+    .replace(/\{\{venue\}\}/g, escapeHtml(params.venue))
+    .replace(
+      /\{\{feePaid\}\}/g,
+      params.feePaidCents > 0 ? formatRinggit(params.feePaidCents) : "Free",
+    )
+    .replace(/\{\{tournamentUrl\}\}/g, tournamentUrl)
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `You're registered for ${params.tournamentName}`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send registration confirmation email:", error);
+    throw new Error(
+      `Failed to send registration confirmation email: ${error.message}`,
+    );
+  }
+}

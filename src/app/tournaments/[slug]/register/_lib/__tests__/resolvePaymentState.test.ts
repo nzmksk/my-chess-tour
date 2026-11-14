@@ -71,6 +71,11 @@ vi.mock("@/services/chip/chip", async (importOriginal) => {
   };
 });
 
+const { mockNotifyConfirmed } = vi.hoisted(() => ({ mockNotifyConfirmed: vi.fn() }));
+vi.mock("@/services/registrations/notify", () => ({
+  notifyRegistrationConfirmed: mockNotifyConfirmed,
+}));
+
 import { resolvePaymentState } from "../resolvePaymentState";
 
 const TOURNAMENT_ID = "00000000-0000-0000-0000-000000000001";
@@ -228,6 +233,33 @@ describe("resolvePaymentState", () => {
       p_payment_method: "fpx_b2c",
     });
     expect(result.state).toBe("confirmed");
+    // The webhook already confirmed it (no newly_confirmed), so no second email.
+    expect(mockNotifyConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("emails the confirmation when this reconcile is what confirmed the registration", async () => {
+    setResults(
+      { data: makeRegistration("pending_payment"), error: null },
+      {
+        data: { id: "pay-uuid", status: "pending", chip_transaction_id: "chip-1" },
+        error: null,
+      },
+    );
+    mockGetChipPurchase.mockResolvedValue({
+      id: "chip-1",
+      status: "paid",
+      purchase: { total: 5500 },
+    });
+    mockRpc.mockResolvedValueOnce({
+      data: { registration_id: "reg-uuid", newly_confirmed: true },
+      error: null,
+    });
+
+    const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
+
+    expect(result.state).toBe("confirmed");
+    expect(mockNotifyConfirmed).toHaveBeenCalledOnce();
+    expect(mockNotifyConfirmed).toHaveBeenCalledWith("reg-uuid");
   });
 
   it("stays 'pending' when settlement reports an amount mismatch", async () => {
@@ -255,6 +287,7 @@ describe("resolvePaymentState", () => {
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
 
     expect(result.state).toBe("pending");
+    expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 
   it("reconciles a pending registration that CHIP reports as error -> failed", async () => {

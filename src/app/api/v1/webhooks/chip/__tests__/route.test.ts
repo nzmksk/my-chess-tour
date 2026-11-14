@@ -60,6 +60,13 @@ vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
+const { mockNotifyConfirmed } = vi.hoisted(() => ({ mockNotifyConfirmed: vi.fn() }));
+vi.mock("@/services/registrations/notify", () => ({
+  notifyRegistrationConfirmed: mockNotifyConfirmed,
+}));
+
+vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }));
+
 import { POST } from "../route";
 
 // ---------------------------------------------------------------------------
@@ -386,5 +393,69 @@ describe("POST /api/v1/webhooks/chip", () => {
     );
 
     expect(res.status).toBe(500);
+  });
+});
+
+describe("registration confirmation email", () => {
+  const paidEvent = {
+    id: "chip-1",
+    reference: "pay-1",
+    status: "paid",
+    event_type: "purchase.paid",
+    purchase: { total: 5500 },
+  };
+
+  beforeEach(() => {
+    setPaymentResult({
+      data: { id: "pay-1", chip_transaction_id: "chip-1" },
+      error: null,
+    });
+  });
+
+  it("emails the player when this settle confirmed the registration", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { registration_id: "reg-1", newly_confirmed: true },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(paidEvent));
+
+    expect(res.status).toBe(200);
+    expect(mockNotifyConfirmed).toHaveBeenCalledOnce();
+    expect(mockNotifyConfirmed).toHaveBeenCalledWith("reg-1");
+  });
+
+  it("does not email again when a retried webhook confirms nothing new", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { registration_id: "reg-1", already_processed: true, newly_confirmed: false },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(paidEvent));
+
+    expect(res.status).toBe(200);
+    expect(mockNotifyConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("does not email on an amount mismatch", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { registration_id: "reg-1", amount_mismatch: true, newly_confirmed: false },
+      error: null,
+    });
+
+    await POST(makeRequest(paidEvent));
+
+    expect(mockNotifyConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("does not email on a failed purchase", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { registration_id: "reg-1", newly_confirmed: false },
+      error: null,
+    });
+
+    await POST(makeRequest({ ...paidEvent, status: "error", event_type: "purchase.payment_failure" }));
+
+    expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 });

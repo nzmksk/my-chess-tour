@@ -234,6 +234,7 @@ AS $$
 DECLARE
   v_payment         payments;
   v_amount_mismatch boolean := false;
+  v_newly_confirmed boolean := false;
 BEGIN
   SELECT * INTO v_payment FROM payments WHERE id = p_payment_id FOR UPDATE;
 
@@ -269,6 +270,10 @@ BEGIN
               cancellation_reason = NULL
           WHERE id = v_payment.registration_id
             AND status <> 'confirmed';
+        -- Only the call that actually confirms the registration reports it, so
+        -- the confirmation email goes out once however many paths settle (webhook,
+        -- success-page reconcile, a second paid attempt on the same registration).
+        v_newly_confirmed := FOUND;
       END IF;
     END IF;
   ELSE
@@ -291,7 +296,8 @@ BEGIN
     'payment_id', p_payment_id,
     'registration_id', v_payment.registration_id,
     'already_processed', v_payment.status = 'paid',
-    'amount_mismatch', v_amount_mismatch
+    'amount_mismatch', v_amount_mismatch,
+    'newly_confirmed', v_newly_confirmed
   );
 END;
 $$;

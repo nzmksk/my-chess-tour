@@ -31,6 +31,7 @@ import {
   sendPayoutFailedEmail,
   sendPayoutProcessedEmail,
   sendPayoutReviewEmail,
+  sendRegistrationConfirmationEmail,
   sendTournamentCancellationEmail,
   sendVerificationEmail,
 } from "../email";
@@ -878,5 +879,64 @@ describe("sendOkuReviewEmail", () => {
     await expect(
       sendOkuReviewEmail("p@example.com", { recipientName: "Farid", verified: true }),
     ).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendRegistrationConfirmationEmail", () => {
+  const base = {
+    playerName: "Farid",
+    tournamentName: "KL Open",
+    tournamentSlug: "kl-open-2026",
+    tournamentDates: "10 Aug – 12 Aug 2026 (MYT)",
+    venue: "Dewan Besar, Selangor",
+    feePaidCents: 5500,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{playerName}}|{{tournamentName}}|{{tournamentDates}}|{{venue}}|{{feePaid}}|{{tournamentUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("renders the tournament, dates, venue and fee paid", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", base);
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("registration-confirmed.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("p@example.com");
+    expect(sent().subject).toBe("You're registered for KL Open");
+    expect(sent().html).toContain("Farid|KL Open|10 Aug – 12 Aug 2026 (MYT)|Dewan Besar, Selangor|RM 55.00|");
+    expect(sent().html).toContain("/tournaments/kl-open-2026|");
+  });
+
+  it("shows a free entry as Free", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", { ...base, feePaidCents: 0 });
+    expect(sent().html).toContain("|Free|");
+  });
+
+  it("falls back to the tournaments list without a slug", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", { ...base, tournamentSlug: null });
+    expect(sent().html).toMatch(/\/tournaments\|/);
+  });
+
+  it("escapes organizer- and player-supplied values", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", {
+      ...base,
+      tournamentName: "<b>Open</b>",
+      venue: "<script>x</script>",
+    });
+    expect(sent().html).toContain("&lt;b&gt;Open&lt;/b&gt;");
+    expect(sent().html).not.toContain("<script>");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(sendRegistrationConfirmationEmail("p@example.com", base)).rejects.toThrow(/nope/);
   });
 });

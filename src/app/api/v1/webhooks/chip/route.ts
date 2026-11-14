@@ -10,6 +10,7 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/tournaments/cache-tags";
+import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -299,6 +300,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const result = settled as {
     amount_mismatch?: boolean;
     registration_id?: string;
+    newly_confirmed?: boolean;
   } | null;
 
   if (result?.amount_mismatch) {
@@ -327,6 +329,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
     if (slug) revalidateTag(tournamentTag(slug), PURGE_PROFILE);
+
+    // Only the settle that confirmed the registration reports it, so a retried
+    // webhook or the success page's reconcile can't email the player twice.
+    // Best-effort: never throws, so CHIP still gets its 200.
+    if (result.newly_confirmed) {
+      await notifyRegistrationConfirmed(result.registration_id);
+    }
   }
 
   return NextResponse.json({ data: { received: true } }, { status: 200 });
