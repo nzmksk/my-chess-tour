@@ -499,3 +499,47 @@ export async function sendOrganizerApplicationReviewEmail(
     );
   }
 }
+
+// Tells a player the outcome of their OKU card review — verified, or rejected
+// with the admin's reason and a link back to settings to upload a new copy. One
+// function with a boolean branch, like sendCancellationReviewEmail.
+export async function sendOkuReviewEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    verified: boolean;
+    rejectionReason?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const template = params.verified ? "oku-verified.html" : "oku-rejected.html";
+
+  let html = loadTemplate(template)
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{settingsUrl\}\}/g, `${siteUrl}/settings`)
+    .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/tournaments`);
+
+  if (!params.verified) {
+    html = html.replace(
+      /\{\{rejectionReason\}\}/g,
+      escapeHtml(params.rejectionReason ?? ""),
+    );
+  }
+
+  const subject = params.verified
+    ? "Your OKU status is verified"
+    : "We couldn't verify your OKU card";
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send OKU review email:", error);
+    throw new Error(`Failed to send OKU review email: ${error.message}`);
+  }
+}

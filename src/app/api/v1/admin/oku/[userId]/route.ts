@@ -1,7 +1,11 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { notifyOkuReviewed } from "@/services/oku/notify";
 import { NextRequest, NextResponse } from "next/server";
+
+// Reviewing emails the player, and email templates are read from disk.
+export const runtime = "nodejs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -128,6 +132,9 @@ export async function PATCH(
       { status: 404 },
     );
   }
+
+  // The review is saved. Best-effort: never throws, never fails the review.
+  await notifyOkuReviewed(userId);
 
   return NextResponse.json({ data }, { status: 200 });
 }

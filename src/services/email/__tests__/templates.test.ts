@@ -51,6 +51,7 @@ describe("email templates", () => {
     ["bank-account-verification-failed.html", "{{rejectionReason}}"],
     ["beneficiary-nomination.html", "{{dashboardUrl}}"],
     ["organizer-application-rejected.html", "{{rejectionReason}}"],
+    ["oku-rejected.html", "{{rejectionReason}}"],
   ])("%s renders %s", (name, placeholder) => {
     expect(read(name)).toContain(placeholder);
   });

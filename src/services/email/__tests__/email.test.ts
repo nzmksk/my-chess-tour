@@ -25,6 +25,7 @@ import {
   sendBankVerificationEmail,
   sendBeneficiaryNominationEmail,
   sendCancellationReviewEmail,
+  sendOkuReviewEmail,
   sendOrganizerApplicationReviewEmail,
   sendPasswordResetEmail,
   sendPayoutFailedEmail,
@@ -824,6 +825,58 @@ describe("sendOrganizerApplicationReviewEmail", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(
       sendOrganizerApplicationReviewEmail("a@example.com", { ...base, approved: true }),
+    ).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendOkuReviewEmail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{settingsUrl}}|{{browseUrl}}|{{rejectionReason}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("uses the verified template", async () => {
+    await sendOkuReviewEmail("p@example.com", { recipientName: "Farid", verified: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("oku-verified.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("p@example.com");
+    expect(sent().subject).toBe("Your OKU status is verified");
+    expect(sent().html).toContain("Farid|");
+    expect(sent().html).toContain("/tournaments|");
+  });
+
+  it("uses the rejected template with the escaped reason and a link to settings", async () => {
+    await sendOkuReviewEmail("p@example.com", {
+      recipientName: "Farid",
+      verified: false,
+      rejectionReason: "Card <expired>",
+    });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("oku-rejected.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toBe("We couldn't verify your OKU card");
+    expect(sent().html).toContain("Card &lt;expired&gt;");
+    expect(sent().html).toContain("/settings|");
+  });
+
+  it("escapes the player's name", async () => {
+    await sendOkuReviewEmail("p@example.com", { recipientName: "<i>F</i>", verified: true });
+    expect(sent().html).toContain("&lt;i&gt;F&lt;/i&gt;");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendOkuReviewEmail("p@example.com", { recipientName: "Farid", verified: true }),
     ).rejects.toThrow(/nope/);
   });
 });

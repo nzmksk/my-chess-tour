@@ -35,6 +35,9 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn().mockResolvedValue({ getAll: () => [], set: vi.fn() }),
 }));
 
+const { mockNotifyOku } = vi.hoisted(() => ({ mockNotifyOku: vi.fn() }));
+vi.mock("@/services/oku/notify", () => ({ notifyOkuReviewed: mockNotifyOku }));
+
 import { PATCH } from "../route";
 
 const ADMIN = "aaaaaaaa-0000-0000-0000-000000000001";
@@ -114,6 +117,8 @@ describe("PATCH /api/v1/admin/oku/:userId", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.data.oku_status).toBe("verified");
+    expect(mockNotifyOku).toHaveBeenCalledOnce();
+    expect(mockNotifyOku).toHaveBeenCalledWith(USER);
   });
 
   it("200 on reject with a reason", async () => {
@@ -126,6 +131,7 @@ describe("PATCH /api/v1/admin/oku/:userId", () => {
       { params: Promise.resolve({ userId: USER }) },
     );
     expect(res.status).toBe(200);
+    expect(mockNotifyOku).toHaveBeenCalledWith(USER);
   });
 
   it("404 when there is no pending submission to review", async () => {
@@ -134,5 +140,7 @@ describe("PATCH /api/v1/admin/oku/:userId", () => {
       params: Promise.resolve({ userId: USER }),
     });
     expect(res.status).toBe(404);
+    // Nothing was reviewed, so the player hears nothing.
+    expect(mockNotifyOku).not.toHaveBeenCalled();
   });
 });
