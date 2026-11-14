@@ -13,6 +13,7 @@ const {
   mockGetClaims,
   mockHasPermission,
   mockNotifyNominated,
+  mockNotifyResponded,
   tables,
   eqCalls,
   ilikeCalls,
@@ -54,6 +55,7 @@ const {
       mockGetClaims: vi.fn(),
       mockHasPermission: vi.fn(),
       mockNotifyNominated: vi.fn(),
+      mockNotifyResponded: vi.fn(),
     };
   });
 
@@ -66,6 +68,7 @@ vi.mock("@/services/supabase/permission", () => ({
 }));
 vi.mock("@/services/payouts/notify", () => ({
   notifyBeneficiaryNominated: mockNotifyNominated,
+  notifyNominationResponded: mockNotifyResponded,
 }));
 
 import { GET as listNominations } from "../route";
@@ -246,6 +249,18 @@ describe("POST .../nominations/[tournamentId]", () => {
     });
   });
 
+  it("emails the organizer that the nomination was accepted", async () => {
+    mockRpc.mockResolvedValue({ data: { already_accepted: false }, error: null });
+    await callAccept();
+    expect(mockNotifyResponded).toHaveBeenCalledWith(T_ID, ORG_ID, true);
+  });
+
+  it("emails no one for a repeated accept", async () => {
+    mockRpc.mockResolvedValue({ data: { already_accepted: true }, error: null });
+    expect((await callAccept()).status).toBe(200);
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
+  });
+
   it("400s on a malformed tournament id", async () => {
     expect((await callAccept("nope")).status).toBe(400);
   });
@@ -262,6 +277,7 @@ describe("POST .../nominations/[tournamentId]", () => {
       error: { code: "P0001", message: "these fields are locked: beneficiary_accepted_at" },
     });
     expect((await callAccept()).status).toBe(409);
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
   });
 });
 
@@ -274,6 +290,7 @@ describe("DELETE .../nominations/[tournamentId]", () => {
       p_tournament_id: T_ID,
       p_user_id: USER_ID,
     });
+    expect(mockNotifyResponded).toHaveBeenCalledWith(T_ID, ORG_ID, false);
   });
 
   it("400s on a malformed tournament id", async () => {
@@ -295,6 +312,7 @@ describe("DELETE .../nominations/[tournamentId]", () => {
     const res = await callDecline();
     expect(res.status).toBe(409);
     expect((await res.json()).error.message).toMatch(/ask the organizer/i);
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
   });
 
   it("409s once a player has paid", async () => {

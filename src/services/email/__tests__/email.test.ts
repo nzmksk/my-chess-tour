@@ -25,6 +25,7 @@ import {
   sendBankVerificationEmail,
   sendBeneficiaryNominationEmail,
   sendCancellationReviewEmail,
+  sendNominationResponseEmail,
   sendOkuReviewEmail,
   sendOrganizerApplicationReviewEmail,
   sendPasswordResetEmail,
@@ -938,5 +939,65 @@ describe("sendRegistrationConfirmationEmail", () => {
     mockSend.mockResolvedValue({ error: { message: "nope" } });
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(sendRegistrationConfirmationEmail("p@example.com", base)).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendNominationResponseEmail", () => {
+  const base = {
+    recipientName: "Aisha",
+    organizerOrgId: "org-1",
+    tournamentId: "t-1",
+    nomineeName: "Selangor Chess Association",
+    tournamentName: "KL Open",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{nomineeName}}|{{tournamentName}}|{{tournamentUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("uses the accepted template, linking to the organizer's tournament", async () => {
+    await sendNominationResponseEmail("o@example.com", { ...base, accepted: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("nomination-accepted.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("o@example.com");
+    expect(sent().subject).toBe(
+      "Selangor Chess Association accepted the payout nomination for KL Open",
+    );
+    expect(sent().html).toContain("/my/organizations/org-1/tournaments/t-1");
+  });
+
+  it("uses the declined template", async () => {
+    await sendNominationResponseEmail("o@example.com", { ...base, accepted: false });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("nomination-declined.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toMatch(/declined the payout nomination for KL Open/);
+  });
+
+  it("escapes organization-supplied names", async () => {
+    await sendNominationResponseEmail("o@example.com", {
+      ...base,
+      nomineeName: "<b>Club</b>",
+      accepted: true,
+    });
+    expect(sent().html).toContain("&lt;b&gt;Club&lt;/b&gt;");
+    expect(sent().html).not.toContain("<b>");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendNominationResponseEmail("o@example.com", { ...base, accepted: true }),
+    ).rejects.toThrow(/nope/);
   });
 });

@@ -3,6 +3,7 @@ import {
   type AdminPayoutAlert,
   sendAdminPayoutAlertEmail,
   sendBeneficiaryNominationEmail,
+  sendNominationResponseEmail,
   sendPayoutReviewEmail,
 } from "@/services/email/email";
 import { sendToAll } from "@/services/email/recipients";
@@ -189,6 +190,61 @@ export async function notifyPayoutReviewed(payoutId: string): Promise<void> {
   } catch (err) {
     console.error(
       `Payout ${payoutId}: review email failed`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+/**
+ * Tells the organizing organization that its payout nominee accepted or declined.
+ * `nomineeOrgId` is passed in because a decline has already cleared it from the
+ * tournament. Goes to the same people as the other payout emails.
+ */
+export async function notifyNominationResponded(
+  tournamentId: string,
+  nomineeOrgId: string,
+  accepted: boolean,
+): Promise<void> {
+  try {
+    const [tournamentRes, nomineeRes] = await Promise.all([
+      supabaseAdmin
+        .from("tournaments")
+        .select("name, organization_id")
+        .eq("id", tournamentId)
+        .single(),
+      supabaseAdmin.from("organizations").select("name").eq("id", nomineeOrgId).single(),
+    ]);
+    const error = tournamentRes.error ?? nomineeRes.error;
+    if (error || !tournamentRes.data || !nomineeRes.data) {
+      console.error(
+        `Tournament ${tournamentId}: failed to load nomination response email data`,
+        error?.message,
+      );
+      return;
+    }
+    const tournament = tournamentRes.data as {
+      name: string | null;
+      organization_id: string;
+    };
+    const nominee = nomineeRes.data as { name: string | null };
+
+    const recipients = await loadOrganizationRecipients([tournament.organization_id]);
+    await sendToAll(
+      recipients,
+      (r) =>
+        sendNominationResponseEmail(r.email, {
+          recipientName: r.name,
+          organizerOrgId: tournament.organization_id,
+          tournamentId,
+          nomineeName: nominee.name ?? "The nominated organization",
+          tournamentName: tournament.name ?? "your tournament",
+          accepted,
+        }),
+      `nomination response email(s) for tournament ${tournamentId}`,
+    );
+  } catch (err) {
+    console.error(
+      `Tournament ${tournamentId}: nomination response email failed`,
       err instanceof Error ? err.message : err,
     );
   }

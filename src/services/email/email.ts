@@ -589,3 +589,45 @@ export async function sendRegistrationConfirmationEmail(
     );
   }
 }
+
+// Tells the organizing organization how its payout nominee responded: accepted
+// (the payout now goes to the nominee) or declined (it stays with the organizer).
+// One function with a boolean branch, like sendCancellationReviewEmail.
+export async function sendNominationResponseEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    organizerOrgId: string;
+    tournamentId: string;
+    nomineeName: string;
+    tournamentName: string;
+    accepted: boolean;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const tournamentUrl = `${siteUrl}/my/organizations/${encodeURIComponent(params.organizerOrgId)}/tournaments/${encodeURIComponent(params.tournamentId)}`;
+
+  const html = loadTemplate(
+    params.accepted ? "nomination-accepted.html" : "nomination-declined.html",
+  )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{nomineeName\}\}/g, escapeHtml(params.nomineeName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{tournamentUrl\}\}/g, tournamentUrl);
+
+  const subject = params.accepted
+    ? `${params.nomineeName} accepted the payout nomination for ${params.tournamentName}`
+    : `${params.nomineeName} declined the payout nomination for ${params.tournamentName}`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send nomination response email:", error);
+    throw new Error(`Failed to send nomination response email: ${error.message}`);
+  }
+}

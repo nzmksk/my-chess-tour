@@ -1,7 +1,11 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { authorizeOrgPermission, UUID_RE } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { nominationErrorResponse } from "@/app/api/v1/organizations/_lib/nomination-errors";
+import { notifyNominationResponded } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
+
+// Responding emails the organizer, and email templates are read from disk.
+export const runtime = "nodejs";
 
 type Params = { params: Promise<{ orgId: string; tournamentId: string }> };
 
@@ -83,6 +87,11 @@ export async function POST(_request: NextRequest, { params }: Params): Promise<N
     return nominationErrorResponse(error, `accepting the nomination for tournament ${tournamentId}`);
   }
 
+  // A repeated accept (double-click, retry) changes nothing, so it tells no one.
+  if (!(data as { already_accepted?: boolean } | null)?.already_accepted) {
+    await notifyNominationResponded(tournamentId, orgId, true);
+  }
+
   return NextResponse.json({ data }, { status: 200 });
 }
 
@@ -105,6 +114,8 @@ export async function DELETE(_request: NextRequest, { params }: Params): Promise
   if (error) {
     return nominationErrorResponse(error, `declining the nomination for tournament ${tournamentId}`);
   }
+
+  await notifyNominationResponded(tournamentId, orgId, false);
 
   return NextResponse.json({ data }, { status: 200 });
 }
