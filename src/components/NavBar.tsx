@@ -9,7 +9,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/auth/logout/_actions/logout";
 import { ThemeToggle } from "./ThemeToggle";
 import OrgSwitcher from "./OrgSwitcher";
-import { RoleBadge } from "@/lib/roles";
+import { RoleBadge } from "@/components/RoleBadge";
 import { MenuIcon, CloseIcon } from "@/app/components/Icons";
 
 const NAV_LINKS = [
