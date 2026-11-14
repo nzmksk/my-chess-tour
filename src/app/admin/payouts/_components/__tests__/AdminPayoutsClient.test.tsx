@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdminPayoutsClient from "../AdminPayoutsClient";
 import type { AdminPayout, AdminPayoutCandidate } from "@/services/payouts/admin-queue";
 
@@ -93,6 +93,7 @@ describe("AdminPayoutsClient early payouts", () => {
     failure_reason: null,
     receipt_url: null,
     awaiting_budget: false,
+    can_resend: false,
     requested_at: "2026-11-01T00:00:00Z",
     processed_at: null,
     tournament: { id: "t1", name: "Selangor Open" },
@@ -118,6 +119,32 @@ describe("AdminPayoutsClient early payouts", () => {
     );
     expect(screen.getByText("Rejected")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View request" })).toBeTruthy();
+  });
+
+  it("offers a retry on a payout that can be re-sent, and says what happened", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { outcome: "awaiting_budget" } }),
+    });
+    render(
+      <AdminPayoutsClient
+        data={{
+          candidates: [],
+          payouts: [
+            { ...EARLY, kind: "automatic", approval: "approved", can_resend: true },
+            { ...EARLY, id: "other", approval: "approved" },
+          ],
+        }}
+      />,
+    );
+    const buttons = screen.getAllByRole("button", { name: "Retry send" });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+    expect(mockFetch).toHaveBeenCalledWith(`/api/v1/admin/payouts/${EARLY.id}/send`, {
+      method: "POST",
+    });
+    expect(screen.getByRole("status").textContent).toMatch(/Still waiting on CHIP Send budget/);
   });
 
   it("gives automatic payouts no review link", () => {

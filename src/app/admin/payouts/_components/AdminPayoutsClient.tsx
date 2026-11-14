@@ -11,6 +11,7 @@ import type {
   AdminPayoutQueue,
   PayoutStatus,
 } from "@/services/payouts/admin-queue";
+import ResendPayoutButton from "./ResendPayoutButton";
 
 type TabKey = "all" | PayoutStatus;
 
@@ -42,7 +43,7 @@ const OUTCOME_MESSAGES: Record<string, string> = {
   blocked: "Queued, but a cancellation or refund is in the way. It stays pending.",
   failed: "The payout failed. See the queue below for why.",
   skipped: "Queued, but not sent.",
-  error: "Queued, but sending failed. It stays pending and can be retried.",
+  error: "Queued, but sending failed. Retry it from the payout in the list below.",
 };
 
 function formatCents(cents: number): string {
@@ -298,6 +299,7 @@ function PayoutCard({ payout }: { payout: AdminPayout }) {
           View CHIP receipt
         </a>
       )}
+      {payout.can_resend && <ResendPayoutButton payoutId={payout.id} />}
       {payout.kind === "early" && (
         <Link
           href={`/admin/payouts/${payout.id}`}

@@ -49,6 +49,8 @@ The claim closes a race. Without it, a cancellation approved after `executePayou
 
 A re-run of a claimed row checks nothing and sends the same reference again, which returns the existing instruction if there is one. The claim was the commitment point.
 
+Nothing re-runs a stalled row on its own yet. An admin can, with **Retry send** on `/admin/payouts` or the review page (`POST /api/v1/admin/payouts/[id]/send`), for any approved payout that is `pending` or claimed without an instruction (`canResend`). The Phase 7 sweep (#522) should cover the same rows.
+
 ## Early payouts
 
 An organization owner can ask for part of a tournament's revenue before it ends, from `/my/organizations/[orgId]/payouts` (`POST /api/v1/organizations/[orgId]/payouts`). A platform admin approves or rejects it at `/admin/payouts/[id]` (`PATCH /api/v1/admin/payouts/[id]`).
@@ -108,4 +110,4 @@ Both columns are money fields, frozen at the first paid registration, so a nomin
 
 - **One automatic payout per tournament** (`uniq_automatic_payout_per_tournament`). An admin paying part of the balance by hand leaves the rest with no way to be paid until something else allows it. The admin screen warns about this.
 - `current_organizer_agreement_version()` in SQL has to be bumped alongside `ORGANIZER_AGREEMENT_VERSION`. A test fails if they differ.
-- A payout left `processing` by a lost webhook stays reserved until the Phase 7 reconciler exists (#522).
+- A payout left `processing` by a lost webhook stays reserved until the Phase 7 reconciler exists (#522). One claimed without an instruction can be finished with Retry send; the reconciler should do the same for it, rather than look up an instruction id it doesn't have.

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatRinggit } from "@/services/payouts/format";
 import type { PayoutReview } from "@/services/payouts/review";
+import ResendPayoutButton from "../../_components/ResendPayoutButton";
 
 const ENTITY_LABELS: Record<string, string> = {
   company: "Company (Sdn Bhd / Enterprise)",
@@ -58,9 +59,9 @@ const OUTCOME_MESSAGES: Record<string, string> = {
   awaiting_budget:
     "Approved, but the CHIP Send balance is too low. A budget increase has been requested, and the payout goes out once it is approved.",
   blocked:
-    "Approved, but something is in the way of sending it (see the payouts list). It will be retried.",
+    "Approved, but something is in the way of sending it. Retry once it has cleared.",
   failed: "Approved, but the transfer failed. See the payouts list for why.",
-  error: "Approved, but the transfer couldn't be started. It is safe to retry from the payouts list.",
+  error: "Approved, but the transfer didn't go through. It is safe to retry.",
   skipped: "Approved.",
 };
 
@@ -308,6 +309,15 @@ export default function PayoutReviewClient({ review }: { review: PayoutReview })
         <p role="status" className="font-lato text-success mb-4 text-sm">
           {message}
         </p>
+      )}
+
+      {review.can_resend && (
+        <div className="card mb-4 flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+          <p className="font-lato text-text-muted text-sm">
+            Approved, but not out with CHIP yet. Retrying re-checks everything first.
+          </p>
+          <ResendPayoutButton payoutId={review.id} />
+        </div>
       )}
 
       {review.approval === "rejected" && review.rejection_reason && (

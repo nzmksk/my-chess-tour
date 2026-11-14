@@ -70,6 +70,7 @@ function makeReview(overrides: Partial<PayoutReview> = {}): PayoutReview {
       cap_cents: 400000,
     },
     approval_blocked: null,
+    can_resend: false,
     ...overrides,
   };
 }
@@ -87,6 +88,30 @@ afterEach(() => {
 });
 
 describe("PayoutReviewClient", () => {
+  it("offers a retry for an approved payout that hasn't gone out", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { outcome: "sent" } }),
+    });
+    render(
+      <PayoutReviewClient
+        review={makeReview({ approval: "approved", can_resend: true })}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry send" }));
+    await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
+    expect(mockFetch).toHaveBeenCalledWith(`/api/v1/admin/payouts/${ID}/send`, {
+      method: "POST",
+    });
+    expect(screen.getByRole("status").textContent).toMatch(/Sent to CHIP/);
+    expect(mockRefresh).toHaveBeenCalled();
+  });
+
+  it("offers no retry for a payout that can't be re-sent", () => {
+    render(<PayoutReviewClient review={makeReview()} />);
+    expect(screen.queryByRole("button", { name: "Retry send" })).toBeNull();
+  });
+
   it("spells out the cap arithmetic", () => {
     render(<PayoutReviewClient review={makeReview()} />);
     expect(screen.getByText("50% early payout ceiling")).toBeTruthy();

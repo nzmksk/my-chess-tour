@@ -75,6 +75,8 @@ function givenPayout(overrides: Record<string, unknown> = {}) {
         failure_reason: null,
         requested_at: "2026-11-01T00:00:00Z",
         reviewed_at: null,
+        processed_at: null,
+        chip_send_instruction_id: null,
         tournament_id: T,
         recipient_organization_id: ORG,
         requester: { first_name: "Olivia", last_name: "Tan", email: "o@x.test" },
@@ -233,6 +235,18 @@ describe("loadPayoutReview", () => {
     givenRpc({ cap: { ...CAP, cap_cents: 300000 } });
     const { data } = await loadPayoutReview(ID);
     expect(data?.approval_blocked).toMatch(/more than can be paid early/);
+  });
+
+  it("offers a re-send once approved, until the payout is out with CHIP", async () => {
+    expect((await loadPayoutReview(ID)).data?.can_resend).toBe(false);
+
+    givenPayout({ approval: "approved", reviewed_at: "2026-11-02T00:00:00Z" });
+    tables.organization_documents = [{ data: [], error: null }];
+    expect((await loadPayoutReview(ID)).data?.can_resend).toBe(true);
+
+    givenPayout({ approval: "approved", status: "processing", chip_send_instruction_id: 8 });
+    tables.organization_documents = [{ data: [], error: null }];
+    expect((await loadPayoutReview(ID)).data?.can_resend).toBe(false);
   });
 
   it("names the requester", async () => {

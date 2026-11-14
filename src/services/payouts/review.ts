@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/legal";
 import { describePayoutFailure } from "./failure-reason";
 import { describeEarlyPayoutProblem } from "./recipient-problem";
+import { canResend } from "./resend";
 
 // Everything the admin payout review page shows, assembled server-side. The caller
 // gates on platform.manage: this reads through the service role. Account numbers
@@ -86,6 +87,8 @@ export interface PayoutReview {
   cap: EarlyPayoutCap;
   /** Why approving would be refused right now, in words; null if it wouldn't. */
   approval_blocked: string | null;
+  /** Approved but not out with CHIP, so an admin can re-run the send. */
+  can_resend: boolean;
 }
 
 interface RawUser {
@@ -137,7 +140,7 @@ export async function loadPayoutReview(
     .select(
       `id, kind, approval, status, amount_cents, settled_amount_cents, request_seq,
        reason, rejection_reason, failure_reason, requested_at, reviewed_at,
-       tournament_id, recipient_organization_id,
+       processed_at, chip_send_instruction_id, tournament_id, recipient_organization_id,
        requester:users!requested_by(first_name, last_name, email),
        reviewer:users!reviewed_by(first_name, last_name),
        tournament:tournaments(id, name, status, start_date, end_date, registration_closed_at),
@@ -166,6 +169,8 @@ export async function loadPayoutReview(
     failure_reason: string | null;
     requested_at: string;
     reviewed_at: string | null;
+    processed_at: string | null;
+    chip_send_instruction_id: number | null;
     tournament_id: string;
     recipient_organization_id: string;
     requester: RawUser | RawUser[] | null;
@@ -284,6 +289,7 @@ export async function loadPayoutReview(
         : pending && p.amount_cents > Number(cap.cap_cents)
           ? "The request is for more than can be paid early now."
           : null,
+      can_resend: canResend(p),
     },
     error: null,
   };

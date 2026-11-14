@@ -26,6 +26,7 @@ const rawPayout = {
   settled_amount_cents: 9500,
   failure_reason: null,
   chip_receipt_url: "https://chip.test/r/1",
+  chip_send_instruction_id: 8,
   chip_send_limit_id: null,
   requested_at: "2026-10-01T00:00:00Z",
   processed_at: "2026-10-02T00:00:00Z",
@@ -82,6 +83,17 @@ describe("loadAdminPayoutQueue", () => {
     result.data = [{ ...rawPayout, status: "pending", chip_send_limit_id: 7 }];
     const { data } = await loadAdminPayoutQueue();
     expect(data?.payouts[0].awaiting_budget).toBe(true);
+  });
+
+  it("offers a re-send only on an approved payout not yet out with CHIP", async () => {
+    result.data = [
+      rawPayout,
+      { ...rawPayout, id: "p-2", status: "pending", processed_at: null, chip_send_instruction_id: null },
+      { ...rawPayout, id: "p-3", status: "processing", processed_at: null, chip_send_instruction_id: null },
+      { ...rawPayout, id: "p-4", status: "processing", processed_at: null },
+    ];
+    const { data } = await loadAdminPayoutQueue();
+    expect(data?.payouts.map((p) => p.can_resend)).toEqual([false, true, true, false]);
   });
 
   it("states a failure in words, not CHIP's raw response", async () => {
