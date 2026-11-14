@@ -1,6 +1,7 @@
 -- =============================================================================
 -- DB regression test for payout beneficiary nomination (#520):
---   * nominate_payout_beneficiary / accept_payout_nomination
+--   * nominate_payout_beneficiary / accept_payout_nomination /
+--     decline_payout_nomination
 --     (003_functions_triggers.sql)
 --   * the money-field freeze and the client-session guard on the beneficiary
 --     columns (guard_tournament_money_fields / guard_tournament_beneficiary_columns)
@@ -15,6 +16,8 @@
 --   B6  nominating a different org resets the earlier acceptance; NULL withdraws
 --   B7  a user JWT cannot write the beneficiary columns directly, on INSERT or UPDATE
 --   B8  the first paid registration freezes the nomination, and a pending one lapses
+--   B9  declining needs payout.request on the NOMINEE, clears a pending nomination,
+--       and is refused once accepted or when there is nothing to decline
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations and seed (the owner/admin roles come from 006). Runs
@@ -174,6 +177,47 @@ BEGIN
   END IF;
   RAISE NOTICE 'B6 PASS — re-nomination resets acceptance; NULL withdraws';
 
+  -- ===== B9: the nominee declines a pending nomination ======================
+  PERFORM nominate_payout_beneficiary(v_t, v_good, v_owner);
+  BEGIN
+    PERFORM decline_payout_nomination(v_t, v_owner);
+    RAISE EXCEPTION 'B9 FAIL: the nominating owner declined on the nominee''s behalf';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  IF (SELECT beneficiary_organization_id FROM tournaments WHERE id = v_t) IS DISTINCT FROM v_good THEN
+    RAISE EXCEPTION 'B9 FAIL: a refused decline still cleared the nomination';
+  END IF;
+
+  v_res := decline_payout_nomination(v_t, v_good_owner);
+  SELECT * INTO v_row FROM tournaments WHERE id = v_t;
+  IF v_row.beneficiary_organization_id IS NOT NULL OR v_row.beneficiary_accepted_at IS NOT NULL
+     OR (v_res->>'declined_organization_id')::uuid IS DISTINCT FROM v_good THEN
+    RAISE EXCEPTION 'B9 FAIL: decline did not clear the nomination: % / org=%', v_res, v_row.beneficiary_organization_id;
+  END IF;
+
+  BEGIN
+    PERFORM decline_payout_nomination(v_t, v_good_owner);
+    RAISE EXCEPTION 'B9 FAIL: declined a nomination that no longer exists';
+  EXCEPTION WHEN no_data_found THEN
+    IF SQLERRM NOT LIKE 'NOMINATION_NOT_FOUND%' THEN RAISE EXCEPTION 'B9 FAIL (repeat): %', SQLERRM; END IF;
+  END;
+
+  PERFORM nominate_payout_beneficiary(v_t, v_good, v_owner);
+  PERFORM accept_payout_nomination(v_t, v_good_owner);
+  BEGIN
+    PERFORM decline_payout_nomination(v_t, v_good_owner);
+    RAISE EXCEPTION 'B9 FAIL: an accepted nomination was declined';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'B9 FAIL%' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE 'NOMINATION_ACCEPTED%' THEN RAISE EXCEPTION 'B9 FAIL (accepted): %', SQLERRM; END IF;
+  END;
+  IF (SELECT beneficiary_accepted_at FROM tournaments WHERE id = v_t) IS NULL THEN
+    RAISE EXCEPTION 'B9 FAIL: a refused decline undid the acceptance';
+  END IF;
+  PERFORM nominate_payout_beneficiary(v_t, NULL, v_owner);
+  RAISE NOTICE 'B9 PASS — the nominee can decline a pending nomination, and only that';
+
   -- ===== B7: a user JWT cannot write the columns directly ===================
   -- This is the RLS "Org members can update tournaments" path: the policy would
   -- let this through, so the trigger is what stops it.
@@ -225,6 +269,13 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM LIKE 'B8 FAIL%' THEN RAISE; END IF;
     IF SQLERRM NOT LIKE '%these fields are locked%' THEN RAISE EXCEPTION 'B8 FAIL (nominate): %', SQLERRM; END IF;
+  END;
+  BEGIN
+    PERFORM decline_payout_nomination(v_t, v_good_owner);
+    RAISE EXCEPTION 'B8 FAIL: the nomination was declined after a player paid';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'B8 FAIL%' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%these fields are locked%' THEN RAISE EXCEPTION 'B8 FAIL (decline): %', SQLERRM; END IF;
   END;
   RAISE NOTICE 'B8 PASS — nomination frozen at the first paid registration';
 

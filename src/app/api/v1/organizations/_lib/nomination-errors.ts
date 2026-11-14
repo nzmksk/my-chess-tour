@@ -2,7 +2,8 @@ import { describeRecipientProblem } from "@/services/payouts/recipient-problem";
 import { NextResponse } from "next/server";
 
 /**
- * Turns an error from nominate_payout_beneficiary / accept_payout_nomination into
+ * Turns an error from nominate_payout_beneficiary / accept_payout_nomination /
+ * decline_payout_nomination into
  * the response to send. The functions raise a sentinel prefix with a stable SQLSTATE;
  * guard_tournament_money_fields raises the "locked" one with no sentinel at all.
  *
@@ -45,6 +46,13 @@ export function nominationErrorResponse(
     }
     if (error.message.startsWith("NOMINATION_CLOSED")) {
       return respond("CONFLICT", "This tournament is cancelled", 409);
+    }
+    if (error.message.startsWith("NOMINATION_ACCEPTED")) {
+      return respond(
+        "CONFLICT",
+        "This nomination has already been accepted. Ask the organizer to withdraw it.",
+        409,
+      );
     }
     return respond("CONFLICT", error.message, 409);
   }

@@ -102,7 +102,7 @@ Organization emails go to owners, admins and the contact address (`loadOrganizat
 
 ## Beneficiary nomination
 
-A tournament may nominate another approved organization to receive its payout. `nominate_payout_beneficiary` takes `payout.request` on the organizing org, and `accept_payout_nomination` takes it on the nominee, so a one-sided nomination can't move money. Until accepted, the payout stays with the organizing org.
+A tournament may nominate another approved organization to receive its payout. `nominate_payout_beneficiary` takes `payout.request` on the organizing org, and `accept_payout_nomination` takes it on the nominee, so a one-sided nomination can't move money. Until accepted, the payout stays with the organizing org. The nominee can instead decline a pending nomination (`decline_payout_nomination`, same permission), which clears it; an accepted one can only be withdrawn by the organizer.
 
 Both columns are money fields, frozen at the first paid registration, so a nomination still pending at that point lapses. A trigger also refuses any write to them from a user JWT, because the tournaments UPDATE policy has no column restriction. Early payouts are blocked whenever a beneficiary is set. The organizing org stays liable for any claw-back.
 

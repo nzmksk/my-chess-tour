@@ -20,18 +20,21 @@ function NominationRow({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [action, setAction] = useState<"accept" | "decline" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function accept() {
+  // POST accepts, DELETE declines; either way the row leaves the list.
+  function respond(next: "accept" | "decline") {
     setError(null);
+    setAction(next);
     startTransition(async () => {
       const res = await fetch(
         `/api/v1/organizations/${organizationId}/nominations/${n.tournament_id}`,
-        { method: "POST" },
+        { method: next === "accept" ? "POST" : "DELETE" },
       );
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setError(json.error?.message ?? "Failed to accept this nomination.");
+        setError(json.error?.message ?? `Failed to ${next} this nomination.`);
         return;
       }
       router.refresh();
@@ -50,14 +53,24 @@ function NominationRow({
         </p>
         {error && <p className="font-lato text-danger mt-1 text-xs">{error}</p>}
       </div>
-      <button
-        type="button"
-        onClick={accept}
-        disabled={isPending}
-        className="btn-primary shrink-0 rounded-md disabled:opacity-50"
-      >
-        {isPending ? "Accepting…" : "Accept"}
-      </button>
+      <div className="flex shrink-0 gap-2">
+        <button
+          type="button"
+          onClick={() => respond("decline")}
+          disabled={isPending}
+          className="btn-secondary rounded-md disabled:opacity-50"
+        >
+          {isPending && action === "decline" ? "Declining…" : "Decline"}
+        </button>
+        <button
+          type="button"
+          onClick={() => respond("accept")}
+          disabled={isPending}
+          className="btn-primary rounded-md disabled:opacity-50"
+        >
+          {isPending && action === "accept" ? "Accepting…" : "Accept"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -85,7 +98,8 @@ export default function PendingNominations({
       <p className="font-lato text-text-secondary mb-4 text-sm">
         These tournaments have nominated your organization to receive their
         payout, to your verified bank account. Accept only if you expect the
-        money. Early payouts aren&apos;t available for these tournaments.
+        money; decline and it stays with the organizer. Early payouts
+        aren&apos;t available for these tournaments.
       </p>
       <div className="flex flex-col gap-4">
         {nominations.map((n) => (

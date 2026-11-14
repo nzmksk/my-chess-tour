@@ -316,9 +316,10 @@ CREATE TABLE tournaments (
   -- Another approved organization nominated to receive this tournament's payout,
   -- reusing its KYB, verified bank account and signed agreement rather than a
   -- second vetting pipeline. A nomination redirects nothing until the beneficiary
-  -- accepts it (accepted_at set by accept_payout_nomination). Both columns are
-  -- money fields, frozen at the first paid registration, and only ever written by
-  -- the two functions in 003_functions_triggers.sql.
+  -- accepts it (accepted_at set by accept_payout_nomination); the beneficiary may
+  -- instead decline it (decline_payout_nomination). Both columns are money
+  -- fields, frozen at the first paid registration, and only ever written by the
+  -- nomination functions in 003_functions_triggers.sql.
   beneficiary_organization_id uuid REFERENCES organizations(id) ON DELETE RESTRICT,
   beneficiary_accepted_at     timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
