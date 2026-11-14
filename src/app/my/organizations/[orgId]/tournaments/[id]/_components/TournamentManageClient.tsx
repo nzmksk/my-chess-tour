@@ -42,6 +42,7 @@ interface Tournament {
   venue: Venue;
   format: Format | null;
   max_participants: number;
+  organization?: { id: string; name: string | null };
 }
 
 interface Stats {
@@ -68,6 +69,12 @@ interface Props {
   stats: Stats;
   participants: Participant[];
   cancellationPending: boolean;
+  /**
+   * Who is looking. "admin" is the platform admin's read-only view: same
+   * details and roster, but no organizer actions (edit, publish, close
+   * registration, cancel) — those belong to the organization.
+   */
+  viewer?: "organizer" | "admin";
 }
 
 const STATUS_CONFIG: Record<
@@ -140,7 +147,9 @@ export default function TournamentManageClient({
   stats,
   participants,
   cancellationPending,
+  viewer = "organizer",
 }: Props) {
+  const isAdminView = viewer === "admin";
   const [search, setSearch] = useState("");
   const statusConfig = STATUS_CONFIG[tournament.status] ?? STATUS_CONFIG.draft;
   // Drafts are always editable. A published tournament stays editable only
@@ -150,13 +159,14 @@ export default function TournamentManageClient({
   // can't answer this; resolve today in the venue's own timezone, exactly as
   // the server does.
   const isEditable =
-    tournament.status === "draft" ||
-    (tournament.status === "published" &&
-      getTournamentDateState(
-        tournament.start_date,
-        tournament.end_date,
-        getTodayInTimeZone(tournament.timezone),
-      ) === "upcoming");
+    !isAdminView &&
+    (tournament.status === "draft" ||
+      (tournament.status === "published" &&
+        getTournamentDateState(
+          tournament.start_date,
+          tournament.end_date,
+          getTodayInTimeZone(tournament.timezone),
+        ) === "upcoming"));
 
   const filtered = participants.filter(
     (p) =>
@@ -169,10 +179,10 @@ export default function TournamentManageClient({
       {/* Back link */}
       <div className="mb-4">
         <Link
-          href={`/my/organizations/${orgId}`}
+          href={isAdminView ? "/admin/dashboard" : `/my/organizations/${orgId}`}
           className="font-lato text-text-muted hover:text-text-primary text-sm transition-colors"
         >
-          ← Back to Dashboard
+          {isAdminView ? "← Back to Admin Dashboard" : "← Back to Dashboard"}
         </Link>
       </div>
 
@@ -197,6 +207,11 @@ export default function TournamentManageClient({
               {statusConfig.label}
             </span>
           </p>
+          {isAdminView && tournament.organization?.name && (
+            <p className="font-lato text-text-muted mt-1 text-sm">
+              Organized by {tournament.organization.name}
+            </p>
+          )}
         </div>
         {isEditable && (
           <Link
@@ -348,17 +363,19 @@ export default function TournamentManageClient({
       </div>
 
       {/* Organizer actions: publish a draft / close registration / request cancellation */}
-      <TournamentActions
-        orgId={orgId}
-        tournamentId={tournament.id}
-        status={tournament.status}
-        startDate={tournament.start_date}
-        endDate={tournament.end_date}
-        timeZone={tournament.timezone}
-        registrationClosedAt={tournament.registration_closed_at}
-        registrationDeadline={tournament.registration_deadline}
-        cancellationPending={cancellationPending}
-      />
+      {!isAdminView && (
+        <TournamentActions
+          orgId={orgId}
+          tournamentId={tournament.id}
+          status={tournament.status}
+          startDate={tournament.start_date}
+          endDate={tournament.end_date}
+          timeZone={tournament.timezone}
+          registrationClosedAt={tournament.registration_closed_at}
+          registrationDeadline={tournament.registration_deadline}
+          cancellationPending={cancellationPending}
+        />
+      )}
     </div>
   );
 }
