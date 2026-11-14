@@ -179,7 +179,7 @@ describe("PATCH /api/v1/admin/payouts/[id]", () => {
     ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: agreement_not_current", 409, /Organizer Agreement/],
     ["P0001", "EARLY_PAYOUT_EXCEEDS_CAP: 1500000 cents requested, 1000000 cents can be paid early", 409, /RM 15,000\.00.*RM 10,000\.00/],
     ["22023", "a rejection reason is required", 400, /rejection reason/],
-    ["40001", "serialization failure", 500, /serialization/],
+    ["40001", "serialization failure", 500, /^Something went wrong on our end/],
   ])("maps %s %s to %i", async (code, message, status, expected) => {
     mockAdminRpc.mockResolvedValue({ data: null, error: { code, message } });
     const res = await patch({ action: "approve" });

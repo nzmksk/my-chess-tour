@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 10;
@@ -39,9 +40,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .limit(MAX_RESULTS);
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/search: error",
+      error,
     );
   }
 

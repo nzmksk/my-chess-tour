@@ -8,6 +8,7 @@ import {
   describeRecipientProblem,
 } from "@/services/payouts/recipient-problem";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // executePayout can send email, whose templates are read from disk.
 export const runtime = "nodejs";
@@ -34,8 +35,12 @@ async function authorizeAdmin(): Promise<
   });
 
   if (error) {
-    console.error("Admin payouts: permission check failed", error.message);
-    return { response: errorResponse("INTERNAL_ERROR", error.message, 500) };
+    return {
+      response: internalErrorResponse(
+        "Admin payouts: permission check failed",
+        error,
+      ),
+    };
   }
   if (!isAdmin) {
     return { response: errorResponse("FORBIDDEN", "Admin access required", 403) };
@@ -50,8 +55,10 @@ export async function GET(): Promise<NextResponse> {
 
   const { data, error } = await loadAdminPayoutQueue();
   if (error) {
-    console.error("Admin payouts: failed to load the payout queue", error);
-    return errorResponse("INTERNAL_ERROR", error, 500);
+    return internalErrorResponse(
+      "Admin payouts: failed to load the payout queue",
+      error,
+    );
   }
 
   return NextResponse.json({ data }, { status: 200 });
@@ -142,11 +149,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
       return errorResponse("CONFLICT", queueErrorMessage(error.message), 409);
     }
-    console.error(
+    return internalErrorResponse(
       `Admin payouts: queue_payout failed for tournament ${tournament_id}`,
-      error.code ? `${error.code}: ${error.message}` : error.message,
+      error,
     );
-    return errorResponse("INTERNAL_ERROR", error.message, 500);
   }
 
   if (!payoutId) {

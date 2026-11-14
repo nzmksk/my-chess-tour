@@ -18,6 +18,7 @@ import {
   PAYMENT_TIMEOUT_MINUTES,
 } from "@/services/chip/chip";
 import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-response";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // The seat hold (and the CHIP purchase `due`) lasts PAYMENT_TIMEOUT_MINUTES from
 // registered_at. While live, the pending payment is resumed by reusing its link.
@@ -103,9 +104,9 @@ export async function POST(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/tournaments/[slug]/checkout: tErr",
+      tErr,
     );
   }
 
@@ -391,9 +392,9 @@ export async function POST(
         { status: 409 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: insertErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/tournaments/[slug]/checkout: insertErr",
+      insertErr,
     );
   }
 
@@ -541,9 +542,9 @@ async function resumeRegistration(
         { status: 409 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: attemptErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/tournaments/[slug]/checkout: attemptErr",
+      attemptErr,
     );
   }
 
@@ -581,9 +582,9 @@ async function settleFreeRegistration(
   );
 
   if (settleErr) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: settleErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/tournaments/[slug]/checkout: settleErr",
+      settleErr,
     );
   }
 

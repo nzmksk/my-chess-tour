@@ -3,6 +3,7 @@ import { authorizeOrgPermission, UUID_RE } from "@/app/api/v1/organizations/_lib
 import { nominationErrorResponse } from "@/app/api/v1/organizations/_lib/nomination-errors";
 import { notifyNominationResponded } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Responding emails the organizer, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -42,15 +43,11 @@ async function authorizeNominee(
     .maybeSingle();
 
   if (lookupError) {
-    console.error(
-      `Payout nomination: failed to look up tournament ${tournamentId} (${action})`,
-      lookupError.message,
-    );
     return {
       ok: false,
-      response: NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: lookupError.message } },
-        { status: 500 },
+      response: internalErrorResponse(
+        `Payout nomination: failed to look up tournament ${tournamentId} (${action})`,
+        lookupError,
       ),
     };
   }

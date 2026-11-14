@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 import { registerOrganizationBankAccount } from "@/services/payouts/bank-account";
 import { validateBankAccountRequest } from "./validators";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,9 +62,9 @@ async function authorize(
   if (orgError || !org) {
     if (orgError && orgError.code !== "PGRST116") {
       return {
-        error: NextResponse.json(
-          { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-          { status: 500 },
+        error: internalErrorResponse(
+          "Org bank account: failed to load organization",
+          orgError,
         ),
       };
     }
@@ -119,9 +120,9 @@ export async function GET(
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/bank-account: error",
+      error,
     );
   }
 
@@ -208,9 +209,9 @@ export async function PUT(
         { status: 409 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PUT /api/v1/organizations/[orgId]/bank-account: error",
+      error,
     );
   }
 

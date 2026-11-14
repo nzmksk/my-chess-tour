@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,9 +28,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { count, error } = await query;
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/tournaments/name-check: error",
+      error,
     );
   }
 

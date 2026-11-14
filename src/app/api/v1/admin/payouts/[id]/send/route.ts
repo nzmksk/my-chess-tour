@@ -4,6 +4,7 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { executePayout } from "@/services/payouts/execute";
 import { canResend } from "@/services/payouts/resend";
 import { NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // executePayout can send email, whose templates are read from disk.
 export const runtime = "nodejs";
@@ -43,8 +44,10 @@ export async function POST(
     { p_user_id: claims.id, p_permission: "platform.manage" },
   );
   if (permissionError) {
-    console.error("Admin payout send: permission check failed", permissionError.message);
-    return errorResponse("INTERNAL_ERROR", permissionError.message, 500);
+    return internalErrorResponse(
+      "Admin payout send: permission check failed",
+      permissionError,
+    );
   }
   if (!isAdmin) {
     return errorResponse("FORBIDDEN", "Admin access required", 403);
@@ -58,8 +61,10 @@ export async function POST(
     .eq("id", id)
     .maybeSingle();
   if (error) {
-    console.error(`Admin payout send: failed to load payout ${id}`, error.message);
-    return errorResponse("INTERNAL_ERROR", error.message, 500);
+    return internalErrorResponse(
+      `Admin payout send: failed to load payout ${id}`,
+      error,
+    );
   }
   if (!payout) {
     return errorResponse("NOT_FOUND", "Payout not found", 404);

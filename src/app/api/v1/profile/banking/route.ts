@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import type { UpdateBankingPayload } from "@/app/profile/types";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Player banking / payout details. Unlike the other profile fields these are
 // freely editable (bank accounts change) and never set-once. The full account
@@ -96,9 +97,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     .upsert({ user_id: claims.id, ...update }, { onConflict: "user_id" });
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/profile/banking: error",
+      error,
     );
   }
 

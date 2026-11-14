@@ -16,6 +16,7 @@ import {
 import { getTournamentDateState } from "@/app/tournaments/utils";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -105,9 +106,9 @@ async function resolvePermission(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/tournaments/[id]: orgError",
+      orgError,
     );
   }
 
@@ -276,9 +277,9 @@ async function checkEditFreeze(
     .limit(1);
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/tournaments/[id]: error",
+      error,
     );
   }
 
@@ -361,9 +362,9 @@ export async function PATCH(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tournamentError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/organizations/[orgId]/tournaments/[id]: tournamentError",
+      tournamentError,
     );
   }
 
@@ -575,9 +576,9 @@ export async function PATCH(
     .single();
 
   if (updateError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: updateError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/organizations/[orgId]/tournaments/[id]: updateError",
+      updateError,
     );
   }
 

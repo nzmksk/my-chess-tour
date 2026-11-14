@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees } from "@/app/tournaments/types";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const VALID_STATUSES = new Set([
   "pending_payment",
@@ -130,9 +131,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/me/registrations: error",
+      error,
     );
   }
 

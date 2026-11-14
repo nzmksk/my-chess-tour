@@ -103,14 +103,34 @@ describe("updatePassword action", () => {
 
   // --- Supabase error -------------------------------------------------------
 
-  it("returns error message when updateUser fails", async () => {
+  it.each([
+    [
+      "an expired recovery session",
+      { name: "AuthSessionMissingError", message: "Auth session missing!" },
+      /reset link has expired/,
+    ],
+    [
+      "a reused password",
+      { code: "same_password", message: "New password should be different from the old password." },
+      /must be different from your current password/,
+    ],
+    [
+      "a password the policy rejects",
+      { code: "weak_password", message: "Password should be at least 8 characters." },
+      /^Password should be at least 8 characters\.$/,
+    ],
+    [
+      "an unexpected auth-server failure",
+      { code: "unexpected_failure", message: "Database error updating user" },
+      /^Something went wrong on our end/,
+    ],
+  ])("explains %s without redirecting", async (_case, authError, expected) => {
     mocks.validateUpdatePasswordForm.mockReturnValue({
       errors: {},
       isValid: true,
     });
-    mocks.updateUser.mockResolvedValue({
-      error: { message: "Auth session missing" },
-    });
+    mocks.updateUser.mockResolvedValue({ error: authError });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const fd = makeFormData({
       password: "Password1!",
@@ -118,9 +138,11 @@ describe("updatePassword action", () => {
     });
     const result = await updatePassword(INITIAL, fd);
 
-    expect(result.error).toBe("Auth session missing");
+    expect(result.error).toMatch(expected);
+    expect(result.error).not.toMatch(/Database error/);
     expect(result.fieldErrors).toEqual({});
     expect(mocks.signOut).not.toHaveBeenCalled();
     expect(mocks.redirect).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });

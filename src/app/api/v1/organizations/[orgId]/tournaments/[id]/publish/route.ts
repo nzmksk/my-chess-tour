@@ -14,6 +14,7 @@ import {
 } from "@/lib/tournaments/prize-funding";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -93,9 +94,9 @@ export async function POST(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/tournaments/[id]/publish: orgError",
+      orgError,
     );
   }
 
@@ -155,9 +156,9 @@ export async function POST(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tournamentError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/tournaments/[id]/publish: tournamentError",
+      tournamentError,
     );
   }
 
@@ -285,9 +286,9 @@ export async function POST(
     .single();
 
   if (updateError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: updateError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/tournaments/[id]/publish: updateError",
+      updateError,
     );
   }
 

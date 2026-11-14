@@ -6,6 +6,7 @@ import {
 import { lookupAppUserId } from "@/services/supabase/identity";
 import { NextRequest, NextResponse } from "next/server";
 import { validateInviteRequest } from "./validators";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -77,16 +78,16 @@ export async function POST(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/members/invite: orgError",
+      orgError,
     );
   }
 
   if (memberError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: memberError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/members/invite: memberError",
+      memberError,
     );
   }
 
@@ -141,9 +142,9 @@ export async function POST(
   // invite would send an existing member down the new-account path, and the
   // email_exists that GoTrue then returns would be misreported as drift below.
   if (existingUserError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: existingUserError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/members/invite: existingUserError",
+      existingUserError,
     );
   }
 
@@ -158,14 +159,9 @@ export async function POST(
         .eq("user_id", existingUser.id);
 
     if (existingCountError) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "INTERNAL_ERROR",
-            message: existingCountError.message,
-          },
-        },
-        { status: 500 },
+      return internalErrorResponse(
+        "POST /api/v1/organizations/[orgId]/members/invite: existingCountError",
+        existingCountError,
       );
     }
 
@@ -190,9 +186,9 @@ export async function POST(
       });
 
     if (insertError) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: insertError.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        "POST /api/v1/organizations/[orgId]/members/invite: insertError",
+        insertError,
       );
     }
 
@@ -236,9 +232,9 @@ export async function POST(
         { status: 409 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: inviteError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/members/invite: inviteError",
+      inviteError,
     );
   }
 
@@ -269,9 +265,9 @@ export async function POST(
     });
 
   if (insertError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: insertError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/members/invite: insertError",
+      insertError,
     );
   }
 

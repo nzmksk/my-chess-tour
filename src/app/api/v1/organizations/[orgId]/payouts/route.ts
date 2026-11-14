@@ -11,6 +11,7 @@ import { MIN_PAYOUT_CENTS } from "@/services/payouts/constants";
 import { notifyAdminsOfPayout } from "@/services/payouts/notify";
 import { validateEarlyPayoutRequest } from "./validators";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Filing a request emails the platform admins, and templates are read from disk.
 export const runtime = "nodejs";
@@ -84,10 +85,9 @@ export async function GET(
 
   const error = overview.error ?? history.error;
   if (error) {
-    console.error(`Organization ${orgId} payouts: failed to load`, error.message);
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      `Organization ${orgId} payouts: failed to load`,
+      error,
     );
   }
 
@@ -260,11 +260,10 @@ export async function POST(
     .maybeSingle();
 
   if (lookupError) {
-    console.error(
+    return internalErrorResponse(
       `Early payout: failed to look up tournament ${tournament_id}`,
-      lookupError.message,
+      lookupError,
     );
-    return errorResponse("INTERNAL_ERROR", lookupError.message, 500);
   }
   if (!tournament) {
     return errorResponse("NOT_FOUND", "Tournament not found", 404);
@@ -286,11 +285,10 @@ export async function POST(
       );
       return mapped;
     }
-    console.error(
+    return internalErrorResponse(
       `Early payout: request_early_payout failed for tournament ${tournament_id}`,
-      error.code ? `${error.code}: ${error.message}` : error.message,
+      error,
     );
-    return errorResponse("INTERNAL_ERROR", error.message, 500);
   }
 
   console.info(

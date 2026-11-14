@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { authorizeOrgPermission } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 /**
  * Payout nominations waiting on this organization. Gated on payout.request, the
@@ -21,10 +22,9 @@ export async function GET(
   });
 
   if (error) {
-    console.error(`Organization ${orgId} nominations: failed to load`, error.message);
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      `Organization ${orgId} nominations: failed to load`,
+      error,
     );
   }
 

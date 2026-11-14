@@ -4,6 +4,7 @@ import {
   getAuthClaims,
 } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -39,16 +40,16 @@ async function resolveOrgAccess(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "/api/v1/organizations/[orgId]/members/[id]: orgError",
+      orgError,
     );
   }
 
   if (memberError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: memberError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "/api/v1/organizations/[orgId]/members/[id]: memberError",
+      memberError,
     );
   }
 
@@ -182,9 +183,9 @@ export async function PATCH(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: membershipError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/organizations/[orgId]/members/[id]: membershipError",
+      membershipError,
     );
   }
 
@@ -215,9 +216,9 @@ export async function PATCH(
     .eq("user_id", id);
 
   if (updateError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: updateError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/organizations/[orgId]/members/[id]: updateError",
+      updateError,
     );
   }
 
@@ -300,9 +301,9 @@ export async function DELETE(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: membershipError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "DELETE /api/v1/organizations/[orgId]/members/[id]: membershipError",
+      membershipError,
     );
   }
 
@@ -320,9 +321,9 @@ export async function DELETE(
     .eq("user_id", id);
 
   if (deleteError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: deleteError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "DELETE /api/v1/organizations/[orgId]/members/[id]: deleteError",
+      deleteError,
     );
   }
 

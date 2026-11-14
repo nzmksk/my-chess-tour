@@ -1,0 +1,74 @@
+import { NextResponse } from "next/server";
+
+/**
+ * What a caller sees when a request fails for a reason they can't fix.
+ *
+ * Database and auth-server errors describe the schema ("insert or update on
+ * table "organizations" violates foreign key constraint ...") and must never
+ * reach the browser: they mean nothing to the user and leak table, column and
+ * constraint names to anyone probing the API.
+ */
+export const INTERNAL_ERROR_MESSAGE =
+  "Something went wrong on our end. Please try again later.";
+
+/**
+ * Log an unexpected failure server-side and return a generic 500.
+ *
+ * The details go to `console.error`, which Sentry captures as an event
+ * (src/services/sentry/server.ts), so nothing is lost by keeping them out of
+ * the response. `context` should name the route and operation so the event is
+ * findable, e.g. "Org applications: create_organization_application failed".
+ */
+export function internalErrorResponse(
+  context: string,
+  cause?: unknown,
+): NextResponse {
+  logInternalError(context, cause);
+  return NextResponse.json(
+    { error: { code: "INTERNAL_ERROR", message: INTERNAL_ERROR_MESSAGE } },
+    { status: 500 },
+  );
+}
+
+/**
+ * The logging half of internalErrorResponse, for code that reports a failure
+ * without building the response itself (data loaders shared by a page and a
+ * route, server actions).
+ */
+export function logInternalError(context: string, cause?: unknown): void {
+  // console.error formats its first argument printf-style whenever more
+  // arguments follow, and `context` often carries request values (ids from the
+  // URL, body or webhook payload). A "%c" in one would swallow the error detail
+  // from the log. So either log a single string, which is never formatted, or
+  // escape the context.
+  if (cause === undefined) {
+    console.error(context);
+    return;
+  }
+  const detail = describeCause(cause);
+  if (typeof detail === "string") {
+    console.error(`${context} ${detail}`);
+    return;
+  }
+  // An Error stays a separate argument so the log keeps its stack and Sentry
+  // records it as an exception rather than a message.
+  console.error(context.replaceAll("%", "%%"), detail);
+}
+
+// Supabase errors are plain objects ({ code, message, details, hint }), which
+// console.error would print as "[object Object]" once Sentry stringifies them.
+// Flatten them to one readable line; pass Errors and strings through.
+function describeCause(cause: unknown): unknown {
+  if (cause instanceof Error || typeof cause !== "object" || cause === null) {
+    return cause;
+  }
+  const { code, message, details, hint } = cause as Record<string, unknown>;
+  if (typeof message !== "string") return cause;
+  return [
+    code ? `${String(code)}: ${message}` : message,
+    details ? `details: ${String(details)}` : null,
+    hint ? `hint: ${String(hint)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -70,16 +71,16 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/members: orgError",
+      orgError,
     );
   }
 
   if (memberError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: memberError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/members: memberError",
+      memberError,
     );
   }
 
@@ -111,9 +112,9 @@ export async function GET(
     .order("joined_at", { ascending: true });
 
   if (membersError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: membersError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/members: membersError",
+      membersError,
     );
   }
 

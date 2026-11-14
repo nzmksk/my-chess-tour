@@ -15,6 +15,7 @@ import {
 } from "@/lib/tournaments/cache-tags";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -322,9 +323,9 @@ export async function PATCH(
   }
 
   if (permissionError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/admin/tournament-cancellations/[id]: permissionError",
+      permissionError,
     );
   }
 
@@ -422,9 +423,9 @@ export async function PATCH(
         { status: 409 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/admin/tournament-cancellations/[id]: error",
+      error,
     );
   }
 

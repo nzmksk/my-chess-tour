@@ -100,7 +100,7 @@ describe("updatePassword action", () => {
 
   it("returns error state when supabase returns an error", async () => {
     mocks.updateUser.mockResolvedValue({
-      error: { message: "Auth session missing" },
+      error: { name: "AuthSessionMissingError", message: "Auth session missing!" },
     });
 
     const fd = makeFormData({
@@ -109,7 +109,7 @@ describe("updatePassword action", () => {
     });
     const result = await updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd);
 
-    expect(result.error).toBe("Auth session missing");
+    expect(result.error).toMatch(/reset link has expired/);
     expect(result.fieldErrors).toEqual({});
   });
 
