@@ -3,6 +3,7 @@ import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { notifyOkuReviewed } from "@/services/oku/notify";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Reviewing emails the player, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -51,9 +52,9 @@ export async function PATCH(
     );
   }
   if (permissionError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/admin/oku/[userId]: permissionError",
+      permissionError,
     );
   }
   if (!isAdmin) {
@@ -116,9 +117,9 @@ export async function PATCH(
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/admin/oku/[userId]: error",
+      error,
     );
   }
   if (!data) {

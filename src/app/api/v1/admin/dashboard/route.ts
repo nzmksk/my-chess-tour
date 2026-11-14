@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 type OrgStatusRow = { approval_status: string };
 type TournamentStatusRow = { status: string };
@@ -36,9 +37,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   );
 
   if (permissionError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: permissionError",
+      permissionError,
     );
   }
 
@@ -91,45 +92,45 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   ]);
 
   if (userError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: userError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: userError",
+      userError,
     );
   }
   if (orgError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: orgError",
+      orgError,
     );
   }
   if (tourError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tourError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: tourError",
+      tourError,
     );
   }
   if (regError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: regError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: regError",
+      regError,
     );
   }
   if (payoutError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: payoutError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: payoutError",
+      payoutError,
     );
   }
   if (pendingOrgsError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: pendingOrgsError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: pendingOrgsError",
+      pendingOrgsError,
     );
   }
   if (recentTourError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: recentTourError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/dashboard: recentTourError",
+      recentTourError,
     );
   }
 
@@ -187,15 +188,15 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       ]);
 
     if (recentRegsError) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: recentRegsError.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        "GET /api/v1/admin/dashboard: recentRegsError",
+        recentRegsError,
       );
     }
     if (orgsError) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: orgsError.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        "GET /api/v1/admin/dashboard: orgsError",
+        orgsError,
       );
     }
 

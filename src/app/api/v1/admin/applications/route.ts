@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -34,9 +35,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   );
 
   if (permissionError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/applications: permissionError",
+      permissionError,
     );
   }
 
@@ -56,9 +57,9 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/applications: error",
+      error,
     );
   }
 

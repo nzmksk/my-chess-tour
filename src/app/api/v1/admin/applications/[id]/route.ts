@@ -4,6 +4,7 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { registerActiveOrganizationBankAccount } from "@/services/payouts/bank-account";
 import { notifyApplicationReviewed } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Reviewing emails the applicant, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -58,9 +59,9 @@ export async function GET(
   }
 
   if (permissionError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/applications/[id]: permissionError",
+      permissionError,
     );
   }
 
@@ -92,9 +93,9 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/admin/applications/[id]: error",
+      error,
     );
   }
 
@@ -131,9 +132,9 @@ export async function PATCH(
   }
 
   if (permissionError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: permissionError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/admin/applications/[id]: permissionError",
+      permissionError,
     );
   }
 
@@ -200,9 +201,9 @@ export async function PATCH(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/admin/applications/[id]: error",
+      error,
     );
   }
 
