@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -73,16 +74,16 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/dashboard: orgError",
+      orgError,
     );
   }
 
   if (memberError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: memberError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/dashboard: memberError",
+      memberError,
     );
   }
 
@@ -131,16 +132,16 @@ export async function GET(
   ]);
 
   if (tourError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tourError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/dashboard: tourError",
+      tourError,
     );
   }
 
   if (payoutError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: payoutError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/dashboard: payoutError",
+      payoutError,
     );
   }
 
@@ -149,9 +150,9 @@ export async function GET(
   // has filed their bank details that they have none — the one state that
   // reads as their fault to fix.
   if (bankError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: bankError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "GET /api/v1/organizations/[orgId]/dashboard: bankError",
+      bankError,
     );
   }
 
@@ -195,21 +196,16 @@ export async function GET(
     ]);
 
     if (regCountError) {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: regCountError.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        "GET /api/v1/organizations/[orgId]/dashboard: regCountError",
+        regCountError,
       );
     }
 
     if (recentRegsError) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "INTERNAL_ERROR",
-            message: recentRegsError.message,
-          },
-        },
-        { status: 500 },
+      return internalErrorResponse(
+        "GET /api/v1/organizations/[orgId]/dashboard: recentRegsError",
+        recentRegsError,
       );
     }
 

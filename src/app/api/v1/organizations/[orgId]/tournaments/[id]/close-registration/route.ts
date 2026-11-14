@@ -8,6 +8,7 @@ import {
 import { revalidateTag } from "next/cache";
 import { registrationStatus } from "@/lib/tournaments/registration-status";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 // Manually closes registration for a published tournament before its deadline.
 // This is IRREVERSIBLE — there is no re-open action; once closed, the only way
@@ -36,9 +37,9 @@ export async function POST(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/tournaments/[id]/close-registration: tErr",
+      tErr,
     );
   }
 
@@ -85,9 +86,9 @@ export async function POST(
     .single();
 
   if (updateError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: updateError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/tournaments/[id]/close-registration: updateError",
+      updateError,
     );
   }
 

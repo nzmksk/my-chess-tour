@@ -381,7 +381,7 @@ describe("POST /organizations/[orgId]/payouts", () => {
     ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: bank_account_not_verified", 409, "EARLY_PAYOUT_NOT_ALLOWED", /verified payout bank/i],
     ["P0002", "tournament x not found", 404, "NOT_FOUND", /not found/i],
     ["42501", "PAYOUT_FORBIDDEN: x", 403, "FORBIDDEN", /owner/i],
-    ["40001", "serialization failure", 500, "INTERNAL_ERROR", /serialization/i],
+    ["40001", "serialization failure", 500, "INTERNAL_ERROR", /^Something went wrong on our end/],
   ])("maps %s %s to %i %s", async (code, message, status, errorCode, expected) => {
     mockRpc.mockResolvedValue({ data: null, error: { code, message } });
     const res = await post(validBody);

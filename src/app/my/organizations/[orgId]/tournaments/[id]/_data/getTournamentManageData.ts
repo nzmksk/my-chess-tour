@@ -3,6 +3,10 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
+import {
+  INTERNAL_ERROR_MESSAGE,
+  logInternalError,
+} from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -68,13 +72,27 @@ export type TournamentManageResult =
       message: string;
     };
 
+type TournamentManageFailure = Extract<TournamentManageResult, { ok: false }>;
+
+// Both the manage page and the API route surface `message`, so a database
+// error is logged here and replaced with the generic text.
+function internalError(context: string, cause: unknown): TournamentManageFailure {
+  logInternalError(`Tournament manage data: ${context}`, cause);
+  return {
+    ok: false,
+    status: 500,
+    code: "INTERNAL_ERROR",
+    message: INTERNAL_ERROR_MESSAGE,
+  };
+}
+
 // Confirms the signed-in user may manage this org's tournaments (org approved +
 // owner/admin membership). Mirrors the API route's permission gate but returns a
 // typed result instead of an HTTP response so the page can consume it directly.
 async function checkManageAccess(
   orgId: string,
   userId: string,
-): Promise<Extract<TournamentManageResult, { ok: false }> | null> {
+): Promise<TournamentManageFailure | null> {
   const { data: org, error: orgError } = await supabaseAdmin
     .from("organizations")
     .select("id, approval_status")
@@ -91,12 +109,7 @@ async function checkManageAccess(
         message: "Organization not found",
       };
     }
-    return {
-      ok: false,
-      status: 500,
-      code: "INTERNAL_ERROR",
-      message: orgError.message,
-    };
+    return internalError(`failed to load organization ${orgId}`, orgError);
   }
 
   if (org.approval_status !== "approved") {
@@ -192,12 +205,7 @@ export const getTournamentManageData = cache(
           message: "Tournament not found",
         };
       }
-      return {
-        ok: false,
-        status: 500,
-        code: "INTERNAL_ERROR",
-        message: tErr.message,
-      };
+      return internalError(`failed to load tournament ${id}`, tErr);
     }
 
     // Terminalize this tournament's lapsed pending checkouts before listing so
@@ -223,12 +231,7 @@ export const getTournamentManageData = cache(
       .order("registered_at", { ascending: true });
 
     if (regErr) {
-      return {
-        ok: false,
-        status: 500,
-        code: "INTERNAL_ERROR",
-        message: regErr.message,
-      };
+      return internalError(`failed to load registrations for ${id}`, regErr);
     }
 
     const registrations = (regs ?? []) as Array<{

@@ -1,5 +1,6 @@
 import { describeRecipientProblem } from "@/services/payouts/recipient-problem";
 import { NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 /**
  * Turns an error from nominate_payout_beneficiary / accept_payout_nomination /
@@ -54,11 +55,17 @@ export function nominationErrorResponse(
         409,
       );
     }
-    return respond("CONFLICT", error.message, 409);
+    // A refusal this map doesn't know yet: still a conflict, but its text is
+    // the database's, so log it rather than show it.
+    console.warn(`Payout nomination: unmapped refusal ${action}`, error.message);
+    return respond(
+      "CONFLICT",
+      "This nomination can't be changed right now",
+      409,
+    );
   }
-  console.error(
+  return internalErrorResponse(
     `Payout nomination: unexpected error ${action}`,
-    error.code ? `${error.code}: ${error.message}` : error.message,
+    error,
   );
-  return respond("INTERNAL_ERROR", error.message, 500);
 }

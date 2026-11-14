@@ -4,6 +4,7 @@ import {
   hasOrgPermission,
 } from "@/services/supabase/permission";
 import { NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 export const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,7 +42,15 @@ export async function authorizeOrgPermission(
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (error) return fail("INTERNAL_ERROR", error.message, 500);
+  if (error) {
+    return {
+      ok: false,
+      response: internalErrorResponse(
+        `Org permission check (${permission}): failed to load organization ${orgId}`,
+        error,
+      ),
+    };
+  }
   if (!org) return fail("NOT_FOUND", "Organization not found", 404);
   if ((org as { approval_status: string }).approval_status !== "approved") {
     return fail("FORBIDDEN", "Organization is not approved", 403);

@@ -5,6 +5,7 @@ import {
 } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import { validateOrgUpdate } from "./validators";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -69,9 +70,9 @@ export async function PATCH(
 
   if (readError || !existing) {
     if (readError && readError.code !== "PGRST116") {
-      return NextResponse.json(
-        { error: { code: "INTERNAL_ERROR", message: readError.message } },
-        { status: 500 },
+      return internalErrorResponse(
+        "PATCH /api/v1/organizations/[orgId]: readError",
+        readError,
       );
     }
     return NextResponse.json(
@@ -110,9 +111,9 @@ export async function PATCH(
         { status: 409 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: updateError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "PATCH /api/v1/organizations/[orgId]: updateError",
+      updateError,
     );
   }
 

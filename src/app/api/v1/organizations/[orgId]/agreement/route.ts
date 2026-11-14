@@ -5,6 +5,7 @@ import {
 } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -95,16 +96,16 @@ export async function POST(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: orgError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/agreement: orgError",
+      orgError,
     );
   }
 
   if (memberError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: memberError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/agreement: memberError",
+      memberError,
     );
   }
 
@@ -152,9 +153,9 @@ export async function POST(
     .single();
 
   if (updateError) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: updateError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/agreement: updateError",
+      updateError,
     );
   }
 

@@ -205,8 +205,9 @@ describe("PUT .../beneficiary", () => {
     ["P0001", "NOMINATION_SELF: x", 409, /cannot nominate itself/i],
     ["P0001", "NOMINATION_CLOSED: x", 409, /cancelled/i],
     ["P0001", "tournament x has paid registrations; these fields are locked: beneficiary_organization_id", 409, /locked once a player has paid/i],
+    ["P0001", "SOME_NEW_SENTINEL: internal detail", 409, /^This nomination can't be changed right now$/],
     ["P0002", "tournament x not found", 404, /not found/i],
-    ["40001", "serialization failure", 500, /serialization/i],
+    ["40001", "serialization failure", 500, /^Something went wrong on our end/],
   ])("maps %s %s to %i", async (code, message, status, expected) => {
     mockRpc.mockResolvedValue({ data: null, error: { code, message } });
     const res = await callNominate({ beneficiary_organization_id: NOMINEE });

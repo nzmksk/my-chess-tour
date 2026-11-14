@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,7 +15,8 @@ type AuthorizeErr = { ok: false; response: NextResponse };
  * owner/admin of it. Mirrors the inline checks in the sibling publish/PATCH
  * routes but returns a typed result so callers can proceed once authorized.
  *
- * `action` is only used to phrase the 403 message (e.g. "close registration").
+ * `action` phrases the 403 message (e.g. "close registration") and labels the
+ * log line of an unexpected failure.
  */
 export async function authorizeTournamentManager(
   orgId: string,
@@ -53,7 +55,13 @@ export async function authorizeTournamentManager(
     if (orgError.code === "PGRST116") {
       return err("NOT_FOUND", "Organization not found", 404);
     }
-    return err("INTERNAL_ERROR", orgError.message, 500);
+    return {
+      ok: false,
+      response: internalErrorResponse(
+        `Tournament ${action}: failed to load organization ${orgId}`,
+        orgError,
+      ),
+    };
   }
 
   if (org.approval_status !== "approved") {

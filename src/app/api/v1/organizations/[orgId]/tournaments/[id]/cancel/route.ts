@@ -3,6 +3,7 @@ import { getTournamentDateState } from "@/app/tournaments/utils";
 import { getTodayInTimeZone, resolveTimeZone } from "@/lib/tournaments/datetime";
 import { authorizeTournamentManager } from "../_lib/authorize";
 import { NextRequest, NextResponse } from "next/server";
+import { internalErrorResponse } from "@/lib/http/internal-error";
 
 interface CancelBody {
   reason?: unknown;
@@ -63,9 +64,9 @@ export async function POST(
         { status: 404 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: tErr.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/tournaments/[id]/cancel: tErr",
+      tErr,
     );
   }
 
@@ -126,9 +127,9 @@ export async function POST(
         { status: 409 },
       );
     }
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: insertError.message } },
-      { status: 500 },
+    return internalErrorResponse(
+      "POST /api/v1/organizations/[orgId]/tournaments/[id]/cancel: insertError",
+      insertError,
     );
   }
 
