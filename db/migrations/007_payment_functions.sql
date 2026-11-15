@@ -1532,6 +1532,127 @@ AS $$
 $$;
 
 -- =============================================
+-- TOURNAMENT END INSTANT
+-- The instant a tournament is considered finished, as an absolute timestamptz.
+-- The automatic payout is due PAYOUT_HOLD_DAYS after it.
+--
+-- end_date is a calendar date at the venue (tournaments.timezone), so its end is
+-- local midnight at the close of that day. `timestamp AT TIME ZONE zone` reads a
+-- wall-clock time in that zone, which makes this DST-safe and correct per
+-- tournament: a GMT+9 venue ends an hour before a GMT+8 one with the same
+-- end_date. Never compare against current_date instead: that is the server's
+-- UTC date, eight hours off what a Malaysian organizer sees.
+--
+-- Seam for tournament schedules (planned, not built). When they land, the last
+-- scheduled session's end goes FIRST in the COALESCE:
+--   (SELECT max(s.ends_at) FROM tournament_schedule_items s WHERE s.tournament_id = t.id),
+-- Whatever table that feature creates must expose a per-tournament
+-- `ends_at timestamptz`, an absolute instant rather than a local time, so that
+-- nothing else here changes and every caller is already correct. The table
+-- doesn't exist yet, and a SQL function body can't name a missing table, so for
+-- now the COALESCE holds the fallback alone.
+--
+-- Not SECURITY DEFINER: it only reads tournaments, so it can run as the caller,
+-- and that lets the planner inline it into list_payable_tournaments.
+-- =============================================
+CREATE OR REPLACE FUNCTION tournament_end_instant(p_tournament_id uuid)
+RETURNS timestamptz
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    -- the schedule branch goes here
+    ((t.end_date + 1)::timestamp AT TIME ZONE t.timezone)
+  )
+  FROM tournaments t
+  WHERE t.id = p_tournament_id;
+$$;
+
+-- =============================================
+-- LIST PAYABLE TOURNAMENTS
+-- The automatic payout sweep's work list (POST /api/v1/cron/payouts), encapsulating
+-- the join the way list_pending_cancellation_refunds does for refunds. A tournament
+-- is payable when ALL of these hold:
+--
+--   * it is published (never draft, never cancelled);
+--   * tournament_end_instant + p_hold_days has passed. One instant comparison, so
+--     the sweep passes no calendar date and its schedule needs no timezone;
+--   * nothing is in the way (tournament_payout_block_reason): no cancellation
+--     under review and no player refund still unsettled;
+--   * the recipient (the ACCEPTED beneficiary, else the organizing org) can be paid
+--     (payout_recipient_problem): approved, entity type set, current agreement, an
+--     active verified bank account with a CHIP id;
+--   * no payout is in flight for it, of either kind. A rejected early request keeps
+--     status 'pending' but reserves nothing, so it doesn't count;
+--   * it has no live automatic payout (one not failed). A failed one is retried,
+--     as queue_payout's superseded_by expects;
+--   * at least p_min_cents is available.
+--
+-- The recipient and block rules are the same functions queue_payout applies, so a
+-- listed tournament is one queue_payout accepts, barring a race it reports itself.
+-- A tournament left off for a recipient problem is still shown, with the reason, by
+-- list_admin_payout_candidates.
+--
+-- p_as_of is "now" for the deadline. Callers leave it to default; it exists so the
+-- tests can stand at an exact instant either side of a deadline, which now()
+-- (fixed for a whole transaction) doesn't allow.
+-- =============================================
+CREATE OR REPLACE FUNCTION list_payable_tournaments(
+  p_hold_days integer,
+  p_min_cents integer,
+  p_as_of     timestamptz DEFAULT now()
+)
+RETURNS TABLE (
+  tournament_id             uuid,
+  tournament_name           varchar(255),
+  recipient_organization_id uuid,
+  end_instant               timestamptz,
+  available_cents           integer
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH ended AS (
+    SELECT t.id,
+           t.name,
+           tournament_end_instant(t.id) AS end_instant,
+           CASE WHEN t.beneficiary_accepted_at IS NOT NULL
+                THEN t.beneficiary_organization_id
+                ELSE t.organization_id
+           END AS recipient_id
+    FROM tournaments t
+    WHERE t.status = 'published'
+      AND t.organization_id IS NOT NULL
+  ),
+  candidates AS (
+    SELECT e.*, available_payout_cents(e.id) AS available
+    FROM ended e
+    WHERE e.end_instant + make_interval(days => p_hold_days) <= p_as_of
+      AND tournament_payout_block_reason(e.id) IS NULL
+      AND payout_recipient_problem(e.recipient_id) IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM payouts p
+        WHERE p.tournament_id = e.id
+          AND p.approval <> 'rejected'
+          AND p.status IN ('pending', 'processing')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM payouts p
+        WHERE p.tournament_id = e.id
+          AND p.kind = 'automatic'
+          AND p.status <> 'failed'
+      )
+  )
+  SELECT c.id, c.name, c.recipient_id, c.end_instant, c.available
+  FROM candidates c
+  WHERE c.available >= p_min_cents
+  ORDER BY c.end_instant, c.id;
+$$;
+
+-- =============================================
 -- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
 -- Same reasoning as the block at the end of 003_functions_triggers.sql: these
 -- SECURITY DEFINER functions trust their arguments, and the checkout route,
@@ -1563,6 +1684,7 @@ REVOKE EXECUTE ON FUNCTION settle_payout                     FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION list_organization_payout_overview FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_pending_payout_nominations   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_admin_payout_candidates      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_payable_tournaments          FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
 GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
@@ -1583,3 +1705,4 @@ GRANT EXECUTE ON FUNCTION settle_payout                     TO service_role;
 GRANT EXECUTE ON FUNCTION list_organization_payout_overview TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_payout_nominations   TO service_role;
 GRANT EXECUTE ON FUNCTION list_admin_payout_candidates      TO service_role;
+GRANT EXECUTE ON FUNCTION list_payable_tournaments          TO service_role;
