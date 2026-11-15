@@ -8,6 +8,7 @@ import {
   timeZoneAbbreviation,
   toLocalDateTimeInput,
 } from "@/lib/tournaments/datetime";
+import { resolveCountry } from "@/lib/reference/countries";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -22,6 +23,11 @@ const FORMATS = {
 
 type ExportFormat = keyof typeof FORMATS;
 
+const GENDER_LABELS: Record<string, string> = {
+  male: "Male",
+  female: "Female",
+};
+
 const STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmed",
   pending_payment: "Pending payment",
@@ -34,14 +40,19 @@ function toTitleCase(str: string): string {
 /**
  * The roster as spreadsheet rows, header first. Columns are what pairing
  * software (Swiss-Manager and the like) imports, plus the registration's own
- * state, and nothing beyond what the privacy policy says organizers receive.
+ * state, and nothing beyond what the privacy policy's "Sharing of Data"
+ * section says organisers receive.
  * Times are wall-clock in the venue's timezone, as on the manage page.
  */
 function rosterRows(entries: RosterEntry[], timeZone: string): Row[] {
   const header: Row = [
     "#",
+    "Title",
     "First name",
     "Last name",
+    "Gender",
+    "Date of birth",
+    "Nationality",
     "FIDE ID",
     "FIDE rating",
     "MCF ID",
@@ -56,8 +67,13 @@ function rosterRows(entries: RosterEntry[], timeZone: string): Row[] {
     ...entries.map(
       (e): Row => [
         e.index,
+        e.title,
         e.first_name ?? "",
         e.last_name ?? "",
+        e.gender ? GENDER_LABELS[e.gender] : null,
+        e.date_of_birth,
+        // Stored as the dropdown's country name; older rows may hold a code.
+        resolveCountry(e.nationality)?.name ?? e.nationality,
         e.fide_id,
         e.fide_rating,
         e.mcf_id,

@@ -55,6 +55,10 @@ const ENTRIES = [
     user_id: "u1",
     first_name: "Alice",
     last_name: "Tan, Jr.",
+    title: "WFM",
+    gender: "female",
+    date_of_birth: "2008-03-14",
+    nationality: "MY",
     fide_id: 5701234,
     fide_rating: 1750,
     mcf_id: 1234,
@@ -70,6 +74,10 @@ const ENTRIES = [
     user_id: "u2",
     first_name: "=cmd",
     last_name: "Lim",
+    title: null,
+    gender: null,
+    date_of_birth: null,
+    nationality: null,
     fide_id: null,
     fide_rating: null,
     mcf_id: null,
@@ -108,9 +116,9 @@ describe("GET participants/export", () => {
     const csv = await res.text();
     // Response.text() drops the BOM; check the raw bytes for it separately.
     expect(csv.split("\r\n")).toEqual([
-      "#,First name,Last name,FIDE ID,FIDE rating,MCF ID,National rating,Fee tier,Status,Registered (MYT)",
-      '1,Alice,"Tan, Jr.",5701234,1750,1234,1690,Standard,Confirmed,2026-11-01 10:30',
-      "2,'=cmd,Lim,,,,,Student U18,Pending payment,2026-11-03 00:05",
+      "#,Title,First name,Last name,Gender,Date of birth,Nationality,FIDE ID,FIDE rating,MCF ID,National rating,Fee tier,Status,Registered (MYT)",
+      '1,WFM,Alice,"Tan, Jr.",Female,2008-03-14,Malaysia,5701234,1750,1234,1690,Standard,Confirmed,2026-11-01 10:30',
+      "2,,'=cmd,Lim,,,,,,,,Student U18,Pending payment,2026-11-03 00:05",
       "",
     ]);
   });

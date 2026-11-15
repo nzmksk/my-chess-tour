@@ -142,6 +142,10 @@ describe("loadRoster", () => {
       data: [
         {
           user_id: ALICE,
+          title: "WFM",
+          gender: "female",
+          date_of_birth: "2008-03-14",
+          nationality: "Malaysia",
           fide_id: 5701234,
           fide_rating: { standard: 1800, rapid: 1750 },
           mcf_id: 1234,
@@ -162,6 +166,10 @@ describe("loadRoster", () => {
           user_id: ALICE,
           first_name: "Alice",
           last_name: "Tan",
+          title: "WFM",
+          gender: "female",
+          date_of_birth: "2008-03-14",
+          nationality: "Malaysia",
           fide_id: 5701234,
           fide_rating: 1750,
           mcf_id: 1234,
@@ -176,6 +184,10 @@ describe("loadRoster", () => {
           user_id: BOB,
           first_name: "Bob",
           last_name: "Lim",
+          title: null,
+          gender: null,
+          date_of_birth: null,
+          nationality: null,
           fide_id: null,
           fide_rating: null,
           mcf_id: null,
@@ -186,6 +198,30 @@ describe("loadRoster", () => {
         },
       ],
     });
+  });
+
+  // The privacy policy promises organisers never see these.
+  it("never reads OKU status, contact or bank details", async () => {
+    builders.registrations.result = {
+      data: [
+        {
+          id: "r1",
+          user_id: ALICE,
+          fee_tier: "standard",
+          status: "confirmed",
+          registered_at: "2026-11-01T02:00:00+00:00",
+        },
+      ],
+      error: null,
+    };
+    await loadRoster(TOUR_ID, "rapid");
+
+    const columns = [
+      ...(builders.users.select as ReturnType<typeof vi.fn>).mock.calls,
+      ...(builders.player_profiles.select as ReturnType<typeof vi.fn>).mock
+        .calls,
+    ].join(",");
+    expect(columns).not.toMatch(/oku|email|bank|avatar/);
   });
 
   it("skips the player lookups when nobody has registered", async () => {

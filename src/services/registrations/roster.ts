@@ -5,8 +5,10 @@ import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
  * One player on a tournament's roster: a live registration (confirmed, or
  * pending payment) joined to the player's name and chess identity.
  *
- * Only what the privacy policy says organizers receive — name, FIDE/MCF ID and
- * rating — plus the registration's own fields. The manage page and the
+ * Only what the privacy policy's "Sharing of Data" section says organisers
+ * receive — name, title, FIDE/MCF IDs and ratings, gender, date of birth and
+ * nationality — plus the registration's own fields. Never OKU status or
+ * contact details. The manage page and the
  * participant export both read this, so they always agree on who is on it.
  */
 export interface RosterEntry {
@@ -16,6 +18,13 @@ export interface RosterEntry {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
+  /** FIDE title (GM, WIM, …). */
+  title: string | null;
+  gender: "male" | "female" | null;
+  /** Calendar date, "YYYY-MM-DD". */
+  date_of_birth: string | null;
+  /** As stored: a country name from the CountryDropdown. */
+  nationality: string | null;
   fide_id: number | null;
   /** The FIDE rating for the tournament's format; see pickFideRating. */
   fide_rating: number | null;
@@ -100,6 +109,10 @@ export async function loadRoster(
   type UserRow = { id: string; first_name: string; last_name: string };
   type ProfileRow = {
     user_id: string;
+    title: string | null;
+    gender: "male" | "female" | null;
+    date_of_birth: string | null;
+    nationality: string | null;
     fide_id: number | null;
     fide_rating: Record<string, number> | null;
     mcf_id: number | null;
@@ -117,7 +130,9 @@ export async function loadRoster(
         .in("id", userIds),
       supabaseAdmin
         .from("player_profiles")
-        .select("user_id, fide_id, fide_rating, mcf_id, national_rating")
+        .select(
+          "user_id, title, gender, date_of_birth, nationality, fide_id, fide_rating, mcf_id, national_rating",
+        )
         .in("user_id", userIds),
     ]);
 
@@ -151,6 +166,10 @@ export async function loadRoster(
       user_id: reg.user_id,
       first_name: u?.first_name ?? null,
       last_name: u?.last_name ?? null,
+      title: p?.title ?? null,
+      gender: p?.gender ?? null,
+      date_of_birth: p?.date_of_birth ?? null,
+      nationality: p?.nationality ?? null,
       fide_id: p?.fide_id ?? null,
       fide_rating: pickFideRating(p?.fide_rating, formatType),
       mcf_id: p?.mcf_id ?? null,
