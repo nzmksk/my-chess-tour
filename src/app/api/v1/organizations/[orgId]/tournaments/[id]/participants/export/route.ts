@@ -53,6 +53,7 @@ function rosterRows(entries: RosterEntry[], timeZone: string): Row[] {
     "Gender",
     "Date of birth",
     "Nationality",
+    "OKU",
     "FIDE ID",
     "FIDE rating",
     "MCF ID",
@@ -74,6 +75,7 @@ function rosterRows(entries: RosterEntry[], timeZone: string): Row[] {
         e.date_of_birth,
         // Stored as the dropdown's country name; older rows may hold a code.
         resolveCountry(e.nationality)?.name ?? e.nationality,
+        e.is_oku ? "Yes" : "No",
         e.fide_id,
         e.fide_rating,
         e.mcf_id,

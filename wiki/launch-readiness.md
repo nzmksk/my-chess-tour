@@ -97,7 +97,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Prize disbursement to players | P14, P7 | ❌ | 🟡 | Manual; same timing/mechanism as payouts. |
 | Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ✅ built, not applied | 🟡 | Run `db/maintenance/apply_ledger_integrity.sql` against staging and production (#502). Payments taken before that have no recorded tier. |
 | Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅; player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510, #511, #512). |
-| Participant CSV / Excel export | O8 | ✅ | — | Export CSV / Export Excel on the manage page (#90): name, title, gender, date of birth, nationality, FIDE/MCF IDs and ratings, fee tier, status, registration time. |
+| Participant CSV / Excel export | O8 | ✅ | — | Export CSV / Export Excel on the manage page (#90): name, title, gender, date of birth, nationality, verified OKU, FIDE/MCF IDs and ratings, fee tier, status, registration time. |
 | Non-auth transactional emails | S4, O1, P6, P9 | ⚠️ most ship | 🟡 | Registration confirmation (#119), application result (#120), OKU result (#449), cancellation, payout and nomination emails ship. Still missing: refund outcome (#512), member invite (#121), tournament reminders. |
 | Player-initiated registration cancellation | P12 | ❌ | 🟡 | Player forfeits; support handles case-by-case. |
 | Admin tournaments / transactions / users pages | A4, A5, A6 | ❌ | 🟡 | Use the Supabase dashboard directly. |

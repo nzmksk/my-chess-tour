@@ -796,7 +796,7 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
 
 Downloads the roster the manage page shows (confirmed and pending-payment registrations, in registration order) for seeding pairing software. The response is an attachment named `<slug>-participants.csv|xlsx`, sent `Cache-Control: private, no-store`.
 
-**Columns:** `#`, Title, First name, Last name, Gender, Date of birth (`YYYY-MM-DD`), Nationality, FIDE ID, FIDE rating (for the tournament's format, falling back to slower time controls), MCF ID, National rating, Fee tier, Status, Registered (wall-clock in the venue's timezone, e.g. `Registered (MYT)`). Exactly what `/privacy` ("Sharing of Data") says organisers receive — never OKU status or contact details. Adding a column means updating the policy first.
+**Columns:** `#`, Title, First name, Last name, Gender, Date of birth (`YYYY-MM-DD`), Nationality, OKU (`Yes` only when admin-verified; pending and rejected read `No`), FIDE ID, FIDE rating (for the tournament's format, falling back to slower time controls), MCF ID, National rating, Fee tier, Status, Registered (wall-clock in the venue's timezone, e.g. `Registered (MYT)`). Exactly what `/privacy` ("Sharing of Data") says organisers receive — never the OKU card, a pending or rejected OKU application, or contact details. Adding a column means updating the policy first.
 
 CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=`, `+`, `-`, `@`) is prefixed with `'`. The workbook holds no formulas.
 

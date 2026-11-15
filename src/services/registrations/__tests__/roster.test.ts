@@ -146,6 +146,7 @@ describe("loadRoster", () => {
           gender: "female",
           date_of_birth: "2008-03-14",
           nationality: "Malaysia",
+          oku_status: "verified",
           fide_id: 5701234,
           fide_rating: { standard: 1800, rapid: 1750 },
           mcf_id: 1234,
@@ -170,6 +171,7 @@ describe("loadRoster", () => {
           gender: "female",
           date_of_birth: "2008-03-14",
           nationality: "Malaysia",
+          is_oku: true,
           fide_id: 5701234,
           fide_rating: 1750,
           mcf_id: 1234,
@@ -188,6 +190,7 @@ describe("loadRoster", () => {
           gender: null,
           date_of_birth: null,
           nationality: null,
+          is_oku: false,
           fide_id: null,
           fide_rating: null,
           mcf_id: null,
@@ -200,8 +203,33 @@ describe("loadRoster", () => {
     });
   });
 
+  it.each(["none", "pending", "rejected"])(
+    "only a verified OKU status counts, not %s",
+    async (okuStatus) => {
+      builders.registrations.result = {
+        data: [
+          {
+            id: "r1",
+            user_id: ALICE,
+            fee_tier: "standard",
+            status: "confirmed",
+            registered_at: "2026-11-01T02:00:00+00:00",
+          },
+        ],
+        error: null,
+      };
+      builders.player_profiles.result = {
+        data: [{ user_id: ALICE, oku_status: okuStatus }],
+        error: null,
+      };
+
+      const result = await loadRoster(TOUR_ID, "rapid");
+      expect(result.ok && result.entries[0].is_oku).toBe(false);
+    },
+  );
+
   // The privacy policy promises organisers never see these.
-  it("never reads OKU status, contact or bank details", async () => {
+  it("never reads the OKU card, contact or bank details", async () => {
     builders.registrations.result = {
       data: [
         {
@@ -221,7 +249,9 @@ describe("loadRoster", () => {
       ...(builders.player_profiles.select as ReturnType<typeof vi.fn>).mock
         .calls,
     ].join(",");
-    expect(columns).not.toMatch(/oku|email|bank|avatar/);
+    expect(columns).not.toMatch(
+      /oku_document|oku_rejection|oku_review|email|bank|avatar/,
+    );
   });
 
   it("skips the player lookups when nobody has registered", async () => {
