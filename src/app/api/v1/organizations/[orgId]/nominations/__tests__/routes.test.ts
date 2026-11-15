@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 
 // One file for the three nomination routes: they share a gate and an error mapping.
 
@@ -24,7 +25,7 @@ const {
 
     function makeBuilder(table: string) {
       const b: Record<string, unknown> = {};
-      for (const m of ["select", "is", "maybeSingle", "order", "limit"]) {
+      for (const m of ["select", "is", "in", "maybeSingle", "order", "limit"]) {
         b[m] = vi.fn(() => b);
       }
       b.eq = vi.fn((col: string, val: unknown) => {
@@ -86,6 +87,25 @@ const NOMINEE = "bbbbbbbb-0000-4000-8000-000000000002";
 const T_ID = "cccccccc-0000-4000-8000-000000000001";
 const URL_BASE = "http://localhost/api/v1/organizations";
 
+// The venue's today, which is what the date stages are read against.
+const TZ = "Asia/Kuala_Lumpur";
+const TODAY = getTodayInTimeZone(TZ);
+
+/** A tournament row as the routes read it, upcoming unless overridden. */
+function tournamentRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: T_ID,
+    status: "published",
+    start_date: "2099-12-01",
+    end_date: "2099-12-02",
+    timezone: TZ,
+    ...overrides,
+  };
+}
+
+const STARTED = { start_date: TODAY, end_date: "2099-12-02" };
+const ENDED = { start_date: "2020-01-01", end_date: "2020-01-02" };
+
 const callList = () =>
   listNominations(new NextRequest(`${URL_BASE}/${ORG_ID}/nominations`), {
     params: Promise.resolve({ orgId: ORG_ID }),
@@ -124,7 +144,7 @@ beforeEach(() => {
   mockHasPermission.mockResolvedValue(true);
   mockRpc.mockResolvedValue({ data: { tournament_id: T_ID }, error: null });
   tables.organizations = [{ data: { id: ORG_ID, approval_status: "approved" }, error: null }];
-  tables.tournaments = [{ data: { id: T_ID }, error: null }];
+  tables.tournaments = [{ data: tournamentRow(), error: null }];
 });
 
 // ---------------------------------------------------------------------------
@@ -191,12 +211,46 @@ describe("PUT .../beneficiary", () => {
     expect(res.status).toBe(400);
   });
 
+  it("500s when the tournament lookup fails", async () => {
+    tables.tournaments = [{ data: null, error: { message: "db down" } }];
+    const res = await callNominate({ beneficiary_organization_id: NOMINEE });
+    expect(res.status).toBe(500);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
   it("404s on another organization's tournament", async () => {
     tables.tournaments = [{ data: null, error: null }];
     const res = await callNominate({ beneficiary_organization_id: NOMINEE });
     expect(res.status).toBe(404);
     expect(eqCalls).toContainEqual(["organization_id", ORG_ID]);
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["started", STARTED, /has started/i],
+    ["ended", ENDED, /has ended/i],
+  ])("409s once the tournament has %s", async (_label, dates, expected) => {
+    tables.tournaments = [{ data: tournamentRow(dates), error: null }];
+    const res = await callNominate({ beneficiary_organization_id: NOMINEE });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toMatch(expected);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockNotifyNominated).not.toHaveBeenCalled();
+  });
+
+  it("409s a withdrawal once the tournament has started", async () => {
+    tables.tournaments = [{ data: tournamentRow(STARTED), error: null }];
+    const res = await callNominate({ beneficiary_organization_id: null });
+    expect(res.status).toBe(409);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("leaves a draft's placeholder dates out of it", async () => {
+    tables.tournaments = [
+      { data: tournamentRow({ status: "draft", ...ENDED }), error: null },
+    ];
+    const res = await callNominate({ beneficiary_organization_id: NOMINEE });
+    expect(res.status).toBe(200);
   });
 
   it.each([
@@ -225,6 +279,7 @@ describe("GET .../nominations", () => {
   it("lists what is waiting on this organization", async () => {
     const rows = [{ tournament_id: T_ID, tournament_name: "KL Open" }];
     mockRpc.mockResolvedValue({ data: rows, error: null });
+    tables.tournaments = [{ data: [tournamentRow()], error: null }];
     const res = await callList();
     expect(res.status).toBe(200);
     expect(mockRpc).toHaveBeenCalledWith("list_pending_payout_nominations", {
@@ -233,9 +288,84 @@ describe("GET .../nominations", () => {
     expect((await res.json()).data).toEqual(rows);
   });
 
+  it("leaves out nominations for tournaments that have started or ended", async () => {
+    const STARTED_ID = "cccccccc-0000-4000-8000-000000000002";
+    const ENDED_ID = "cccccccc-0000-4000-8000-000000000003";
+    mockRpc.mockResolvedValue({
+      data: [
+        { tournament_id: T_ID, tournament_name: "Upcoming" },
+        { tournament_id: STARTED_ID, tournament_name: "Started" },
+        { tournament_id: ENDED_ID, tournament_name: "Ended" },
+      ],
+      error: null,
+    });
+    tables.tournaments = [
+      {
+        data: [
+          tournamentRow(),
+          tournamentRow({ id: STARTED_ID, ...STARTED }),
+          tournamentRow({ id: ENDED_ID, ...ENDED }),
+        ],
+        error: null,
+      },
+    ];
+    const res = await callList();
+    expect((await res.json()).data).toEqual([
+      { tournament_id: T_ID, tournament_name: "Upcoming" },
+    ]);
+  });
+
+  it("skips the date lookup when nothing is pending", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    const res = await callList();
+    expect((await res.json()).data).toEqual([]);
+    expect(mockFrom).not.toHaveBeenCalledWith("tournaments");
+  });
+
+  it("treats a null list as empty", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: null });
+    const res = await callList();
+    expect((await res.json()).data).toEqual([]);
+  });
+
+  it("lists nothing it couldn't find the dates for", async () => {
+    mockRpc.mockResolvedValue({ data: [{ tournament_id: T_ID }], error: null });
+    tables.tournaments = [{ data: null, error: null }];
+    const res = await callList();
+    expect((await res.json()).data).toEqual([]);
+  });
+
+  it("500s when the date lookup fails", async () => {
+    mockRpc.mockResolvedValue({ data: [{ tournament_id: T_ID }], error: null });
+    tables.tournaments = [{ data: null, error: { message: "db down" } }];
+    expect((await callList()).status).toBe(500);
+  });
+
   it("500s when the list fails", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: "db down" } });
     expect((await callList()).status).toBe(500);
+  });
+});
+
+describe.each([
+  ["accept", () => callAccept()],
+  ["decline", () => callDecline()],
+])("%s once the tournament has started", (_label, call) => {
+  it.each([
+    ["started", STARTED, /has started/i],
+    ["ended", ENDED, /has ended/i],
+  ])("409s when it has %s", async (_when, dates, expected) => {
+    tables.tournaments = [{ data: tournamentRow(dates), error: null }];
+    const res = await call();
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toMatch(expected);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
+  });
+
+  it("goes through before the start date", async () => {
+    expect((await call()).status).toBe(200);
+    expect(mockRpc).toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,10 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { authorizeOrgPermission, UUID_RE } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { nominationErrorResponse } from "@/app/api/v1/organizations/_lib/nomination-errors";
+import {
+  BENEFICIARY_LOCK_COLUMNS,
+  beneficiaryLockResponse,
+} from "@/app/api/v1/organizations/_lib/beneficiary-lock";
 import { notifyBeneficiaryNominated } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
@@ -56,7 +60,7 @@ export async function PUT(
   // may not be the one in this URL.
   const { data: tournament, error: lookupError } = await supabaseAdmin
     .from("tournaments")
-    .select("id")
+    .select(`id, ${BENEFICIARY_LOCK_COLUMNS}`)
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
@@ -73,6 +77,11 @@ export async function PUT(
       { status: 404 },
     );
   }
+
+  // Locked once the tournament starts. The RPC and the paid-fields trigger
+  // cover cancellation and payment, but not the dates.
+  const locked = beneficiaryLockResponse(tournament);
+  if (locked) return locked;
 
   const { data, error } = await supabaseAdmin.rpc("nominate_payout_beneficiary", {
     p_tournament_id: id,

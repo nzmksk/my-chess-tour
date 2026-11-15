@@ -27,7 +27,8 @@
 // ongoing is treated as past "paid" whether or not anyone paid.
 //
 // This module is the single place the rule is written down. The PATCH route
-// enforces it, the edit wizard disables what it locks, and
+// enforces it (and the beneficiary and nomination routes, for `beneficiary`),
+// the edit wizard disables what it locks, and
 // guard_tournament_paid_fields (003_functions_triggers.sql) is the database's
 // copy of the "paid" column list. The date-based stages are deliberately not in
 // the database: they depend on today at the venue, and a second definition of
