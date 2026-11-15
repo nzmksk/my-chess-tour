@@ -6,14 +6,15 @@ import {
   isValidRegion,
   timeZoneForRegion,
 } from "@/lib/tournaments/venues";
+import {
+  PLACEHOLDER_DATE,
+  PLACEHOLDER_DEADLINE,
+} from "@/lib/tournaments/publish-validation";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const PLACEHOLDER_DATE = "2099-12-31";
-const PLACEHOLDER_DEADLINE = "2099-12-30T23:59:59Z";
 
 interface FormatInput {
   type?: string;

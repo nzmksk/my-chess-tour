@@ -6,21 +6,18 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/tournaments/cache-tags";
-import { getTodayInTimeZone, resolveTimeZone } from "@/lib/tournaments/datetime";
 import {
-  validatePrizeFunding,
-  validatePrizeStructure,
-  type PrizesJson,
-} from "@/lib/tournaments/prize-funding";
+  getTodayInTimeZone,
+  resolveTimeZone,
+} from "@/lib/tournaments/datetime";
+import type { PrizesJson } from "@/lib/tournaments/prize-funding";
+import { validatePublishable } from "@/lib/tournaments/publish-validation";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const PLACEHOLDER_DATE = "2099-12-31";
-const PLACEHOLDER_DEADLINE = "2099-12-30T23:59:59Z";
 
 interface TournamentRow {
   id: string;
@@ -176,69 +173,12 @@ export async function POST(
     );
   }
 
-  const validationErrors: string[] = [];
   // A start date is a calendar date at the venue, so "still in the future" is
   // judged against the venue's today rather than the server's.
-  const today = getTodayInTimeZone(resolveTimeZone(t.timezone));
-  const now = new Date().toISOString();
-
-  if (!t.name?.trim()) {
-    validationErrors.push("Tournament name is required");
-  }
-  if (!t.venue_name?.trim()) {
-    validationErrors.push("Venue name is required");
-  }
-  if (!t.venue_state?.trim()) {
-    validationErrors.push("Venue state is required");
-  }
-  if (!t.venue_address?.trim()) {
-    validationErrors.push("Venue address is required");
-  }
-
-  if (
-    !t.start_date ||
-    t.start_date === PLACEHOLDER_DATE ||
-    t.start_date <= today
-  ) {
-    validationErrors.push("Start date must be a future date");
-  }
-  if (!t.end_date || t.end_date === PLACEHOLDER_DATE) {
-    validationErrors.push("End date is required");
-  }
-  if (
-    !t.registration_deadline ||
-    t.registration_deadline === PLACEHOLDER_DEADLINE ||
-    t.registration_deadline <= now
-  ) {
-    validationErrors.push("Registration deadline must be a future date");
-  }
-
-  const fmt = t.format;
-  if (!fmt?.type?.trim()) {
-    validationErrors.push("Tournament format type is required");
-  }
-  if (!fmt?.system?.trim()) {
-    validationErrors.push("Tournament system is required");
-  }
-  if (!fmt?.rounds || fmt.rounds < 1) {
-    validationErrors.push("Number of rounds must be at least 1");
-  }
-
-  const tc = t.time_control;
-  if (!tc?.base_minutes || tc.base_minutes < 1) {
-    validationErrors.push("Time control base time is required");
-  }
-
-  if (!t.entry_fees?.standard) {
-    validationErrors.push("Standard entry fee is required");
-  }
-
-  // Entry fees are an administration fee and never fund prizes, so any prize
-  // with money attached has to name where that money actually comes from. See
-  // src/lib/tournaments/prize-funding.ts for the reasoning.
-  validationErrors.push(...validatePrizeFunding(t.prizes));
-  // Special prizes attach to a placed result, so they cannot stand alone.
-  validationErrors.push(...validatePrizeStructure(t.prizes));
+  const validationErrors = validatePublishable(t, {
+    today: getTodayInTimeZone(resolveTimeZone(t.timezone)),
+    now: new Date().toISOString(),
+  });
 
   if (validationErrors.length > 0) {
     return NextResponse.json(
