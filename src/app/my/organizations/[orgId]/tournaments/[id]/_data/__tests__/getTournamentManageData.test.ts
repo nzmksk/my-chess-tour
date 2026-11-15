@@ -4,13 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { builders, mockFrom, mockRpc, mockGetAuthClaims, mockHasGlobal } =
-  vi.hoisted(() => {
+const {
+  builders,
+  mockFrom,
+  mockRpc,
+  mockGetAuthClaims,
+  mockHasGlobal,
+  mockHasOrg,
+} = vi.hoisted(() => {
     function makeBuilder() {
       const b: Record<string, unknown> & {
         result: { data: unknown; error: unknown; count?: number };
       } = { result: { data: null, error: null } };
-      for (const m of ["select", "eq", "in", "is", "order", "single", "limit"]) {
+      for (const m of ["select", "eq", "neq", "in", "is", "order", "single", "limit"]) {
         b[m] = vi.fn(() => b);
       }
       b.then = (
@@ -29,6 +35,7 @@ const { builders, mockFrom, mockRpc, mockGetAuthClaims, mockHasGlobal } =
       player_profiles: makeBuilder(),
       tournament_cancellation_requests: makeBuilder(),
       payments: makeBuilder(),
+      refunds: makeBuilder(),
     };
 
     return {
@@ -37,6 +44,7 @@ const { builders, mockFrom, mockRpc, mockGetAuthClaims, mockHasGlobal } =
       mockRpc: vi.fn().mockResolvedValue({ data: [], error: null }),
       mockGetAuthClaims: vi.fn(),
       mockHasGlobal: vi.fn(),
+      mockHasOrg: vi.fn(),
     };
   });
 
@@ -47,6 +55,7 @@ vi.mock("@/services/supabase/admin", () => ({
 vi.mock("@/services/supabase/permission", () => ({
   getAuthClaims: mockGetAuthClaims,
   hasGlobalPermission: mockHasGlobal,
+  hasOrgPermission: mockHasOrg,
 }));
 
 import {
@@ -108,9 +117,22 @@ beforeEach(() => {
     count: 0,
   };
   builders.payments.result = { data: null, error: null, count: 0 };
+  builders.refunds.result = { data: [], error: null };
   mockGetAuthClaims.mockResolvedValue({ id: USER_ID });
   mockHasGlobal.mockResolvedValue(true);
+  mockHasOrg.mockResolvedValue(true);
 });
+
+function asOrgOwner() {
+  builders.organizations.result = {
+    data: { id: ORG_ID, approval_status: "approved" },
+    error: null,
+  };
+  builders.organization_memberships.result = {
+    data: { roles: { name: "owner" } },
+    error: null,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -215,6 +237,90 @@ describe("hasPaidRegistration", () => {
       error: { message: "db down" },
     };
     const result = await getAdminTournamentManageData(TOUR_ID);
+    expect(result).toMatchObject({ ok: false, status: 500 });
+  });
+});
+
+describe("refunds", () => {
+  const REG_ID = "dddddddd-0000-0000-0000-000000000001";
+
+  it("lists the tournament's live refunds with player names and state", async () => {
+    asOrgOwner();
+    builders.registrations.result = {
+      data: [
+        {
+          id: REG_ID,
+          user_id: USER_ID,
+          fee_tier: "standard",
+          status: "confirmed",
+          registered_at: "2026-11-01T00:00:00Z",
+        },
+      ],
+      error: null,
+    };
+    builders.users.result = {
+      data: [{ id: USER_ID, first_name: "Farid", last_name: "Zain" }],
+      error: null,
+    };
+    builders.refunds.result = {
+      data: [
+        {
+          id: "rf-1",
+          registration_id: REG_ID,
+          refund_amount_cents: 5500,
+          requested_at: "2026-11-10T00:00:00Z",
+          processed_at: null,
+          failed_at: "2026-11-10T01:00:00Z",
+        },
+        {
+          id: "rf-2",
+          registration_id: "dddddddd-0000-0000-0000-00000000dead",
+          refund_amount_cents: 4000,
+          requested_at: "2026-11-10T00:00:00Z",
+          processed_at: "2026-11-11T00:00:00Z",
+          failed_at: null,
+        },
+      ],
+      error: null,
+    };
+
+    const result = await getTournamentManageData(ORG_ID, TOUR_ID);
+
+    expect(mockHasOrg).toHaveBeenCalledWith(USER_ID, ORG_ID, "refund.manage");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.refunds).toEqual([
+      expect.objectContaining({ id: "rf-1", amount_cents: 5500, state: "failed" }),
+      // Not on the roster: shown, with a placeholder name.
+      expect.objectContaining({ id: "rf-2", player_name: "Player", state: "refunded" }),
+    ]);
+    expect(eqCalls("refunds")).toEqual([["registration.tournament_id", TOUR_ID]]);
+    expect(builders.refunds.neq).toHaveBeenCalledWith("status", "rejected");
+  });
+
+  it("hides refunds from a manager without refund.manage", async () => {
+    asOrgOwner();
+    mockHasOrg.mockResolvedValue(false);
+
+    const result = await getTournamentManageData(ORG_ID, TOUR_ID);
+
+    expect(result.ok && result.data.refunds).toBeNull();
+    expect(mockFrom).not.toHaveBeenCalledWith("refunds");
+  });
+
+  it("shows refunds to a platform admin", async () => {
+    const result = await getAdminTournamentManageData(TOUR_ID);
+
+    expect(result.ok && result.data.refunds).toEqual([]);
+    expect(mockHasOrg).not.toHaveBeenCalled();
+  });
+
+  it("fails the load when refunds can't be read", async () => {
+    builders.refunds.result = { data: null, error: { message: "db down" } };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await getAdminTournamentManageData(TOUR_ID);
+
     expect(result).toMatchObject({ ok: false, status: 500 });
   });
 });
