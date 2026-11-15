@@ -87,8 +87,8 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               FIDE registration
             </li>
             <li>
-              OKU (disability) status — collected solely to facilitate
-              accessibility requirements at events
+              OKU (disability) status — collected to facilitate accessibility
+              requirements at events and for OKU categories and prizes
             </li>
           </ul>
 
@@ -141,16 +141,25 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             <tbody>
               <tr>
                 <td>OKU (disability) status</td>
-                <td>Event accessibility and FIDE Special Needs registration</td>
+                <td>
+                  Event accessibility; FIDE Special Needs registration; OKU
+                  categories and special prizes. Whether you are verified OKU is
+                  shared with the organisers of tournaments you enter — never
+                  your card or the outcome of a pending or rejected application
+                </td>
               </tr>
               <tr>
                 <td>Date of birth</td>
-                <td>Age-category eligibility; identity verification</td>
+                <td>
+                  Age-category eligibility; identity verification; shared with
+                  the organisers of tournaments you enter
+                </td>
               </tr>
               <tr>
                 <td>Gender</td>
                 <td>
-                  Gender-restricted event categories (e.g. Women&apos;s Open)
+                  Gender-restricted event categories (e.g. Women&apos;s Open);
+                  shared with the organisers of tournaments you enter
                 </td>
               </tr>
             </tbody>
@@ -250,7 +259,10 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             <li>
               Sensitive personal data (OKU status, date of birth, gender) and
               financial data (bank details) are restricted to the specific
-              features that need them, and to authorised personnel.
+              features that need them, and to authorised personnel. Date of
+              birth, gender and verified OKU status are also shared with the
+              organisers of tournaments you enter, as described under Sharing of
+              Data.
             </li>
             <li>
               Bank account numbers and document paths are masked in our internal
@@ -307,8 +319,14 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               event registration.
             </li>
             <li>
-              <strong>Tournament organisers</strong> — name, FIDE/MCF ID, and
-              rating for pairing and certification purposes.
+              <strong>Tournament organisers</strong> — for each tournament you
+              enter, its organiser receives your name, title, FIDE and MCF IDs
+              and ratings, gender, date of birth, nationality and whether you
+              are verified OKU, and can download them as a participant list.
+              They use these for pairing, for age, gender and OKU categories and
+              special prizes, and for certification. Your OKU card, any pending
+              or rejected OKU application, and your contact details are not
+              shared.
             </li>
             <li>
               <strong>CHIP (chip-in.asia)</strong> — our licensed payment

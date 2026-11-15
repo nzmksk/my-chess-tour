@@ -97,7 +97,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Prize disbursement to players | P14, P7 | ❌ | 🟡 | Manual; same timing/mechanism as payouts. |
 | Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ✅ built, not applied | 🟡 | Run `db/maintenance/apply_ledger_integrity.sql` against staging and production (#502). Payments taken before that have no recorded tier. |
 | Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅; player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510, #511, #512). |
-| Participant CSV / Excel export | O8 | ❌ | 🟡 | Transcribe from the roster; needed for pairing software (Swiss-Manager etc.). |
+| Participant CSV / Excel export | O8 | ✅ | — | Export CSV / Export Excel on the manage page (#90): name, title, gender, date of birth, nationality, verified OKU, FIDE/MCF IDs and ratings, fee tier, status, registration time. |
 | Non-auth transactional emails | S4, O1, P6, P9 | ⚠️ most ship | 🟡 | Registration confirmation (#119), application result (#120), OKU result (#449), cancellation, payout and nomination emails ship. Still missing: refund outcome (#512), member invite (#121), tournament reminders. |
 | Player-initiated registration cancellation | P12 | ❌ | 🟡 | Player forfeits; support handles case-by-case. |
 | Admin tournaments / transactions / users pages | A4, A5, A6 | ❌ | 🟡 | Use the Supabase dashboard directly. |
@@ -281,7 +281,8 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 
 ### O8. Participant roster / management — ⚠️ Partial
 - **Entry:** tournament manage page → `getTournamentManageData` (roster with statuses, live expiry sweep).
-- **Gaps:** ❌ **no CSV/Excel export** (MVP Flow 4) — organizers need participant lists to seed pairing software 🟡 (#90); ❌ no per-row "refund" / "cancel registration" actions (MVP Flow 4) — this would be the first code to actually check the `refund.manage` permission (#510).
+- **Export:** ✅ CSV / Excel download of the roster for seeding pairing software (#90), via `GET …/tournaments/:id/participants/export?format=csv|xlsx`.
+- **Gaps:** ❌ no per-row "refund" / "cancel registration" actions (MVP Flow 4) — this would be the first code to actually check the `refund.manage` permission (#510).
 
 ### O9. Payout — ⚠️ Built (automatic sweep unverified on staging)
 - **Entry:** the `tournament_payout_summary` **view** aggregates the payments ledger into `net_payout_cents`, surfaced as the dashboard "Pending Payout" stat.
@@ -372,7 +373,7 @@ on the pre-launch list despite being invisible to users. Neither changes behavio
 3. **Data protection — 🟡 (compliance).** Sensitive columns are redacted on the way into `audit_logs` (#516/#518/#503), account deletion anonymises the user's audit history ([runbook](./account-deletion.md)), and `/privacy` now lists audit records in its retention table (S3, #503). Left: run the pre-redaction check against staging and production, and have a second person review the retention wording. Retention/pruning (#507) is the 🟢 follow-on.
 4. **Cheap-now, expensive-later schema — 🟡.** Identity indirection (#501) and ledger integrity (#502) are both **built** while there is still little data to migrate. Left: apply them to staging and production (S7).
 5. **Communications — 🟡.** Registration confirmation, application/OKU results, cancellation and payout emails exist (S4). Still missing: refund outcome (#512), member invite (#121), reminders.
-6. **Organizer event-running tooling — 🟡.** No participant CSV/Excel export (O8, #90) — core to actually running an event (pairing software). Recommend for launch.
+6. **Organizer event-running tooling — ✅.** Participant CSV/Excel export ships (O8, #90), so rosters can seed pairing software.
 7. **Admin tooling — 🟡.** No admin tournaments/transactions/users pages (A4–A6); `/admin/cancellations` is the one operational admin screen beyond applications/OKU. *Interim:* Supabase dashboard.
 8. **Support-load risks — 🟡.** Set-once profile fields with no self-serve correction, and no self-serve email/name change or account deletion (P5); support-email inconsistency (V1, a trivial fix). These convert small user mistakes into support tickets. Deletion is support-run through [account-deletion.md](./account-deletion.md) until a self-serve flow exists, and P16 would make the missing correction path more visible.
 9. **Auth niceties — 🟢.** No OAuth/magic-link (email+password is fine); no logout-everywhere.
@@ -427,7 +428,7 @@ Flow IDs in brackets point back to the detail above.
 - [ ] **[O4/O5]** Test the create wizard → publish (validation + slug) happy path.
 - [x] **[O6]** Decide whether editing a *published* tournament (dates/fees) after registrations is allowed. Decided in #536, see [tournament-editing.md](./tournament-editing.md).
 - [ ] **[O7]** Test cancel end to end: organizer files → admin approves → tournament `cancelled`, players emailed, refunds settle. Then re-run approve to confirm it's idempotent.
-- [ ] **[O8]** Provide participant export (CSV/Excel) or a documented workaround for pairing.
+- [x] **[O8]** Provide participant export (CSV/Excel) or a documented workaround for pairing. Built in #90.
 - [ ] **[O3]** Confirm invite (existing + new user) works; accept that resend/expiry are absent.
 
 **Admin**
