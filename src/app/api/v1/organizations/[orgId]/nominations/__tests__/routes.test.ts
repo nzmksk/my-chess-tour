@@ -25,7 +25,7 @@ const {
 
     function makeBuilder(table: string) {
       const b: Record<string, unknown> = {};
-      for (const m of ["select", "is", "maybeSingle", "order", "limit"]) {
+      for (const m of ["select", "is", "in", "maybeSingle", "order", "limit"]) {
         b[m] = vi.fn(() => b);
       }
       b.eq = vi.fn((col: string, val: unknown) => {
@@ -272,12 +272,53 @@ describe("GET .../nominations", () => {
   it("lists what is waiting on this organization", async () => {
     const rows = [{ tournament_id: T_ID, tournament_name: "KL Open" }];
     mockRpc.mockResolvedValue({ data: rows, error: null });
+    tables.tournaments = [{ data: [tournamentRow()], error: null }];
     const res = await callList();
     expect(res.status).toBe(200);
     expect(mockRpc).toHaveBeenCalledWith("list_pending_payout_nominations", {
       p_org_id: ORG_ID,
     });
     expect((await res.json()).data).toEqual(rows);
+  });
+
+  it("leaves out nominations for tournaments that have started or ended", async () => {
+    const STARTED_ID = "cccccccc-0000-4000-8000-000000000002";
+    const ENDED_ID = "cccccccc-0000-4000-8000-000000000003";
+    mockRpc.mockResolvedValue({
+      data: [
+        { tournament_id: T_ID, tournament_name: "Upcoming" },
+        { tournament_id: STARTED_ID, tournament_name: "Started" },
+        { tournament_id: ENDED_ID, tournament_name: "Ended" },
+      ],
+      error: null,
+    });
+    tables.tournaments = [
+      {
+        data: [
+          tournamentRow(),
+          tournamentRow({ id: STARTED_ID, ...STARTED }),
+          tournamentRow({ id: ENDED_ID, ...ENDED }),
+        ],
+        error: null,
+      },
+    ];
+    const res = await callList();
+    expect((await res.json()).data).toEqual([
+      { tournament_id: T_ID, tournament_name: "Upcoming" },
+    ]);
+  });
+
+  it("skips the date lookup when nothing is pending", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    const res = await callList();
+    expect((await res.json()).data).toEqual([]);
+    expect(mockFrom).not.toHaveBeenCalledWith("tournaments");
+  });
+
+  it("500s when the date lookup fails", async () => {
+    mockRpc.mockResolvedValue({ data: [{ tournament_id: T_ID }], error: null });
+    tables.tournaments = [{ data: null, error: { message: "db down" } }];
+    expect((await callList()).status).toBe(500);
   });
 
   it("500s when the list fails", async () => {
