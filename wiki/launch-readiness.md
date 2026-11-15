@@ -93,7 +93,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Production error monitoring / alerting | S6 | ⚠️ code built, account not set up | 🔴 | Sentry SDK is wired in and inert until configured: follow [error-monitoring.md](./error-monitoring.md) §Setup (#125). Uptime monitor still needed (#572). |
 | Audit-log PII redaction + privacy-policy alignment | S3, P5 | ⚠️ built, scrub not yet run | 🟡 | Run the check in `db/maintenance/scrub_pre_redaction_audit_rows.sql` against staging and production, and get the `/privacy` wording reviewed (#503). |
 | Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | Code landed (#501); migration `009` still needs applying (#161). Follow-on #513. |
-| Organizer payout disbursement | O9, P7 | ⚠️ admin-triggered | 🔴 | CHIP Send payouts exist, triggered by a platform admin; organizers can request admin-approved early payouts (#521). The automatic sweep is #522. |
+| Organizer payout disbursement | O9, P7 | ⚠️ built, unverified on staging | 🟡 | CHIP Send payouts go out automatically 3 days after a tournament ends in its own timezone (#522), or when a platform admin triggers one; organizers can request admin-approved early payouts (#521). |
 | Prize disbursement to players | P14, P7 | ❌ | 🟡 | Manual; same timing/mechanism as payouts. |
 | Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ✅ built, not applied | 🟡 | Run `db/maintenance/apply_ledger_integrity.sql` against staging and production (#502). Payments taken before that have no recorded tier. |
 | Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅; player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510, #511, #512). |
@@ -283,13 +283,14 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 - **Entry:** tournament manage page → `getTournamentManageData` (roster with statuses, live expiry sweep).
 - **Gaps:** ❌ **no CSV/Excel export** (MVP Flow 4) — organizers need participant lists to seed pairing software 🟡 (#90); ❌ no per-row "refund" / "cancel registration" actions (MVP Flow 4) — this would be the first code to actually check the `refund.manage` permission (#510).
 
-### O9. Payout — ⚠️ Partial (admin-triggered; no automatic sweep)
+### O9. Payout — ⚠️ Built (automatic sweep unverified on staging)
 - **Entry:** the `tournament_payout_summary` **view** aggregates the payments ledger into `net_payout_cents`, surfaced as the dashboard "Pending Payout" stat.
 - **Since #518** there is a **recipient**: `organization_bank_accounts` holds one active row per org, superseded (never edited) on change so a `verified` stamp can't outlive the details it verified, and unique on `(bank_code, account_number)` among active rows so one account can't be two organizations' payout destination. Row ids are the deterministic CHIP Send `reference`.
 - **Since #520** money can actually leave: a platform admin triggers a payout from `/admin/payouts`, it goes out through CHIP Send, and `settle_payout` books the `organizer_payout` ledger row. Organizers follow it at `/my/organizations/[orgId]/payouts`, and may nominate another approved organization as beneficiary. See [payout-flow.md](./payout-flow.md).
 - **Since #521** an owner can request up to 50% of net revenue early once registration has closed, at most twice, from the payouts page; a platform admin approves or rejects it at `/admin/payouts/[id]`, which spells out the cap. Admins are emailed when a request is filed and when a payout is parked waiting for CHIP Send budget. A cancellation can no longer be approved once organizer money has left (see O7).
-- **Gaps:** ❌ **no automatic payout** after the tournament ends, and no reconciler for a payout stuck in `processing` (#522).
-- **Priority:** 🔴 — nothing is *due* until the first tournament ends, but until the sweep ships every payout depends on an admin remembering to trigger it.
+- **Since #522** payouts go out on their own: a daily GitHub Actions job (01:00 UTC) calls `POST /api/v1/cron/payouts`, which pays every tournament 3 days after it ends at its venue (`tournament_end_instant`), retries payouts parked on budget, and settles payouts stuck in `processing` from CHIP's record when a webhook was lost.
+- **Gaps:** the sweep hasn't yet been run against staging end to end (seeded ended tournament → send instruction → `paid` → ledger row → "Pending Payout" drains → email, then a re-run). The workflow needs the `CRON_SECRET` and `PRODUCTION_URL` repository secrets, which the FIDE job already uses. Until tournament schedules exist, the end instant is midnight after `end_date`.
+- **Priority:** 🟡 — the code path is complete; what's left is the staging run before the first real tournament ends.
 
 ---
 

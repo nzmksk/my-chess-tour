@@ -2,7 +2,7 @@
 
 How an organization receives its tournament revenue through **CHIP Send**. As in the [payment](./payment-flow.md) and [refund](./refund-flow.md) flows, money state is enforced in Postgres (SECURITY DEFINER functions + row locks), network calls happen outside those transactions, and settlement is idempotent so the synchronous response and the webhook can't double-book.
 
-Scope: the payout machine and the admin trigger (#520), early payouts and their review (#521). The automatic sweep is #522, platform-managed prizes are #523.
+Scope: the payout machine and the admin trigger (#520), early payouts and their review (#521), the automatic sweep and its reconcilers (#522). Platform-managed prizes are #523.
 
 ## What is owed
 
@@ -49,7 +49,23 @@ The claim closes a race. Without it, a cancellation approved after `executePayou
 
 A re-run of a claimed row checks nothing and sends the same reference again, which returns the existing instruction if there is one. The claim was the commitment point.
 
-Nothing re-runs a stalled row on its own yet. An admin can, with **Retry send** on `/admin/payouts` or the review page (`POST /api/v1/admin/payouts/[id]/send`), for any approved payout that is `pending` or claimed without an instruction (`canResend`). The Phase 7 sweep (#522) should cover the same rows.
+The [daily run](#the-daily-run) re-runs these rows on its own: every approved `pending` payout each day, and a claimed one once it has been `processing` for `PAYOUT_STUCK_HOURS`. An admin needn't wait for it: **Retry send** on `/admin/payouts` or the review page (`POST /api/v1/admin/payouts/[id]/send`) does the same for any approved payout that is `pending` or claimed without an instruction (`canResend`).
+
+## The daily run
+
+A GitHub Actions schedule (`.github/workflows/organizer-payouts.yml`, 01:00 UTC = 09:00 MYT) POSTs `/api/v1/cron/payouts` with the shared `CRON_SECRET`, as the FIDE ratings job does. It is the project's only scheduler: there is no `pg_cron` and no platform cron. The route runs three passes from `src/services/payouts/sweep.ts`, in this order:
+
+1. **Stuck payouts.** Anything `processing` for more than `PAYOUT_STUCK_HOURS` (24). With an instruction id, the single-instruction `GET /send/send_instructions/{id}` decides: completed or failed is settled exactly as the webhook would settle it, and anything else is left alone. Never the list endpoint, which CHIP caches for an hour. Claimed with no instruction, it is resumed through `executePayout`, which sends the same reference again. Without this pass a dropped webhook would leave a payout `processing` forever, still reserving its money.
+2. **Pending payouts.** Every approved, unsettled `pending` payout goes back through `executePayout`. That sends a payout parked on budget once the allocation has been approved and the balance has landed, without emailing approvers again while it is still waiting, and re-checks a payout held by a block or a lapsed recipient.
+3. **The sweep.** `list_payable_tournaments(PAYOUT_HOLD_DAYS, MIN_PAYOUT_CENTS)` returns every tournament due an automatic payout. Each is queued (`queue_payout`, `kind='automatic'`, no amount, no requester) and sent, `PAYOUT_CONCURRENCY` at a time. The sweep runs last so a payout it parks on budget isn't retried straight away.
+
+Per-payout failures are counted and the run moves on. The response gives each pass's counts in `executePayout`'s terms (`sent`, `paid`, `failed`, `awaiting_budget`, `blocked`, `skipped`, `error`), plus `swept` and `queued` for the sweep. A pass that can't load its work list makes the run a 500, so the scheduled job shows as failed, but the other passes still run.
+
+**When a tournament is due.** `tournament_end_instant` is local midnight after `end_date` in the tournament's own `timezone`, as an absolute instant: `(end_date + 1)::timestamp AT TIME ZONE timezone`. A tournament is payable once that plus three days has passed, so a GMT+9 venue is paid an hour before a GMT+8 one with the same end date. It is one instant comparison: no calendar date crosses from Node, and `current_date` (the server's UTC date) is never used. The function has a `COALESCE` seam for tournament schedules, which are planned and not built: when they land, the last session's `ends_at` goes first, and every caller is already correct.
+
+**What the sweep lists.** Published; past its end instant plus the hold; no cancellation under review or refund unsettled (`tournament_payout_block_reason`); recipient payable (`payout_recipient_problem`); no payout of either kind in flight, a rejected early request aside; no live automatic payout (a failed one is retried); at least the minimum available. These are the rules `queue_payout` applies, so a listed tournament is one it accepts unless something changed in between, which it refuses itself. A tournament left off because its recipient can't be paid still shows on the admin candidates list with the reason.
+
+**Re-running is always safe**, on four independent layers: `queue_payout`'s `ON CONFLICT DO NOTHING`, the sweep's two in-flight filters, CHIP's `reference` dedupe, and `settle_payout`'s `processed_at` no-op.
 
 ## Early payouts
 
@@ -110,4 +126,5 @@ Both columns are money fields, frozen at the first paid registration, so a nomin
 
 - **One automatic payout per tournament** (`uniq_automatic_payout_per_tournament`). An admin paying part of the balance by hand leaves the rest with no way to be paid until something else allows it. The admin screen warns about this.
 - `current_organizer_agreement_version()` in SQL has to be bumped alongside `ORGANIZER_AGREEMENT_VERSION`. A test fails if they differ.
-- A payout left `processing` by a lost webhook stays reserved until the Phase 7 reconciler exists (#522). One claimed without an instruction can be finished with Retry send; the reconciler should do the same for it, rather than look up an instruction id it doesn't have.
+- A payout left `processing` by a lost webhook stays reserved until the daily run finds it, up to `PAYOUT_STUCK_HOURS` plus a day. Retry send can't finish one that has an instruction; only the reconciler asks CHIP about it.
+- **The end instant ignores the schedule.** Until tournament schedules exist, a tournament ends at midnight after its `end_date`, even if its last round finished in the afternoon. The payout is at most a day later than it would be with the schedule.
