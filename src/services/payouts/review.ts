@@ -53,7 +53,10 @@ export interface PayoutReview {
   request_seq: number | null;
   reason: string | null;
   rejection_reason: string | null;
+  /** Why it failed, in the words an organizer sees. */
   failure_reason: string | null;
+  /** The stored code or CHIP response behind failure_reason. Admins only. */
+  failure_detail: string | null;
   requested_at: string;
   reviewed_at: string | null;
   requested_by: { name: string; email: string } | null;
@@ -261,6 +264,7 @@ export async function loadPayoutReview(
       reason: p.reason,
       rejection_reason: p.rejection_reason,
       failure_reason: p.status === "failed" ? describePayoutFailure(p.failure_reason) : null,
+      failure_detail: p.status === "failed" ? p.failure_reason : null,
       requested_at: p.requested_at,
       reviewed_at: p.reviewed_at,
       requested_by: requester

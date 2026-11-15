@@ -27,6 +27,7 @@ function makeReview(overrides: Partial<PayoutReview> = {}): PayoutReview {
     reason: "Venue deposit",
     rejection_reason: null,
     failure_reason: null,
+    failure_detail: null,
     requested_at: "2026-11-01T02:00:00Z",
     reviewed_at: null,
     requested_by: { name: "Olivia Tan", email: "olivia@club.test" },
@@ -225,5 +226,26 @@ describe("PayoutReviewClient", () => {
     );
     expect(screen.queryByRole("button", { name: /Approve/ })).toBeNull();
     expect(screen.getByText("Send the invoice")).toBeTruthy();
+  });
+
+  it("shows a failed transfer's recorded reason, and none while it hasn't failed", () => {
+    render(<PayoutReviewClient review={makeReview()} />);
+    expect(screen.queryByText("Recorded reason")).toBeNull();
+    cleanup();
+
+    render(
+      <PayoutReviewClient
+        review={makeReview({
+          approval: "approved",
+          status: "failed",
+          reviewed_at: "2026-11-02T00:00:00Z",
+          failure_reason: "The transfer was rejected during processing.",
+          failure_detail: "send_instruction_rejected",
+        })}
+      />,
+    );
+    expect(screen.getByText(/The transfer was rejected during processing\./)).toBeTruthy();
+    expect(screen.getByText("Recorded reason")).toBeTruthy();
+    expect(screen.getByText("send_instruction_rejected")).toBeTruthy();
   });
 });

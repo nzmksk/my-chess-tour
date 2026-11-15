@@ -253,4 +253,16 @@ describe("loadPayoutReview", () => {
     const { data } = await loadPayoutReview(ID);
     expect(data?.requested_by).toEqual({ name: "Olivia Tan", email: "o@x.test" });
   });
+
+  it("gives a failure in words, with the stored reason behind it for admins", async () => {
+    givenPayout({
+      approval: "approved",
+      status: "failed",
+      reviewed_at: "2026-11-02T00:00:00Z",
+      failure_reason: 'chip_send_422: {"message":"bank account rejected"}',
+    });
+    const { data } = await loadPayoutReview(ID);
+    expect(data?.failure_reason).toBe("The transfer could not be completed.");
+    expect(data?.failure_detail).toBe('chip_send_422: {"message":"bank account rejected"}');
+  });
 });
