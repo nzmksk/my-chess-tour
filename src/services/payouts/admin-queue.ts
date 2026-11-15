@@ -17,7 +17,13 @@ export interface AdminPayout {
   status: PayoutStatus;
   approval: "pending" | "approved" | "rejected";
   amount_cents: number;
+  /** Why it failed, in the words an organizer sees. */
   failure_reason: string | null;
+  /**
+   * What was actually stored: our own code, or CHIP's status and (digit-redacted)
+   * message. For admins only; it never goes to an organizer.
+   */
+  failure_detail: string | null;
   receipt_url: string | null;
   awaiting_budget: boolean;
   /** Approved but not out with CHIP, so an admin can re-run the send. */
@@ -136,6 +142,7 @@ export async function loadAdminPayoutQueue(): Promise<
         amount_cents: p.settled_amount_cents ?? p.amount_cents,
         failure_reason:
           p.status === "failed" ? describePayoutFailure(p.failure_reason) : null,
+        failure_detail: p.status === "failed" ? p.failure_reason : null,
         receipt_url: p.chip_receipt_url,
         awaiting_budget: p.status === "pending" && p.chip_send_limit_id !== null,
         can_resend: canResend(p),

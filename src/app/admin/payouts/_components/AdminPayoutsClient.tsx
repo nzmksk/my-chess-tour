@@ -287,7 +287,15 @@ function PayoutCard({ payout }: { payout: AdminPayout }) {
         </p>
       )}
       {payout.failure_reason && (
-        <p className="font-lato text-danger text-xs">{payout.failure_reason}</p>
+        <div className="flex flex-col gap-1">
+          <p className="font-lato text-danger text-xs">{payout.failure_reason}</p>
+          {payout.failure_detail && (
+            <p className="font-lato text-text-muted text-xs">
+              Recorded reason:{" "}
+              <code className="font-mono break-all">{payout.failure_detail}</code>
+            </p>
+          )}
+        </div>
       )}
       {payout.receipt_url && (
         <a

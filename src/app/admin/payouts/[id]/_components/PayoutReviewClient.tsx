@@ -366,6 +366,13 @@ export default function PayoutReviewClient({ review }: { review: PayoutReview })
             <span className="text-danger"> — {review.failure_reason}</span>
           )}
         </DetailRow>
+        {review.failure_detail && (
+          <DetailRow label="Recorded reason">
+            <code className="text-text-secondary font-mono text-xs break-all">
+              {review.failure_detail}
+            </code>
+          </DetailRow>
+        )}
         <DetailRow label="Tournament">
           {tournament.name}{" "}
           <span className="text-text-muted">

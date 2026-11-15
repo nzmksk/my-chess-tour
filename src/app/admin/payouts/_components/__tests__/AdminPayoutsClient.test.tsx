@@ -91,6 +91,7 @@ describe("AdminPayoutsClient early payouts", () => {
     approval: "pending",
     amount_cents: 250000,
     failure_reason: null,
+    failure_detail: null,
     receipt_url: null,
     awaiting_budget: false,
     can_resend: false,
@@ -157,5 +158,29 @@ describe("AdminPayoutsClient early payouts", () => {
       />,
     );
     expect(screen.queryByRole("link", { name: /request/ })).toBeNull();
+  });
+
+  it("shows a failure in words and the recorded reason behind it", () => {
+    render(
+      <AdminPayoutsClient
+        data={{
+          candidates: [],
+          payouts: [
+            {
+              ...EARLY,
+              kind: "automatic",
+              approval: "approved",
+              status: "failed",
+              failure_reason: "The transfer could not be completed.",
+              failure_detail: 'chip_send_400: {"message":"invalid bank account"}',
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("The transfer could not be completed.")).toBeTruthy();
+    expect(
+      screen.getByText('chip_send_400: {"message":"invalid bank account"}'),
+    ).toBeTruthy();
   });
 });
