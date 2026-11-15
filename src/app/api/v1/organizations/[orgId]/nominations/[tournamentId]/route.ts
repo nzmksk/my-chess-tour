@@ -1,6 +1,10 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { authorizeOrgPermission, UUID_RE } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { nominationErrorResponse } from "@/app/api/v1/organizations/_lib/nomination-errors";
+import {
+  BENEFICIARY_LOCK_COLUMNS,
+  beneficiaryLockResponse,
+} from "@/app/api/v1/organizations/_lib/beneficiary-lock";
 import { notifyNominationResponded } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
@@ -12,7 +16,16 @@ type Params = { params: Promise<{ orgId: string; tournamentId: string }> };
 
 /**
  * The shared front half of accepting and declining: the caller must hold
- * payout.request on this organization, and the tournament must nominate it.
+ * payout.request on this organization, the tournament must nominate it, and
+ * the beneficiary must still be changeable.
+ *
+ * Both are refused once the tournament starts. Accepting moves the payout and
+ * declining clears the nomination, so each changes the beneficiary, which the
+ * edit policy locks from the start date (src/lib/tournaments/edit-policy.ts).
+ * That is the same answer the paid-fields trigger already gives for both once
+ * a player has paid, and it means a nomination can't take effect after the
+ * event.
+ *
  * Returns the acting user, or the response to send.
  */
 async function authorizeNominee(
@@ -37,7 +50,7 @@ async function authorizeNominee(
   // which may not be the one in this URL.
   const { data: nominated, error: lookupError } = await supabaseAdmin
     .from("tournaments")
-    .select("id")
+    .select(`id, ${BENEFICIARY_LOCK_COLUMNS}`)
     .eq("id", tournamentId)
     .eq("beneficiary_organization_id", orgId)
     .maybeSingle();
@@ -60,6 +73,9 @@ async function authorizeNominee(
       ),
     };
   }
+
+  const locked = beneficiaryLockResponse(nominated);
+  if (locked) return { ok: false, response: locked };
 
   return { ok: true, userId: auth.userId };
 }

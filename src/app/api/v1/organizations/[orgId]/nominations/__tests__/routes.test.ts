@@ -286,6 +286,28 @@ describe("GET .../nominations", () => {
   });
 });
 
+describe.each([
+  ["accept", () => callAccept()],
+  ["decline", () => callDecline()],
+])("%s once the tournament has started", (_label, call) => {
+  it.each([
+    ["started", STARTED, /has started/i],
+    ["ended", ENDED, /has ended/i],
+  ])("409s when it has %s", async (_when, dates, expected) => {
+    tables.tournaments = [{ data: tournamentRow(dates), error: null }];
+    const res = await call();
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toMatch(expected);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockNotifyResponded).not.toHaveBeenCalled();
+  });
+
+  it("goes through before the start date", async () => {
+    expect((await call()).status).toBe(200);
+    expect(mockRpc).toHaveBeenCalled();
+  });
+});
+
 describe("POST .../nominations/[tournamentId]", () => {
   it("accepts on behalf of the nominee", async () => {
     const res = await callAccept();
