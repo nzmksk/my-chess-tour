@@ -3,8 +3,8 @@
 --   * nominate_payout_beneficiary / accept_payout_nomination /
 --     decline_payout_nomination
 --     (003_functions_triggers.sql)
---   * the money-field freeze and the client-session guard on the beneficiary
---     columns (guard_tournament_money_fields / guard_tournament_beneficiary_columns)
+--   * the paid-registration freeze and the client-session guard on the beneficiary
+--     columns (guard_tournament_paid_fields / guard_tournament_beneficiary_columns)
 --
 -- Covers:
 --   B1  nomination is refused for self, and for an unapproved, bank-unverified,

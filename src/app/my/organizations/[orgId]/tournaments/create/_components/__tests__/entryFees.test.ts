@@ -189,7 +189,7 @@ describe("entry fee round trip", () => {
   });
 
   // The regression this suite exists to hold. `entry_fees` is jsonb, and both
-  // the PATCH route's deepEquals and guard_tournament_money_fields' IS DISTINCT
+  // the PATCH route's deepEquals and guard_tournament_paid_fields' IS DISTINCT
   // FROM read any difference at all as a fee change — which is refused outright
   // on a tournament that has taken payment. So hydrating a row and saving it
   // back untouched has to reproduce it byte for byte, whatever shape it is in.

@@ -6,7 +6,7 @@ import { internalErrorResponse } from "@/lib/http/internal-error";
  * Turns an error from nominate_payout_beneficiary / accept_payout_nomination /
  * decline_payout_nomination into
  * the response to send. The functions raise a sentinel prefix with a stable SQLSTATE;
- * guard_tournament_money_fields raises the "locked" one with no sentinel at all.
+ * guard_tournament_paid_fields raises the "locked" one with no sentinel at all.
  *
  * `action` names what was being attempted, for the log of an unexpected error.
  */

@@ -1,6 +1,7 @@
 -- =============================================================================
--- DB regression test for guard_tournament_money_fields (003_functions_triggers.sql):
--- money fields stay editable until the first paid registration, then lock.
+-- DB regression test for guard_tournament_paid_fields (003_functions_triggers.sql):
+-- what a player paid for stays editable until the first paid registration, then
+-- locks. The column list mirrors the "paid" stage of src/lib/tournaments/edit-policy.ts.
 --
 -- The trigger once built its list with `v_changed || 'entry_fees'`, which Postgres
 -- reads as text[] || text[] and fails with "malformed array literal". Every change
@@ -12,6 +13,8 @@
 --   M3  after a paid registration a change is refused, naming the field
 --   M4  re-saving the same value after payment is still allowed
 --   M5  non-money fields stay editable after payment
+--   M6  dates, region, format, time control, ratings and restrictions lock too
+--   M7  name, venue name/address and the registration deadline stay editable
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it persists
@@ -85,6 +88,46 @@ BEGIN
   -- ===== M5: everything else stays editable =================================
   UPDATE tournaments SET description = 'Now with parking' WHERE id = v_t;
   RAISE NOTICE 'M5 PASS — non-money fields stay editable';
+
+  -- ===== M6: when, where, what and who also lock ============================
+  DECLARE
+    v_case record;
+  BEGIN
+    FOR v_case IN
+      SELECT * FROM (VALUES
+        ('start_date',    'UPDATE tournaments SET start_date = start_date + 1 WHERE id = $1'),
+        ('end_date',      'UPDATE tournaments SET end_date = end_date + 1 WHERE id = $1'),
+        ('venue_country', 'UPDATE tournaments SET venue_country = ''SG'' WHERE id = $1'),
+        ('venue_state',   'UPDATE tournaments SET venue_state = ''Johor'' WHERE id = $1'),
+        ('timezone',      'UPDATE tournaments SET timezone = ''Asia/Jakarta'' WHERE id = $1'),
+        ('format',        'UPDATE tournaments SET format = ''{"type":"rapid","rounds":7,"system":"swiss"}'' WHERE id = $1'),
+        ('time_control',  'UPDATE tournaments SET time_control = ''{"base_minutes":15}'' WHERE id = $1'),
+        ('is_fide_rated', 'UPDATE tournaments SET is_fide_rated = NOT is_fide_rated WHERE id = $1'),
+        ('is_mcf_rated',  'UPDATE tournaments SET is_mcf_rated = NOT is_mcf_rated WHERE id = $1'),
+        ('restrictions',  'UPDATE tournaments SET restrictions = ''[{"type":"rating","max":1600}]'' WHERE id = $1')
+      ) AS c(field, stmt)
+    LOOP
+      BEGIN
+        EXECUTE v_case.stmt USING v_t;
+        RAISE EXCEPTION 'M6 FAIL: % changed after a player paid', v_case.field;
+      EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM LIKE 'M6 FAIL%' THEN RAISE; END IF;
+        IF SQLERRM NOT LIKE '%these fields are locked: ' || v_case.field || '%' THEN
+          RAISE EXCEPTION 'M6 FAIL (%): unexpected error: %', v_case.field, SQLERRM;
+        END IF;
+      END;
+    END LOOP;
+  END;
+  RAISE NOTICE 'M6 PASS — dates, region, format, ratings and eligibility locked after payment';
+
+  -- ===== M7: cosmetic fields and the deadline stay editable =================
+  UPDATE tournaments
+    SET name = 'FREEZE T (renamed)',
+        venue_name = 'Hall B',
+        venue_address = 'New Address',
+        registration_deadline = now() + interval '19 days'
+    WHERE id = v_t;
+  RAISE NOTICE 'M7 PASS — cosmetic fields and the deadline stay editable';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;

@@ -552,25 +552,30 @@ END;
 $$;
 
 -- =============================================
--- TOURNAMENT EDIT FREEZE (money fields)
--- entry_fees/prizes/max_participants and the commission split define what a
--- player is buying. Once anyone has paid, changing them rewrites a concluded
--- transaction.
+-- TOURNAMENT EDIT FREEZE (paid-registration stage)
+-- Once anyone has paid, the fields that define what they paid for lock:
+-- what it costs and what can be won (entry_fees, prizes, max_participants, the
+-- commission split), who receives the money (the beneficiary pair), when and
+-- where it runs (dates, venue country/state and the timezone derived from
+-- them), and what kind of event it is and who may enter (format, time_control,
+-- rating flags, restrictions). Changing any of them rewrites a concluded
+-- transaction. src/lib/tournaments/edit-policy.ts is the full policy, and this
+-- column list is its "paid" stage.
 --
 -- The PATCH route returns the readable 409 (naming the rejected fields); this
 -- trigger is the authority, so the rule holds for any writer including the
 -- service role and the SQL editor. Same belt-and-braces posture as
 -- settle_registration_payment's amount guard.
 --
--- The "tournament has started" half of the freeze is NOT enforced here: it
--- depends on today-in-the-venue-timezone, and pinning that in the DB would
--- duplicate getTodayInTimeZone() with a second, drifting definition. It lives
--- in the route only.
+-- The date-based stages (started, ended) are NOT enforced here: they depend
+-- on today-in-the-venue-timezone, and pinning that in the DB would duplicate
+-- getTodayInTimeZone() with a second, drifting definition. They live in the
+-- route only.
 --
 -- Deliberately allows the write when the value is unchanged, so a client that
--- re-submits the whole form without touching money fields still succeeds.
+-- re-submits the whole form without touching these fields still succeeds.
 -- =============================================
-CREATE OR REPLACE FUNCTION guard_tournament_money_fields()
+CREATE OR REPLACE FUNCTION guard_tournament_paid_fields()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -579,6 +584,7 @@ AS $$
 DECLARE
   v_changed text[] := ARRAY[]::text[];
 BEGIN
+  -- What it costs and what can be won.
   IF NEW.entry_fees IS DISTINCT FROM OLD.entry_fees THEN
     v_changed := array_append(v_changed, 'entry_fees');
   END IF;
@@ -603,6 +609,39 @@ BEGIN
   IF NEW.beneficiary_accepted_at IS DISTINCT FROM OLD.beneficiary_accepted_at THEN
     v_changed := array_append(v_changed, 'beneficiary_accepted_at');
   END IF;
+  -- When and where. A tournament that has to move after taking payment is a
+  -- cancellation with refunds, not an edit.
+  IF NEW.start_date IS DISTINCT FROM OLD.start_date THEN
+    v_changed := array_append(v_changed, 'start_date');
+  END IF;
+  IF NEW.end_date IS DISTINCT FROM OLD.end_date THEN
+    v_changed := array_append(v_changed, 'end_date');
+  END IF;
+  IF NEW.venue_country IS DISTINCT FROM OLD.venue_country THEN
+    v_changed := array_append(v_changed, 'venue_country');
+  END IF;
+  IF NEW.venue_state IS DISTINCT FROM OLD.venue_state THEN
+    v_changed := array_append(v_changed, 'venue_state');
+  END IF;
+  IF NEW.timezone IS DISTINCT FROM OLD.timezone THEN
+    v_changed := array_append(v_changed, 'timezone');
+  END IF;
+  -- What kind of event, and who may enter.
+  IF NEW.format IS DISTINCT FROM OLD.format THEN
+    v_changed := array_append(v_changed, 'format');
+  END IF;
+  IF NEW.time_control IS DISTINCT FROM OLD.time_control THEN
+    v_changed := array_append(v_changed, 'time_control');
+  END IF;
+  IF NEW.is_fide_rated IS DISTINCT FROM OLD.is_fide_rated THEN
+    v_changed := array_append(v_changed, 'is_fide_rated');
+  END IF;
+  IF NEW.is_mcf_rated IS DISTINCT FROM OLD.is_mcf_rated THEN
+    v_changed := array_append(v_changed, 'is_mcf_rated');
+  END IF;
+  IF NEW.restrictions IS DISTINCT FROM OLD.restrictions THEN
+    v_changed := array_append(v_changed, 'restrictions');
+  END IF;
 
   IF array_length(v_changed, 1) IS NULL THEN
     RETURN NEW;
@@ -624,8 +663,8 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER guard_money_fields BEFORE UPDATE ON tournaments
-  FOR EACH ROW EXECUTE FUNCTION guard_tournament_money_fields();
+CREATE TRIGGER guard_paid_fields BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_paid_fields();
 
 -- =============================================
 -- TOURNAMENT BENEFICIARY GUARD
@@ -1253,7 +1292,7 @@ $$;
 --
 -- Both functions check the actor themselves, unlike the review functions above:
 -- the permission is on an org the route can't otherwise infer. The paid-registration
--- freeze is left to guard_tournament_money_fields, the single authority on it.
+-- freeze is left to guard_tournament_paid_fields, the single authority on it.
 -- Failures RAISE with a stable sentinel prefix for the route to map.
 -- =============================================
 CREATE OR REPLACE FUNCTION nominate_payout_beneficiary(
