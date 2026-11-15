@@ -70,8 +70,8 @@ Both the trigger and the route refuse a locked field only when its value **chang
 
 ## Known limits / follow-ups
 
-- **Rescheduling a paid tournament** isn't possible by editing. Today it's a cancellation (refunds) and a new tournament. A proper reschedule flow would need player notification and a refund-or-keep choice.
+- **Rescheduling a paid tournament** isn't possible by editing. Today it's a cancellation (refunds) and a new tournament. A proper reschedule flow would need player notification and a refund-or-keep choice (#592).
 - **Raising capacity doesn't promote anyone.** There's no registration waiting list today, so more places simply means the checkout stops reporting "full" (#590).
 - **Lowering capacity before anyone has paid** isn't checked against seats held by checkouts in progress. `assert_tournament_capacity` runs when a seat is held, not when the payment settles, so those holds can all confirm and leave more players than places (#591). Free registrations settle as a paid payment too, so once anyone is confirmed, capacity is already increase-only.
-- The wizard decides `paid` from the confirmed-registration count, while the API and trigger check for a paid registration payment. They can disagree at the edges: a paid registration that's since been cancelled or refunded (the wizard leaves the fields open and the save gets the readable 409), or a confirmed registration with no paid payment (the wizard locks fields the API would accept). Exposing a `has_paid_registration` flag from the manage-data loader would close the gap.
-- The beneficiary route (`PUT .../beneficiary`) relies on the trigger for the `paid` lock and doesn't check the date stages itself.
+- The wizard decides `paid` from the confirmed-registration count, while the API and trigger check for a paid registration payment. They can disagree at the edges: a paid registration that's since been cancelled or refunded (the wizard leaves the fields open and the save gets the readable 409), or a confirmed registration with no paid payment (the wizard locks fields the API would accept). Exposing a `has_paid_registration` flag from the manage-data loader would close the gap (#593).
+- The beneficiary route (`PUT .../beneficiary`) relies on the trigger for the `paid` lock and doesn't check the date stages itself (#594).
