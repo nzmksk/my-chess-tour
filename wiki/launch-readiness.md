@@ -270,9 +270,9 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 ### O5. Publish tournament — ✅ Built
 - **Entry:** `POST .../tournaments/[id]/publish`. **Only `draft` can publish** (else 409). Full required-field validation (rejects placeholders → 422 with `details[]`). Assigns a unique slug on first publish, stable on re-publish.
 
-### O6. Edit tournament — ✅ Built (with caveat)
+### O6. Edit tournament — ✅ Built
 - **Entry:** `PATCH .../tournaments/[id]` (owner/admin). Partial field update.
-- **Caveat / review item:** editing is **not restricted to drafts** — a **published** tournament can be edited (dates, fees, restrictions) with no status guard, and the slug is not recomputed on rename. Confirm this is intended once players have already registered/paid 🟡 (data-integrity review).
+- **What can change, and when (#536):** see [tournament-editing.md](./tournament-editing.md). Drafts and unpaid listings are fully editable, but a published tournament must stay publishable (422). The first paid registration locks fees, prizes, capacity, beneficiary, dates, region, format, time control, ratings and eligibility. Once started, only the description can change. Ended and cancelled tournaments are read-only. Enforced by the route (409 naming the fields), the `guard_tournament_paid_fields` trigger for the paid stage, and the wizard, which disables locked fields. The slug is still not recomputed on rename (deliberately: shared links stay stable).
 
 ### O7. Close registration / cancel tournament — ✅ Built
 - **Close registration early:** `POST .../tournaments/[id]/close-registration` — stamps `registration_closed_at`, which is also populated on publish (from `registration_deadline`) so the two paths can't drift. Checkout and the public detail page both read it.
@@ -424,7 +424,7 @@ Flow IDs in brackets point back to the detail above.
 **Organizer**
 - [ ] **[O1]** Test apply → admin approve → owner membership appears; decide on the approval email.
 - [ ] **[O4/O5]** Test the create wizard → publish (validation + slug) happy path.
-- [ ] **[O6]** Decide whether editing a *published* tournament (dates/fees) after registrations is allowed.
+- [x] **[O6]** Decide whether editing a *published* tournament (dates/fees) after registrations is allowed. Decided in #536, see [tournament-editing.md](./tournament-editing.md).
 - [ ] **[O7]** Test cancel end to end: organizer files → admin approves → tournament `cancelled`, players emailed, refunds settle. Then re-run approve to confirm it's idempotent.
 - [ ] **[O8]** Provide participant export (CSV/Excel) or a documented workaround for pairing.
 - [ ] **[O3]** Confirm invite (existing + new user) works; accept that resend/expiry are absent.
