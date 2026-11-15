@@ -301,6 +301,58 @@ describe("WizardShell — editing a published tournament", () => {
   });
 });
 
+describe("WizardShell — cancelling an edit", () => {
+  const STORAGE_KEY = `tournament-wizard-${ORG_ID}-edit-${TOUR_ID}`;
+
+  // The bug this covers (#564): the edit wizard had no way out but saving,
+  // and leaving by the browser left the edits in sessionStorage to be
+  // restored over the saved tournament on the next visit.
+  it("returns to the tournament without saving, and forgets the edits", async () => {
+    renderEditWizard({ currentStepIndex: 2 });
+    await waitFor(() =>
+      expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      `/my/organizations/${ORG_ID}/tournaments/${TOUR_ID}`,
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("is offered on the first step, where there is no Back", async () => {
+    renderEditWizard({ currentStepIndex: 0 });
+
+    expect(
+      await screen.findByRole("button", { name: /^cancel$/i }),
+    ).toBeTruthy();
+  });
+
+  it("is offered when editing a draft", async () => {
+    renderEditWizard({ status: "draft" });
+
+    expect(
+      await screen.findByRole("button", { name: /^cancel$/i }),
+    ).toBeTruthy();
+  });
+
+  it("is not offered when creating a tournament", async () => {
+    render(
+      <TournamentWizardProvider
+        orgId={ORG_ID}
+        initialData={{ ...INITIAL, tournamentId: null, currentStepIndex: 0 }}
+      >
+        <WizardShell orgId={ORG_ID} orgName="Penang Chess Association" />
+      </TournamentWizardProvider>,
+    );
+
+    await screen.findByRole("button", { name: /save draft/i });
+    expect(screen.queryByRole("button", { name: /^cancel$/i })).toBeNull();
+  });
+});
+
 describe("WizardShell — payout nomination", () => {
   const NOMINEE = "33333333-3333-4333-8333-333333333333";
 
