@@ -528,7 +528,7 @@ The wizard footer shows "Back", "Save as Draft", and "Next" buttons. Steps are s
 - **Tabs:** Participants, Registration Stats, Payout.
 - **Stats row:** Registered count, Confirmed (paid), Pending payment, Revenue collected.
 - **Participants table:** Searchable, sortable table with columns: #, Player name (with avatar initials), FIDE ID, Rating, Fee Tier, Status (Confirmed/Pending), Registration date, and an actions menu (⋯). Export buttons for CSV and Excel above the table.
-- The "⋯" action menu on each row allows the organizer to view player details, initiate a refund, or cancel a registration. *(Not built — #510. The roster itself and the Cancel action in the header are built; the per-row menu and CSV/Excel export (#90) are not.)*
+- The "⋯" action menu on each row allows the organizer to view player details, initiate a refund, or cancel a registration. *(Not built — #510. The roster itself and the Cancel action in the header are built; so is CSV/Excel export (#90); the per-row menu is not.)*
 
 #### Flow 5: Payout Tracking
 

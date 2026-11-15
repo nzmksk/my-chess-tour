@@ -677,7 +677,7 @@ Returns the current user's organizer application status. Returns `null` if they 
 | POST   | `/organizer/:orgId/tournaments/:id/close-registration`  | Org admin+  | Close registration early                |
 | POST   | `/organizer/:orgId/tournaments/:id/cancel`              | Org owner   | Cancel the tournament                   |
 | GET    | `/organizer/:orgId/tournaments/:id/participants`        | Org member+ | List registered players                 |
-| GET    | `/organizer/:orgId/tournaments/:id/participants/export` | Org admin+  | Export participants as CSV              |
+| GET    | `/organizer/:orgId/tournaments/:id/participants/export` | Org admin+  | Export participants as CSV or Excel     |
 | GET    | `/organizer/:orgId/tournaments/:id/stats`               | Org member+ | Registration stats                      |
 
 #### `POST /organizer/:orgId/upload`
@@ -787,6 +787,18 @@ Same shape as POST, but all fields optional. Only provided fields are updated. I
   "has_more": true
 }
 ```
+
+#### `GET /organizer/:orgId/tournaments/:id/participants/export`
+
+**Permission:** `admin` or `owner` role. Implemented at `/api/v1/organizations/:orgId/tournaments/:id/participants/export`.
+
+**Query parameters:** `?format=csv` (default) or `?format=xlsx`. Anything else → `400 VALIDATION_ERROR`.
+
+Downloads the roster the manage page shows (confirmed and pending-payment registrations, in registration order) for seeding pairing software. The response is an attachment named `<slug>-participants.csv|xlsx`, sent `Cache-Control: private, no-store`.
+
+**Columns:** `#`, First name, Last name, FIDE ID, FIDE rating (for the tournament's format, falling back to slower time controls), MCF ID, National rating, Fee tier, Status, Registered (wall-clock in the venue's timezone, e.g. `Registered (MYT)`). Only what `/privacy` says organizers receive.
+
+CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=`, `+`, `-`, `@`) is prefixed with `'`. The workbook holds no formulas.
 
 #### `GET /organizer/:orgId/tournaments/:id/stats`
 
