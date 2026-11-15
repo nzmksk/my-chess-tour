@@ -129,14 +129,16 @@ export default function PrivacyPage() {
                         Date of birth
                       </td>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
-                        Age-category eligibility; identity verification
+                        Age-category eligibility; identity verification; shared
+                        with the organisers of tournaments you enter
                       </td>
                     </tr>
                     <tr>
                       <td className="text-text-secondary px-3 py-2">Gender</td>
                       <td className="text-text-secondary px-3 py-2">
                         Gender-restricted event categories (e.g. Women&apos;s
-                        Open)
+                        Open); shared with the organisers of tournaments you
+                        enter
                       </td>
                     </tr>
                   </tbody>
@@ -281,6 +283,8 @@ export default function PrivacyPage() {
                   Sensitive personal data (OKU status, date of birth, gender)
                   and financial data (bank details) are restricted to the
                   specific features that need them, and to authorised personnel.
+                  Date of birth and gender are also shared with the organisers
+                  of tournaments you enter, as described under Sharing of Data.
                 </li>
                 <li>
                   Bank account numbers and document paths are masked in our
@@ -347,8 +351,12 @@ export default function PrivacyPage() {
                   MCF-rated event registration.
                 </li>
                 <li>
-                  <strong>Tournament organisers</strong> — name, FIDE/MCF ID,
-                  and rating for pairing and certification purposes.
+                  <strong>Tournament organisers</strong> — for each tournament
+                  you enter, its organiser receives your name, title, FIDE and
+                  MCF IDs and ratings, gender, date of birth and nationality,
+                  and can download them as a participant list. They use these
+                  for pairing, age and gender categories, and certification.
+                  Your OKU status and contact details are not shared.
                 </li>
                 <li>
                   <strong>CHIP (chip-in.asia)</strong> — our licensed payment
