@@ -3,6 +3,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import TournamentManageClient from "../TournamentManageClient";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -40,11 +41,16 @@ const PARTICIPANTS = [
   },
 ];
 
-function renderClient(viewer?: "organizer" | "admin") {
+function renderClient(
+  viewer?: "organizer" | "admin",
+  tournament: React.ComponentProps<
+    typeof TournamentManageClient
+  >["tournament"] = TOURNAMENT,
+) {
   return render(
     <TournamentManageClient
       orgId={ORG_ID}
-      tournament={TOURNAMENT}
+      tournament={tournament}
       stats={{ total: 1, confirmed: 1, pending: 0 }}
       participants={PARTICIPANTS}
       cancellationPending={false}
@@ -77,5 +83,32 @@ describe("TournamentManageClient", () => {
     expect(screen.getByText("Ahmad Ali")).toBeTruthy();
     expect(screen.queryByText("Edit Tournament")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  // The edit policy leaves the description editable while a tournament runs.
+  it("offers Edit while a published tournament is under way", () => {
+    const today = getTodayInTimeZone(TOURNAMENT.timezone);
+    renderClient("organizer", {
+      ...TOURNAMENT,
+      status: "published",
+      start_date: today,
+      end_date: today,
+    });
+    expect(screen.getByText("Edit Tournament")).toBeTruthy();
+  });
+
+  it("hides Edit once the tournament has ended", () => {
+    renderClient("organizer", {
+      ...TOURNAMENT,
+      status: "published",
+      start_date: "2020-01-01",
+      end_date: "2020-01-02",
+    });
+    expect(screen.queryByText("Edit Tournament")).toBeNull();
+  });
+
+  it("hides Edit on a cancelled tournament", () => {
+    renderClient("organizer", { ...TOURNAMENT, status: "cancelled" });
+    expect(screen.queryByText("Edit Tournament")).toBeNull();
   });
 });
