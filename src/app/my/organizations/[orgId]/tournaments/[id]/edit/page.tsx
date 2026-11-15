@@ -66,7 +66,10 @@ interface TournamentForEdit {
     name: string | null;
     accepted: boolean;
   } | null;
-  /** Any confirmed registration means a player has paid. */
+  /**
+   * A registration payment has settled. From the manage-data loader, which
+   * asks the same helper the PATCH route does (hasPaidRegistration).
+   */
   has_paid_registration: boolean;
 }
 
@@ -83,7 +86,7 @@ async function fetchTournamentForEdit(
     if (!json.data?.tournament) return null;
     return {
       ...json.data.tournament,
-      has_paid_registration: (json.data.stats?.confirmed ?? 0) > 0,
+      has_paid_registration: json.data.hasPaidRegistration === true,
     } as TournamentForEdit;
   } catch {
     return null;
