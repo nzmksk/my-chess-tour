@@ -85,6 +85,36 @@ describe("TournamentManageClient", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("offers the organizer the roster as CSV and Excel downloads", () => {
+    renderClient();
+
+    const base = `/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}/participants/export`;
+    const csv = screen.getByRole("link", { name: "Export CSV" });
+    const xlsx = screen.getByRole("link", { name: "Export Excel" });
+    expect(csv.getAttribute("href")).toBe(`${base}?format=csv`);
+    expect(xlsx.getAttribute("href")).toBe(`${base}?format=xlsx`);
+    expect(csv.hasAttribute("download")).toBe(true);
+  });
+
+  // The export endpoint is for the organization's owners and admins.
+  it("doesn't offer the admin an export", () => {
+    renderClient("admin");
+    expect(screen.queryByRole("link", { name: /export/i })).toBeNull();
+  });
+
+  it("offers no export before anyone has registered", () => {
+    render(
+      <TournamentManageClient
+        orgId={ORG_ID}
+        tournament={TOURNAMENT}
+        stats={{ total: 0, confirmed: 0, pending: 0 }}
+        participants={[]}
+        cancellationPending={false}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /export/i })).toBeNull();
+  });
+
   // The edit policy leaves the description editable while a tournament runs.
   it("offers Edit while a published tournament is under way", () => {
     const today = getTodayInTimeZone(TOURNAMENT.timezone);

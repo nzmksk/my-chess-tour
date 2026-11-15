@@ -118,6 +118,9 @@ const REG_STATUS_CONFIG: Record<string, { label: string; className: string }> =
     },
   };
 
+const EXPORT_LINK_CLASS =
+  "font-cinzel text-gold-bright border-gold-bright/40 hover:border-gold-bright hover:bg-int-gold-bg inline-flex shrink-0 cursor-pointer items-center rounded-md border bg-transparent px-3 py-2 text-xs font-bold tracking-widest uppercase transition duration-150";
+
 function toTitleCase(str: string): string {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -174,6 +177,9 @@ export default function TournamentManageClient({
         hasPaidRegistration: false,
       }),
     );
+
+  // The whole roster, whatever the search box holds: it seeds pairing software.
+  const exportUrl = `/api/v1/organizations/${orgId}/tournaments/${tournament.id}/participants/export`;
 
   const filtered = participants.filter(
     (p) =>
@@ -252,13 +258,34 @@ export default function TournamentManageClient({
             Participants ({stats.total})
           </h2>
           {participants.length > 0 && (
-            <input
-              type="text"
-              placeholder="Search by name or FIDE ID…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="input w-56 text-sm"
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search by name or FIDE ID…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="input w-56 text-sm"
+              />
+              {/* The export is org owner/admin only, so not the admin's view. */}
+              {!isAdminView && (
+                <>
+                  <a
+                    href={`${exportUrl}?format=csv`}
+                    download
+                    className={EXPORT_LINK_CLASS}
+                  >
+                    Export CSV
+                  </a>
+                  <a
+                    href={`${exportUrl}?format=xlsx`}
+                    download
+                    className={EXPORT_LINK_CLASS}
+                  >
+                    Export Excel
+                  </a>
+                </>
+              )}
+            </div>
           )}
         </div>
 
