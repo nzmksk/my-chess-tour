@@ -960,6 +960,68 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       expect(res.status).toBe(200);
     });
 
+    // Capacity is increase-only once someone has paid: more places harms
+    // nobody, fewer could leave a paid player without a seat.
+    it("allows raising capacity after a payment", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: PUBLISHED.max_participants + 16,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      // A raise is allowed paid or not, so there's nothing to ask.
+      expect(mockFrom).not.toHaveBeenCalledWith("payments");
+    });
+
+    it("409s on lowering capacity after a payment", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: PUBLISHED.max_participants - 1,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.details).toEqual(["max_participants"]);
+      expect(body.error.message).toMatch(/capacity can only be increased/i);
+    });
+
+    it("allows lowering capacity before anyone has paid", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(0);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: PUBLISHED.max_participants - 1,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockFrom).toHaveBeenCalledWith("payments");
+    });
+
+    it("409s on raising capacity once the tournament has started", async () => {
+      setUser();
+      setTournamentFetchResult(ONGOING_TODAY);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: ONGOING_TODAY.max_participants + 16,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.details).toEqual(["max_participants"]);
+    });
+
     it("409s on any change to a cancelled tournament", async () => {
       setUser();
       setTournamentFetchResult({ ...PUBLISHED, status: "cancelled" });

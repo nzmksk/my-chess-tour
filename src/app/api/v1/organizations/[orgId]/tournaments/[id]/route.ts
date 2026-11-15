@@ -12,11 +12,12 @@ import {
 } from "@/lib/tournaments/datetime";
 import {
   EDITABLE_FIELDS,
-  isFieldEditable,
+  isChangeAllowed,
   lockReason,
   needsPaymentCheck,
   resolveEditStage,
   type EditableField,
+  type EditStage,
 } from "@/lib/tournaments/edit-policy";
 import {
   validatePublishable,
@@ -245,8 +246,9 @@ function changedFields(
 }
 
 /**
- * Refuses a change to a field the edit policy has locked. Which fields lock
- * when, and why, is in src/lib/tournaments/edit-policy.ts.
+ * Refuses a change to a field the edit policy has locked, and a decrease to
+ * one it has made increase-only (capacity, once someone has paid). Which
+ * fields lock when, and why, is in src/lib/tournaments/edit-policy.ts.
  *
  * The paid-registration stage is also enforced by guard_tournament_paid_fields
  * in 003_functions_triggers.sql; the DB is the authority and this is the
@@ -257,9 +259,13 @@ function changedFields(
 async function checkEditFreeze(
   tournamentId: string,
   existing: ExistingTournament,
+  patch: Record<string, unknown>,
   changed: EditableField[],
 ): Promise<NextResponse | null> {
   if (changed.length === 0) return null;
+
+  const allowedAt = (stage: EditStage) => (f: EditableField) =>
+    isChangeAllowed(f, stage, existing[f], patch[f]);
 
   let stage = resolveEditStage({
     status: existing.status,
@@ -270,11 +276,8 @@ async function checkEditFreeze(
   });
 
   // Only worth a query when the dates haven't already decided, and when the
-  // patch touches something a payment would lock.
-  if (
-    needsPaymentCheck(stage) &&
-    changed.some((f) => !isFieldEditable(f, "paid"))
-  ) {
+  // patch makes a change a payment would refuse (raising capacity isn't one).
+  if (needsPaymentCheck(stage) && !changed.every(allowedAt("paid"))) {
     // `head: true` — we only need to know whether one exists.
     const { count, error } = await supabaseAdmin
       .from("payments")
@@ -293,7 +296,7 @@ async function checkEditFreeze(
     if ((count ?? 0) > 0) stage = "paid";
   }
 
-  const refused = changed.filter((f) => !isFieldEditable(f, stage));
+  const refused = changed.filter((f) => !allowedAt(stage)(f));
   if (refused.length === 0) return null;
 
   return NextResponse.json(
@@ -621,7 +624,7 @@ export async function PATCH(
   const tournament = existing as ExistingTournament;
   const changed = changedFields(tournament, patch);
 
-  const freezeError = await checkEditFreeze(id, tournament, changed);
+  const freezeError = await checkEditFreeze(id, tournament, patch, changed);
   if (freezeError) return freezeError;
 
   const publishableError = checkStillPublishable(tournament, patch, changed);
