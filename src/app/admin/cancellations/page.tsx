@@ -21,7 +21,6 @@ interface Organization {
 interface TournamentRef {
   id: string;
   name: string;
-  slug: string | null;
   start_date: string;
   organization: Organization | null;
 }
@@ -60,7 +59,6 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 interface RawTournament {
   id: string;
   name: string;
-  slug: string | null;
   start_date: string;
   organization: Organization | Organization[] | null;
 }
@@ -96,7 +94,7 @@ export default async function AdminCancellationsPage() {
     .from("tournament_cancellation_requests")
     .select(
       `id, reason, status, rejection_reason, created_at, reviewed_at,
-       tournament:tournaments(id, name, slug, start_date,
+       tournament:tournaments(id, name, start_date,
          organization:organizations!organization_id(id, name)),
        requester:users!requested_by(first_name, last_name, email)`,
     )
@@ -120,7 +118,6 @@ export default async function AdminCancellationsPage() {
           ? {
               id: t.id,
               name: t.name,
-              slug: t.slug,
               start_date: t.start_date,
               organization: one(t.organization),
             }
