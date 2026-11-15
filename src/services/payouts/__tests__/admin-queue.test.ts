@@ -108,6 +108,25 @@ describe("loadAdminPayoutQueue", () => {
     expect(data?.payouts[0].failure_reason).toBe("The transfer could not be completed.");
   });
 
+  it("keeps the stored reason alongside, so an admin can see what CHIP said", async () => {
+    result.data = [
+      {
+        ...rawPayout,
+        status: "failed",
+        failure_reason: 'chip_send_400: {"message":"raw detail"}',
+      },
+    ];
+    const { data } = await loadAdminPayoutQueue();
+    expect(data?.payouts[0].failure_detail).toBe('chip_send_400: {"message":"raw detail"}');
+  });
+
+  it("has no failure detail on a payout that didn't fail", async () => {
+    result.data = [{ ...rawPayout, failure_reason: "send_instruction_failed" }];
+    const { data } = await loadAdminPayoutQueue();
+    expect(data?.payouts[0].failure_reason).toBeNull();
+    expect(data?.payouts[0].failure_detail).toBeNull();
+  });
+
   it("says why a candidate can't be paid, block before recipient", async () => {
     mockRpc.mockResolvedValue({
       data: [
