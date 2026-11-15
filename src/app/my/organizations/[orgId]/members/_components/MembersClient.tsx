@@ -153,10 +153,11 @@ function InviteBar({ orgId }: { orgId: string }) {
       if (!res.ok) {
         setError(json.error?.message ?? "Failed to send invitation");
       } else {
+        const addedAs = json.data.role === "admin" ? "an admin" : "a member";
         const msg =
           json.data.status === "pending"
             ? `Invitation sent to ${json.data.email}`
-            : `${json.data.email} has been added as a member`;
+            : `${json.data.email} has been added as ${addedAs}`;
         setSuccessMsg(msg);
         setEmail("");
         setRole("member");
