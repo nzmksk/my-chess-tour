@@ -211,6 +211,13 @@ describe("PUT .../beneficiary", () => {
     expect(res.status).toBe(400);
   });
 
+  it("500s when the tournament lookup fails", async () => {
+    tables.tournaments = [{ data: null, error: { message: "db down" } }];
+    const res = await callNominate({ beneficiary_organization_id: NOMINEE });
+    expect(res.status).toBe(500);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
   it("404s on another organization's tournament", async () => {
     tables.tournaments = [{ data: null, error: null }];
     const res = await callNominate({ beneficiary_organization_id: NOMINEE });
@@ -313,6 +320,19 @@ describe("GET .../nominations", () => {
     const res = await callList();
     expect((await res.json()).data).toEqual([]);
     expect(mockFrom).not.toHaveBeenCalledWith("tournaments");
+  });
+
+  it("treats a null list as empty", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: null });
+    const res = await callList();
+    expect((await res.json()).data).toEqual([]);
+  });
+
+  it("lists nothing it couldn't find the dates for", async () => {
+    mockRpc.mockResolvedValue({ data: [{ tournament_id: T_ID }], error: null });
+    tables.tournaments = [{ data: null, error: null }];
+    const res = await callList();
+    expect((await res.json()).data).toEqual([]);
   });
 
   it("500s when the date lookup fails", async () => {
