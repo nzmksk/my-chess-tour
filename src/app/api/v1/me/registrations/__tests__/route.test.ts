@@ -235,6 +235,70 @@ describe("GET /api/v1/me/registrations", () => {
       expect(json.data[0].entry_fee_cents).toBeNull();
     });
 
+    it("has no refund when none was issued", async () => {
+      setQueryResult([makeRegistration({ refunds: [] })]);
+
+      const json = await (await GET(makeRequest())).json();
+
+      expect(json.data[0].refund).toBeNull();
+    });
+
+    it("returns the live refund's state, amount and dates", async () => {
+      setQueryResult([
+        makeRegistration({
+          tournaments: { ...makeRegistration().tournaments, status: "cancelled" },
+          refunds: [
+            {
+              status: "rejected",
+              refund_amount_cents: 1,
+              requested_at: "2026-03-01T00:00:00Z",
+              processed_at: null,
+              failed_at: null,
+            },
+            {
+              status: "approved",
+              refund_amount_cents: 5500,
+              requested_at: "2026-03-10T00:00:00Z",
+              processed_at: "2026-03-11T00:00:00Z",
+              failed_at: null,
+            },
+          ],
+        }),
+      ]);
+
+      const json = await (await GET(makeRequest())).json();
+
+      expect(json.data[0].refund).toEqual({
+        state: "refunded",
+        amount_cents: 5500,
+        requested_at: "2026-03-10T00:00:00Z",
+        processed_at: "2026-03-11T00:00:00Z",
+      });
+    });
+
+    it.each([
+      ["processing", null],
+      ["failed", "2026-03-10T01:00:00Z"],
+    ])("reports a pending refund as %s", async (state, failedAt) => {
+      setQueryResult([
+        makeRegistration({
+          refunds: [
+            {
+              status: "pending",
+              refund_amount_cents: 5500,
+              requested_at: "2026-03-10T00:00:00Z",
+              processed_at: null,
+              failed_at: failedAt,
+            },
+          ],
+        }),
+      ]);
+
+      const json = await (await GET(makeRequest())).json();
+
+      expect(json.data[0].refund.state).toBe(state);
+    });
+
     it("returns empty data array when there are no registrations", async () => {
       setQueryResult([]);
 

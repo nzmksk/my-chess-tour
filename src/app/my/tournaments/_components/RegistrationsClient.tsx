@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { PlayerRegistration, RegistrationStatus } from "../types";
 import type { TournamentFormat, TimeControl } from "@/app/tournaments/types";
+import { formatRinggit } from "@/services/payouts/format";
+import { formatInstantDate } from "@/lib/tournaments/datetime";
 
 type Tab = "upcoming" | "past" | "cancelled";
 
@@ -15,6 +17,11 @@ function classifyRegistration(
   reg: PlayerRegistration,
   today: Date,
 ): Tab | null {
+  // A cancelled tournament leaves the registration itself `confirmed` (the
+  // refund ledger, not the registration, records the money going back), so
+  // without this it would sit under Upcoming looking like a live entry.
+  if (reg.tournament.status === "cancelled") return "cancelled";
+
   const startDate = new Date(reg.tournament.start_date + "T00:00:00");
   const isActive =
     reg.status === "confirmed" || reg.status === "pending_payment";
@@ -38,7 +45,13 @@ function formatTournamentType(format: TournamentFormat): string {
   return format.type.charAt(0).toUpperCase() + format.type.slice(1);
 }
 
-function StatusBadge({ status }: { status: RegistrationStatus }) {
+function StatusBadge({
+  status,
+  tournamentCancelled,
+}: {
+  status: RegistrationStatus;
+  tournamentCancelled: boolean;
+}) {
   const config: Record<
     RegistrationStatus,
     { label: string; className: string }
@@ -65,7 +78,12 @@ function StatusBadge({ status }: { status: RegistrationStatus }) {
     },
   };
 
-  const { label, className } = config[status] ?? config.cancelled_payment;
+  const { label, className } = tournamentCancelled
+    ? {
+        label: "Tournament Cancelled",
+        className: "bg-bg-raised text-text-muted border border-border",
+      }
+    : (config[status] ?? config.cancelled_payment);
 
   return (
     <span
@@ -73,6 +91,40 @@ function StatusBadge({ status }: { status: RegistrationStatus }) {
     >
       {label}
     </span>
+  );
+}
+
+// Where the refund for a cancelled tournament stands, so the player can follow
+// the money the cancellation email promised (#511).
+function RefundLine({
+  refund,
+}: {
+  refund: NonNullable<PlayerRegistration["refund"]>;
+}) {
+  const amount = formatRinggit(refund.amount_cents);
+
+  if (refund.state === "refunded") {
+    return (
+      <p className="font-lato text-xs text-success mt-1">
+        Refunded {amount}
+        {refund.processed_at && ` on ${formatInstantDate(refund.processed_at)}`}
+      </p>
+    );
+  }
+
+  if (refund.state === "failed") {
+    return (
+      <p className="font-lato text-xs text-danger mt-1">
+        Refund of {amount} could not be completed. Contact
+        support@mychesstour.com and we will arrange it.
+      </p>
+    );
+  }
+
+  return (
+    <p className="font-lato text-xs text-warning mt-1">
+      Refund of {amount} processing
+    </p>
   );
 }
 
@@ -122,10 +174,14 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
             </>
           )}
         </p>
+        {registration.refund && <RefundLine refund={registration.refund} />}
       </div>
 
       {/* Status badge */}
-      <StatusBadge status={status} />
+      <StatusBadge
+        status={status}
+        tournamentCancelled={tournament.status === "cancelled"}
+      />
     </Link>
   );
 }
@@ -135,7 +191,7 @@ function EmptyState({ tab }: { tab: Tab }) {
     upcoming:
       "No upcoming tournaments. Browse available tournaments to register.",
     past: "No past tournaments yet.",
-    cancelled: "No cancelled registrations.",
+    cancelled: "No cancelled registrations or tournaments.",
   };
 
   return (

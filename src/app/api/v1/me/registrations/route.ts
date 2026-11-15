@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { EntryFees } from "@/app/tournaments/types";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { liveRefund, refundState } from "@/lib/refunds/state";
 
 const VALID_STATUSES = new Set([
   "pending_payment",
@@ -28,6 +29,14 @@ type TournamentRow = {
   status: string;
 };
 
+type RefundRow = {
+  status: string;
+  refund_amount_cents: number;
+  requested_at: string;
+  processed_at: string | null;
+  failed_at: string | null;
+};
+
 type RegistrationRow = {
   id: string;
   fee_tier: string;
@@ -35,6 +44,7 @@ type RegistrationRow = {
   registered_at: string;
   confirmed_at: string | null;
   tournaments: TournamentRow;
+  refunds: RefundRow[] | null;
 };
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -115,7 +125,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       `id, fee_tier, status, registered_at, confirmed_at,
       tournaments!inner (
         id, slug, name, start_date, venue_name, venue_state, format, time_control, entry_fees, status
-      )`,
+      ),
+      refunds (status, refund_amount_cents, requested_at, processed_at, failed_at)`,
     )
     .eq("user_id", claims.id)
     // Deterministic base order so equal sort keys (e.g. same start_date) resolve
@@ -151,6 +162,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
+    // Today only a tournament cancellation creates a refund (#477), so this is
+    // how a player follows the money the cancellation email promised (#511).
+    const refund = liveRefund(row.refunds);
+
     return {
       id: row.id,
       tournament: {
@@ -169,6 +184,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       status: row.status,
       registered_at: row.registered_at,
       confirmed_at: row.confirmed_at,
+      refund: refund
+        ? {
+            state: refundState(refund),
+            amount_cents: refund.refund_amount_cents,
+            requested_at: refund.requested_at,
+            processed_at: refund.processed_at,
+          }
+        : null,
     };
   });
 
