@@ -5,6 +5,7 @@ import {
   hasGlobalPermission,
 } from "@/services/supabase/permission";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
+import { hasPaidRegistration } from "@/services/payments/paid-registration";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
 import {
   INTERNAL_ERROR_MESSAGE,
@@ -63,6 +64,12 @@ interface TournamentManageData {
     } | null;
   };
   stats: { total: number; confirmed: number; pending: number };
+  /**
+   * Whether a registration payment has settled, which puts the tournament in
+   * the edit policy's "paid" stage. Not the same as `stats.confirmed > 0`: a
+   * paid registration that was later forfeited still counts here.
+   */
+  hasPaidRegistration: boolean;
   participants: ManageParticipant[];
   // A cancellation request awaiting platform-admin review, if one is open.
   cancellationPending: boolean;
@@ -308,6 +315,13 @@ async function loadTournamentManageData(
     (r) => r.status === "pending_payment",
   ).length;
 
+  // Same helper the PATCH route uses, so the edit wizard locks exactly what
+  // the API would refuse.
+  const paid = await hasPaidRegistration(id);
+  if (!paid.ok) {
+    return internalError(`failed to check payments for ${id}`, paid.error);
+  }
+
   // Is there a cancellation request awaiting admin review? Drives the manage
   // page's "cancellation pending" banner (and hides the cancel action).
   const { count: pendingCancellationCount } = await supabaseAdmin
@@ -360,6 +374,7 @@ async function loadTournamentManageData(
           : null,
       },
       stats: { total, confirmed, pending },
+      hasPaidRegistration: paid.paid,
       participants,
       cancellationPending: (pendingCancellationCount ?? 0) > 0,
     },

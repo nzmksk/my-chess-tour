@@ -10,7 +10,7 @@ const { builders, mockFrom, mockRpc, mockGetAuthClaims, mockHasGlobal } =
       const b: Record<string, unknown> & {
         result: { data: unknown; error: unknown; count?: number };
       } = { result: { data: null, error: null } };
-      for (const m of ["select", "eq", "in", "is", "order", "single"]) {
+      for (const m of ["select", "eq", "in", "is", "order", "single", "limit"]) {
         b[m] = vi.fn(() => b);
       }
       b.then = (
@@ -28,6 +28,7 @@ const { builders, mockFrom, mockRpc, mockGetAuthClaims, mockHasGlobal } =
       users: makeBuilder(),
       player_profiles: makeBuilder(),
       tournament_cancellation_requests: makeBuilder(),
+      payments: makeBuilder(),
     };
 
     return {
@@ -106,6 +107,7 @@ beforeEach(() => {
     error: null,
     count: 0,
   };
+  builders.payments.result = { data: null, error: null, count: 0 };
   mockGetAuthClaims.mockResolvedValue({ id: USER_ID });
   mockHasGlobal.mockResolvedValue(true);
 });
@@ -179,5 +181,40 @@ describe("getTournamentManageData", () => {
       ["id", TOUR_ID],
       ["organization_id", ORG_ID],
     ]);
+  });
+});
+
+describe("hasPaidRegistration", () => {
+  it("is false when no registration payment has settled", async () => {
+    const result = await getAdminTournamentManageData(TOUR_ID);
+    expect(result.ok && result.data.hasPaidRegistration).toBe(false);
+  });
+
+  // A refunded registration is forfeited, so nobody is confirmed, but its
+  // payment row stays 'paid' and the API still locks the paid-stage fields.
+  it("is true for a paid registration that is no longer confirmed", async () => {
+    builders.registrations.result = { data: [], error: null };
+    builders.payments.result = { data: null, error: null, count: 1 };
+
+    const result = await getAdminTournamentManageData(TOUR_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.stats.confirmed).toBe(0);
+    expect(result.data.hasPaidRegistration).toBe(true);
+    expect(eqCalls("payments")).toEqual([
+      ["tournament_id", TOUR_ID],
+      ["type", "registration"],
+      ["status", "paid"],
+    ]);
+  });
+
+  it("fails the load rather than guess when the check fails", async () => {
+    builders.payments.result = {
+      data: null,
+      error: { message: "db down" },
+    };
+    const result = await getAdminTournamentManageData(TOUR_ID);
+    expect(result).toMatchObject({ ok: false, status: 500 });
   });
 });
