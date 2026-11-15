@@ -33,7 +33,10 @@ const NO_ERRORS: FieldErrors = {};
 function validate(
   data: FormatData,
   timeZone: string,
-  { startDateLocked = false }: { startDateLocked?: boolean } = {},
+  {
+    startDateLocked = false,
+    capacityFloor = null,
+  }: { startDateLocked?: boolean; capacityFloor?: number | null } = {},
 ): FieldErrors {
   const errors: FieldErrors = {};
 
@@ -90,6 +93,11 @@ function validate(
     errors.maxParticipants = "Maximum participants is required.";
   } else if (Number(data.maxParticipants) < 2) {
     errors.maxParticipants = "Must allow at least 2 participants.";
+  } else if (
+    capacityFloor !== null &&
+    Number(data.maxParticipants) < capacityFloor
+  ) {
+    errors.maxParticipants = `A player has already paid, so capacity can't go below ${capacityFloor}.`;
   }
 
   const restrictionErrors: Record<string, string> = {};
@@ -121,6 +129,7 @@ export default function FormatStep() {
     goNext,
     registerStepHandler,
     isLocked,
+    capacityFloor,
   } = useTournamentWizard();
 
   // Memoized so it is a stable dependency of attemptNext below.
@@ -139,7 +148,7 @@ export default function FormatStep() {
 
   // Errors are derived from the form — no need to mirror them into state.
   const errors = showErrors
-    ? validate(form, timeZone, { startDateLocked })
+    ? validate(form, timeZone, { startDateLocked, capacityFloor })
     : NO_ERRORS;
 
   const field = <K extends keyof FormatData>(key: K, value: FormatData[K]) => {
@@ -185,14 +194,17 @@ export default function FormatStep() {
 
   const attemptNext = useCallback(async () => {
     setShowErrors(true);
-    const fieldErrors = validate(form, timeZone, { startDateLocked });
+    const fieldErrors = validate(form, timeZone, {
+      startDateLocked,
+      capacityFloor,
+    });
     const hasErrors =
       Object.keys(fieldErrors).filter((k) => k !== "restrictions").length > 0 ||
       Object.keys(fieldErrors.restrictions ?? {}).length > 0;
     if (hasErrors) return;
     setFormatData(form);
     goNext();
-  }, [form, timeZone, startDateLocked, setFormatData, goNext]);
+  }, [form, timeZone, startDateLocked, capacityFloor, setFormatData, goNext]);
 
   useEffect(() => {
     registerStepHandler(1, attemptNext);
@@ -454,15 +466,22 @@ export default function FormatStep() {
             value={
               form.maxParticipants === "" ? "" : String(form.maxParticipants)
             }
-            min={2}
+            min={capacityFloor ?? 2}
             onChange={(e) => {
               const raw = e.target.value;
               field("maxParticipants", raw === "" ? "" : Number(raw));
             }}
             disabled={isLocked("max_participants")}
           />
-          {showErrors && errors.maxParticipants && (
+          {showErrors && errors.maxParticipants ? (
             <p className="input-hint error">{errors.maxParticipants}</p>
+          ) : (
+            capacityFloor !== null && (
+              <p className="input-hint">
+                Players have paid, so capacity can only go up from{" "}
+                {capacityFloor}.
+              </p>
+            )
           )}
         </div>
       </div>

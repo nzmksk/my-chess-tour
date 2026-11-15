@@ -258,6 +258,7 @@ export default async function EditTournamentPage({
         excludeId={id}
         canNominate={canNominate}
         editStage={editStage}
+        savedCapacity={tournament.max_participants}
       >
         <WizardShell
           orgId={orgId}

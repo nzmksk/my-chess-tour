@@ -21,6 +21,7 @@ import type {
 import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
 import {
   isFieldEditable,
+  isIncreaseOnly,
   type EditStage,
   type EditableField,
 } from "@/lib/tournaments/edit-policy";
@@ -132,6 +133,12 @@ interface TournamentWizardContextType {
   editStage: EditStage;
   /** True when the edit policy has locked `field` at the current stage. */
   isLocked: (field: EditableField) => boolean;
+  /**
+   * The lowest capacity the organizer may save: the saved capacity once a
+   * player has paid (it can only go up from there), else null for no floor
+   * beyond the usual minimum.
+   */
+  capacityFloor: number | null;
   orgId: string;
   tournamentId: string | null;
   setTournamentId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -153,6 +160,7 @@ export function TournamentWizardProvider({
   excludeId = null,
   canNominate = false,
   editStage = "draft",
+  savedCapacity = null,
 }: {
   orgId: string;
   children: React.ReactNode;
@@ -161,6 +169,8 @@ export function TournamentWizardProvider({
   excludeId?: string | null;
   canNominate?: boolean;
   editStage?: EditStage;
+  /** The capacity on the server, when editing. Not taken from sessionStorage. */
+  savedCapacity?: number | null;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -295,6 +305,9 @@ export function TournamentWizardProvider({
     (field: EditableField) => !isFieldEditable(field, editStage),
     [editStage],
   );
+  const capacityFloor = isIncreaseOnly("max_participants", editStage)
+    ? savedCapacity
+    : null;
 
   return (
     <TournamentWizardContext.Provider
@@ -318,6 +331,7 @@ export function TournamentWizardProvider({
         canNominate,
         editStage,
         isLocked,
+        capacityFloor,
         orgId,
         tournamentId,
         setTournamentId,

@@ -1,11 +1,20 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import BasicInfoStep from "../steps/BasicInfoStep";
 import FormatStep from "../steps/FormatStep";
 import FeesStep from "../steps/FeesStep";
-import { TournamentWizardProvider } from "../TournamentWizardContext";
+import {
+  TournamentWizardProvider,
+  useTournamentWizard,
+} from "../TournamentWizardContext";
 import type { PersistedState } from "../../types";
 import type { EditStage } from "@/lib/tournaments/edit-policy";
 
@@ -44,12 +53,17 @@ const INITIAL = {
   completedSteps: [],
 } satisfies PersistedState;
 
-function renderStep(step: React.ReactNode, editStage: EditStage) {
+function renderStep(
+  step: React.ReactNode,
+  editStage: EditStage,
+  savedCapacity: number | null = null,
+) {
   return render(
     <TournamentWizardProvider
       orgId={ORG_ID}
       initialData={INITIAL}
       editStage={editStage}
+      savedCapacity={savedCapacity}
     >
       {step}
     </TournamentWizardProvider>,
@@ -64,6 +78,16 @@ function isDisabled(el: Element) {
 
 function field(label: RegExp) {
   return { disabled: isDisabled(screen.getByLabelText(label)) };
+}
+
+/** Stands in for WizardShell's Next button, which runs the step's handler. */
+function NextButton() {
+  const { triggerStepHandler } = useTournamentWizard();
+  return (
+    <button type="button" onClick={() => void triggerStepHandler(1)}>
+      Next
+    </button>
+  );
 }
 
 beforeEach(() => sessionStorage.clear());
@@ -95,6 +119,41 @@ describe("wizard steps under the edit policy", () => {
     expect(field(/registration deadline/i).disabled).toBe(false);
     // Increase-only rather than locked.
     expect(field(/max participants/i).disabled).toBe(false);
+  });
+
+  it("only lets capacity go up after a payment", async () => {
+    renderStep(
+      <>
+        <FormatStep />
+        <NextButton />
+      </>,
+      "paid",
+      64,
+    );
+    await screen.findByText(/format & schedule/i);
+    const input = screen.getByLabelText(/max participants/i);
+    expect(input.getAttribute("min")).toBe("64");
+    screen.getByText(/capacity can only go up from 64/i);
+
+    fireEvent.change(input, { target: { value: "48" } });
+    fireEvent.click(screen.getByRole("button", { name: /^next$/i }));
+    await waitFor(() => screen.getByText(/can't go below 64/i));
+  });
+
+  it("puts no floor on capacity before anyone has paid", async () => {
+    renderStep(<FormatStep />, "published", 64);
+    await screen.findByText(/format & schedule/i);
+    expect(screen.getByLabelText(/max participants/i).getAttribute("min")).toBe(
+      "2",
+    );
+    expect(screen.queryByText(/can only go up/i)).toBeNull();
+  });
+
+  it("locks capacity once the tournament has started", async () => {
+    renderStep(<FormatStep />, "ongoing", 64);
+    await screen.findByText(/format & schedule/i);
+    expect(field(/max participants/i).disabled).toBe(true);
+    expect(screen.queryByText(/can only go up/i)).toBeNull();
   });
 
   it("locks the whole fees step after a payment", async () => {
