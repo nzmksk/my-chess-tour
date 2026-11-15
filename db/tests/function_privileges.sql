@@ -36,6 +36,7 @@ DECLARE
     'review_organization_application',
     'review_tournament_cancellation',
     'assert_tournament_capacity',
+    'count_taken_seats',
     'create_registration_with_payment',
     'start_new_payment_attempt',
     'settle_registration_payment',

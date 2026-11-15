@@ -720,9 +720,38 @@ CREATE TRIGGER guard_beneficiary_columns BEFORE INSERT OR UPDATE ON tournaments
 -- a scheduler. Enforced purely in Postgres so the lock guarantee holds.
 -- =============================================
 
--- Shared capacity guard. Locks the tournament row, counts confirmed seats plus
--- pending_payment seats still inside the 10-minute hold window, and raises if at
--- capacity. p_exclude_registration_id lets a resume ignore its own row.
+-- The seats a tournament has given out: confirmed registrations plus
+-- pending_payment holds still inside the 10-minute window. The one definition
+-- of "taken", for the capacity guard below and anything else that needs it.
+-- p_exclude_registration_id lets a resume ignore its own row.
+--
+-- Counts without locking: callers must hold the tournament row lock first, or
+-- a hold can land between the count and whatever they decide from it.
+CREATE OR REPLACE FUNCTION count_taken_seats(
+  p_tournament_id           uuid,
+  p_exclude_registration_id uuid DEFAULT NULL
+)
+RETURNS integer
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT COUNT(*)::integer
+  FROM registrations
+  WHERE tournament_id = p_tournament_id
+    AND (
+      status = 'confirmed'
+      OR (
+        status = 'pending_payment'
+        AND registered_at > now() - interval '10 minutes'
+      )
+    )
+    AND (p_exclude_registration_id IS NULL OR id <> p_exclude_registration_id);
+$$;
+
+-- Shared capacity guard. Locks the tournament row, counts the seats taken, and
+-- raises if at capacity. p_exclude_registration_id lets a resume ignore its own
+-- row.
 CREATE OR REPLACE FUNCTION assert_tournament_capacity(
   p_tournament_id           uuid,
   p_exclude_registration_id uuid DEFAULT NULL
@@ -741,17 +770,7 @@ BEGIN
   WHERE id = p_tournament_id
   FOR UPDATE;
 
-  SELECT COUNT(*) INTO v_current
-  FROM registrations
-  WHERE tournament_id = p_tournament_id
-    AND (
-      status = 'confirmed'
-      OR (
-        status = 'pending_payment'
-        AND registered_at > now() - interval '10 minutes'
-      )
-    )
-    AND (p_exclude_registration_id IS NULL OR id <> p_exclude_registration_id);
+  v_current := count_taken_seats(p_tournament_id, p_exclude_registration_id);
 
   IF v_current >= v_max THEN
     RAISE EXCEPTION 'Tournament is full (% / % participants)', v_current, v_max
@@ -1493,7 +1512,9 @@ $$;
 -- assert_tournament_capacity is revoked too. The enforce_tournament_capacity
 -- trigger calls it with the inserting role's rights, but clients can no longer
 -- insert registrations (004_rls.sql), so it only ever fires inside the
--- SECURITY DEFINER functions in 007, which run as the owner.
+-- SECURITY DEFINER functions in 007, which run as the owner. count_taken_seats
+-- is not SECURITY DEFINER (a client call would only count what RLS shows it),
+-- but its callers are, so it is revoked with them.
 --
 -- db/tests/function_privileges.sql fails if a SECURITY DEFINER function is
 -- executable by anon or authenticated without being on that list.
@@ -1503,6 +1524,7 @@ REVOKE EXECUTE ON FUNCTION create_organization_application FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION review_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_tournament_cancellation  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION assert_tournament_capacity      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION count_taken_seats               FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION payout_recipient_problem        FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION nominate_payout_beneficiary     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, authenticated;
@@ -1515,6 +1537,7 @@ GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_tournament_cancellation  TO service_role;
 GRANT EXECUTE ON FUNCTION assert_tournament_capacity      TO service_role;
+GRANT EXECUTE ON FUNCTION count_taken_seats               TO service_role;
 GRANT EXECUTE ON FUNCTION payout_recipient_problem        TO service_role;
 GRANT EXECUTE ON FUNCTION nominate_payout_beneficiary     TO service_role;
 GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
