@@ -11,10 +11,12 @@
 --   M1  every money field can be changed while nothing is paid
 --   M2  a pending (unpaid) registration does not lock anything
 --   M3  after a paid registration a change is refused, naming the field
+--       (here a capacity decrease)
 --   M4  re-saving the same value after payment is still allowed
 --   M5  non-money fields stay editable after payment
 --   M6  dates, region, format, time control, ratings and restrictions lock too
 --   M7  name, venue name/address and the registration deadline stay editable
+--   M8  capacity can still be raised after payment (but M3: not lowered)
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it persists
@@ -75,11 +77,11 @@ BEGIN
     RAISE EXCEPTION 'M3 FAIL: max_participants changed after a player paid';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM LIKE 'M3 FAIL%' THEN RAISE; END IF;
-    IF SQLERRM NOT LIKE '%these fields are locked: max_participants%' THEN
+    IF SQLERRM NOT LIKE '%these fields are locked: max_participants (can only increase)%' THEN
       RAISE EXCEPTION 'M3 FAIL: unexpected error: %', SQLERRM;
     END IF;
   END;
-  RAISE NOTICE 'M3 PASS — locked after payment, naming the field';
+  RAISE NOTICE 'M3 PASS — capacity decrease refused after payment, naming the field';
 
   -- ===== M4: an unchanged value is not a change =============================
   UPDATE tournaments SET max_participants = 110 WHERE id = v_t;
@@ -128,6 +130,23 @@ BEGIN
         registration_deadline = now() + interval '19 days'
     WHERE id = v_t;
   RAISE NOTICE 'M7 PASS — cosmetic fields and the deadline stay editable';
+
+  -- ===== M8: capacity can still grow ========================================
+  UPDATE tournaments SET max_participants = 150 WHERE id = v_t;
+  IF (SELECT max_participants FROM tournaments WHERE id = v_t) <> 150 THEN
+    RAISE EXCEPTION 'M8 FAIL: capacity raise did not land';
+  END IF;
+  -- ...and the raise is the new floor.
+  BEGIN
+    UPDATE tournaments SET max_participants = 140 WHERE id = v_t;
+    RAISE EXCEPTION 'M8 FAIL: capacity lowered after a raise';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'M8 FAIL%' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE '%max_participants (can only increase)%' THEN
+      RAISE EXCEPTION 'M8 FAIL: unexpected error: %', SQLERRM;
+    END IF;
+  END;
+  RAISE NOTICE 'M8 PASS — capacity can be raised after payment, never lowered';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;

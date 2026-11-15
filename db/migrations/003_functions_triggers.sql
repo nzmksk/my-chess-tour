@@ -554,13 +554,15 @@ $$;
 -- =============================================
 -- TOURNAMENT EDIT FREEZE (paid-registration stage)
 -- Once anyone has paid, the fields that define what they paid for lock:
--- what it costs and what can be won (entry_fees, prizes, max_participants, the
--- commission split), who receives the money (the beneficiary pair), when and
+-- what it costs and what can be won (entry_fees, prizes, the commission
+-- split), who receives the money (the beneficiary pair), when and
 -- where it runs (dates, venue country/state and the timezone derived from
 -- them), and what kind of event it is and who may enter (format, time_control,
 -- rating flags, restrictions). Changing any of them rewrites a concluded
--- transaction. src/lib/tournaments/edit-policy.ts is the full policy, and this
--- column list is its "paid" stage.
+-- transaction. max_participants is the exception: it may still go up (more
+-- places harms nobody who paid), but not down (fewer could leave a paid player
+-- without a seat). src/lib/tournaments/edit-policy.ts is the full policy, and
+-- this column list is its "paid" stage.
 --
 -- The PATCH route returns the readable 409 (naming the rejected fields); this
 -- trigger is the authority, so the rule holds for any writer including the
@@ -591,8 +593,10 @@ BEGIN
   IF NEW.prizes IS DISTINCT FROM OLD.prizes THEN
     v_changed := array_append(v_changed, 'prizes');
   END IF;
-  IF NEW.max_participants IS DISTINCT FROM OLD.max_participants THEN
-    v_changed := array_append(v_changed, 'max_participants');
+  -- Increase-only: a raise opens more places and is allowed. (NOT NULL, so a
+  -- plain comparison is enough.)
+  IF NEW.max_participants < OLD.max_participants THEN
+    v_changed := array_append(v_changed, 'max_participants (can only increase)');
   END IF;
   IF NEW.commission_rate IS DISTINCT FROM OLD.commission_rate THEN
     v_changed := array_append(v_changed, 'commission_rate');
