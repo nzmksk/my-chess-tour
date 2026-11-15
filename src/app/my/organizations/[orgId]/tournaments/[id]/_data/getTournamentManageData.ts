@@ -4,8 +4,8 @@ import {
   getAuthClaims,
   hasGlobalPermission,
 } from "@/services/supabase/permission";
-import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 import { hasPaidRegistration } from "@/services/payments/paid-registration";
+import { loadRoster, rosterDisplayName } from "@/services/registrations/roster";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
 import {
   INTERNAL_ERROR_MESSAGE,
@@ -210,109 +210,33 @@ async function loadTournamentManageData(
     return internalError(`failed to load tournament ${id}`, tErr);
   }
 
-  // Terminalize this tournament's lapsed pending checkouts before listing so
-  // the roster's pending_payment rows are genuinely live (CHIP sends no expiry
-  // event). Bulk sweep skips the per-row CHIP cancel — the purchase `due`
-  // already makes the link unpayable. Best-effort: never block the page.
-  const { error: expireErr } = await supabaseAdmin.rpc(
-    "expire_stale_pending_payments",
-    { p_ttl: PAYMENT_TIMEOUT_INTERVAL, p_tournament_id: id },
+  const roster = await loadRoster(
+    id,
+    (tournament.format as { type?: string } | null)?.type,
   );
-  if (expireErr) {
-    console.warn(
-      "expire_stale_pending_payments failed (continuing):",
-      expireErr,
+  if (!roster.ok) {
+    return internalError(
+      `failed to load ${roster.context} for ${id}`,
+      roster.error,
     );
   }
 
-  const { data: regs, error: regErr } = await supabaseAdmin
-    .from("registrations")
-    .select("id, user_id, fee_tier, status, registered_at")
-    .eq("tournament_id", id)
-    .in("status", ["confirmed", "pending_payment"])
-    .order("registered_at", { ascending: true });
+  const participants: ManageParticipant[] = roster.entries.map((entry) => ({
+    index: entry.index,
+    id: entry.registration_id,
+    user_id: entry.user_id,
+    name: rosterDisplayName(entry),
+    fide_id: entry.fide_id,
+    rating: entry.fide_rating,
+    fee_tier: entry.fee_tier,
+    status: entry.status,
+    registered_at: entry.registered_at,
+  }));
 
-  if (regErr) {
-    return internalError(`failed to load registrations for ${id}`, regErr);
-  }
-
-  const registrations = (regs ?? []) as Array<{
-    id: string;
-    user_id: string;
-    fee_tier: string;
-    status: string;
-    registered_at: string;
-  }>;
-
-  const userIds = registrations.map((r) => r.user_id).filter(Boolean);
-
-  type UserRow = { id: string; first_name: string; last_name: string };
-  type ProfileRow = {
-    user_id: string;
-    fide_id: number | null;
-    fide_rating: Record<string, number> | null;
-    national_rating: number | null;
-  };
-
-  let userMap = new Map<string, UserRow>();
-  let profileMap = new Map<string, ProfileRow>();
-
-  if (userIds.length > 0) {
-    const [{ data: users }, { data: profiles }] = await Promise.all([
-      supabaseAdmin
-        .from("users")
-        .select("id, first_name, last_name")
-        .in("id", userIds),
-      supabaseAdmin
-        .from("player_profiles")
-        .select("user_id, fide_id, fide_rating, national_rating")
-        .in("user_id", userIds),
-    ]);
-
-    userMap = new Map(((users as UserRow[]) ?? []).map((u) => [u.id, u]));
-    profileMap = new Map(
-      ((profiles as ProfileRow[]) ?? []).map((p) => [p.user_id, p]),
-    );
-  }
-
-  const formatType =
-    (tournament.format as { type?: string } | null)?.type ?? "";
-
-  const participants: ManageParticipant[] = registrations.map((reg, idx) => {
-    const u = userMap.get(reg.user_id);
-    const p = profileMap.get(reg.user_id);
-
-    let rating: number | null = null;
-    if (p?.fide_rating) {
-      const r = p.fide_rating;
-      if (formatType === "blitz") {
-        rating = r.blitz ?? r.rapid ?? r.standard ?? null;
-      } else if (formatType === "rapid") {
-        rating = r.rapid ?? r.standard ?? null;
-      } else {
-        rating = r.standard ?? null;
-      }
-    }
-
-    return {
-      index: idx + 1,
-      id: reg.id,
-      user_id: reg.user_id,
-      name: u ? `${u.first_name} ${u.last_name}` : "Unknown",
-      fide_id: p?.fide_id ?? null,
-      rating,
-      fee_tier: reg.fee_tier,
-      status: reg.status,
-      registered_at: reg.registered_at,
-    };
-  });
-
-  const total = registrations.length;
-  const confirmed = registrations.filter(
-    (r) => r.status === "confirmed",
-  ).length;
-  const pending = registrations.filter(
-    (r) => r.status === "pending_payment",
+  const total = participants.length;
+  const confirmed = participants.filter((p) => p.status === "confirmed").length;
+  const pending = participants.filter(
+    (p) => p.status === "pending_payment",
   ).length;
 
   // Same helper the PATCH route uses, so the edit wizard locks exactly what
