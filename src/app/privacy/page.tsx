@@ -56,8 +56,9 @@ export default function PrivacyPage() {
                   and FIDE registration
                 </li>
                 <li>
-                  OKU (disability) status — collected solely to facilitate
-                  accessibility requirements at events
+                  OKU (disability) status — collected to facilitate
+                  accessibility requirements at events and for OKU categories
+                  and prizes
                 </li>
               </ul>
 
@@ -121,7 +122,11 @@ export default function PrivacyPage() {
                         OKU (disability) status
                       </td>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
-                        Event accessibility and FIDE Special Needs registration
+                        Event accessibility; FIDE Special Needs registration;
+                        OKU categories and special prizes. Whether you are
+                        verified OKU is shared with the organisers of
+                        tournaments you enter — never your card or the outcome
+                        of a pending or rejected application
                       </td>
                     </tr>
                     <tr>
@@ -283,8 +288,9 @@ export default function PrivacyPage() {
                   Sensitive personal data (OKU status, date of birth, gender)
                   and financial data (bank details) are restricted to the
                   specific features that need them, and to authorised personnel.
-                  Date of birth and gender are also shared with the organisers
-                  of tournaments you enter, as described under Sharing of Data.
+                  Date of birth, gender and verified OKU status are also shared
+                  with the organisers of tournaments you enter, as described
+                  under Sharing of Data.
                 </li>
                 <li>
                   Bank account numbers and document paths are masked in our
@@ -353,10 +359,12 @@ export default function PrivacyPage() {
                 <li>
                   <strong>Tournament organisers</strong> — for each tournament
                   you enter, its organiser receives your name, title, FIDE and
-                  MCF IDs and ratings, gender, date of birth and nationality,
-                  and can download them as a participant list. They use these
-                  for pairing, age and gender categories, and certification.
-                  Your OKU status and contact details are not shared.
+                  MCF IDs and ratings, gender, date of birth, nationality and
+                  whether you are verified OKU, and can download them as a
+                  participant list. They use these for pairing, for age, gender
+                  and OKU categories and special prizes, and for certification.
+                  Your OKU card, any pending or rejected OKU application, and
+                  your contact details are not shared.
                 </li>
                 <li>
                   <strong>CHIP (chip-in.asia)</strong> — our licensed payment
