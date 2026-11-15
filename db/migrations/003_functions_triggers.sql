@@ -722,8 +722,9 @@ CREATE TRIGGER guard_beneficiary_columns BEFORE INSERT OR UPDATE ON tournaments
 
 -- The seats a tournament has given out: confirmed registrations plus
 -- pending_payment holds still inside the 10-minute window. The one definition
--- of "taken", for the capacity guard below and anything else that needs it.
--- p_exclude_registration_id lets a resume ignore its own row.
+-- of "taken", shared by the capacity guard below and the capacity floor
+-- (guard_tournament_seats_taken). p_exclude_registration_id lets a resume
+-- ignore its own row.
 --
 -- Counts without locking: callers must hold the tournament row lock first, or
 -- a hold can land between the count and whatever they decide from it.
@@ -791,6 +792,62 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER enforce_tournament_capacity
   BEFORE INSERT ON registrations
   FOR EACH ROW EXECUTE FUNCTION check_tournament_capacity();
+
+-- =============================================
+-- CAPACITY FLOOR
+-- Capacity may not drop below the seats already taken. Settlement doesn't
+-- re-check capacity (a player mid-checkout was promised the seat when the hold
+-- was taken), so without this an organizer could lower capacity under live
+-- holds and every one of them would still settle: 5 confirmed against a
+-- capacity of 3. Once anyone has paid, guard_tournament_paid_fields makes
+-- capacity increase-only anyway; this covers the window before that.
+--
+-- Race with a hold: the UPDATE has already locked this tournament row (FOR NO
+-- KEY UPDATE) by the time a BEFORE ROW trigger fires, and that conflicts with
+-- the FOR UPDATE in assert_tournament_capacity. Whichever comes second waits
+-- for the first to commit, then sees its result: a hold that got in first is
+-- counted here (each statement in this function takes a fresh snapshot), and a
+-- hold that comes after reads the lowered capacity. No separate lock needed.
+--
+-- Only a decrease is checked. Raising capacity, or saving it unchanged, is
+-- always allowed, even on a row that is somehow already over capacity.
+--
+-- SECURITY DEFINER so the count isn't filtered by the caller's RLS: an org
+-- admin updating through PostgREST can't see other players' registrations, and
+-- would otherwise get a floor of zero.
+--
+-- The PATCH route turns the CAPACITY_BELOW_TAKEN sentinel into a readable 422.
+-- Named to fire after guard_paid_fields (same-event triggers run in name
+-- order), so a decrease after payment reports the paid lock, not this.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_seats_taken()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_taken integer;
+BEGIN
+  IF NEW.max_participants >= OLD.max_participants THEN
+    RETURN NEW;
+  END IF;
+
+  v_taken := count_taken_seats(NEW.id);
+
+  IF NEW.max_participants < v_taken THEN
+    RAISE EXCEPTION
+      'CAPACITY_BELOW_TAKEN: % places are already taken; tournament % cannot drop to %',
+      v_taken, NEW.id, NEW.max_participants
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_seats_taken BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_seats_taken();
 
 -- =============================================
 -- BULK PARTICIPANT COUNTS
