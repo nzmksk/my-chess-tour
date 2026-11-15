@@ -77,7 +77,9 @@ A concurrent double-submit that hits the `UNIQUE(user_id, tournament_id)` constr
 
 ## Capacity & the reservation hold
 
-`assert_tournament_capacity()` (`003`) locks the tournament row `FOR UPDATE` and counts `confirmed` seats **plus** `pending_payment` seats whose `registered_at` is within the last **10 minutes**. So an abandoned checkout stops consuming capacity after 10 minutes with no scheduler — the seat frees itself. Capacity is enforced only in Postgres; there is no JS pre-check (it would double-count lapsed holds).
+`assert_tournament_capacity()` (`003`) locks the tournament row `FOR UPDATE` and counts `confirmed` seats **plus** `pending_payment` seats whose `registered_at` is within the last **10 minutes** (`count_taken_seats()`). So an abandoned checkout stops consuming capacity after 10 minutes with no scheduler — the seat frees itself. Capacity is enforced only in Postgres; there is no JS pre-check (it would double-count lapsed holds).
+
+The same count is the floor for capacity itself: `guard_tournament_seats_taken` refuses an update that lowers `max_participants` below it (#591). Settlement doesn't re-check capacity, so without the floor, holds taken under a higher capacity would all confirm past a lowered one. The UPDATE's own row lock serializes it against `assert_tournament_capacity`'s `FOR UPDATE`, so a hold and a decrease can't both slip through; `db/tests/tournament_capacity_floor_race.sql` runs the two in parallel sessions.
 
 ## Expiry (no CHIP event)
 
