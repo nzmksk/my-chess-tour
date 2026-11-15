@@ -394,8 +394,18 @@ $$;
 --           response and the webhook settle the same refund concurrently.
 --   !paid → the CHIP refund failed: record the CHIP refund id (if any) but leave
 --           the refund pending and unprocessed so ops can retry; no ledger row.
+--           failed_at is stamped the first time only.
 -- The refund id is used as the correlation handle; p_chip_refund_id is the CHIP
 -- refund Payment id (distinct from the original purchase id).
+--
+-- The result says whether THIS call did the work, so the caller can send the
+-- refund outcome email exactly once (#512). A refund can be settled twice (the
+-- sync response and the webhook for the same refund) and CHIP may redeliver a
+-- failure, and every one of those calls returns without error:
+--   newly_settled → this call booked the refund. Exactly one call ever does.
+--   newly_failed  → this call recorded the refund's FIRST failure. A redelivered
+--                   or repeated failure reports false, so the player hears about
+--                   a failure once, and about the money landing once.
 -- =============================================
 CREATE OR REPLACE FUNCTION settle_refund(
   p_refund_id      uuid,
@@ -426,7 +436,9 @@ BEGIN
       'refund_id', v_refund.id,
       'registration_id', v_refund.registration_id,
       'already_processed', true,
-      'settled', true
+      'settled', true,
+      'newly_settled', false,
+      'newly_failed', false
     );
   END IF;
 
@@ -469,7 +481,8 @@ BEGIN
     -- Failure: record the CHIP refund id for traceability but leave the refund
     -- pending/unprocessed so a retry can re-fire it.
     UPDATE refunds
-      SET chip_refund_id = COALESCE(p_chip_refund_id, chip_refund_id)
+      SET chip_refund_id = COALESCE(p_chip_refund_id, chip_refund_id),
+          failed_at      = COALESCE(failed_at, now())
       WHERE id = p_refund_id;
   END IF;
 
@@ -477,7 +490,9 @@ BEGIN
     'refund_id', v_refund.id,
     'registration_id', v_refund.registration_id,
     'already_processed', false,
-    'settled', v_settled
+    'settled', v_settled,
+    'newly_settled', v_settled,
+    'newly_failed', NOT p_paid AND v_refund.failed_at IS NULL
   );
 END;
 $$;

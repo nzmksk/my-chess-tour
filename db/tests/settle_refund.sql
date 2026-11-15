@@ -6,6 +6,8 @@
 --     row and stamping the refund (idempotent, "already processed" no-op)
 --   * the uniq_active_refund_per_registration guard (002_indexes.sql)
 --   * tournament_payout_summary reversing a fully-refunded tournament to zero
+--   * settle_refund's newly_settled / newly_failed flags, which gate the refund
+--     outcome emails to exactly one send per outcome (#512)
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. The whole thing runs inside a transaction that
@@ -39,6 +41,7 @@ DECLARE
   v_reason  text;
   v_reqby   uuid;
   v_tstatus text;
+  v_failed_at timestamptz;
   v_row     tournament_payout_summary%ROWTYPE;
 BEGIN
   -- ---- fixtures -----------------------------------------------------------
@@ -126,8 +129,10 @@ BEGIN
 
   -- ===== R2: settle_refund books the mirrored paid ledger row ================
   v_res := settle_refund(v_refund_a, 'chip-refund-a', true, 'fpx_b2c');
-  IF (v_res->>'settled')::boolean IS NOT TRUE THEN
-    RAISE EXCEPTION 'R2 FAIL: expected settled=true, got %', v_res;
+  IF (v_res->>'settled')::boolean IS NOT TRUE
+     OR (v_res->>'newly_settled')::boolean IS NOT TRUE
+     OR (v_res->>'newly_failed')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'R2 FAIL: expected settled/newly_settled=true, newly_failed=false, got %', v_res;
   END IF;
 
   SELECT * INTO v_src FROM payments WHERE id = v_pay_a;
@@ -157,6 +162,10 @@ BEGIN
   IF (v_res->>'already_processed')::boolean IS NOT TRUE THEN
     RAISE EXCEPTION 'R3 FAIL: expected already_processed=true, got %', v_res;
   END IF;
+  IF (v_res->>'newly_settled')::boolean IS NOT FALSE
+     OR (v_res->>'newly_failed')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'R3 FAIL: a duplicate settle must not report newly_settled/newly_failed, got %', v_res;
+  END IF;
   SELECT count(*) INTO v_count FROM payments WHERE registration_id = v_reg_a AND type = 'refund';
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'R3 FAIL: refund payment rows=% (expected 1 — no duplicate)', v_count;
@@ -165,8 +174,14 @@ BEGIN
 
   -- ===== R4: a refund failure books no ledger row, stays pending ============
   v_res := settle_refund(v_refund_b, 'chip-refund-b', false, NULL);
-  IF (v_res->>'settled')::boolean IS NOT FALSE THEN
-    RAISE EXCEPTION 'R4 FAIL: expected settled=false, got %', v_res;
+  IF (v_res->>'settled')::boolean IS NOT FALSE
+     OR (v_res->>'newly_settled')::boolean IS NOT FALSE
+     OR (v_res->>'newly_failed')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'R4 FAIL: expected settled/newly_settled=false, newly_failed=true, got %', v_res;
+  END IF;
+  SELECT failed_at INTO v_failed_at FROM refunds WHERE id = v_refund_b;
+  IF v_failed_at IS NULL THEN
+    RAISE EXCEPTION 'R4 FAIL: failed_at not stamped on the first failure';
   END IF;
   IF EXISTS (SELECT 1 FROM payments WHERE registration_id = v_reg_b AND type = 'refund') THEN
     RAISE EXCEPTION 'R4 FAIL: a failed refund must not book a ledger row';
@@ -177,8 +192,28 @@ BEGIN
   END IF;
   RAISE NOTICE 'R4 PASS — refund failure left pending for retry';
 
+  -- ===== R4b: a repeated failure is not "new" (no second failure email) ======
+  -- e.g. CHIP redelivering purchase.refund_failure.
+  v_res := settle_refund(v_refund_b, NULL, false, NULL);
+  IF (v_res->>'newly_failed')::boolean IS NOT FALSE THEN
+    RAISE EXCEPTION 'R4b FAIL: a repeated failure reported newly_failed, got %', v_res;
+  END IF;
+  IF (SELECT failed_at FROM refunds WHERE id = v_refund_b) <> v_failed_at THEN
+    RAISE EXCEPTION 'R4b FAIL: failed_at moved on a repeated failure';
+  END IF;
+  IF (SELECT chip_refund_id FROM refunds WHERE id = v_refund_b) <> 'chip-refund-b' THEN
+    RAISE EXCEPTION 'R4b FAIL: a failure without a CHIP id overwrote the recorded one';
+  END IF;
+  RAISE NOTICE 'R4b PASS — repeated failure is not reported as new';
+
   -- ===== R5: retry after failure settles; payout summary nets to zero ========
-  PERFORM settle_refund(v_refund_b, 'chip-refund-b2', true, 'visa');
+  v_res := settle_refund(v_refund_b, 'chip-refund-b2', true, 'visa');
+  IF (v_res->>'newly_settled')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'R5 FAIL: a retry that clears after a failure must report newly_settled, got %', v_res;
+  END IF;
+  IF (SELECT failed_at FROM refunds WHERE id = v_refund_b) IS NULL THEN
+    RAISE EXCEPTION 'R5 FAIL: failed_at should survive the successful retry as history';
+  END IF;
   SELECT * INTO v_row FROM tournament_payout_summary WHERE tournament_id = v_tournament;
   IF v_row.net_revenue_cents <> 0 THEN
     RAISE EXCEPTION 'R5 FAIL: net_revenue_cents=% (expected 0 — both regs fully refunded)', v_row.net_revenue_cents;
