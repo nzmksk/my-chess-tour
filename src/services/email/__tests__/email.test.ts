@@ -32,6 +32,7 @@ import {
   sendPayoutFailedEmail,
   sendPayoutProcessedEmail,
   sendPayoutReviewEmail,
+  sendRefundOutcomeEmail,
   sendRegistrationConfirmationEmail,
   sendTournamentCancellationEmail,
   sendVerificationEmail,
@@ -998,6 +999,64 @@ describe("sendNominationResponseEmail", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(
       sendNominationResponseEmail("o@example.com", { ...base, accepted: true }),
+    ).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendRefundOutcomeEmail", () => {
+  const base = {
+    playerName: "Farid",
+    tournamentName: "KL Open",
+    amountCents: 11000,
+    paymentMethod: "GrabPay",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{playerName}}|{{tournamentName}}|{{amount}}|{{paymentMethod}}|{{dashboardUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("renders a completed refund from refund-completed.html", async () => {
+    await sendRefundOutcomeEmail("p@example.com", { ...base, completed: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("refund-completed.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("p@example.com");
+    expect(sent().subject).toBe("Your refund for KL Open is on its way");
+    expect(sent().html).toMatch(/^Farid\|KL Open\|RM 110\.00\|GrabPay\|.*\/my\|/);
+  });
+
+  it("renders a failed refund from refund-failed.html", async () => {
+    await sendRefundOutcomeEmail("p@example.com", { ...base, completed: false });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("refund-failed.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toMatch(/^Action needed: your refund for KL Open/);
+  });
+
+  it("escapes organizer- and player-supplied values", async () => {
+    await sendRefundOutcomeEmail("p@example.com", {
+      ...base,
+      playerName: "<i>Farid</i>",
+      tournamentName: "<b>Open</b>",
+      completed: true,
+    });
+    expect(sent().html).toContain("&lt;i&gt;Farid&lt;/i&gt;");
+    expect(sent().html).toContain("&lt;b&gt;Open&lt;/b&gt;");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendRefundOutcomeEmail("p@example.com", { ...base, completed: true }),
     ).rejects.toThrow(/nope/);
   });
 });

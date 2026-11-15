@@ -590,6 +590,49 @@ export async function sendRegistrationConfirmationEmail(
   }
 }
 
+// Tells a player how the refund promised by the cancellation email turned out:
+// completed (the money is on its way back) or failed (contact support). One
+// function with a boolean branch, like sendCancellationReviewEmail.
+// `paymentMethod` is already in words (describePaymentMethod).
+export async function sendRefundOutcomeEmail(
+  email: string,
+  params: {
+    playerName: string;
+    tournamentName: string;
+    amountCents: number;
+    paymentMethod: string;
+    completed: boolean;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate(
+    params.completed ? "refund-completed.html" : "refund-failed.html",
+  )
+    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{paymentMethod\}\}/g, escapeHtml(params.paymentMethod))
+    .replace(/\{\{dashboardUrl\}\}/g, `${siteUrl}/my`)
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const subject = params.completed
+    ? `Your refund for ${params.tournamentName} is on its way`
+    : `Action needed: your refund for ${params.tournamentName} was not completed`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send refund outcome email:", error);
+    throw new Error(`Failed to send refund outcome email: ${error.message}`);
+  }
+}
+
 // Tells the organizing organization how its payout nominee responded: accepted
 // (the payout now goes to the nominee) or declined (it stays with the organizer).
 // One function with a boolean branch, like sendCancellationReviewEmail.

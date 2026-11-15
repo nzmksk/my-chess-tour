@@ -55,6 +55,10 @@ describe("email templates", () => {
     ["registration-confirmed.html", "{{feePaid}}"],
     ["nomination-accepted.html", "{{nomineeName}}"],
     ["nomination-declined.html", "{{nomineeName}}"],
+    ["refund-completed.html", "{{amount}}"],
+    ["refund-completed.html", "{{paymentMethod}}"],
+    ["refund-failed.html", "{{amount}}"],
+    ["refund-failed.html", "{{paymentMethod}}"],
   ])("%s renders %s", (name, placeholder) => {
     expect(read(name)).toContain(placeholder);
   });
