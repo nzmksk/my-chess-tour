@@ -85,7 +85,6 @@ describe("wizard steps under the edit policy", () => {
     await screen.findByText(/format & schedule/i);
     expect(field(/start date/i).disabled).toBe(true);
     expect(field(/end date/i).disabled).toBe(true);
-    expect(field(/max participants/i).disabled).toBe(true);
     expect(field(/number of rounds/i).disabled).toBe(true);
     expect(field(/base time/i).disabled).toBe(true);
     expect(field(/fide rated/i).disabled).toBe(true);
@@ -94,6 +93,8 @@ describe("wizard steps under the edit policy", () => {
     ).toBe(true);
     // Still the organizer's to move.
     expect(field(/registration deadline/i).disabled).toBe(false);
+    // Increase-only rather than locked.
+    expect(field(/max participants/i).disabled).toBe(false);
   });
 
   it("locks the whole fees step after a payment", async () => {

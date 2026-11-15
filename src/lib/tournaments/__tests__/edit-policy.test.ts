@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   EDITABLE_FIELDS,
   canEditAnything,
+  isChangeAllowed,
   isFieldEditable,
+  isIncreaseOnly,
   lockedFields,
   needsPaymentCheck,
   resolveEditStage,
@@ -80,7 +82,6 @@ describe("isFieldEditable", () => {
     expect(lockedFields("paid")).toEqual([
       "entry_fees",
       "prizes",
-      "max_participants",
       "commission_rate",
       "organizer_commission_pct",
       "beneficiary",
@@ -133,6 +134,56 @@ describe("isFieldEditable", () => {
       const firstLocked = editable.indexOf(false);
       if (firstLocked === -1) continue;
       expect(editable.slice(firstLocked).every((e) => !e)).toBe(true);
+    }
+  });
+});
+
+describe("capacity", () => {
+  it("can move either way until someone pays", () => {
+    for (const s of ["draft", "published"] as const) {
+      expect(isIncreaseOnly("max_participants", s)).toBe(false);
+      expect(isChangeAllowed("max_participants", s, 32, 16)).toBe(true);
+      expect(isChangeAllowed("max_participants", s, 32, 64)).toBe(true);
+    }
+  });
+
+  it("can only go up after the first payment", () => {
+    expect(isFieldEditable("max_participants", "paid")).toBe(true);
+    expect(isIncreaseOnly("max_participants", "paid")).toBe(true);
+    expect(isChangeAllowed("max_participants", "paid", 32, 64)).toBe(true);
+    expect(isChangeAllowed("max_participants", "paid", 32, 16)).toBe(false);
+    expect(isChangeAllowed("max_participants", "paid", 32, null)).toBe(false);
+  });
+
+  it("locks outright once the tournament starts", () => {
+    for (const s of ["ongoing", "completed", "cancelled"] as const) {
+      expect(isIncreaseOnly("max_participants", s)).toBe(false);
+      expect(isChangeAllowed("max_participants", s, 32, 64)).toBe(false);
+    }
+  });
+
+  it("is the only increase-only field", () => {
+    expect(EDITABLE_FIELDS.filter((f) => isIncreaseOnly(f, "paid"))).toEqual([
+      "max_participants",
+    ]);
+  });
+});
+
+describe("isChangeAllowed", () => {
+  it("follows isFieldEditable for every other field", () => {
+    const stages: EditStage[] = [
+      "draft",
+      "published",
+      "paid",
+      "ongoing",
+      "completed",
+      "cancelled",
+    ];
+    for (const s of stages) {
+      for (const f of EDITABLE_FIELDS) {
+        if (f === "max_participants") continue;
+        expect(isChangeAllowed(f, s, "a", "b")).toBe(isFieldEditable(f, s));
+      }
     }
   });
 });

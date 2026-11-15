@@ -9,11 +9,11 @@
 //              move into the past. Players can see it, but nobody has paid,
 //              so there's no deal to protect yet.
 //   paid       The first registration payment has settled. What the player
-//              paid for locks: the price, the prizes, the capacity, who gets
-//              the money, when and where (country/state) it runs, what kind of
-//              event it is, and who's eligible. Cosmetic details (name,
-//              description, venue name and address) and the registration
-//              deadline stay editable.
+//              paid for locks: the price, the prizes, who gets the money, when
+//              and where (country/state) it runs, what kind of event it is,
+//              and who's eligible. Capacity can still go up but not down.
+//              Cosmetic details (name, description, venue name and address)
+//              and the registration deadline stay editable.
 //   ongoing    The start date has arrived. Only the description is editable,
 //              so the organizer can still post notices (pairings links, venue
 //              changes on the day, results).
@@ -89,7 +89,6 @@ export const LOCKS_AT: Record<EditableField, OrderedStage> = {
   // What the player is paying, and what they can win.
   entry_fees: "paid",
   prizes: "paid",
-  max_participants: "paid",
   commission_rate: "paid",
   organizer_commission_pct: "paid",
   beneficiary: "paid",
@@ -120,10 +119,26 @@ export const LOCKS_AT: Record<EditableField, OrderedStage> = {
   // Extending or shortening the deadline doesn't change anyone's paid entry.
   // (It can't outlive the start date anyway: chk_registration_deadline.)
   registration_deadline: "ongoing",
+  // Increase-only from "paid" (see INCREASE_ONLY_FROM), then locked once it
+  // starts: registration has closed by then, so there's nothing left to grow.
+  max_participants: "ongoing",
 
   // The one place to post notices while the tournament runs.
   description: "completed",
 };
+
+/**
+ * Fields that may still change from a stage on, but only upwards, until
+ * LOCKS_AT locks them outright.
+ *
+ * Capacity: more places harms nobody who has paid, so an organizer whose event
+ * sells out can open more. Fewer places could leave a paid player without a
+ * seat, so a decrease is refused.
+ */
+export const INCREASE_ONLY_FROM: Partial<Record<EditableField, OrderedStage>> =
+  {
+    max_participants: "paid",
+  };
 
 export const EDITABLE_FIELDS = Object.keys(LOCKS_AT) as EditableField[];
 
@@ -134,6 +149,38 @@ export function isFieldEditable(
 ): boolean {
   if (stage === "cancelled") return false;
   return STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(LOCKS_AT[field]);
+}
+
+/**
+ * True when `field` is still editable at `stage` but may only increase. A
+ * locked field is not increase-only: it can't change at all.
+ */
+export function isIncreaseOnly(
+  field: EditableField,
+  stage: EditStage,
+): boolean {
+  const from = INCREASE_ONLY_FROM[field];
+  if (from === undefined || !isFieldEditable(field, stage)) return false;
+  return (
+    STAGE_ORDER.indexOf(stage as OrderedStage) >= STAGE_ORDER.indexOf(from)
+  );
+}
+
+/**
+ * Whether changing `field` from `before` to `after` is allowed at `stage`:
+ * the field isn't locked, and an increase-only field is going up.
+ */
+export function isChangeAllowed(
+  field: EditableField,
+  stage: EditStage,
+  before: unknown,
+  after: unknown,
+): boolean {
+  if (!isFieldEditable(field, stage)) return false;
+  if (!isIncreaseOnly(field, stage)) return true;
+  return (
+    typeof before === "number" && typeof after === "number" && after > before
+  );
 }
 
 /** Every field locked at `stage`, in declaration order. */
@@ -148,8 +195,8 @@ export function canEditAnything(stage: EditStage): boolean {
 
 /**
  * Whether the stage depends on a paid registration. Past "published" every
- * paid-locked field is locked by the date anyway, so callers can skip asking
- * the database whether anyone paid.
+ * paid-locked field is locked by the date anyway (and capacity with it), so
+ * callers can skip asking the database whether anyone paid.
  */
 export function needsPaymentCheck(stage: EditStage): boolean {
   return stage === "published";
@@ -195,7 +242,7 @@ export function resolveEditStage({
 export function lockReason(stage: EditStage): string {
   switch (stage) {
     case "paid":
-      return "A player has already paid, so the fee, prizes, capacity, dates, region, format and eligibility are locked.";
+      return "A player has already paid, so the fee, prizes, dates, region, format and eligibility are locked, and capacity can only be increased.";
     case "ongoing":
       return "This tournament has started. Only the description can still be edited.";
     case "completed":

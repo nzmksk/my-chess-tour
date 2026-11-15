@@ -427,7 +427,6 @@ describe("WizardShell — edit policy", () => {
     const body = patchBody();
     for (const locked of [
       "entry_fees",
-      "max_participants",
       "start_date",
       "end_date",
       "venue_country",
@@ -446,6 +445,8 @@ describe("WizardShell — edit policy", () => {
       venue_address: INITIAL.basicInfoData.venueAddress,
     });
     expect(body).toHaveProperty("registration_deadline");
+    // Increase-only, not locked: the API refuses a decrease.
+    expect(body).toHaveProperty("max_participants");
   });
 
   it("sends only the description once the tournament has started", async () => {
