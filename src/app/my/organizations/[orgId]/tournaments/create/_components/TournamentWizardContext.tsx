@@ -19,6 +19,11 @@ import type {
 } from "../types";
 
 import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
+import {
+  isFieldEditable,
+  type EditStage,
+  type EditableField,
+} from "@/lib/tournaments/edit-policy";
 
 export const WIZARD_STEPS: WizardStep[] = [
   { id: "basic-info", label: "Basic Info" },
@@ -120,6 +125,13 @@ interface TournamentWizardContextType {
   setPayoutData: React.Dispatch<React.SetStateAction<PayoutData>>;
   /** Whether this user holds payout.request. The API enforces it regardless. */
   canNominate: boolean;
+  /**
+   * Where the tournament being edited is in its life, which decides what can
+   * still change. "draft" when creating. See src/lib/tournaments/edit-policy.ts.
+   */
+  editStage: EditStage;
+  /** True when the edit policy has locked `field` at the current stage. */
+  isLocked: (field: EditableField) => boolean;
   orgId: string;
   tournamentId: string | null;
   setTournamentId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -140,6 +152,7 @@ export function TournamentWizardProvider({
   storageKeySuffix,
   excludeId = null,
   canNominate = false,
+  editStage = "draft",
 }: {
   orgId: string;
   children: React.ReactNode;
@@ -147,6 +160,7 @@ export function TournamentWizardProvider({
   storageKeySuffix?: string;
   excludeId?: string | null;
   canNominate?: boolean;
+  editStage?: EditStage;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -274,6 +288,14 @@ export function TournamentWizardProvider({
     [currentStepIndex, completedSteps],
   );
 
+  // Deliberately not persisted with the rest of the wizard: the stage comes from
+  // the server on every load, so a session saved before the first payment
+  // can't reopen with fields unlocked.
+  const isLocked = useCallback(
+    (field: EditableField) => !isFieldEditable(field, editStage),
+    [editStage],
+  );
+
   return (
     <TournamentWizardContext.Provider
       value={{
@@ -294,6 +316,8 @@ export function TournamentWizardProvider({
         payoutData,
         setPayoutData,
         canNominate,
+        editStage,
+        isLocked,
         orgId,
         tournamentId,
         setTournamentId,

@@ -72,7 +72,9 @@ export default function BasicInfoStep() {
     goNext,
     registerStepHandler,
     excludeId,
+    isLocked,
   } = useTournamentWizard();
+  const nameLocked = isLocked("name");
 
   // WizardShell only mounts steps after the context has hydrated, so the
   // context value is already the restored one here.
@@ -104,7 +106,10 @@ export default function BasicInfoStep() {
 
     let currentNameStatus = nameStatus;
 
-    if (
+    // A locked name can't change, so it can't have become a duplicate.
+    if (nameLocked) {
+      currentNameStatus = "available";
+    } else if (
       form.name.trim() &&
       (nameStatus === "idle" || nameStatus === "checking")
     ) {
@@ -121,7 +126,7 @@ export default function BasicInfoStep() {
 
     setBasicInfoData(form);
     goNext();
-  }, [form, nameStatus, excludeId, setBasicInfoData, goNext]);
+  }, [form, nameStatus, nameLocked, excludeId, setBasicInfoData, goNext]);
 
   useEffect(() => {
     registerStepHandler(0, attemptNext);
@@ -171,6 +176,7 @@ export default function BasicInfoStep() {
             placeholder="e.g., KL Open Rapid Championship 2026"
             value={form.name}
             onChange={(e) => handleNameChange(e.target.value)}
+            disabled={nameLocked}
             maxLength={255}
             autoComplete="off"
           />
@@ -209,6 +215,7 @@ export default function BasicInfoStep() {
           placeholder="Full description, rules, what to bring, parking info, etc."
           value={form.description}
           onChange={(e) => field("description", e.target.value)}
+          disabled={isLocked("description")}
           rows={3}
         />
       </div>
@@ -231,6 +238,7 @@ export default function BasicInfoStep() {
             placeholder="e.g., Dewan Bandaraya KL"
             value={form.venueName}
             onChange={(e) => field("venueName", e.target.value)}
+            disabled={isLocked("venue_name")}
             maxLength={255}
           />
           {showErrors && errors.venueName && (
@@ -252,6 +260,7 @@ export default function BasicInfoStep() {
             className="input"
             value={form.venueCountry}
             onChange={(e) => handleCountryChange(e.target.value)}
+            disabled={isLocked("venue_country")}
           >
             {SUPPORTED_COUNTRIES.map((c) => (
               <option key={c.code} value={c.code}>
@@ -278,6 +287,7 @@ export default function BasicInfoStep() {
             className={`input ${showErrors && errors.venueState ? "input-error" : ""}`}
             value={form.venueState}
             onChange={(e) => field("venueState", e.target.value)}
+            disabled={isLocked("venue_state")}
           >
             <option value="">Select state…</option>
             {regions.map((r) => (
@@ -315,6 +325,7 @@ export default function BasicInfoStep() {
           placeholder="Full address"
           value={form.venueAddress}
           onChange={(e) => field("venueAddress", e.target.value)}
+          disabled={isLocked("venue_address")}
         />
         {showErrors && errors.venueAddress && (
           <p className="input-hint error">{errors.venueAddress}</p>

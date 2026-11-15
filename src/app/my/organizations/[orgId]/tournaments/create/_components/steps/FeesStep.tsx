@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeesData, FeeTier, TierType } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
+import LockedFieldset from "../LockedFieldset";
 import { TIER_LABELS, TIER_TYPES } from "../entryFees";
 
 const COMMISSION = 0.1;
@@ -213,8 +214,9 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function FeesStep() {
-  const { feesData, setFeesData, goNext, registerStepHandler } =
+  const { feesData, setFeesData, goNext, registerStepHandler, isLocked } =
     useTournamentWizard();
+  const locked = isLocked("entry_fees");
 
   // WizardShell only mounts steps after the context has hydrated, so the
   // context value is already the restored one here.
@@ -269,6 +271,11 @@ export default function FeesStep() {
   };
 
   const attemptNext = useCallback(async () => {
+    // Nothing here can change, so there's nothing to check or to keep.
+    if (locked) {
+      goNext();
+      return;
+    }
     setShowErrors(true);
     const fieldErrors = validate(form);
     const hasErrors =
@@ -276,14 +283,14 @@ export default function FeesStep() {
     if (hasErrors) return;
     setFeesData(form);
     goNext();
-  }, [form, setFeesData, goNext]);
+  }, [form, locked, setFeesData, goNext]);
 
   useEffect(() => {
     registerStepHandler(2, attemptNext);
   }, [registerStepHandler, attemptNext]);
 
   return (
-    <div>
+    <LockedFieldset locked={locked}>
       <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
         Entry Fees
       </h2>
@@ -621,6 +628,6 @@ export default function FeesStep() {
           amounts.
         </p>
       </div>
-    </div>
+    </LockedFieldset>
   );
 }

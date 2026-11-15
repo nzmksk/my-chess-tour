@@ -12,7 +12,17 @@ import type {
 import WizardShell from "@/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell";
 import { fromPersistedRestrictions } from "@/app/my/organizations/[orgId]/tournaments/create/_components/restrictions";
 import { fromPersistedEntryFees } from "@/app/my/organizations/[orgId]/tournaments/create/_components/entryFees";
-import { resolveTimeZone, toLocalDateTimeInput } from "@/lib/tournaments/datetime";
+import {
+  getTodayInTimeZone,
+  resolveTimeZone,
+  toLocalDateTimeInput,
+} from "@/lib/tournaments/datetime";
+import {
+  canEditAnything,
+  isFieldEditable,
+  resolveEditStage,
+  type EditStage,
+} from "@/lib/tournaments/edit-policy";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
 import {
   isPrizeDistribution,
@@ -81,7 +91,21 @@ async function fetchTournamentForEdit(
   }
 }
 
-function buildInitialData(t: TournamentForEdit): PersistedState {
+/** Where the tournament is in its life, which decides what can still change. */
+function editStageOf(t: TournamentForEdit): EditStage {
+  return resolveEditStage({
+    status: t.status,
+    startDate: t.start_date,
+    endDate: t.end_date,
+    today: getTodayInTimeZone(resolveTimeZone(t.timezone)),
+    hasPaidRegistration: t.has_paid_registration,
+  });
+}
+
+function buildInitialData(
+  t: TournamentForEdit,
+  stage: EditStage,
+): PersistedState {
   // Times come back as instants; the organizer edits them at the venue's wall
   // clock, which is the one they entered — not the clock of whoever is editing.
   //
@@ -165,7 +189,7 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     beneficiaryOrgName: t.beneficiary?.name ?? "",
     savedBeneficiaryOrgId: t.beneficiary?.organization_id ?? null,
     accepted: t.beneficiary?.accepted ?? false,
-    locked: t.has_paid_registration,
+    locked: !isFieldEditable("beneficiary", stage),
   };
 
   return {
@@ -214,7 +238,15 @@ export default async function EditTournamentPage({
     notFound();
   }
 
-  const initialData = buildInitialData(tournament);
+  const editStage = editStageOf(tournament);
+
+  // An ended or cancelled tournament has nothing left to edit; the manage page
+  // doesn't link here, but a bookmarked URL still can.
+  if (!canEditAnything(editStage)) {
+    redirect(`/my/organizations/${orgId}/tournaments/${id}`);
+  }
+
+  const initialData = buildInitialData(tournament, editStage);
 
   return (
     <div className="bg-bg-base min-h-screen">
@@ -225,6 +257,7 @@ export default async function EditTournamentPage({
         storageKeySuffix={`edit-${id}`}
         excludeId={id}
         canNominate={canNominate}
+        editStage={editStage}
       >
         <WizardShell
           orgId={orgId}
