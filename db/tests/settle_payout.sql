@@ -1,9 +1,10 @@
 -- =============================================================================
--- DB money-state regression test for organizer payouts (#520, #521):
+-- DB money-state regression test for organizer payouts (#520, #521, #522):
 --   * available_payout_cents, queue_payout, settle_payout (007_payment_functions.sql)
 --   * request_early_payout, early_payout_cap, early_payout_problem (#521)
 --   * the payouts unique indexes (002_indexes.sql)
 --   * tournament_payout_summary draining on a settled payout
+--   * tournament_end_instant, list_payable_tournaments: the automatic sweep (#522)
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations and seed. The whole thing runs inside a transaction that
@@ -1019,6 +1020,208 @@ BEGIN
     RAISE EXCEPTION 'C5 FAIL: claimed the payout of a cancelled tournament';
   END IF;
   RAISE NOTICE 'C5 PASS — a claim refuses a cancelled or cancelling tournament';
+END $$;
+
+-- =============================================================================
+-- The automatic payout sweep (#522): tournament_end_instant and
+-- list_payable_tournaments.
+-- =============================================================================
+
+-- A published tournament that ended on p_end at a venue in p_tz, with one paid
+-- registration (net 10000). Played in the past, so it is built directly: the
+-- registration functions refuse a closed tournament, and guard_paid_fields
+-- refuses moving the dates once someone has paid.
+CREATE FUNCTION pg_temp.ended_tournament(p_org uuid, p_end date, p_tz text DEFAULT 'Asia/Kuala_Lumpur')
+RETURNS uuid
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_t      uuid;
+  v_player uuid;
+  v_reg    uuid;
+  v_pay    uuid;
+BEGIN
+  INSERT INTO tournaments (
+    organization_id, name, venue_name, venue_state, venue_address, timezone,
+    start_date, end_date, registration_deadline,
+    format, time_control, entry_fees, max_participants, status
+  ) VALUES (
+    p_org, 'SWEEP T', 'Venue', 'Selangor', 'Address', p_tz,
+    p_end - 1, p_end, (p_end - 2)::timestamptz,
+    '{"type":"classical"}', '{"base_minutes":90}', '{"standard": {"amount_cents": 10000}}', 100, 'published'
+  ) RETURNING id INTO v_t;
+
+  INSERT INTO users (email, first_name, last_name)
+    VALUES ('sweep-' || gen_random_uuid() || '@test.local', 'S', 'W') RETURNING id INTO v_player;
+  INSERT INTO registrations (user_id, tournament_id, fee_tier, status, confirmed_at)
+    VALUES (v_player, v_t, 'standard', 'confirmed', now()) RETURNING id INTO v_reg;
+  INSERT INTO payments (
+    type, tournament_id, registration_id, user_id, organization_id,
+    gross_amount_cents, platform_fee_cents, net_amount_cents, status, paid_at
+  ) VALUES (
+    'registration', v_t, v_reg, v_player, p_org, 11000, 1000, 10000, 'paid', now()
+  ) RETURNING id INTO v_pay;
+  UPDATE registrations SET current_payment_id = v_pay WHERE id = v_reg;
+  RETURN v_t;
+END $$;
+
+-- Whether list_payable_tournaments lists p_t at p_as_of.
+CREATE FUNCTION pg_temp.payable(p_t uuid, p_as_of timestamptz DEFAULT now())
+RETURNS boolean
+LANGUAGE sql AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM list_payable_tournaments(3, 1000, p_as_of) l WHERE l.tournament_id = p_t
+  );
+$$;
+
+DO $$
+DECLARE
+  v_owner_role integer;
+  v_org      uuid;
+  v_lapsed   uuid;
+  v_owner    uuid;
+  v_reviewer uuid;
+  v_kl       uuid;
+  v_tokyo    uuid;
+  v_kl_end   timestamptz;
+  v_tok_end  timestamptz;
+  v_t        uuid;
+  v_id       uuid;
+  v_reg      uuid;
+  v_row      record;
+  v_ended    date := current_date - 10;
+BEGIN
+  SELECT id INTO v_owner_role FROM roles WHERE name = 'owner' AND scope = 'organization';
+  INSERT INTO users (email, first_name, last_name) VALUES ('sw-owner@test.local', 'O', 'S') RETURNING id INTO v_owner;
+  INSERT INTO users (email, first_name, last_name) VALUES ('sw-admin@test.local', 'A', 'S') RETURNING id INTO v_reviewer;
+  INSERT INTO organizations (name, email, entity_type, agreement_version, agreement_accepted_at, approval_status)
+    VALUES ('SW ORG', 'sw-org@test.local', 'company', current_organizer_agreement_version(), now(), 'approved') RETURNING id INTO v_org;
+  INSERT INTO organizations (name, email, entity_type, agreement_version, agreement_accepted_at, approval_status)
+    VALUES ('SW LAPSED', 'sw-lapsed@test.local', 'company', current_organizer_agreement_version(), now(), 'approved') RETURNING id INTO v_lapsed;
+  INSERT INTO organization_bank_accounts (organization_id, bank_name, bank_code, account_holder, account_number, status, chip_bank_account_id, verified_at)
+    VALUES (v_org, 'Maybank', 'MBBEMYKL', 'Org', '514100000401', 'verified', 960001, now());
+  -- Registered with CHIP, not yet verified.
+  INSERT INTO organization_bank_accounts (organization_id, bank_name, bank_code, account_holder, account_number, status, chip_bank_account_id)
+    VALUES (v_lapsed, 'Maybank', 'MBBEMYKL', 'Lapsed', '514100000402', 'pending', 960002);
+  INSERT INTO organization_memberships (organization_id, user_id, role_id) VALUES (v_org, v_owner, v_owner_role);
+
+  -- ===== S1: the end instant is local midnight in the venue's own zone =======
+  v_kl    := pg_temp.ended_tournament(v_org, DATE '2026-03-10', 'Asia/Kuala_Lumpur');
+  v_tokyo := pg_temp.ended_tournament(v_org, DATE '2026-03-10', 'Asia/Tokyo');
+  v_kl_end  := tournament_end_instant(v_kl);
+  v_tok_end := tournament_end_instant(v_tokyo);
+  IF v_kl_end <> TIMESTAMPTZ '2026-03-10 16:00:00+00' THEN
+    RAISE EXCEPTION 'S1 FAIL: KL end instant=% (expected midnight 11 Mar at GMT+8)', v_kl_end;
+  END IF;
+  IF v_tok_end <> TIMESTAMPTZ '2026-03-10 15:00:00+00' THEN
+    RAISE EXCEPTION 'S1 FAIL: Tokyo end instant=% (expected midnight 11 Mar at GMT+9)', v_tok_end;
+  END IF;
+  IF v_kl_end - v_tok_end <> interval '1 hour' THEN
+    RAISE EXCEPTION 'S1 FAIL: the instants are % apart (expected exactly 1 hour)', v_kl_end - v_tok_end;
+  END IF;
+  -- Half an hour after Tokyo's deadline, KL's is still half an hour away.
+  IF NOT pg_temp.payable(v_tokyo, v_tok_end + interval '3 days 30 minutes') THEN
+    RAISE EXCEPTION 'S1 FAIL: the Tokyo tournament is not payable after its deadline';
+  END IF;
+  IF pg_temp.payable(v_kl, v_tok_end + interval '3 days 30 minutes') THEN
+    RAISE EXCEPTION 'S1 FAIL: the KL tournament is payable before its deadline';
+  END IF;
+  IF tournament_end_instant(gen_random_uuid()) IS NOT NULL THEN
+    RAISE EXCEPTION 'S1 FAIL: an unknown tournament has an end instant';
+  END IF;
+  RAISE NOTICE 'S1 PASS — the end instant follows the venue timezone; GMT+9 is payable an hour before GMT+8';
+
+  -- ===== S2: the hold is measured from the end instant ======================
+  IF pg_temp.payable(v_kl, v_kl_end + interval '2 days 23 hours') THEN
+    RAISE EXCEPTION 'S2 FAIL: payable at end + 2d 23h';
+  END IF;
+  IF NOT pg_temp.payable(v_kl, v_kl_end + interval '3 days 1 minute') THEN
+    RAISE EXCEPTION 'S2 FAIL: not payable at end + 3d 1m';
+  END IF;
+  SELECT * INTO v_row FROM list_payable_tournaments(3, 1000, v_kl_end + interval '3 days 1 minute') l
+    WHERE l.tournament_id = v_kl;
+  IF v_row.recipient_organization_id <> v_org OR v_row.available_cents <> 10000
+     OR v_row.end_instant <> v_kl_end THEN
+    RAISE EXCEPTION 'S2 FAIL: listed row is wrong: %', row_to_json(v_row);
+  END IF;
+  -- Below the minimum, nothing is listed.
+  IF EXISTS (SELECT 1 FROM list_payable_tournaments(3, 10001, v_kl_end + interval '3 days 1 minute') l
+             WHERE l.tournament_id = v_kl) THEN
+    RAISE EXCEPTION 'S2 FAIL: listed with less than p_min_cents available';
+  END IF;
+  RAISE NOTICE 'S2 PASS — not payable at end + 2d 23h, payable at end + 3d 1m';
+
+  -- ===== S3: what keeps an ended tournament off the list ====================
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  IF NOT pg_temp.payable(v_t) THEN
+    RAISE EXCEPTION 'S3 FAIL: control tournament is not payable';
+  END IF;
+
+  -- Cancelled.
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  UPDATE tournaments SET status = 'cancelled' WHERE id = v_t;
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: a cancelled tournament is payable'; END IF;
+
+  -- A cancellation under review.
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)
+    VALUES (v_t, v_owner, 'Venue fell through');
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: payable with a cancellation pending'; END IF;
+
+  -- A player refund not yet settled.
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  SELECT id INTO v_reg FROM registrations WHERE tournament_id = v_t;
+  INSERT INTO refunds (registration_id, refund_amount_cents, reason) VALUES (v_reg, 11000, 'Withdrew');
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: payable with a refund unsettled'; END IF;
+
+  -- A recipient whose bank account isn't verified.
+  v_t := pg_temp.ended_tournament(v_lapsed, v_ended);
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: payable to an unverified bank account'; END IF;
+
+  -- An automatic payout already live: queued, in flight, or paid.
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  v_id := queue_payout(v_t, 'automatic', 5000, NULL);
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: payable with an automatic payout queued'; END IF;
+  PERFORM settle_payout(v_id, 9101, true, 5000, NULL, NULL);
+  -- 5000 is still available, but the one automatic payout has been made.
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: payable after its automatic payout was paid'; END IF;
+
+  -- An early payout in flight.
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  UPDATE tournaments SET registration_closed_at = registration_deadline WHERE id = v_t;
+  v_id := request_early_payout(v_t, v_owner, 4000, 'Venue deposit');
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: payable with an early request awaiting review'; END IF;
+  -- Rejected, it reserves nothing and no longer holds the sweep up.
+  PERFORM review_payout_request(v_id, v_reviewer, 'reject', 'Not needed');
+  IF NOT pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: a rejected early request blocks the sweep'; END IF;
+
+  -- A failed automatic payout is retried.
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  v_id := queue_payout(v_t, 'automatic', NULL, NULL);
+  PERFORM settle_payout(v_id, NULL, false, NULL, NULL, 'chip_send_422: bad account');
+  IF NOT pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: a failed automatic payout is not retried'; END IF;
+
+  -- A draft never is, ended or not.
+  v_t := pg_temp.ended_tournament(v_org, v_ended);
+  UPDATE tournaments SET status = 'draft' WHERE id = v_t;
+  IF pg_temp.payable(v_t) THEN RAISE EXCEPTION 'S3 FAIL: a draft tournament is payable'; END IF;
+  RAISE NOTICE 'S3 PASS — cancelled, cancelling, refunding, unpayable recipient, live payout and draft are all excluded';
+
+  -- ===== S4: running the sweep twice queues nothing new =====================
+  -- What the cron route does: queue every listed tournament, then list again.
+  FOR v_row IN SELECT * FROM list_payable_tournaments(3, 1000) LOOP
+    PERFORM queue_payout(v_row.tournament_id, 'automatic', NULL, NULL);
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM list_payable_tournaments(3, 1000)) THEN
+    RAISE EXCEPTION 'S4 FAIL: tournaments still listed after the sweep queued them';
+  END IF;
+  -- And queueing a swept tournament again is a no-op, not an error.
+  SELECT tournament_id INTO v_t FROM payouts
+    WHERE kind = 'automatic' AND status = 'pending' AND organization_id = v_org
+    ORDER BY created_at DESC LIMIT 1;
+  IF queue_payout(v_t, 'automatic', NULL, NULL) IS NOT NULL THEN
+    RAISE EXCEPTION 'S4 FAIL: a second queue_payout created another automatic payout';
+  END IF;
+  RAISE NOTICE 'S4 PASS — a second sweep finds nothing to queue';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'ALL SCENARIOS PASSED'; END $$;
