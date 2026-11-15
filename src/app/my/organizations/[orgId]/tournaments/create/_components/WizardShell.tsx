@@ -8,6 +8,7 @@ import { toPersistedRestrictions } from "./restrictions";
 import { toPersistedEntryFees } from "./entryFees";
 import { toInstantInTimeZone } from "@/lib/tournaments/datetime";
 import { timeZoneForRegion } from "@/lib/tournaments/venues";
+import { lockReason, lockedFields } from "@/lib/tournaments/edit-policy";
 import BasicInfoStep from "./steps/BasicInfoStep";
 import FormatStep from "./steps/FormatStep";
 import FeesStep from "./steps/FeesStep";
@@ -58,6 +59,8 @@ export default function WizardShell({
     payoutData,
     setPayoutData,
     canNominate,
+    editStage,
+    isLocked,
     tournamentId,
     setTournamentId,
     clearWizardStorage,
@@ -77,6 +80,10 @@ export default function WizardShell({
   const canPublish = mode === "create" || status === "draft";
 
   const StepContent = STEP_COMPONENTS[currentStepIndex];
+  // Shown on every step while anything is locked, so a disabled field is
+  // never a mystery.
+  const editLockReason =
+    lockedFields(editStage).length > 0 ? lockReason(editStage) : null;
 
   function buildDraftBody(): Record<string, unknown> {
     // Everything dated in the wizard is dated at the venue, so the venue's
@@ -170,6 +177,11 @@ export default function WizardShell({
     body.entry_fees = entryFees;
     if (prizes) body.prizes = prizes;
 
+    // Locked fields are left out rather than resent. The route would accept
+    // an unchanged value, but "unchanged" means byte-for-byte after a round
+    // trip through the wizard's state, and not sending them can't go wrong.
+    for (const field of lockedFields(editStage)) delete body[field];
+
     return body;
   }
 
@@ -187,7 +199,11 @@ export default function WizardShell({
         error?: { message?: string; details?: string[] };
       };
       const details = json.error?.details;
-      if (details && details.length > 1) return details.join(" · ");
+      // A 409's details are the locked field names, for API clients; its
+      // message already says what is locked and why.
+      if (res.status !== 409 && details && details.length > 1) {
+        return details.join(" · ");
+      }
       return json.error?.message ?? fallback;
     } catch {
       return fallback;
@@ -198,6 +214,14 @@ export default function WizardShell({
 
   async function saveDraftToApi(): Promise<SaveResult> {
     const body = buildDraftBody();
+
+    // Once a tournament has started, the description may be all that's left
+    // to send. With nothing editable changed there's nothing to save, and the
+    // route would answer an empty patch with a 400.
+    // (An undefined value is dropped by JSON.stringify, so it's nothing too.)
+    if (tournamentId && Object.values(body).every((v) => v === undefined)) {
+      return { ok: true, id: tournamentId };
+    }
 
     if (tournamentId) {
       const res = await fetch(
@@ -245,7 +269,11 @@ export default function WizardShell({
    */
   async function syncBeneficiary(id: string): Promise<SaveResult> {
     const chosen = payoutData.beneficiaryOrgId;
-    if (!canNominate || chosen === payoutData.savedBeneficiaryOrgId) {
+    if (
+      !canNominate ||
+      isLocked("beneficiary") ||
+      chosen === payoutData.savedBeneficiaryOrgId
+    ) {
       return { ok: true, id };
     }
 
@@ -356,6 +384,14 @@ export default function WizardShell({
 
       <div className="card overflow-hidden">
         <WizardProgressBar />
+
+        {editLockReason && (
+          <div className="bg-warning/10 border-warning/30 mx-6 mt-6 rounded-md border px-4 py-3 sm:mx-8">
+            <p className="font-lato text-text-secondary text-xs leading-relaxed">
+              {editLockReason}
+            </p>
+          </div>
+        )}
 
         {/* Steps seed their local form state from the context on mount, so they
             must not mount until the context has restored sessionStorage. */}

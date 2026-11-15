@@ -8,6 +8,7 @@ import type {
   SpecialPrize,
 } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
+import LockedFieldset from "../LockedFieldset";
 import { newRowId } from "../rowId";
 import {
   PRIZE_FUNDING_LABELS,
@@ -292,8 +293,9 @@ function PrizeFundingFields({
 }
 
 export default function PrizesStep() {
-  const { prizesData, setPrizesData, goNext, registerStepHandler } =
+  const { prizesData, setPrizesData, goNext, registerStepHandler, isLocked } =
     useTournamentWizard();
+  const locked = isLocked("prizes");
 
   // WizardShell only mounts steps after the context has hydrated, so the
   // context value is already the restored one here.
@@ -417,12 +419,17 @@ export default function PrizesStep() {
   // ── Validation + step handler ─────────────────────────────
 
   const attemptNext = useCallback(async () => {
+    // Nothing here can change, so there's nothing to check or to keep.
+    if (locked) {
+      goNext();
+      return;
+    }
     setShowErrors(true);
     const fieldErrors = validate(form);
     if (hasErrors(fieldErrors)) return;
     setPrizesData(form);
     goNext();
-  }, [form, setPrizesData, goNext]);
+  }, [form, locked, setPrizesData, goNext]);
 
   useEffect(() => {
     registerStepHandler(3, attemptNext);
@@ -431,7 +438,7 @@ export default function PrizesStep() {
   // ── Render ────────────────────────────────────────────────
 
   return (
-    <div>
+    <LockedFieldset locked={locked}>
       <h2 className="font-cinzel text-text-primary mb-1 text-lg font-bold tracking-wide">
         Prizes
       </h2>
@@ -596,6 +603,6 @@ export default function PrizesStep() {
           </label>
         ))}
       </div>
-    </div>
+    </LockedFieldset>
   );
 }

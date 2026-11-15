@@ -6,14 +6,29 @@ import {
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
 } from "@/lib/tournaments/cache-tags";
-import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
+import {
+  getTodayInTimeZone,
+  resolveTimeZone,
+} from "@/lib/tournaments/datetime";
+import {
+  EDITABLE_FIELDS,
+  isChangeAllowed,
+  lockReason,
+  needsPaymentCheck,
+  resolveEditStage,
+  type EditableField,
+  type EditStage,
+} from "@/lib/tournaments/edit-policy";
+import {
+  validatePublishable,
+  type PublishableTournament,
+} from "@/lib/tournaments/publish-validation";
 import {
   DEFAULT_COUNTRY_CODE,
   findCountry,
   isValidRegion,
   timeZoneForRegion,
 } from "@/lib/tournaments/venues";
-import { getTournamentDateState } from "@/app/tournaments/utils";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
@@ -155,33 +170,22 @@ async function resolvePermission(
   return null;
 }
 
-// Columns that define what a player is paying for and what they can win. Once
-// somebody has paid, changing these rewrites the deal after the fact. Frozen at
-// the first paid registration, not at publish, so an organizer can still correct
-// a typo on a listing nobody has bought into yet.
-const MONEY_FIELDS = [
-  "entry_fees",
-  "prizes",
-  "max_participants",
-  "commission_rate",
-  "organizer_commission_pct",
-] as const;
-
-interface FreezeSubject {
+interface ExistingTournament extends PublishableTournament {
+  id: string;
   status: string;
   start_date: string;
   end_date: string;
+  registration_deadline: string;
+  registration_closed_at: string | null;
   timezone: string;
-  entry_fees: unknown;
-  prizes: unknown;
-  max_participants: unknown;
-  commission_rate: unknown;
-  organizer_commission_pct: unknown;
+  venue_country: string | null;
+  venue_state: string | null;
+  [column: string]: unknown;
 }
 
 /**
- * Deep structural equality, used to answer "is this money field actually
- * changing?" the same way the database does.
+ * Deep structural equality, used to answer "is this field actually changing?"
+ * the same way the database does.
  *
  * The trigger compares with `IS DISTINCT FROM`, which on jsonb is semantic:
  * key order doesn't matter, but a key being present-vs-absent does. This walks
@@ -216,88 +220,139 @@ function deepEquals(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Two-stage edit freeze.
+ * The fields this patch actually changes. Changed, not merely present: the
+ * edit wizard can send a field at its current value, and gating on presence
+ * would refuse that edit while the trigger — which compares OLD/NEW — would
+ * have allowed it. Presence is the client's business; what the row ends up
+ * holding is the rule.
+ */
+function changedFields(
+  existing: ExistingTournament,
+  patch: Record<string, unknown>,
+): EditableField[] {
+  return EDITABLE_FIELDS.filter((f) => {
+    if (!(f in patch)) return false;
+    // An instant: the client sends `...Z`, the column reads back `...+00:00`.
+    if (f === "registration_deadline") {
+      const next = patch[f] as string | null;
+      return (
+        next == null ||
+        new Date(next).getTime() !==
+          new Date(existing.registration_deadline).getTime()
+      );
+    }
+    return !deepEquals(patch[f], existing[f]);
+  });
+}
+
+/**
+ * Refuses a change to a field the edit policy has locked, and a decrease to
+ * one it has made increase-only (capacity, once someone has paid). Which
+ * fields lock when, and why, is in src/lib/tournaments/edit-policy.ts.
  *
- * Stage 1 — money fields lock at the first paid registration.
- * Stage 2 — everything locks once the tournament starts.
- *
- * Both rules are also enforced by a BEFORE UPDATE trigger in
- * 003_functions_triggers.sql; the DB is the authority and this is the readable
- * error. Drafts are exempt: they have placeholder dates and can't have
- * registrations, so neither stage can apply.
+ * The paid-registration stage is also enforced by guard_tournament_paid_fields
+ * in 003_functions_triggers.sql; the DB is the authority and this is the
+ * readable error. The date stages live here only.
  *
  * Returns a 409 response when the edit is refused, else null.
  */
 async function checkEditFreeze(
   tournamentId: string,
-  existing: FreezeSubject,
+  existing: ExistingTournament,
   patch: Record<string, unknown>,
+  changed: EditableField[],
 ): Promise<NextResponse | null> {
-  if (existing.status === "draft") return null;
+  if (changed.length === 0) return null;
 
-  // Stage 2 first: it's the broader rule, and it needs no query.
-  const dateState = getTournamentDateState(
-    existing.start_date,
-    existing.end_date,
-    getTodayInTimeZone(existing.timezone),
-  );
-  if (dateState !== "upcoming") {
-    return NextResponse.json(
-      {
-        error: {
-          code: "CONFLICT",
-          message:
-            dateState === "ongoing"
-              ? "This tournament has started and can no longer be edited"
-              : "This tournament has ended and can no longer be edited",
-        },
+  const allowedAt = (stage: EditStage) => (f: EditableField) =>
+    isChangeAllowed(f, stage, existing[f], patch[f]);
+
+  let stage = resolveEditStage({
+    status: existing.status,
+    startDate: existing.start_date,
+    endDate: existing.end_date,
+    today: getTodayInTimeZone(resolveTimeZone(existing.timezone)),
+    hasPaidRegistration: false,
+  });
+
+  // Only worth a query when the dates haven't already decided, and when the
+  // patch makes a change a payment would refuse (raising capacity isn't one).
+  if (needsPaymentCheck(stage) && !changed.every(allowedAt("paid"))) {
+    // `head: true` — we only need to know whether one exists.
+    const { count, error } = await supabaseAdmin
+      .from("payments")
+      .select("id", { count: "exact", head: true })
+      .eq("tournament_id", tournamentId)
+      .eq("type", "registration")
+      .eq("status", "paid")
+      .limit(1);
+
+    if (error) {
+      return internalErrorResponse(
+        "PATCH /api/v1/organizations/[orgId]/tournaments/[id]: payments",
+        error,
+      );
+    }
+    if ((count ?? 0) > 0) stage = "paid";
+  }
+
+  const refused = changed.filter((f) => !allowedAt(stage)(f));
+  if (refused.length === 0) return null;
+
+  return NextResponse.json(
+    {
+      error: {
+        code: "CONFLICT",
+        message: lockReason(stage),
+        // The organizer needs to know WHICH fields were refused.
+        details: refused,
       },
-      { status: 409 },
-    );
-  }
-
-  // Changed, not merely present. The edit wizard rebuilds the whole draft body
-  // on every save, so an organizer fixing a typo in the venue address still
-  // sends entry_fees and max_participants at their current values. Gating on
-  // presence would refuse that edit, while the trigger — which compares
-  // OLD/NEW — would have allowed it. Presence is the client's business; what
-  // the row ends up holding is the rule.
-  const touchedMoneyFields = MONEY_FIELDS.filter(
-    (f) => f in patch && !deepEquals(patch[f], existing[f]),
+    },
+    { status: 409 },
   );
-  if (touchedMoneyFields.length === 0) return null;
+}
 
-  // `head: true` — we only need to know whether one exists.
-  const { count, error } = await supabaseAdmin
-    .from("payments")
-    .select("id", { count: "exact", head: true })
-    .eq("tournament_id", tournamentId)
-    .eq("type", "registration")
-    .eq("status", "paid")
-    .limit(1);
+/**
+ * A published tournament has to stay publishable: an edit may not blank a
+ * required field or move a date into the past. Only problems the edit
+ * introduces are reported, so a listing published before a rule existed
+ * (prize funding, say) can still have its description fixed without first
+ * being brought up to date.
+ *
+ * Returns a 422 response listing what the edit broke, else null.
+ */
+function checkStillPublishable(
+  existing: ExistingTournament,
+  patch: Record<string, unknown>,
+  changed: EditableField[],
+): NextResponse | null {
+  if (existing.status !== "published") return null;
 
-  if (error) {
-    return internalErrorResponse(
-      "GET /api/v1/organizations/[orgId]/tournaments/[id]: error",
-      error,
-    );
-  }
+  const merged = { ...existing, ...patch } as ExistingTournament;
+  const options = {
+    today: getTodayInTimeZone(resolveTimeZone(merged.timezone)),
+    now: new Date().toISOString(),
+    // A date that has already passed and isn't changing (a closed
+    // registration) is not something this edit did.
+    requireFutureStartDate: changed.includes("start_date"),
+    requireFutureDeadline: changed.includes("registration_deadline"),
+  };
+  const before = new Set(validatePublishable(existing, options));
+  const introduced = validatePublishable(merged, options).filter(
+    (e) => !before.has(e),
+  );
+  if (introduced.length === 0) return null;
 
-  if ((count ?? 0) > 0) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "CONFLICT",
-          message:
-            "Entry fees, prizes and capacity are locked once a player has paid",
-          details: touchedMoneyFields,
-        },
+  return NextResponse.json(
+    {
+      error: {
+        code: "VALIDATION_ERROR",
+        message: introduced[0],
+        details: introduced,
       },
-      { status: 409 },
-    );
-  }
-
-  return null;
+    },
+    { status: 422 },
+  );
 }
 
 export async function PATCH(
@@ -345,11 +400,12 @@ export async function PATCH(
   const { data: existing, error: tournamentError } = await supabaseAdmin
     .from("tournaments")
     .select(
-      // The money columns are here for checkEditFreeze, which refuses an edit
-      // only when a value actually changes and so needs the current one.
-      // venue_country/venue_state are here because the timezone is derived from
-      // the pair, and a patch may only carry one half of it.
-      "id, status, registration_deadline, registration_closed_at, start_date, end_date, timezone, venue_country, venue_state, entry_fees, prizes, max_participants, commission_rate, organizer_commission_pct",
+      // Every editable column: checkEditFreeze refuses an edit only when a
+      // locked value actually changes, and checkStillPublishable validates the
+      // row as it will be after the patch, so both need the current values.
+      // venue_country/venue_state are also needed because the timezone is
+      // derived from the pair, and a patch may only carry one half of it.
+      "id, status, name, description, venue_name, venue_address, venue_state, venue_country, timezone, start_date, end_date, registration_deadline, registration_closed_at, format, time_control, is_fide_rated, is_mcf_rated, restrictions, entry_fees, prizes, max_participants, commission_rate, organizer_commission_pct",
     )
     .eq("id", id)
     .eq("organization_id", orgId)
@@ -565,8 +621,14 @@ export async function PATCH(
     );
   }
 
-  const freezeError = await checkEditFreeze(id, existing, patch);
+  const tournament = existing as ExistingTournament;
+  const changed = changedFields(tournament, patch);
+
+  const freezeError = await checkEditFreeze(id, tournament, patch, changed);
   if (freezeError) return freezeError;
+
+  const publishableError = checkStillPublishable(tournament, patch, changed);
+  if (publishableError) return publishableError;
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("tournaments")

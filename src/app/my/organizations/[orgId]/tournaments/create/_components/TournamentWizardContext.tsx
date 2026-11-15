@@ -19,6 +19,12 @@ import type {
 } from "../types";
 
 import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
+import {
+  isFieldEditable,
+  isIncreaseOnly,
+  type EditStage,
+  type EditableField,
+} from "@/lib/tournaments/edit-policy";
 
 export const WIZARD_STEPS: WizardStep[] = [
   { id: "basic-info", label: "Basic Info" },
@@ -55,7 +61,6 @@ const initialPayoutData: PayoutData = {
   beneficiaryOrgName: "",
   savedBeneficiaryOrgId: null,
   accepted: false,
-  locked: false,
 };
 
 const initialFormatData: FormatData = {
@@ -120,6 +125,19 @@ interface TournamentWizardContextType {
   setPayoutData: React.Dispatch<React.SetStateAction<PayoutData>>;
   /** Whether this user holds payout.request. The API enforces it regardless. */
   canNominate: boolean;
+  /**
+   * Where the tournament being edited is in its life, which decides what can
+   * still change. "draft" when creating. See src/lib/tournaments/edit-policy.ts.
+   */
+  editStage: EditStage;
+  /** True when the edit policy has locked `field` at the current stage. */
+  isLocked: (field: EditableField) => boolean;
+  /**
+   * The lowest capacity the organizer may save: the saved capacity once a
+   * player has paid (it can only go up from there), else null for no floor
+   * beyond the usual minimum.
+   */
+  capacityFloor: number | null;
   orgId: string;
   tournamentId: string | null;
   setTournamentId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -140,6 +158,8 @@ export function TournamentWizardProvider({
   storageKeySuffix,
   excludeId = null,
   canNominate = false,
+  editStage = "draft",
+  savedCapacity = null,
 }: {
   orgId: string;
   children: React.ReactNode;
@@ -147,6 +167,9 @@ export function TournamentWizardProvider({
   storageKeySuffix?: string;
   excludeId?: string | null;
   canNominate?: boolean;
+  editStage?: EditStage;
+  /** The capacity on the server, when editing. Not taken from sessionStorage. */
+  savedCapacity?: number | null;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -165,6 +188,7 @@ export function TournamentWizardProvider({
   const orgIdRef = useRef(orgId);
   const storageKeySuffixRef = useRef(storageKeySuffix);
   const initialDataRef = useRef(initialData);
+  const editStageRef = useRef(editStage);
   const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
 
   // Restore persisted state once on mount (client-only, no SSR sessionStorage).
@@ -181,7 +205,13 @@ export function TournamentWizardProvider({
       setFormatData(saved.formatData ?? initialFormatData);
       setFeesData(saved.feesData ?? initialFeesData);
       setPrizesData(saved.prizesData ?? initialPrizesData);
-      setPayoutData(saved.payoutData ?? initialPayoutData);
+      // Once the nomination is locked, the server's copy wins over a session
+      // saved before the lock: the controls are disabled, so an unsaved pick
+      // left in that session could neither be shown honestly nor be sent.
+      const serverPayout = isFieldEditable("beneficiary", editStageRef.current)
+        ? undefined
+        : initialDataRef.current?.payoutData;
+      setPayoutData(serverPayout ?? saved.payoutData ?? initialPayoutData);
       setTournamentId(saved.tournamentId ?? null);
       setCurrentStepIndex(saved.currentStepIndex ?? 0);
       if (saved.completedSteps) {
@@ -274,6 +304,17 @@ export function TournamentWizardProvider({
     [currentStepIndex, completedSteps],
   );
 
+  // Deliberately not persisted with the rest of the wizard: the stage comes from
+  // the server on every load, so a session saved before the first payment
+  // can't reopen with fields unlocked.
+  const isLocked = useCallback(
+    (field: EditableField) => !isFieldEditable(field, editStage),
+    [editStage],
+  );
+  const capacityFloor = isIncreaseOnly("max_participants", editStage)
+    ? savedCapacity
+    : null;
+
   return (
     <TournamentWizardContext.Provider
       value={{
@@ -294,6 +335,9 @@ export function TournamentWizardProvider({
         payoutData,
         setPayoutData,
         canNominate,
+        editStage,
+        isLocked,
+        capacityFloor,
         orgId,
         tournamentId,
         setTournamentId,

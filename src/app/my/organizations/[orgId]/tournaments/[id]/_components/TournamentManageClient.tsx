@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { getTournamentDateState } from "@/app/tournaments/utils";
 import TournamentActions from "./TournamentActions";
+import {
+  canEditAnything,
+  resolveEditStage,
+} from "@/lib/tournaments/edit-policy";
 import {
   formatCalendarDateRange,
   formatInstantDate,
@@ -152,21 +155,25 @@ export default function TournamentManageClient({
   const isAdminView = viewer === "admin";
   const [search, setSearch] = useState("");
   const statusConfig = STATUS_CONFIG[tournament.status] ?? STATUS_CONFIG.draft;
-  // Drafts are always editable. A published tournament stays editable only
-  // until it starts — after that the PATCH route refuses every field, so
-  // offering the button would just walk the organizer into a 409. "ongoing" and
-  // "completed" are date-derived and never stored, so the status column alone
-  // can't answer this; resolve today in the venue's own timezone, exactly as
-  // the server does.
+  // Offered while the edit policy leaves anything editable: up to the end date
+  // (only the description, once started), never once cancelled. Past the end
+  // date the PATCH route refuses every field, so offering the button would
+  // just walk the organizer into a 409. "ongoing" and "completed" are
+  // date-derived and never stored, so the status column alone can't answer
+  // this; resolve today in the venue's own timezone, exactly as the server
+  // does. Whether anyone has paid only decides WHICH fields are editable, so
+  // it doesn't matter here.
   const isEditable =
     !isAdminView &&
-    (tournament.status === "draft" ||
-      (tournament.status === "published" &&
-        getTournamentDateState(
-          tournament.start_date,
-          tournament.end_date,
-          getTodayInTimeZone(tournament.timezone),
-        ) === "upcoming"));
+    canEditAnything(
+      resolveEditStage({
+        status: tournament.status,
+        startDate: tournament.start_date,
+        endDate: tournament.end_date,
+        today: getTodayInTimeZone(tournament.timezone),
+        hasPaidRegistration: false,
+      }),
+    );
 
   const filtered = participants.filter(
     (p) =>

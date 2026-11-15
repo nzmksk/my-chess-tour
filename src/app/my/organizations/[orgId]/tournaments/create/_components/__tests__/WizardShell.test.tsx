@@ -11,6 +11,7 @@ import {
 import WizardShell from "../WizardShell";
 import { TournamentWizardProvider } from "../TournamentWizardContext";
 import type { PersistedState } from "../../types";
+import type { EditStage } from "@/lib/tournaments/edit-policy";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -73,11 +74,13 @@ function renderEditWizard({
   initialData = INITIAL,
   currentStepIndex = initialData.currentStepIndex,
   canNominate = false,
+  editStage,
 }: {
   status?: "draft" | "published";
   initialData?: PersistedState;
   currentStepIndex?: number;
   canNominate?: boolean;
+  editStage?: EditStage;
 } = {}) {
   return render(
     <TournamentWizardProvider
@@ -86,6 +89,7 @@ function renderEditWizard({
       storageKeySuffix={`edit-${TOUR_ID}`}
       excludeId={TOUR_ID}
       canNominate={canNominate}
+      editStage={editStage ?? (status === "draft" ? "draft" : "published")}
     >
       <WizardShell
         orgId={ORG_ID}
@@ -310,16 +314,19 @@ describe("WizardShell — payout nomination", () => {
       beneficiaryOrgName: beneficiaryOrgId ? "Penang Chess" : "",
       savedBeneficiaryOrgId,
       accepted: false,
-      locked: false,
     },
   });
 
   const beneficiaryCalls = () =>
-    mockFetch.mock.calls.filter(([url]) => String(url).endsWith("/beneficiary"));
+    mockFetch.mock.calls.filter(([url]) =>
+      String(url).endsWith("/beneficiary"),
+    );
 
   async function save(initial: PersistedState, canNominate = true) {
     renderEditWizard({ initialData: initial, canNominate });
-    fireEvent.click(await screen.findByRole("button", { name: /save changes/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /save changes/i }),
+    );
   }
 
   it("nominates after saving the tournament, when the choice changed", async () => {
@@ -328,9 +335,13 @@ describe("WizardShell — payout nomination", () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalled());
     const [url, init] = beneficiaryCalls()[0];
-    expect(url).toBe(`/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}/beneficiary`);
+    expect(url).toBe(
+      `/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}/beneficiary`,
+    );
     expect(init.method).toBe("PUT");
-    expect(JSON.parse(init.body)).toEqual({ beneficiary_organization_id: NOMINEE });
+    expect(JSON.parse(init.body)).toEqual({
+      beneficiary_organization_id: NOMINEE,
+    });
     // The tournament first: a new one has no id to nominate on until it is saved.
     expect(String(mockFetch.mock.calls[0][0])).not.toContain("/beneficiary");
   });
@@ -361,17 +372,153 @@ describe("WizardShell — payout nomination", () => {
     expect(beneficiaryCalls()).toHaveLength(0);
   });
 
+  // An unsaved pick left in a session from before the lock must not be sent:
+  // after the start date nothing in the database would refuse it.
+  it.each(["paid", "ongoing"] as const)(
+    "sends nothing from a session saved before the %s lock",
+    async (editStage) => {
+      sessionStorage.setItem(
+        `tournament-wizard-${ORG_ID}-edit-${TOUR_ID}`,
+        JSON.stringify(withPayout(NOMINEE, null)),
+      );
+      mockFetch.mockResolvedValue(jsonResponse(200, { data: { id: TOUR_ID } }));
+      renderEditWizard({
+        initialData: withPayout(null, null),
+        canNominate: true,
+        editStage,
+      });
+      fireEvent.click(
+        await screen.findByRole("button", { name: /save changes/i }),
+      );
+
+      await waitFor(() => expect(mockPush).toHaveBeenCalled());
+      expect(beneficiaryCalls()).toHaveLength(0);
+    },
+  );
+
   it("keeps the organizer on the wizard when the nomination is refused", async () => {
     mockFetch.mockImplementation(async (url: string) =>
       url.endsWith("/beneficiary")
         ? jsonResponse(409, {
-            error: { message: "The payout recipient is locked once a player has paid" },
+            error: {
+              message: "The payout recipient is locked once a player has paid",
+            },
           })
         : jsonResponse(200, { data: {} }),
     );
     await save(withPayout(NOMINEE, null));
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/locked once a player has paid/i);
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /locked once a player has paid/i,
+    );
     expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("WizardShell — edit policy", () => {
+  function patchBody(): Record<string, unknown> {
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    return JSON.parse(init.body as string);
+  }
+
+  async function saveAt(editStage: EditStage, initialData = INITIAL) {
+    mockFetch.mockResolvedValue(jsonResponse(200, { data: { id: TOUR_ID } }));
+    renderEditWizard({ editStage, initialData });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /save changes/i }),
+    );
+  }
+
+  it("sends every field while nothing is locked", async () => {
+    await saveAt("published");
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(Object.keys(patchBody())).toEqual(
+      expect.arrayContaining(["entry_fees", "start_date", "max_participants"]),
+    );
+  });
+
+  // Not resent at their current value: leaving them out can't trip the freeze.
+  it("leaves out what a payment locked", async () => {
+    await saveAt("paid", {
+      ...INITIAL,
+      formatData: {
+        ...INITIAL.formatData,
+        restrictions: [{ id: "r1", kind: "max_rating", value: "1600" }],
+      },
+    });
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    const body = patchBody();
+    for (const locked of [
+      "entry_fees",
+      "start_date",
+      "end_date",
+      "venue_country",
+      "venue_state",
+      "format",
+      "time_control",
+      "is_fide_rated",
+      "is_mcf_rated",
+      "restrictions",
+    ]) {
+      expect(body).not.toHaveProperty(locked);
+    }
+    expect(body).toMatchObject({
+      name: INITIAL.basicInfoData.name,
+      venue_name: INITIAL.basicInfoData.venueName,
+      venue_address: INITIAL.basicInfoData.venueAddress,
+    });
+    expect(body).toHaveProperty("registration_deadline");
+    // Increase-only, not locked: the API refuses a decrease.
+    expect(body).toHaveProperty("max_participants");
+  });
+
+  it("sends only the description once the tournament has started", async () => {
+    await saveAt("ongoing", {
+      ...INITIAL,
+      basicInfoData: {
+        ...INITIAL.basicInfoData,
+        description: "Round 3 pairings are up.",
+      },
+    });
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(patchBody()).toEqual({ description: "Round 3 pairings are up." });
+  });
+
+  // An empty patch is a 400 from the route; there's simply nothing to save.
+  it("skips the request when nothing editable is left to send", async () => {
+    await saveAt("ongoing");
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("says why fields are locked", async () => {
+    renderEditWizard({ editStage: "paid" });
+    expect(await screen.findByText(/a player has already paid/i)).toBeTruthy();
+  });
+
+  it("shows no lock notice while everything is editable", async () => {
+    renderEditWizard({ editStage: "published" });
+    await screen.findByRole("button", { name: /save changes/i });
+    expect(screen.queryByText(/locked|can no longer/i)).toBeNull();
+  });
+
+  // A 409's details are column names; its message is the readable part.
+  it("shows the freeze's message rather than the locked column names", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse(409, {
+        error: {
+          code: "CONFLICT",
+          message: "A player has already paid, so the dates are locked.",
+          details: ["start_date", "end_date"],
+        },
+      }),
+    );
+    renderEditWizard();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /save changes/i }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "A player has already paid, so the dates are locked.",
+    );
   });
 });

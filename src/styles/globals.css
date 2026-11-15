@@ -477,6 +477,9 @@
   .input::placeholder {
     @apply text-text-disabled;
   }
+  .input:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
   .input::-webkit-calendar-picker-indicator {
     @apply cursor-pointer opacity-70;
     filter: invert(70%) sepia(30%) saturate(400%) hue-rotate(5deg)

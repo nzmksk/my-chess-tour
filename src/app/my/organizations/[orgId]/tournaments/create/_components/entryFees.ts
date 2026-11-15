@@ -98,7 +98,7 @@ export function fromValidUntilTimestamp(
  *
  * A tier whose date the organizer did not move is written back exactly as it
  * was stored. `entry_fees` is compared byte-for-byte — by `deepEquals` in the
- * PATCH route and by `IS DISTINCT FROM` in guard_tournament_money_fields — so
+ * PATCH route and by `IS DISTINCT FROM` in guard_tournament_paid_fields — so
  * normalising an already-stored value would report a money-field edit on a save
  * that only changed the venue, and a tournament with a paid registration would
  * be refused outright. Only a date the organizer actually picked is normalised.

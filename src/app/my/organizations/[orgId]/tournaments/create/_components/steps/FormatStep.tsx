@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { FormatData, Restriction, RestrictionKind } from "../../types";
 import { useTournamentWizard } from "../TournamentWizardContext";
+import LockedFieldset from "../LockedFieldset";
 import { newRowId } from "../rowId";
 import { RESTRICTION_KINDS, RESTRICTION_LABELS } from "../restrictions";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
@@ -29,7 +30,14 @@ type FieldErrors = Partial<
 
 const NO_ERRORS: FieldErrors = {};
 
-function validate(data: FormatData, timeZone: string): FieldErrors {
+function validate(
+  data: FormatData,
+  timeZone: string,
+  {
+    startDateLocked = false,
+    capacityFloor = null,
+  }: { startDateLocked?: boolean; capacityFloor?: number | null } = {},
+): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!data.formatType) errors.formatType = "Format type is required.";
@@ -52,7 +60,12 @@ function validate(data: FormatData, timeZone: string): FieldErrors {
   // is an hour ahead. Same zone the publish route and the edit freeze use.
   if (!data.startDate) {
     errors.startDate = "Start date is required.";
-  } else if (data.startDate <= getTodayInTimeZone(timeZone)) {
+  } else if (
+    // A start date the organizer can no longer move is not theirs to fix, and
+    // once the tournament has started it is in the past by definition.
+    !startDateLocked &&
+    data.startDate <= getTodayInTimeZone(timeZone)
+  ) {
     // Publish rejects a past start date anyway (422 from the publish route);
     // catching it here means the organizer finds out on the step that owns the
     // field instead of at the end of the wizard. It also matters more now that
@@ -80,6 +93,11 @@ function validate(data: FormatData, timeZone: string): FieldErrors {
     errors.maxParticipants = "Maximum participants is required.";
   } else if (Number(data.maxParticipants) < 2) {
     errors.maxParticipants = "Must allow at least 2 participants.";
+  } else if (
+    capacityFloor !== null &&
+    Number(data.maxParticipants) < capacityFloor
+  ) {
+    errors.maxParticipants = `A player has already paid, so capacity can't go below ${capacityFloor}.`;
   }
 
   const restrictionErrors: Record<string, string> = {};
@@ -110,6 +128,8 @@ export default function FormatStep() {
     setFormatData,
     goNext,
     registerStepHandler,
+    isLocked,
+    capacityFloor,
   } = useTournamentWizard();
 
   // Memoized so it is a stable dependency of attemptNext below.
@@ -124,9 +144,12 @@ export default function FormatStep() {
   const [form, setForm] = useState<FormatData>(formatData);
   const [showErrors, setShowErrors] = useState(false);
   const uid = useId();
+  const startDateLocked = isLocked("start_date");
 
   // Errors are derived from the form — no need to mirror them into state.
-  const errors = showErrors ? validate(form, timeZone) : NO_ERRORS;
+  const errors = showErrors
+    ? validate(form, timeZone, { startDateLocked, capacityFloor })
+    : NO_ERRORS;
 
   const field = <K extends keyof FormatData>(key: K, value: FormatData[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -171,14 +194,17 @@ export default function FormatStep() {
 
   const attemptNext = useCallback(async () => {
     setShowErrors(true);
-    const fieldErrors = validate(form, timeZone);
+    const fieldErrors = validate(form, timeZone, {
+      startDateLocked,
+      capacityFloor,
+    });
     const hasErrors =
       Object.keys(fieldErrors).filter((k) => k !== "restrictions").length > 0 ||
       Object.keys(fieldErrors.restrictions ?? {}).length > 0;
     if (hasErrors) return;
     setFormatData(form);
     goNext();
-  }, [form, timeZone, setFormatData, goNext]);
+  }, [form, timeZone, startDateLocked, capacityFloor, setFormatData, goNext]);
 
   useEffect(() => {
     registerStepHandler(1, attemptNext);
@@ -193,159 +219,165 @@ export default function FormatStep() {
         Define the tournament format, time control, and schedule.
       </p>
 
-      {/* Format Type + System */}
-      <div className="input-row">
-        <div className="form-group">
-          <div className="label-row">
-            <label htmlFor={`${uid}-format-type`} className="input-label">
-              Format Type
-            </label>
-            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
-              *
-            </span>
+      <LockedFieldset locked={isLocked("format")}>
+        {/* Format Type + System */}
+        <div className="input-row">
+          <div className="form-group">
+            <div className="label-row">
+              <label htmlFor={`${uid}-format-type`} className="input-label">
+                Format Type
+              </label>
+              <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+                *
+              </span>
+            </div>
+            <select
+              id={`${uid}-format-type`}
+              className={`input ${showErrors && errors.formatType ? "input-error" : ""}`}
+              value={form.formatType}
+              onChange={(e) => field("formatType", e.target.value)}
+            >
+              <option value="">Select format…</option>
+              {FORMAT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            {showErrors && errors.formatType && (
+              <p className="input-hint error">{errors.formatType}</p>
+            )}
           </div>
-          <select
-            id={`${uid}-format-type`}
-            className={`input ${showErrors && errors.formatType ? "input-error" : ""}`}
-            value={form.formatType}
-            onChange={(e) => field("formatType", e.target.value)}
-          >
-            <option value="">Select format…</option>
-            {FORMAT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          {showErrors && errors.formatType && (
-            <p className="input-hint error">{errors.formatType}</p>
-          )}
-        </div>
 
-        <div className="form-group">
-          <div className="label-row">
-            <label htmlFor={`${uid}-system`} className="input-label">
-              System
-            </label>
-            <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
-              *
-            </span>
+          <div className="form-group">
+            <div className="label-row">
+              <label htmlFor={`${uid}-system`} className="input-label">
+                System
+              </label>
+              <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+                *
+              </span>
+            </div>
+            <select
+              id={`${uid}-system`}
+              className={`input ${showErrors && errors.system ? "input-error" : ""}`}
+              value={form.system}
+              onChange={(e) => field("system", e.target.value)}
+            >
+              <option value="">Select system…</option>
+              {SYSTEMS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            {showErrors && errors.system && (
+              <p className="input-hint error">{errors.system}</p>
+            )}
           </div>
-          <select
-            id={`${uid}-system`}
-            className={`input ${showErrors && errors.system ? "input-error" : ""}`}
-            value={form.system}
-            onChange={(e) => field("system", e.target.value)}
-          >
-            <option value="">Select system…</option>
-            {SYSTEMS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          {showErrors && errors.system && (
-            <p className="input-hint error">{errors.system}</p>
-          )}
         </div>
-      </div>
 
-      {/* Number of Rounds */}
-      <div className="form-group">
-        <div className="label-row">
-          <label htmlFor={`${uid}-rounds`} className="input-label">
-            Number of Rounds
-          </label>
-          <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
-            *
-          </span>
-        </div>
-        <input
-          id={`${uid}-rounds`}
-          type="number"
-          className={`input w-32 ${showErrors && errors.rounds ? "input-error" : ""}`}
-          value={form.rounds === "" ? "" : String(form.rounds)}
-          min={1}
-          max={20}
-          onChange={(e) => {
-            const raw = e.target.value;
-            field("rounds", raw === "" ? "" : Number(raw));
-          }}
-        />
-        {showErrors && errors.rounds && (
-          <p className="input-hint error">{errors.rounds}</p>
-        )}
-      </div>
-
-      <SectionHeader>Time Control</SectionHeader>
-
-      <div className="input-row">
+        {/* Number of Rounds */}
         <div className="form-group">
           <div className="label-row">
-            <label htmlFor={`${uid}-base-time`} className="input-label">
-              Base Time (min)
+            <label htmlFor={`${uid}-rounds`} className="input-label">
+              Number of Rounds
             </label>
             <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
               *
             </span>
           </div>
           <input
-            id={`${uid}-base-time`}
+            id={`${uid}-rounds`}
             type="number"
-            className={`input w-32 ${showErrors && errors.baseTime ? "input-error" : ""}`}
-            value={form.baseTime === "" ? "" : String(form.baseTime)}
+            className={`input w-32 ${showErrors && errors.rounds ? "input-error" : ""}`}
+            value={form.rounds === "" ? "" : String(form.rounds)}
             min={1}
+            max={20}
             onChange={(e) => {
               const raw = e.target.value;
-              field("baseTime", raw === "" ? "" : Number(raw));
+              field("rounds", raw === "" ? "" : Number(raw));
             }}
           />
-          {showErrors && errors.baseTime && (
-            <p className="input-hint error">{errors.baseTime}</p>
+          {showErrors && errors.rounds && (
+            <p className="input-hint error">{errors.rounds}</p>
           )}
+        </div>
+      </LockedFieldset>
+
+      <SectionHeader>Time Control</SectionHeader>
+
+      <LockedFieldset locked={isLocked("time_control")}>
+        <div className="input-row">
+          <div className="form-group">
+            <div className="label-row">
+              <label htmlFor={`${uid}-base-time`} className="input-label">
+                Base Time (min)
+              </label>
+              <span aria-hidden="true" className="text-danger ml-0.5 text-sm">
+                *
+              </span>
+            </div>
+            <input
+              id={`${uid}-base-time`}
+              type="number"
+              className={`input w-32 ${showErrors && errors.baseTime ? "input-error" : ""}`}
+              value={form.baseTime === "" ? "" : String(form.baseTime)}
+              min={1}
+              onChange={(e) => {
+                const raw = e.target.value;
+                field("baseTime", raw === "" ? "" : Number(raw));
+              }}
+            />
+            {showErrors && errors.baseTime && (
+              <p className="input-hint error">{errors.baseTime}</p>
+            )}
+          </div>
+
+          <div className="form-group">
+            <div className="label-row">
+              <label htmlFor={`${uid}-increment`} className="input-label">
+                Increment (sec)
+              </label>
+              <span className="label-optional">(optional)</span>
+            </div>
+            <input
+              id={`${uid}-increment`}
+              type="number"
+              className="input w-32"
+              value={form.increment === "" ? "" : String(form.increment)}
+              min={0}
+              onChange={(e) => {
+                const raw = e.target.value;
+                field("increment", raw === "" ? "" : Number(raw));
+              }}
+            />
+          </div>
         </div>
 
         <div className="form-group">
           <div className="label-row">
-            <label htmlFor={`${uid}-increment`} className="input-label">
-              Increment (sec)
+            <label htmlFor={`${uid}-delay`} className="input-label">
+              Delay (sec)
             </label>
             <span className="label-optional">(optional)</span>
           </div>
           <input
-            id={`${uid}-increment`}
+            id={`${uid}-delay`}
             type="number"
             className="input w-32"
-            value={form.increment === "" ? "" : String(form.increment)}
+            value={form.delay === "" ? "" : String(form.delay)}
             min={0}
             onChange={(e) => {
               const raw = e.target.value;
-              field("increment", raw === "" ? "" : Number(raw));
+              field("delay", raw === "" ? "" : Number(raw));
             }}
           />
+          <p className="input-hint">
+            Most rapid tournaments use increment only.
+          </p>
         </div>
-      </div>
-
-      <div className="form-group">
-        <div className="label-row">
-          <label htmlFor={`${uid}-delay`} className="input-label">
-            Delay (sec)
-          </label>
-          <span className="label-optional">(optional)</span>
-        </div>
-        <input
-          id={`${uid}-delay`}
-          type="number"
-          className="input w-32"
-          value={form.delay === "" ? "" : String(form.delay)}
-          min={0}
-          onChange={(e) => {
-            const raw = e.target.value;
-            field("delay", raw === "" ? "" : Number(raw));
-          }}
-        />
-        <p className="input-hint">Most rapid tournaments use increment only.</p>
-      </div>
+      </LockedFieldset>
 
       <SectionHeader>Schedule &amp; Capacity</SectionHeader>
 
@@ -365,6 +397,7 @@ export default function FormatStep() {
             className={`input ${showErrors && errors.startDate ? "input-error" : ""}`}
             value={form.startDate}
             onChange={(e) => field("startDate", e.target.value)}
+            disabled={startDateLocked}
           />
           {showErrors && errors.startDate && (
             <p className="input-hint error">{errors.startDate}</p>
@@ -386,6 +419,7 @@ export default function FormatStep() {
             className={`input ${showErrors && errors.endDate ? "input-error" : ""}`}
             value={form.endDate}
             onChange={(e) => field("endDate", e.target.value)}
+            disabled={isLocked("end_date")}
           />
           {showErrors && errors.endDate && (
             <p className="input-hint error">{errors.endDate}</p>
@@ -409,6 +443,7 @@ export default function FormatStep() {
             className={`input ${showErrors && errors.registrationDeadline ? "input-error" : ""}`}
             value={form.registrationDeadline}
             onChange={(e) => field("registrationDeadline", e.target.value)}
+            disabled={isLocked("registration_deadline")}
           />
           {showErrors && errors.registrationDeadline && (
             <p className="input-hint error">{errors.registrationDeadline}</p>
@@ -431,14 +466,22 @@ export default function FormatStep() {
             value={
               form.maxParticipants === "" ? "" : String(form.maxParticipants)
             }
-            min={2}
+            min={capacityFloor ?? 2}
             onChange={(e) => {
               const raw = e.target.value;
               field("maxParticipants", raw === "" ? "" : Number(raw));
             }}
+            disabled={isLocked("max_participants")}
           />
-          {showErrors && errors.maxParticipants && (
+          {showErrors && errors.maxParticipants ? (
             <p className="input-hint error">{errors.maxParticipants}</p>
+          ) : (
+            capacityFloor !== null && (
+              <p className="input-hint">
+                Players have paid, so capacity can only go up from{" "}
+                {capacityFloor}.
+              </p>
+            )
           )}
         </div>
       </div>
@@ -452,6 +495,7 @@ export default function FormatStep() {
             className="accent-gold-bright h-4 w-4 cursor-pointer"
             checked={form.fideRated}
             onChange={(e) => field("fideRated", e.target.checked)}
+            disabled={isLocked("is_fide_rated")}
           />
           FIDE Rated
         </label>
@@ -461,6 +505,7 @@ export default function FormatStep() {
             className="accent-gold-bright h-4 w-4 cursor-pointer"
             checked={form.mcfRated}
             onChange={(e) => field("mcfRated", e.target.checked)}
+            disabled={isLocked("is_mcf_rated")}
           />
           MCF Rated
         </label>
@@ -468,96 +513,101 @@ export default function FormatStep() {
 
       <SectionHeader>Restrictions</SectionHeader>
 
-      <p className="font-lato text-text-muted -mt-1 mb-3 text-xs">
-        Optional. Leave empty if the tournament is open to all players.
-      </p>
+      <LockedFieldset locked={isLocked("restrictions")}>
+        <p className="font-lato text-text-muted -mt-1 mb-3 text-xs">
+          Optional. Leave empty if the tournament is open to all players.
+        </p>
 
-      {form.restrictions.length > 0 && (
-        <div className="mb-3 flex flex-col gap-2">
-          {form.restrictions.map((r) => (
-            <div key={r.id} className="flex items-start gap-2">
-              <select
-                className="input"
-                style={{ width: "175px", flexShrink: 0 }}
-                value={r.kind}
-                onChange={(e) =>
-                  changeRestrictionKind(r.id, e.target.value as RestrictionKind)
-                }
-                aria-label="Restriction type"
-              >
-                {RESTRICTION_KINDS.map((k) => (
-                  <option key={k} value={k}>
-                    {RESTRICTION_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-              <div className="min-w-0 flex-1">
-                {r.kind === "nationality" ? (
-                  <CountryDropdown
-                    placeholder="Select country"
-                    defaultValue={nameToAlpha3(r.value)}
-                    onChange={(c) => updateRestrictionValue(r.id, c.name)}
-                  />
-                ) : r.kind === "gender" ? (
-                  <select
-                    className={`input ${
-                      showErrors && errors.restrictions?.[r.id]
-                        ? "input-error"
-                        : ""
-                    }`}
-                    value={r.value}
-                    aria-label="Restriction value"
-                    onChange={(e) =>
-                      updateRestrictionValue(r.id, e.target.value)
-                    }
-                  >
-                    <option value="">Select…</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    className={`input ${
-                      showErrors && errors.restrictions?.[r.id]
-                        ? "input-error"
-                        : ""
-                    }`}
-                    placeholder="Value"
-                    value={r.value}
-                    aria-label="Restriction value"
-                    onChange={(e) =>
-                      updateRestrictionValue(r.id, e.target.value)
-                    }
-                  />
-                )}
-                {showErrors && errors.restrictions?.[r.id] && (
-                  <p className="input-hint error">
-                    {errors.restrictions[r.id]}
-                  </p>
-                )}
+        {form.restrictions.length > 0 && (
+          <div className="mb-3 flex flex-col gap-2">
+            {form.restrictions.map((r) => (
+              <div key={r.id} className="flex items-start gap-2">
+                <select
+                  className="input"
+                  style={{ width: "175px", flexShrink: 0 }}
+                  value={r.kind}
+                  onChange={(e) =>
+                    changeRestrictionKind(
+                      r.id,
+                      e.target.value as RestrictionKind,
+                    )
+                  }
+                  aria-label="Restriction type"
+                >
+                  {RESTRICTION_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {RESTRICTION_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+                <div className="min-w-0 flex-1">
+                  {r.kind === "nationality" ? (
+                    <CountryDropdown
+                      placeholder="Select country"
+                      defaultValue={nameToAlpha3(r.value)}
+                      onChange={(c) => updateRestrictionValue(r.id, c.name)}
+                    />
+                  ) : r.kind === "gender" ? (
+                    <select
+                      className={`input ${
+                        showErrors && errors.restrictions?.[r.id]
+                          ? "input-error"
+                          : ""
+                      }`}
+                      value={r.value}
+                      aria-label="Restriction value"
+                      onChange={(e) =>
+                        updateRestrictionValue(r.id, e.target.value)
+                      }
+                    >
+                      <option value="">Select…</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className={`input ${
+                        showErrors && errors.restrictions?.[r.id]
+                          ? "input-error"
+                          : ""
+                      }`}
+                      placeholder="Value"
+                      value={r.value}
+                      aria-label="Restriction value"
+                      onChange={(e) =>
+                        updateRestrictionValue(r.id, e.target.value)
+                      }
+                    />
+                  )}
+                  {showErrors && errors.restrictions?.[r.id] && (
+                    <p className="input-hint error">
+                      {errors.restrictions[r.id]}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Remove restriction"
+                  className="font-lato border-border text-text-muted hover:text-danger hover:border-danger-border flex cursor-pointer items-center justify-center rounded-md border bg-transparent transition duration-200"
+                  style={{ width: "36px", height: "38px", flexShrink: 0 }}
+                  onClick={() => removeRestriction(r.id)}
+                >
+                  ×
+                </button>
               </div>
-              <button
-                type="button"
-                aria-label="Remove restriction"
-                className="font-lato border-border text-text-muted hover:text-danger hover:border-danger-border flex cursor-pointer items-center justify-center rounded-md border bg-transparent transition duration-200"
-                style={{ width: "36px", height: "38px", flexShrink: 0 }}
-                onClick={() => removeRestriction(r.id)}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      <button
-        type="button"
-        className="font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200"
-        onClick={addRestriction}
-      >
-        + Add Restriction
-      </button>
+        <button
+          type="button"
+          className="font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200"
+          onClick={addRestriction}
+        >
+          + Add Restriction
+        </button>
+      </LockedFieldset>
     </div>
   );
 }

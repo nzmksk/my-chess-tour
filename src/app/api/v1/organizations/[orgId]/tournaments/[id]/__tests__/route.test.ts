@@ -52,8 +52,8 @@ const {
   const mockMembershipBuilder = makeBuilder({ data: null, error: null });
   const mockTournamentFetchBuilder = makeBuilder({ data: null, error: null });
   const mockTournamentUpdateBuilder = makeBuilder({ data: null, error: null });
-  // Paid-registration probe for the money-field freeze. count 0 = nobody has
-  // paid yet, so money fields stay editable.
+  // Paid-registration probe for the edit freeze. count 0 = nobody has paid
+  // yet, so paid-locked fields stay editable.
   const mockPaymentsBuilder = makeBuilder({ count: 0, error: null });
 
   // Track tournament table calls: first is fetch, second is update
@@ -171,9 +171,9 @@ const VALID_PATCH_BODY = {
   venue_address: "Jalan Pinang, 50088 KL",
   format: { type: "rapid", system: "swiss", rounds: 9 },
   time_control: { base_minutes: 15, increment_seconds: 10, delay_seconds: 0 },
-  start_date: "2026-09-01",
-  end_date: "2026-09-02",
-  registration_deadline: "2026-08-25T23:59:59Z",
+  start_date: "2099-09-01",
+  end_date: "2099-09-02",
+  registration_deadline: "2099-08-25T23:59:59Z",
   max_participants: 64,
   is_fide_rated: true,
   is_mcf_rated: true,
@@ -241,7 +241,7 @@ function setTournamentUpdateResult(data: unknown, error: unknown = null) {
   ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
 }
 
-/** How many paid registration payments the money-field freeze should see. */
+/** How many paid registration payments the paid-registration freeze should see. */
 function setPaidRegistrationCount(count: number, error: unknown = null) {
   (mockPaymentsBuilder as Record<string, unknown>).then = (
     onfulfilled: (v: unknown) => unknown,
@@ -523,21 +523,21 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       setTournamentFetchResult({
         ...EXISTING_TOURNAMENT,
         status: "published",
-        registration_deadline: "2026-08-01T00:00:00Z",
-        registration_closed_at: "2026-08-01T00:00:00Z",
+        registration_deadline: "2099-08-01T00:00:00Z",
+        registration_closed_at: "2099-08-01T00:00:00Z",
       });
       setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
       const res = await PATCH(
         makeRequest(ORG_ID, TOUR_ID, {
-          registration_deadline: "2026-08-25T23:59:59Z",
+          registration_deadline: "2099-08-25T23:59:59Z",
         }),
         { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
       );
       expect(res.status).toBe(200);
       expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          registration_deadline: "2026-08-25T23:59:59Z",
-          registration_closed_at: "2026-08-25T23:59:59Z",
+          registration_deadline: "2099-08-25T23:59:59Z",
+          registration_closed_at: "2099-08-25T23:59:59Z",
         }),
       );
     });
@@ -549,20 +549,20 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       setTournamentFetchResult({
         ...EXISTING_TOURNAMENT,
         status: "published",
-        registration_deadline: "2026-08-01T00:00:00Z",
+        registration_deadline: "2099-08-01T00:00:00Z",
         registration_closed_at: "2026-07-01T00:00:00Z",
       });
       setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
       const res = await PATCH(
         makeRequest(ORG_ID, TOUR_ID, {
-          registration_deadline: "2026-08-25T23:59:59Z",
+          registration_deadline: "2099-08-25T23:59:59Z",
         }),
         { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
       );
       expect(res.status).toBe(200);
       expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          registration_deadline: "2026-08-25T23:59:59Z",
+          registration_deadline: "2099-08-25T23:59:59Z",
         }),
       );
       expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
@@ -712,7 +712,7 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       expect(body.error.details).toContain("prizes");
     });
 
-    it("still allows non-money edits after a registration is paid", async () => {
+    it("still allows cosmetic edits after a registration is paid", async () => {
       setUser();
       setTournamentFetchResult(PUBLISHED);
       setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
@@ -816,7 +816,7 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       expect(body.error.details).toEqual(["entry_fees"]);
     });
 
-    it("409s on any edit once the tournament has started", async () => {
+    it("409s on a venue edit once the tournament has started", async () => {
       setUser();
       setTournamentFetchResult(ONGOING_TODAY);
       setPaidRegistrationCount(0);
@@ -829,7 +829,7 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
       expect(body.error.message).toMatch(/started/i);
     });
 
-    it("409s on any edit once the tournament has ended", async () => {
+    it("409s on a venue edit once the tournament has ended", async () => {
       setUser();
       setTournamentFetchResult(STARTED);
       setPaidRegistrationCount(0);
@@ -857,6 +857,254 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
           entry_fees: { standard: { amount_cents: 5000 } },
         }),
         { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+    it("409s on a date change once a registration is paid", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          start_date: "2099-09-08",
+          end_date: "2099-09-09",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.details).toEqual(["start_date", "end_date"]);
+      expect(body.error.message).toMatch(/already paid/i);
+    });
+
+    it("409s on an eligibility change once a registration is paid", async () => {
+      setUser();
+      setTournamentFetchResult({ ...PUBLISHED, restrictions: null });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          restrictions: [{ type: "rating", max: 1600 }],
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.details).toEqual(["restrictions"]);
+    });
+
+    it("still allows moving the registration deadline after a payment", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          registration_deadline: "2099-08-15T00:00:00Z",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    // Cosmetic fields never lock on payment, so there is nothing to ask the
+    // database about.
+    it("skips the payment lookup when only cosmetic fields change", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { venue_name: "New Hall" }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockFrom).not.toHaveBeenCalledWith("payments");
+    });
+
+    it("allows a description edit once the tournament has started", async () => {
+      setUser();
+      setTournamentFetchResult(ONGOING_TODAY);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          description: "Round 3 pairings are up.",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("names the refused field when a started tournament is renamed", async () => {
+      setUser();
+      setTournamentFetchResult({ ...ONGOING_TODAY, name: "KL Open" });
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          name: "KL Open 2099",
+          description: "Round 3 pairings are up.",
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.details).toEqual(["name"]);
+    });
+
+    it("allows resending unchanged values once the tournament has started", async () => {
+      setUser();
+      setTournamentFetchResult({ ...ONGOING_TODAY, venue_address: "1 Road" });
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          venue_address: "1 Road",
+          max_participants: ONGOING_TODAY.max_participants,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    // Capacity is increase-only once someone has paid: more places harms
+    // nobody, fewer could leave a paid player without a seat.
+    it("allows raising capacity after a payment", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: PUBLISHED.max_participants + 16,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      // A raise is allowed paid or not, so there's nothing to ask.
+      expect(mockFrom).not.toHaveBeenCalledWith("payments");
+    });
+
+    it("409s on lowering capacity after a payment", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setPaidRegistrationCount(1);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: PUBLISHED.max_participants - 1,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.details).toEqual(["max_participants"]);
+      expect(body.error.message).toMatch(/capacity can only be increased/i);
+    });
+
+    it("allows lowering capacity before anyone has paid", async () => {
+      setUser();
+      setTournamentFetchResult(PUBLISHED);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      setPaidRegistrationCount(0);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: PUBLISHED.max_participants - 1,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(200);
+      expect(mockFrom).toHaveBeenCalledWith("payments");
+    });
+
+    it("409s on raising capacity once the tournament has started", async () => {
+      setUser();
+      setTournamentFetchResult(ONGOING_TODAY);
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, {
+          max_participants: ONGOING_TODAY.max_participants + 16,
+        }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.details).toEqual(["max_participants"]);
+    });
+
+    it("409s on any change to a cancelled tournament", async () => {
+      setUser();
+      setTournamentFetchResult({ ...PUBLISHED, status: "cancelled" });
+      const res = await PATCH(
+        makeRequest(ORG_ID, TOUR_ID, { description: "Postponed." }),
+        { params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }) },
+      );
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.message).toMatch(/cancelled/i);
+    });
+  });
+
+  // A published listing must stay one that could have been published.
+  describe("published tournaments stay publishable", () => {
+    const LISTED = {
+      ...EXISTING_TOURNAMENT,
+      status: "published",
+      name: "KL Open",
+      description: null,
+      venue_name: "Dewan",
+      venue_address: "1 Jalan",
+      format: { type: "rapid", system: "swiss", rounds: 7 },
+      time_control: {
+        base_minutes: 15,
+        increment_seconds: 0,
+        delay_seconds: 0,
+      },
+    };
+
+    function patchListed(body: unknown, row: unknown = LISTED) {
+      setUser();
+      setTournamentFetchResult(row);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "published" });
+      return PATCH(makeRequest(ORG_ID, TOUR_ID, body), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+    }
+
+    it("422s when an edit blanks a required field", async () => {
+      const res = await patchListed({ venue_address: "" });
+      expect(res.status).toBe(422);
+      expect((await res.json()).error.details).toEqual([
+        "Venue address is required",
+      ]);
+      expect(mockTournamentUpdateBuilder.update).not.toHaveBeenCalled();
+    });
+
+    it("422s when an edit moves the start date into the past", async () => {
+      const today = getTodayInTimeZone(LISTED.timezone);
+      const res = await patchListed({ start_date: today, end_date: today });
+      expect(res.status).toBe(422);
+      expect((await res.json()).error.details).toContain(
+        "Start date must be a future date",
+      );
+    });
+
+    it("422s when an edit moves the deadline into the past", async () => {
+      const res = await patchListed({
+        registration_deadline: "2020-01-01T00:00:00Z",
+      });
+      expect(res.status).toBe(422);
+      expect((await res.json()).error.details).toEqual([
+        "Registration deadline must be a future date",
+      ]);
+    });
+
+    // A deadline that has passed is a closed registration. Resending it with
+    // a new description (in another offset, as the wizard does) is no change.
+    it("allows an edit that resends a deadline already in the past", async () => {
+      const res = await patchListed(
+        {
+          description: "Registration is closed.",
+          registration_deadline: "2020-01-01T00:00:00Z",
+        },
+        { ...LISTED, registration_deadline: "2020-01-01T08:00:00+08:00" },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("lets a listing that predates a rule be edited without fixing it", async () => {
+      const res = await patchListed(
+        { description: "Now with parking" },
+        { ...LISTED, time_control: null },
       );
       expect(res.status).toBe(200);
     });
