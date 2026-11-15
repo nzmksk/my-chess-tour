@@ -367,6 +367,14 @@ export default function WizardShell({
     }
   }
 
+  // Leaving without saving. The edits live in sessionStorage, so walking away
+  // isn't enough: the next visit to this tournament's edit page would restore
+  // them over what is actually saved.
+  function handleCancel() {
+    clearWizardStorage();
+    router.push(afterSaveRedirect);
+  }
+
   async function handleNext() {
     await triggerStepHandler(currentStepIndex);
   }
@@ -407,16 +415,31 @@ export default function WizardShell({
         )}
 
         <div className="border-border bg-bg-raised flex items-center justify-between border-t px-6 py-4 sm:px-8">
-          <button
-            type="button"
-            className={`font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 ${
-              isFirstStep ? "invisible" : ""
-            }`}
-            onClick={goBack}
-            aria-hidden={isFirstStep}
-          >
-            ← Back
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className={`font-cinzel border-border text-text-secondary hover:border-gold-muted hover:text-text-primary cursor-pointer rounded-md border bg-transparent px-4 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 ${
+                isFirstStep ? (mode === "edit" ? "hidden" : "invisible") : ""
+              }`}
+              onClick={goBack}
+              aria-hidden={isFirstStep}
+            >
+              ← Back
+            </button>
+
+            {/* Only when editing: a new tournament's wizard is meant to
+                survive leaving, and Save Draft already exits it. */}
+            {mode === "edit" && (
+              <button
+                type="button"
+                className="font-cinzel text-text-muted hover:text-text-primary cursor-pointer bg-transparent px-2 py-2 text-xs font-bold tracking-widest uppercase transition duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleCancel}
+                disabled={isSaving || isPublishing}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-3">
             {/* A published tournament has no draft to save to: this button
