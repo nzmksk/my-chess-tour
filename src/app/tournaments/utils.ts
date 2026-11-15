@@ -183,23 +183,9 @@ export function getMinFeeCents(fees: EntryFees | null | undefined): number {
   return amounts.length > 0 ? Math.min(...amounts) : 0;
 }
 
-export type TournamentDateState = "upcoming" | "ongoing" | "completed";
-
-// Derives a tournament's temporal state from its calendar dates. The status
-// column only tracks draft/published/cancelled; ongoing/completed are never
-// stored — they're purely date-derived. `start_date`/`end_date` are Postgres
-// `date` columns ("YYYY-MM-DD"), so lexicographic string comparison against
-// `today` is chronological and timezone-safe.
-//
-// `today` must be the venue's today (getTodayInTimeZone(tournament.timezone)):
-// a tournament is ongoing when it is ongoing where it is being played, not
-// where the server or the reader happens to be.
-export function getTournamentDateState(
-  startDate: string,
-  endDate: string,
-  today: string,
-): TournamentDateState {
-  if (startDate > today) return "upcoming";
-  if (endDate >= today) return "ongoing";
-  return "completed";
-}
+// Moved to src/lib so lib code (the edit policy) can use it; re-exported here
+// for the pages that already import it from this module.
+export {
+  getTournamentDateState,
+  type TournamentDateState,
+} from "@/lib/tournaments/datetime";
