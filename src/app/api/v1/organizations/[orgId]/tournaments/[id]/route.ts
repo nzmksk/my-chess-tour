@@ -32,6 +32,7 @@ import {
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { hasPaidRegistration } from "@/services/payments/paid-registration";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -278,22 +279,14 @@ async function checkEditFreeze(
   // Only worth a query when the dates haven't already decided, and when the
   // patch makes a change a payment would refuse (raising capacity isn't one).
   if (needsPaymentCheck(stage) && !changed.every(allowedAt("paid"))) {
-    // `head: true` — we only need to know whether one exists.
-    const { count, error } = await supabaseAdmin
-      .from("payments")
-      .select("id", { count: "exact", head: true })
-      .eq("tournament_id", tournamentId)
-      .eq("type", "registration")
-      .eq("status", "paid")
-      .limit(1);
-
-    if (error) {
+    const paid = await hasPaidRegistration(tournamentId);
+    if (!paid.ok) {
       return internalErrorResponse(
         "PATCH /api/v1/organizations/[orgId]/tournaments/[id]: payments",
-        error,
+        paid.error,
       );
     }
-    if ((count ?? 0) > 0) stage = "paid";
+    if (paid.paid) stage = "paid";
   }
 
   const refused = changed.filter((f) => !allowedAt(stage)(f));
