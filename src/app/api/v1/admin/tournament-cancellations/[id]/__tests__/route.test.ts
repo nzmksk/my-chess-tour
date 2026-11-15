@@ -82,6 +82,11 @@ vi.mock("@/services/email/email", () => ({
   sendCancellationReviewEmail: mockSendReviewEmail,
 }));
 
+const { mockNotifyRefund } = vi.hoisted(() => ({ mockNotifyRefund: vi.fn() }));
+vi.mock("@/services/refunds/notify", () => ({
+  notifyRefundSettlement: mockNotifyRefund,
+}));
+
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getClaims: mockGetClaims },
@@ -155,7 +160,10 @@ function setAdminRpcDispatch(
       return Promise.resolve({ data: pendingRefunds, error: null });
     }
     if (name === "settle_refund") {
-      return Promise.resolve({ data: { settled: true }, error: null });
+      return Promise.resolve({
+        data: { settled: true, newly_settled: true, newly_failed: false },
+        error: null,
+      });
     }
     return Promise.resolve(reviewResult);
   });
@@ -609,6 +617,59 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       p_paid: true,
       p_payment_method: null,
     });
+    // Each settle's result goes to the notifier, which emails only on a new settle.
+    expect(mockNotifyRefund).toHaveBeenCalledWith("rf-1", {
+      settled: true,
+      newly_settled: true,
+      newly_failed: false,
+    });
+    expect(mockNotifyRefund).toHaveBeenCalledWith("rf-2", expect.anything());
+  });
+
+  it("sends the cancellation notice before any refund outcome email", async () => {
+    setPendingRefunds({
+      refund_id: "rf-1",
+      registration_id: "reg-1",
+      amount_cents: 5500,
+      original_chip_purchase_id: "chip-1",
+    });
+
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    const lastNotice = Math.max(...mockSendCancellationEmail.mock.invocationCallOrder);
+    const [firstRefund] = mockNotifyRefund.mock.invocationCallOrder;
+    expect(firstRefund).toBeDefined();
+    expect(lastNotice).toBeLessThan(firstRefund);
+  });
+
+  it("does not notify when settle_refund errors", async () => {
+    setPendingRefunds({
+      refund_id: "rf-1",
+      registration_id: "reg-1",
+      amount_cents: 5500,
+      original_chip_purchase_id: "chip-1",
+    });
+    mockAdminRpc.mockImplementation((name: string) => {
+      if (name === "list_pending_cancellation_refunds") {
+        return Promise.resolve({ data: pendingRefunds, error: null });
+      }
+      if (name === "settle_refund") {
+        return Promise.resolve({ data: null, error: { message: "db down" } });
+      }
+      return Promise.resolve({
+        data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
+        error: null,
+      });
+    });
+
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockNotifyRefund).not.toHaveBeenCalled();
   });
 
   it("does not fire refunds on rejection", async () => {
@@ -696,6 +757,8 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
 
     expect(res.status).toBe(200);
     expect(mockRefundsBuilder.update).not.toHaveBeenCalled();
+    // The webhook settles it, and emails from there.
+    expect(mockNotifyRefund).not.toHaveBeenCalled();
     expect(mockAdminRpc).not.toHaveBeenCalledWith(
       "settle_refund",
       expect.anything(),
