@@ -1110,6 +1110,49 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
     });
   });
 
+  describe("capacity below the seats taken", () => {
+    it("returns 422 naming the count when the trigger refuses the decrease", async () => {
+      setUser();
+      setTournamentUpdateResult(null, {
+        code: "P0001",
+        message: `CAPACITY_BELOW_TAKEN: 5 places are already taken; tournament ${TOUR_ID} cannot drop to 3`,
+      });
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { max_participants: 3 }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.error.code).toBe("VALIDATION_ERROR");
+      expect(body.error.message).toBe(
+        "5 places are already taken, so capacity can't go below 5.",
+      );
+    });
+
+    it("leaves any other trigger refusal as a 500", async () => {
+      setUser();
+      setTournamentUpdateResult(null, {
+        code: "P0001",
+        message: "something else entirely",
+      });
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { max_participants: 3 }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(500);
+    });
+
+    it("needs the trigger's SQLSTATE, not just its wording", async () => {
+      setUser();
+      setTournamentUpdateResult(null, {
+        code: "XX000",
+        message: "CAPACITY_BELOW_TAKEN: 5 places are already taken",
+      });
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { max_participants: 3 }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(500);
+    });
+  });
+
   describe("database errors", () => {
     it("returns 500 when the update fails", async () => {
       setUser();

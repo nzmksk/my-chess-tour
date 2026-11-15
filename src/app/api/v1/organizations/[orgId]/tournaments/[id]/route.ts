@@ -348,6 +348,26 @@ function checkStillPublishable(
   );
 }
 
+const CAPACITY_BELOW_TAKEN = /^CAPACITY_BELOW_TAKEN: (\d+) /;
+
+/**
+ * The number of seats taken, when the update was refused for lowering capacity
+ * below them; null for any other error.
+ *
+ * guard_tournament_seats_taken (003_functions_triggers.sql) raises this. There is
+ * no pre-check here on purpose: the seats taken include checkout holds that
+ * come and go by the minute, and only the trigger counts them under the
+ * tournament row lock, so asking first would answer a different question.
+ */
+function seatsTakenFrom(error: {
+  code?: string;
+  message: string;
+}): number | null {
+  if (error.code !== "P0001") return null;
+  const match = CAPACITY_BELOW_TAKEN.exec(error.message);
+  return match ? Number(match[1]) : null;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
@@ -631,6 +651,18 @@ export async function PATCH(
     .single();
 
   if (updateError) {
+    const taken = seatsTakenFrom(updateError);
+    if (taken !== null) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: `${taken} places are already taken, so capacity can't go below ${taken}.`,
+          },
+        },
+        { status: 422 },
+      );
+    }
     return internalErrorResponse(
       "PATCH /api/v1/organizations/[orgId]/tournaments/[id]: updateError",
       updateError,
