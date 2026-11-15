@@ -16,13 +16,17 @@ const SEARCH_DEBOUNCE_MS = 250;
  * nothing until the nominee accepts it.
  */
 export default function PayoutStep() {
-  const { payoutData, setPayoutData, canNominate, orgId } = useTournamentWizard();
+  const { payoutData, setPayoutData, canNominate, orgId, editStage, isLocked } =
+    useTournamentWizard();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<OrgResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const chosenId = payoutData.beneficiaryOrgId;
-  const editable = canNominate && !payoutData.locked;
+  // From the stage, never from saved wizard state: a session saved before the
+  // first payment (or the start date) must not reopen with this unlocked.
+  const locked = isLocked("beneficiary");
+  const editable = canNominate && !locked;
   const isSaved = chosenId === payoutData.savedBeneficiaryOrgId;
 
   useEffect(() => {
@@ -157,9 +161,11 @@ export default function PayoutStep() {
           Only an organization owner can change who receives the payout.
         </p>
       )}
-      {canNominate && payoutData.locked && (
+      {canNominate && locked && (
         <p className="font-lato text-text-muted text-xs">
-          The payout recipient is locked because a player has already paid.
+          {editStage === "paid"
+            ? "The payout recipient is locked because a player has already paid."
+            : "The payout recipient can no longer be changed."}
         </p>
       )}
 

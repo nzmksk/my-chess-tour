@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import PayoutStep from "../steps/PayoutStep";
 import { TournamentWizardProvider } from "../TournamentWizardContext";
 import type { PayoutData, PersistedState } from "../../types";
+import type { EditStage } from "@/lib/tournaments/edit-policy";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -17,16 +18,20 @@ const NONE: PayoutData = {
   beneficiaryOrgName: "",
   savedBeneficiaryOrgId: null,
   accepted: false,
-  locked: false,
 };
 
-function renderStep(payoutData: PayoutData, canNominate = true) {
+function renderStep(
+  payoutData: PayoutData,
+  canNominate = true,
+  editStage: EditStage = "draft",
+) {
   const initialData = { payoutData } as PersistedState;
   return render(
     <TournamentWizardProvider
       orgId={ORG_ID}
       initialData={initialData}
       canNominate={canNominate}
+      editStage={editStage}
     >
       <PayoutStep />
     </TournamentWizardProvider>,
@@ -126,8 +131,35 @@ describe("PayoutStep", () => {
   });
 
   it("is read-only once a player has paid", async () => {
-    renderStep({ ...NONE, locked: true });
+    renderStep(NONE, true, "paid");
     expect(await screen.findByText(/locked because a player has already paid/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/search approved organizations/i)).toBeNull();
+  });
+
+  it("is read-only once the tournament has started, paid or not", async () => {
+    renderStep(NONE, true, "ongoing");
+    expect(await screen.findByText(/can no longer be changed/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/search approved organizations/i)).toBeNull();
+  });
+
+  // A session saved before the lock carried `locked: false` and could hold an
+  // unsaved pick. The stage decides the lock, and the server's nomination wins.
+  it("ignores a wizard session saved before the lock", async () => {
+    sessionStorage.setItem(
+      `tournament-wizard-${ORG_ID}`,
+      JSON.stringify({
+        payoutData: {
+          beneficiaryOrgId: OTHER_ID,
+          beneficiaryOrgName: "Stale Pick Club",
+          savedBeneficiaryOrgId: null,
+          accepted: false,
+          locked: false,
+        },
+      }),
+    );
+    renderStep(NONE, true, "ongoing");
+    expect(await screen.findByText(/can no longer be changed/i)).toBeTruthy();
+    expect(screen.queryByText(/stale pick club/i)).toBeNull();
     expect(screen.queryByLabelText(/search approved organizations/i)).toBeNull();
   });
 });

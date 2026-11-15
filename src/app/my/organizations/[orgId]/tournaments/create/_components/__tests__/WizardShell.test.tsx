@@ -314,7 +314,6 @@ describe("WizardShell — payout nomination", () => {
       beneficiaryOrgName: beneficiaryOrgId ? "Penang Chess" : "",
       savedBeneficiaryOrgId,
       accepted: false,
-      locked: false,
     },
   });
 
@@ -372,6 +371,30 @@ describe("WizardShell — payout nomination", () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalled());
     expect(beneficiaryCalls()).toHaveLength(0);
   });
+
+  // An unsaved pick left in a session from before the lock must not be sent:
+  // after the start date nothing in the database would refuse it.
+  it.each(["paid", "ongoing"] as const)(
+    "sends nothing from a session saved before the %s lock",
+    async (editStage) => {
+      sessionStorage.setItem(
+        `tournament-wizard-${ORG_ID}-edit-${TOUR_ID}`,
+        JSON.stringify(withPayout(NOMINEE, null)),
+      );
+      mockFetch.mockResolvedValue(jsonResponse(200, { data: { id: TOUR_ID } }));
+      renderEditWizard({
+        initialData: withPayout(null, null),
+        canNominate: true,
+        editStage,
+      });
+      fireEvent.click(
+        await screen.findByRole("button", { name: /save changes/i }),
+      );
+
+      await waitFor(() => expect(mockPush).toHaveBeenCalled());
+      expect(beneficiaryCalls()).toHaveLength(0);
+    },
+  );
 
   it("keeps the organizer on the wizard when the nomination is refused", async () => {
     mockFetch.mockImplementation(async (url: string) =>

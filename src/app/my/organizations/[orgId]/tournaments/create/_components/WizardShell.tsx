@@ -60,6 +60,7 @@ export default function WizardShell({
     setPayoutData,
     canNominate,
     editStage,
+    isLocked,
     tournamentId,
     setTournamentId,
     clearWizardStorage,
@@ -268,7 +269,11 @@ export default function WizardShell({
    */
   async function syncBeneficiary(id: string): Promise<SaveResult> {
     const chosen = payoutData.beneficiaryOrgId;
-    if (!canNominate || chosen === payoutData.savedBeneficiaryOrgId) {
+    if (
+      !canNominate ||
+      isLocked("beneficiary") ||
+      chosen === payoutData.savedBeneficiaryOrgId
+    ) {
       return { ok: true, id };
     }
 

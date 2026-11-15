@@ -19,7 +19,6 @@ import {
 } from "@/lib/tournaments/datetime";
 import {
   canEditAnything,
-  isFieldEditable,
   resolveEditStage,
   type EditStage,
 } from "@/lib/tournaments/edit-policy";
@@ -102,10 +101,7 @@ function editStageOf(t: TournamentForEdit): EditStage {
   });
 }
 
-function buildInitialData(
-  t: TournamentForEdit,
-  stage: EditStage,
-): PersistedState {
+function buildInitialData(t: TournamentForEdit): PersistedState {
   // Times come back as instants; the organizer edits them at the venue's wall
   // clock, which is the one they entered — not the clock of whoever is editing.
   //
@@ -189,7 +185,6 @@ function buildInitialData(
     beneficiaryOrgName: t.beneficiary?.name ?? "",
     savedBeneficiaryOrgId: t.beneficiary?.organization_id ?? null,
     accepted: t.beneficiary?.accepted ?? false,
-    locked: !isFieldEditable("beneficiary", stage),
   };
 
   return {
@@ -246,7 +241,7 @@ export default async function EditTournamentPage({
     redirect(`/my/organizations/${orgId}/tournaments/${id}`);
   }
 
-  const initialData = buildInitialData(tournament, editStage);
+  const initialData = buildInitialData(tournament);
 
   return (
     <div className="bg-bg-base min-h-screen">

@@ -187,8 +187,8 @@ export interface PayoutData {
   /** What the server holds, so a save only nominates when this has changed. */
   savedBeneficiaryOrgId: string | null;
   accepted: boolean;
-  /** A player has paid, so the nomination is frozen. */
-  locked: boolean;
+  // Whether it's locked is not stored here: it follows the edit stage
+  // (isLocked("beneficiary")), which comes from the server on every load.
 }
 
 export interface PersistedState {

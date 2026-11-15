@@ -61,7 +61,6 @@ const initialPayoutData: PayoutData = {
   beneficiaryOrgName: "",
   savedBeneficiaryOrgId: null,
   accepted: false,
-  locked: false,
 };
 
 const initialFormatData: FormatData = {
@@ -189,6 +188,7 @@ export function TournamentWizardProvider({
   const orgIdRef = useRef(orgId);
   const storageKeySuffixRef = useRef(storageKeySuffix);
   const initialDataRef = useRef(initialData);
+  const editStageRef = useRef(editStage);
   const stepHandlers = useRef<Record<number, () => Promise<void>>>({});
 
   // Restore persisted state once on mount (client-only, no SSR sessionStorage).
@@ -205,7 +205,13 @@ export function TournamentWizardProvider({
       setFormatData(saved.formatData ?? initialFormatData);
       setFeesData(saved.feesData ?? initialFeesData);
       setPrizesData(saved.prizesData ?? initialPrizesData);
-      setPayoutData(saved.payoutData ?? initialPayoutData);
+      // Once the nomination is locked, the server's copy wins over a session
+      // saved before the lock: the controls are disabled, so an unsaved pick
+      // left in that session could neither be shown honestly nor be sent.
+      const serverPayout = isFieldEditable("beneficiary", editStageRef.current)
+        ? undefined
+        : initialDataRef.current?.payoutData;
+      setPayoutData(serverPayout ?? saved.payoutData ?? initialPayoutData);
       setTournamentId(saved.tournamentId ?? null);
       setCurrentStepIndex(saved.currentStepIndex ?? 0);
       if (saved.completedSteps) {
