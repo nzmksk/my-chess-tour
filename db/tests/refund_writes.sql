@@ -19,6 +19,9 @@
 --       gets 42501
 --   F4  the service-role path still works: approving the cancellation queues
 --       exactly one refund per paid registration, for the gross amount paid
+--   F5  the signed-in player can READ the cancellation refund on their own
+--       registration, though the reviewing admin requested it, and cannot read
+--       the other player's (#511)
 --
 -- HOW TO RUN: paste into the Supabase SQL editor AFTER applying the current
 -- migrations. Runs inside a transaction that ROLLBACKs, so it builds throwaway
@@ -145,6 +148,24 @@ BEGIN
     RAISE EXCEPTION 'F4 FAIL: refund amount % (expected the % paid)', v_amount, v_gross;
   END IF;
   RAISE NOTICE 'F4 PASS — service-role cancellation queues one refund per paid registration at the gross amount';
+
+  -- ===== F5 ===============================================================
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_player_auth, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  SELECT count(*) INTO v_count FROM refunds WHERE registration_id = v_reg_player;
+  IF v_count <> 1 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'F5 FAIL: player sees % refunds on own registration (expected 1)', v_count;
+  END IF;
+  SELECT count(*) INTO v_count FROM refunds WHERE registration_id = v_reg_other;
+  IF v_count <> 0 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'F5 FAIL: player sees another player''s refund';
+  END IF;
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '{}', true);
+  RAISE NOTICE 'F5 PASS — player reads own cancellation refund, not another player''s';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;

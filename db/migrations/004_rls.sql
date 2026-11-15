@@ -315,12 +315,19 @@ USING (has_global_permission(app_user_id(), 'platform.manage'));
 -- =============================================
 -- REFUNDS
 -- =============================================
--- NOTE: these scope on requested_by, not on the registration's owner, so a
--- cancellation refund (requested_by = the reviewing admin) is invisible to the
--- player it belongs to. Pre-existing behaviour, unchanged here — tracked in #511.
-CREATE POLICY "Players can view own refunds"
+-- A player sees the refunds against their own registrations. This scopes on the
+-- registration's owner, not on requested_by: a cancellation refund is requested
+-- by the reviewing admin, so a requested_by policy hid it from the very player
+-- it pays (#511).
+CREATE POLICY "Players can view refunds of own registrations"
 ON refunds FOR SELECT
-USING (can_act_for(requested_by));
+USING (
+  EXISTS (
+    SELECT 1 FROM registrations r
+    WHERE r.id = refunds.registration_id
+      AND can_act_for(r.user_id)
+  )
+);
 
 -- No client write capability, as for registrations above. The INSERT policy
 -- that used to sit here checked only can_act_for(requested_by): not that the
