@@ -1,0 +1,37 @@
+name: Organizer payout sweep
+
+# Pays every tournament whose automatic payout has fallen due, and reconciles
+# stuck and pending payouts (src/app/api/v1/cron/payouts/route.ts).
+#
+# GitHub cron is always UTC. 01:00 UTC is 09:00 MYT and 10:00 at GMT+9, banking
+# hours across ASEAN. Eligibility is an instant comparison in the database, so
+# daily is enough: a tournament becomes payable on the first run after its
+# deadline passes. Also runnable on demand from the Actions tab, and safe to
+# re-run at any time.
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+# This workflow only makes an outbound request; it needs no GITHUB_TOKEN access.
+permissions: {}
+
+# Never two runs at once. Each is idempotent, but there is no point racing CHIP.
+concurrency:
+  group: organizer-payouts
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Trigger the daily payout run
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST to the cron route
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        # The route can take up to its 300s maxDuration.
+        run: |
+          curl -fsS --max-time 320 -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${PRODUCTION_URL}/api/v1/cron/payouts"
