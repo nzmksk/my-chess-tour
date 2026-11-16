@@ -586,8 +586,9 @@ The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visua
 
 #### Screen 5: Transactions
 
-*(Not built — #109 / #110. This is the only place the spec surfaces refunds to an operator, so until
-it exists a refund's status is invisible outside the database — see #511.)*
+*(Not built — #109 / #110. This is the only place the spec surfaces refunds across tournaments, so
+until it exists an operator sees one tournament's refunds at a time, on its read-only manage page
+(#511).)*
 
 - **Stats row:** Total Transactions (count), Total Volume (amount charged to players), Platform Commission (10% earned), Refunds (count + amount).
 - **Full-width search bar** on its own line, searchable by player name or CHIP reference.

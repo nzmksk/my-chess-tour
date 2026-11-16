@@ -13,6 +13,8 @@ import {
   getTodayInTimeZone,
   resolveTimeZone,
 } from "@/lib/tournaments/datetime";
+import type { RefundState } from "@/lib/refunds/state";
+import { formatRinggit } from "@/services/payouts/format";
 
 type TournamentStatus =
   | "draft"
@@ -66,12 +68,23 @@ interface Participant {
   registered_at: string;
 }
 
+interface Refund {
+  id: string;
+  player_name: string;
+  amount_cents: number;
+  state: RefundState;
+  requested_at: string;
+  processed_at: string | null;
+}
+
 interface Props {
   orgId: string;
   tournament: Tournament;
   stats: Stats;
   participants: Participant[];
   cancellationPending: boolean;
+  /** null when the viewer can't see refunds (no refund.manage). */
+  refunds?: Refund[] | null;
   /**
    * Who is looking. "admin" is the platform admin's read-only view: same
    * details and roster, but no organizer actions (edit, publish, close
@@ -118,11 +131,116 @@ const REG_STATUS_CONFIG: Record<string, { label: string; className: string }> =
     },
   };
 
+const REFUND_STATE_CONFIG: Record<
+  RefundState,
+  { label: string; className: string }
+> = {
+  refunded: {
+    label: "Refunded",
+    className: "bg-success/10 text-success border border-success/20",
+  },
+  processing: {
+    label: "Processing",
+    className: "bg-warning/15 text-warning border border-warning/20",
+  },
+  failed: {
+    label: "Failed",
+    className: "bg-danger/15 text-danger border border-danger/20",
+  },
+};
+
 const EXPORT_LINK_CLASS =
   "font-cinzel text-gold-bright border-gold-bright/40 hover:border-gold-bright hover:bg-int-gold-bg inline-flex shrink-0 cursor-pointer items-center rounded-md border bg-transparent px-3 py-2 text-xs font-bold tracking-widest uppercase transition duration-150";
 
 function toTitleCase(str: string): string {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Refunds to this tournament's players (today: one per paid player when the
+// tournament is cancelled). Explains why the tournament's revenue, and so its
+// payout, dropped (#511).
+function RefundsSection({
+  refunds,
+  timeZone,
+}: {
+  refunds: Refund[];
+  timeZone: string;
+}) {
+  const totals = { refunded: 0, processing: 0, failed: 0 };
+  for (const r of refunds) totals[r.state] += r.amount_cents;
+
+  const summary = (["refunded", "processing", "failed"] as const)
+    .filter((state) => totals[state] > 0)
+    .map(
+      (state) =>
+        `${formatRinggit(totals[state])} ${REFUND_STATE_CONFIG[state].label.toLowerCase()}`,
+    )
+    .join(" · ");
+
+  return (
+    <div className="mb-8">
+      <h2 className="font-cinzel text-text-primary mb-1 text-base font-bold tracking-wide">
+        Refunds ({refunds.length})
+      </h2>
+      <p className="font-lato text-text-muted mb-3 text-xs">
+        {summary}. Each player gets back what they paid, platform fee included.
+        Refunds that have cleared are deducted from this tournament&apos;s
+        revenue.
+        {totals.failed > 0 &&
+          " A failed refund is still owed to the player, and MY Chess Tour support will arrange it with them."}
+      </p>
+      <div className="card overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-120 border-collapse">
+          <thead>
+            <tr className="border-border bg-bg-raised border-b">
+              <th className="font-cinzel text-text-muted px-4 py-3 text-left text-xs font-semibold tracking-widest uppercase">
+                Player
+              </th>
+              <th className="font-cinzel text-text-muted px-4 py-3 text-right text-xs font-semibold tracking-widest uppercase">
+                Amount
+              </th>
+              <th className="font-cinzel text-text-muted px-4 py-3 text-left text-xs font-semibold tracking-widest uppercase">
+                Status
+              </th>
+              <th className="font-cinzel text-text-muted px-4 py-3 text-left text-xs font-semibold tracking-widest uppercase">
+                Date
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {refunds.map((r) => {
+              const state = REFUND_STATE_CONFIG[r.state];
+              return (
+                <tr
+                  key={r.id}
+                  className="border-border border-b last:border-b-0"
+                >
+                  <td className="font-lato text-text-primary px-4 py-3 text-sm font-semibold">
+                    {r.player_name}
+                  </td>
+                  <td className="font-lato text-text-secondary px-4 py-3 text-right text-sm whitespace-nowrap">
+                    {formatRinggit(r.amount_cents)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`font-cinzel rounded-md px-2 py-0.5 text-xs font-bold tracking-widest uppercase ${state.className}`}
+                    >
+                      {state.label}
+                    </span>
+                  </td>
+                  <td className="font-lato text-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    {formatInstantDate(r.processed_at ?? r.requested_at, timeZone, {
+                      withZone: false,
+                    })}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function StatCard({
@@ -153,6 +271,7 @@ export default function TournamentManageClient({
   stats,
   participants,
   cancellationPending,
+  refunds = null,
   viewer = "organizer",
 }: Props) {
   const isAdminView = viewer === "admin";
@@ -250,6 +369,13 @@ export default function TournamentManageClient({
           note="Awaiting payment"
         />
       </div>
+
+      {refunds && refunds.length > 0 && (
+        <RefundsSection
+          refunds={refunds}
+          timeZone={resolveTimeZone(tournament.timezone)}
+        />
+      )}
 
       {/* Participants table */}
       <div>

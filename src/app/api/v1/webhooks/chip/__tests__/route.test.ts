@@ -65,6 +65,11 @@ vi.mock("@/services/registrations/notify", () => ({
   notifyRegistrationConfirmed: mockNotifyConfirmed,
 }));
 
+const { mockNotifyRefund } = vi.hoisted(() => ({ mockNotifyRefund: vi.fn() }));
+vi.mock("@/services/refunds/notify", () => ({
+  notifyRefundSettlement: mockNotifyRefund,
+}));
+
 vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }));
 
 import { POST } from "../route";
@@ -457,5 +462,57 @@ describe("registration confirmation email", () => {
     await POST(makeRequest({ ...paidEvent, status: "error", event_type: "purchase.payment_failure" }));
 
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
+  });
+});
+
+describe("refund outcome email", () => {
+  const refundedEvent = {
+    id: "refund-pay-1",
+    status: "refunded",
+    event_type: "payment.refunded",
+    related_to: { id: "chip-orig-1" },
+  };
+
+  beforeEach(() => {
+    setPaymentResult({ data: { registration_id: "reg-1" }, error: null });
+    setRefundResult({ data: { id: "rf-1" }, error: null });
+  });
+
+  it("hands settle_refund's result to the notifier, which decides whether to send", async () => {
+    const settled = { refund_id: "rf-1", newly_settled: true, newly_failed: false };
+    mockRpc.mockResolvedValueOnce({ data: settled, error: null });
+
+    const res = await POST(makeRequest(refundedEvent));
+
+    expect(res.status).toBe(200);
+    expect(mockNotifyRefund).toHaveBeenCalledWith("rf-1", settled);
+  });
+
+  it("hands over a refund failure too", async () => {
+    const settled = { refund_id: "rf-1", newly_settled: false, newly_failed: true };
+    mockRpc.mockResolvedValueOnce({ data: settled, error: null });
+
+    await POST(
+      makeRequest({ id: "chip-orig-1", status: "error", event_type: "purchase.refund_failure" }),
+    );
+
+    expect(mockNotifyRefund).toHaveBeenCalledWith("rf-1", settled);
+  });
+
+  it("does not notify when settle_refund errors (CHIP will redeliver)", async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: "db down" } });
+
+    const res = await POST(makeRequest(refundedEvent));
+
+    expect(res.status).toBe(500);
+    expect(mockNotifyRefund).not.toHaveBeenCalled();
+  });
+
+  it("does not notify on a pending_refund", async () => {
+    await POST(
+      makeRequest({ id: "chip-orig-1", status: "pending_refund", event_type: "purchase.pending_refund" }),
+    );
+
+    expect(mockNotifyRefund).not.toHaveBeenCalled();
   });
 });

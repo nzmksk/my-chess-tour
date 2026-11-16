@@ -25,6 +25,7 @@ const {
     for (const m of [
       "select",
       "eq",
+      "neq",
       "in",
       "is",
       "order",
@@ -49,6 +50,7 @@ const {
   const mockRegistrationsBuilder = makeBuilder({ data: null, error: null });
   const mockUsersBuilder = makeBuilder({ data: null, error: null });
   const mockProfilesBuilder = makeBuilder({ data: null, error: null });
+  const mockRefundsBuilder = makeBuilder({ data: [], error: null });
 
   const mockFrom = vi.fn((table: string) => {
     switch (table) {
@@ -64,6 +66,8 @@ const {
         return mockUsersBuilder;
       case "player_profiles":
         return mockProfilesBuilder;
+      case "refunds":
+        return mockRefundsBuilder;
       default:
         return mockOrgBuilder;
     }
@@ -93,6 +97,8 @@ vi.mock("@/services/supabase/admin", () => ({
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getClaims: mockGetClaims },
+    // has_org_permission, for the refund.manage gate on the refunds list.
+    rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
   }),
 }));
 

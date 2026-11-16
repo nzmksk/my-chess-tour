@@ -71,10 +71,11 @@ built.
 (organizer requests → admin approves) and approval now **refunds every paid player through CHIP**,
 end-to-end and tested — see [refund-flow.md](./refund-flow.md). What is still schema/view only:
 organizer payouts and prize disbursement (captured bank details are never read), and any refund
-*not* triggered by a cancellation — a player or organizer cannot request one (#509, #510), and no
-screen anywhere shows a refund's status (#511). **Communications** now cover registration
-confirmation, application and OKU results, cancellations and payouts, but some of the MVP's "we'll
-email you" promises are still absent — including telling the player their refund actually landed (#512). And there is **no production error monitoring**.
+*not* triggered by a cancellation — a player or organizer cannot request one (#509, #510). Players
+and organizers can now see where a refund stands (#511), and the player is emailed when it lands or
+fails (#512). **Communications** now cover registration confirmation, application and OKU results,
+cancellations, refunds and payouts, but some of the MVP's "we'll email you" promises are still
+absent. And there is **no production error monitoring**.
 
 **Two non-feature items also belong on the pre-launch list.** `audit_logs` is accumulating
 **unredacted PII** — bank account numbers, DOB, OKU status, and the path to the uploaded OKU
@@ -96,9 +97,9 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Organizer payout disbursement | O9, P7 | ⚠️ built, unverified on staging | 🟡 | CHIP Send payouts go out automatically 3 days after a tournament ends in its own timezone (#522), or when a platform admin triggers one; organizers can request admin-approved early payouts (#521). |
 | Prize disbursement to players | P14, P7 | ❌ | 🟡 | Manual; same timing/mechanism as payouts. |
 | Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ✅ built, not applied | 🟡 | Run `db/maintenance/apply_ledger_integrity.sql` against staging and production (#502). Payments taken before that have no recorded tier. |
-| Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅; player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510, #511, #512). |
+| Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅ (visible to player + organizer, outcome emailed); player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510). |
 | Participant CSV / Excel export | O8 | ✅ | — | Export CSV / Export Excel on the manage page (#90): name, title, gender, date of birth, nationality, verified OKU, FIDE/MCF IDs and ratings, fee tier, status, registration time. |
-| Non-auth transactional emails | S4, O1, P6, P9 | ⚠️ most ship | 🟡 | Registration confirmation (#119), application result (#120), OKU result (#449), cancellation, payout and nomination emails ship. Still missing: refund outcome (#512), member invite (#121), tournament reminders. |
+| Non-auth transactional emails | S4, O1, P6, P9 | ⚠️ most ship | 🟡 | Registration confirmation (#119), application result (#120), OKU result (#449), cancellation, refund outcome (#512), payout and nomination emails ship. Still missing: member invite (#121), tournament reminders. |
 | Player-initiated registration cancellation | P12 | ❌ | 🟡 | Player forfeits; support handles case-by-case. |
 | Admin tournaments / transactions / users pages | A4, A5, A6 | ❌ | 🟡 | Use the Supabase dashboard directly. |
 | Self-serve correction of set-once fields / account changes | P5 | ❌ | 🟡 | Support-routed; monitor support load. |
@@ -209,7 +210,8 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 
 ### P13. Refund request — ⚠️ Partial (cancellation refunds built; nothing else)
 - **Built and wired end-to-end:** when an admin approves a tournament cancellation, `review_tournament_cancellation()` queues one `refunds` row per confirmed+paid registration, the admin route fires `refundChipPurchase()` per player, and `settle_refund()` appends the mirrored `type='refund'` ledger row — synchronously on a terminal CHIP response, or from the `payment.refunded` webhook. Idempotent at three layers; covered by route tests and `db/tests/settle_refund.sql`. Full detail in **[refund-flow.md](./refund-flow.md)**.
-- **Still missing:** a player cannot request a refund (**#509**); an organizer cannot refund from the roster (**#510**); `refunds.status` has **no read surface at all** outside the Supabase dashboard (**#511**); and no email tells the player the refund actually landed or failed (**#512**). Consequently `refunds.reviewed_by`/`reviewed_at` and the per-refund RLS policies are still unexercised — cancellation refunds are auto-approved wholesale.
+- **Visible and communicated:** the player sees the refund's state on `/my` and the organizer sees the tournament's refunds on its manage page (**#511**); the player is emailed once when the refund lands and once if it fails (**#512**). See [refund-flow.md](./refund-flow.md) §Who sees what, §Outcome emails.
+- **Still missing:** a player cannot request a refund (**#509**); an organizer cannot refund from the roster (**#510**); and there is no cross-tournament admin list of refunds (owned by the transactions screen, A5). Consequently `refunds.reviewed_by`/`reviewed_at` are still unexercised — cancellation refunds are auto-approved wholesale.
 - **Open operational risks** on the shipped path (`related_to` parsing #495, inline fan-out timeout #496, no re-fire for stuck `pending` #497, out-of-band CHIP-dashboard refunds #498, monitoring #499) — see [refund-flow.md](./refund-flow.md) §Open risks.
 - **Priority:** 🟡 — the launch-blocking case (tournament cancelled, players owed money) is handled; the rest is a support-load and trust question.
 
@@ -314,7 +316,7 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 - What *does* exist: **`/admin/cancellations`**, where admins review organizer cancellation requests (approve → cancel + refund, or reject with a reason). See O7.
 
 ### A5. Admin transactions view — ❌ Not built
-- MVP lists `/admin/transactions`; **no route/page exists** (#109, #110). No in-app view of payments **or refunds** — a refund stuck in `pending` is invisible without querying the DB (#511, and #499 for metrics). Interim: Supabase dashboard. 🟡
+- MVP lists `/admin/transactions`; **no route/page exists** (#109, #110). No cross-tournament view of payments **or refunds**: an admin can see one tournament's refunds on its read-only manage page (#511), but spotting a refund stuck in `pending` across tournaments still means querying the DB (and #499 for metrics). Interim: Supabase dashboard. 🟡
 
 ### A6. Admin users management — ❌ Not built
 - MVP sidebar lists "Users"; **no page exists**. 🟢
@@ -342,8 +344,8 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 - **Gap — retention 🟢 (#507).** No retention policy and no pruning. `FOR EACH ROW` on INSERT/UPDATE/DELETE across nine tables with two snapshots each means this will be the largest table by row count long before `payments` is. Not urgent (no volume yet), but it needs `prune_audit_logs` with dry-run + batched deletes, an index on `(table_name, created_at)`, and a schedule — which needs `pg_cron`, the **same missing prerequisite as S2**. Land them together.
 
 ### S4. Transactional email — ⚠️ Partial
-- Provider Resend (`src/services/email/email.ts`), templates in `templates/` (a test checks each is complete). Beyond auth (`sendVerificationEmail`, `sendPasswordResetEmail`) it sends: registration confirmation (#119, once per confirmation via `settle_registration_payment`'s `newly_confirmed`), organizer application result (#120), OKU result (#449), tournament cancellation and cancellation review, bank verification, payout sent/failed/early-request review, admin payout alerts, and payout nomination plus the nominee's accept/decline (#562). Fan-out is best-effort and never fails the action (`services/email/recipients.ts`). The change-email, reauthentication, magic-link and invite templates are Supabase-dashboard copies, **not wired to app code**.
-- **Gaps:** ❌ member invite (#121), tournament reminders, and **refund outcome** (#512) — the cancellation email promises a refund and nothing ever confirms it landed. See the **Communications** gap in §9. 🟡
+- Provider Resend (`src/services/email/email.ts`), templates in `templates/` (a test checks each is complete). Beyond auth (`sendVerificationEmail`, `sendPasswordResetEmail`) it sends: registration confirmation (#119, once per confirmation via `settle_registration_payment`'s `newly_confirmed`), organizer application result (#120), OKU result (#449), tournament cancellation and cancellation review, bank verification, payout sent/failed/early-request review, admin payout alerts, payout nomination plus the nominee's accept/decline (#562), and refund completed/failed (#512, once per outcome via `settle_refund`'s `newly_settled`/`newly_failed`). Fan-out is best-effort and never fails the action (`services/email/recipients.ts`). The change-email, reauthentication, magic-link and invite templates are Supabase-dashboard copies, **not wired to app code**.
+- **Gaps:** ❌ member invite (#121) and tournament reminders. See the **Communications** gap in §9. 🟡
 
 ### S5. Notifications (in-app / SMS / push) — ❌ Not built
 - No `notifications` table or service, no SMS, no web-push. 🟢
@@ -368,11 +370,11 @@ on the pre-launch list despite being invisible to users. Neither changes behavio
 
 ## 9. Cross-cutting gaps (prioritized)
 
-1. **Money-out — 🔴/🟡.** Organizer payouts (O9, #375) and prize disbursement (P14) are unbuilt and captured banking (P7) is unused — those remain 🔴 and manual. Refunds are **no longer blocked**: the cancellation path moves money automatically (P13), leaving 🟡 gaps for player/organizer-initiated refunds (#509, #510) and refund visibility (#511). *Interim for payouts/prizes:* manual disbursement + a tracking sheet, but **define and record the process** before taking real money.
+1. **Money-out — 🔴/🟡.** Organizer payouts (O9, #375) and prize disbursement (P14) are unbuilt and captured banking (P7) is unused — those remain 🔴 and manual. Refunds are **no longer blocked**: the cancellation path moves money automatically (P13), leaving 🟡 gaps for player/organizer-initiated refunds (#509, #510). *Interim for payouts/prizes:* manual disbursement + a tracking sheet, but **define and record the process** before taking real money.
 2. **Observability — 🔴 (operational).** Sentry is built but not switched on (S6). Until the [setup](./error-monitoring.md#setup) is done, a failed asynchronous refund settlement is still silent (#499). *Interim:* none — finish the Sentry setup + add an uptime check before launch.
 3. **Data protection — 🟡 (compliance).** Sensitive columns are redacted on the way into `audit_logs` (#516/#518/#503), account deletion anonymises the user's audit history ([runbook](./account-deletion.md)), and `/privacy` now lists audit records in its retention table (S3, #503). Left: run the pre-redaction check against staging and production, and have a second person review the retention wording. Retention/pruning (#507) is the 🟢 follow-on.
 4. **Cheap-now, expensive-later schema — 🟡.** Identity indirection (#501) and ledger integrity (#502) are both **built** while there is still little data to migrate. Left: apply them to staging and production (S7).
-5. **Communications — 🟡.** Registration confirmation, application/OKU results, cancellation and payout emails exist (S4). Still missing: refund outcome (#512), member invite (#121), reminders.
+5. **Communications — 🟡.** Registration confirmation, application/OKU results, cancellation and payout emails exist (S4). Still missing: member invite (#121), reminders.
 6. **Organizer event-running tooling — ✅.** Participant CSV/Excel export ships (O8, #90), so rosters can seed pairing software.
 7. **Admin tooling — 🟡.** No admin tournaments/transactions/users pages (A4–A6); `/admin/cancellations` is the one operational admin screen beyond applications/OKU. *Interim:* Supabase dashboard.
 8. **Support-load risks — 🟡.** Set-once profile fields with no self-serve correction, and no self-serve email/name change or account deletion (P5); support-email inconsistency (V1, a trivial fix). These convert small user mistakes into support tickets. Deletion is support-run through [account-deletion.md](./account-deletion.md) until a self-serve flow exists, and P16 would make the missing correction path more visible.

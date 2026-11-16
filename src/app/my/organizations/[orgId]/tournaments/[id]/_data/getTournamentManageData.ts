@@ -3,10 +3,12 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import {
   getAuthClaims,
   hasGlobalPermission,
+  hasOrgPermission,
 } from "@/services/supabase/permission";
 import { hasPaidRegistration } from "@/services/payments/paid-registration";
 import { loadRoster, rosterDisplayName } from "@/services/registrations/roster";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
+import { refundState, type RefundState } from "@/lib/refunds/state";
 import {
   INTERNAL_ERROR_MESSAGE,
   logInternalError,
@@ -25,6 +27,27 @@ interface ManageParticipant {
   fee_tier: string;
   status: string;
   registered_at: string;
+}
+
+/** A live (non-rejected) refund to one of the tournament's players. */
+export interface ManageRefund {
+  id: string;
+  registration_id: string;
+  player_name: string;
+  amount_cents: number;
+  state: RefundState;
+  requested_at: string;
+  /** When it cleared; set exactly when state is "refunded". */
+  processed_at: string | null;
+}
+
+interface RefundRow {
+  id: string;
+  registration_id: string;
+  refund_amount_cents: number;
+  requested_at: string;
+  processed_at: string | null;
+  failed_at: string | null;
 }
 
 interface TournamentManageData {
@@ -73,6 +96,12 @@ interface TournamentManageData {
   participants: ManageParticipant[];
   // A cancellation request awaiting platform-admin review, if one is open.
   cancellationPending: boolean;
+  /**
+   * Refunds to this tournament's players, oldest first, so the organizer can
+   * see why its revenue dropped (#511). null when the viewer lacks
+   * `refund.manage`, which hides the section rather than showing it empty.
+   */
+  refunds: ManageRefund[] | null;
 }
 
 export type TournamentManageResult =
@@ -181,12 +210,14 @@ const UNAUTHENTICATED: TournamentManageFailure = {
 };
 
 // Reads everything the tournament management view needs (tournament details,
-// registration stats, participant roster). Performs NO access check — callers
-// gate first. `orgId`, when given, also scopes the read to that organization so
-// an org manager can't reach another org's tournament by id.
+// registration stats, participant roster, and refunds when `canViewRefunds`).
+// Performs NO access check — callers gate first. `orgId`, when given, also
+// scopes the read to that organization so an org manager can't reach another
+// org's tournament by id.
 async function loadTournamentManageData(
   id: string,
   orgId: string | null,
+  canViewRefunds: boolean,
 ): Promise<TournamentManageResult> {
   let query = supabaseAdmin
     .from("tournaments")
@@ -254,6 +285,33 @@ async function loadTournamentManageData(
     .eq("tournament_id", id)
     .eq("status", "pending");
 
+  let refunds: ManageRefund[] | null = null;
+  if (canViewRefunds) {
+    const { data: refundRows, error: refundErr } = await supabaseAdmin
+      .from("refunds")
+      .select(
+        "id, registration_id, refund_amount_cents, requested_at, processed_at, failed_at, registration:registrations!inner(tournament_id)",
+      )
+      .eq("registration.tournament_id", id)
+      .neq("status", "rejected")
+      .order("requested_at", { ascending: true });
+    if (refundErr) {
+      return internalError(`failed to load refunds for ${id}`, refundErr);
+    }
+
+    // A refunded registration stays confirmed, so its player is on the roster.
+    const names = new Map(participants.map((p) => [p.id, p.name]));
+    refunds = ((refundRows ?? []) as unknown as RefundRow[]).map((r) => ({
+      id: r.id,
+      registration_id: r.registration_id,
+      player_name: names.get(r.registration_id) ?? "Player",
+      amount_cents: r.refund_amount_cents,
+      state: refundState(r),
+      requested_at: r.requested_at,
+      processed_at: r.processed_at,
+    }));
+  }
+
   return {
     ok: true,
     data: {
@@ -301,6 +359,7 @@ async function loadTournamentManageData(
       hasPaidRegistration: paid.paid,
       participants,
       cancellationPending: (pendingCancellationCount ?? 0) > 0,
+      refunds,
     },
   };
 }
@@ -328,7 +387,15 @@ export const getTournamentManageData = cache(
     const accessError = await checkManageAccess(orgId, claims.id);
     if (accessError) return accessError;
 
-    return loadTournamentManageData(id, orgId);
+    // The "Org refund managers can view tournament refunds" RLS policy's gate.
+    // Owners and admins hold it today, but the role mapping is data.
+    const canViewRefunds = await hasOrgPermission(
+      claims.id,
+      orgId,
+      "refund.manage",
+    );
+
+    return loadTournamentManageData(id, orgId, canViewRefunds);
   },
 );
 
@@ -351,6 +418,6 @@ export const getAdminTournamentManageData = cache(
       };
     }
 
-    return loadTournamentManageData(id, null);
+    return loadTournamentManageData(id, null, true);
   },
 );

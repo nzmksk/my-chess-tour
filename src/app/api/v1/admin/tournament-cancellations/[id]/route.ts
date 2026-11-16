@@ -9,6 +9,10 @@ import {
 } from "@/services/email/email";
 import { formatRinggit, parseSentinel } from "@/services/payouts/format";
 import {
+  notifyRefundSettlement,
+  type SettleRefundResult,
+} from "@/services/refunds/notify";
+import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
   tournamentTag,
@@ -114,7 +118,7 @@ async function processCancellationRefund(refund: PendingRefund): Promise<void> {
     // A Payment object came back, which *is* the completed refund — settle now.
     // `result.id` is the new refund Payment id. The later payment.refunded
     // webhook is an idempotent no-op.
-    const { error } = await supabaseAdmin.rpc("settle_refund", {
+    const { data, error } = await supabaseAdmin.rpc("settle_refund", {
       p_refund_id: refund.refund_id,
       p_chip_refund_id: result.id,
       p_paid: true,
@@ -122,7 +126,10 @@ async function processCancellationRefund(refund: PendingRefund): Promise<void> {
     });
     if (error) {
       console.error(`Refund ${refund.refund_id}: settle_refund failed`, error);
+      return;
     }
+    // Emails the player only if this call, not the webhook, settled it.
+    await notifyRefundSettlement(refund.refund_id, data as SettleRefundResult | null);
     return;
   }
 
@@ -444,8 +451,12 @@ export async function PATCH(
     revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
     if (t?.slug) revalidateTag(tournamentTag(t.slug), PURGE_PROFILE);
 
-    await initiateCancellationRefunds(tournamentId);
+    // Cancellation notice first: a refund that settles synchronously emails the
+    // player "refund completed", which must not arrive before the email saying
+    // the tournament is off. Refunds leave registration statuses alone, so the
+    // order doesn't change who is notified.
     await notifyRegisteredPlayers(tournamentId, tournamentName);
+    await initiateCancellationRefunds(tournamentId);
   }
 
   // Notify the organization members who can cancel tournaments of the review

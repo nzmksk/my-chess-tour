@@ -11,6 +11,10 @@ import {
   tournamentTag,
 } from "@/lib/tournaments/cache-tags";
 import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
+import {
+  notifyRefundSettlement,
+  type SettleRefundResult,
+} from "@/services/refunds/notify";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -137,7 +141,7 @@ async function handleRefundEvent(
   // event has none.
   const chipRefundId = paid ? (payload.id ?? null) : null;
 
-  const { error: rpcErr } = await supabaseAdmin.rpc("settle_refund", {
+  const { data: settled, error: rpcErr } = await supabaseAdmin.rpc("settle_refund", {
     p_refund_id: refund.id,
     p_chip_refund_id: chipRefundId,
     p_paid: paid,
@@ -157,6 +161,11 @@ async function handleRefundEvent(
       event: payload.event_type,
     });
   }
+
+  // Emails the player only if this delivery settled the refund or recorded its
+  // first failure; a duplicate or a refund the sync response already settled
+  // sends nothing. Never throws, so a Resend outage can't make CHIP redeliver.
+  await notifyRefundSettlement(refund.id, settled as SettleRefundResult | null);
 
   return ack();
 }

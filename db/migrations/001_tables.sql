@@ -486,6 +486,10 @@ CREATE TABLE refunds (
   reviewed_at           timestamptz,
   chip_refund_id        varchar(255),
   processed_at          timestamptz,
+  -- When CHIP first reported this refund failed. Set once by settle_refund and
+  -- kept after a later successful retry, as history; processed_at is what says
+  -- the money went back. Gates the one "refund failed" email (#512).
+  failed_at             timestamptz,
 
   CONSTRAINT chk_reviewed_at
     CHECK (reviewed_at IS NULL OR reviewed_at >= requested_at)
