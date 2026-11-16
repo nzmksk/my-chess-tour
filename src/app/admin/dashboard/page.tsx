@@ -28,6 +28,8 @@ interface AdminDashboardData {
     total_registrations: number;
     platform_revenue_cents: number;
   };
+  /** Refunds still owed that nothing is moving; null when it couldn't be checked. */
+  stuck_refunds: number | null;
   pending_organizations: {
     id: string;
     name: string;

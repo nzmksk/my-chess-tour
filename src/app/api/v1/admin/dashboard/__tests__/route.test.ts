@@ -113,6 +113,13 @@ vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom },
 }));
 
+const { mockLoadStuckRefunds } = vi.hoisted(() => ({
+  mockLoadStuckRefunds: vi.fn(),
+}));
+vi.mock("@/services/refunds/stuck", () => ({
+  loadStuckRefunds: mockLoadStuckRefunds,
+}));
+
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getClaims: mockGetClaims },
@@ -218,6 +225,7 @@ describe("GET /api/v1/admin/dashboard", () => {
     resetCallIndexes();
     setUser();
     setAdminPermission(true);
+    mockLoadStuckRefunds.mockResolvedValue({ data: [], error: null });
     setResult(mockUsersBuilder, { count: 55, error: null });
     setResult(mockOrgStatusBuilder, {
       data: [APPROVED_ORG_STATUS, APPROVED_ORG_STATUS, PENDING_ORG_STATUS],
@@ -605,6 +613,34 @@ describe("GET /api/v1/admin/dashboard", () => {
       expect(res.status).toBe(500);
       const json = await res.json();
       expect(json.error.code).toBe("INTERNAL_ERROR");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Stuck refunds (#497)
+  // -------------------------------------------------------------------------
+
+  describe("stuck refunds", () => {
+    it("counts the refunds stuck in pending", async () => {
+      mockLoadStuckRefunds.mockResolvedValue({
+        data: [{ refund_id: "rf-1" }, { refund_id: "rf-2" }],
+        error: null,
+      });
+      const { data } = await (await GET(makeRequest())).json();
+      expect(data.stuck_refunds).toBe(2);
+    });
+
+    it("reports 0 when nothing is stuck", async () => {
+      const { data } = await (await GET(makeRequest())).json();
+      expect(data.stuck_refunds).toBe(0);
+    });
+
+    it("still answers, with null, when the count fails", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      mockLoadStuckRefunds.mockResolvedValue({ data: null, error: { message: "db down" } });
+      const res = await GET(makeRequest());
+      expect(res.status).toBe(200);
+      expect((await res.json()).data.stuck_refunds).toBeNull();
     });
   });
 

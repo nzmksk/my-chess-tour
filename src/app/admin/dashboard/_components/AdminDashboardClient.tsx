@@ -44,6 +44,8 @@ interface AdminDashboardData {
     total_registrations: number;
     platform_revenue_cents: number;
   };
+  /** Refunds still owed that nothing is moving; null when it couldn't be checked. */
+  stuck_refunds: number | null;
   pending_organizations: PendingOrganization[];
   recent_tournaments: RecentTournament[];
 }
@@ -219,8 +221,28 @@ function TournamentRow({ tournament }: { tournament: RecentTournament }) {
   );
 }
 
+// Refunds stuck in pending fail silently otherwise (#497): nothing retries them
+// and nobody is told. Shown above everything else until they are cleared.
+function StuckRefundsAlert({ count }: { count: number | null }) {
+  if (count === 0) return null;
+  const message =
+    count === null
+      ? "Couldn't check for stuck refunds."
+      : `${count} ${count === 1 ? "refund is" : "refunds are"} stuck. ${count === 1 ? "A player is" : "Players are"} still owed money.`;
+  return (
+    <Link
+      href="/admin/refunds"
+      role="alert"
+      className="bg-danger/10 border-danger/30 text-danger font-lato mb-6 flex items-center justify-between gap-3 rounded-md border px-4 py-3 text-sm font-semibold no-underline"
+    >
+      <span>{message}</span>
+      <span className="whitespace-nowrap">Review →</span>
+    </Link>
+  );
+}
+
 export default function AdminDashboardClient({ data }: Props) {
-  const { stats, pending_organizations, recent_tournaments } = data;
+  const { stats, stuck_refunds, pending_organizations, recent_tournaments } = data;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
@@ -232,6 +254,8 @@ export default function AdminDashboardClient({ data }: Props) {
           Admin Dashboard
         </p>
       </div>
+
+      <StuckRefundsAlert count={stuck_refunds} />
 
       {/* Top-level stats */}
       <div className="mb-4 grid grid-cols-2 gap-3">
@@ -297,6 +321,12 @@ export default function AdminDashboardClient({ data }: Props) {
           className="card hover:border-gold-dim font-lato text-text-primary flex-1 rounded-md px-4 py-3 text-sm font-semibold transition-colors"
         >
           Payouts →
+        </Link>
+        <Link
+          href="/admin/refunds"
+          className="card hover:border-gold-dim font-lato text-text-primary flex-1 rounded-md px-4 py-3 text-sm font-semibold transition-colors"
+        >
+          Stuck refunds →
         </Link>
       </div>
 
