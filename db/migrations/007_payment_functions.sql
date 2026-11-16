@@ -383,6 +383,157 @@ AS $$
 $$;
 
 -- =============================================
+-- REFUND FIRE DUE (#497)
+-- Whether a pending refund may be sent to CHIP again. `pending` is overloaded: a
+-- refund that was fired a moment ago and is waiting on its payment.refunded
+-- webhook looks exactly like one that is stuck. So a refund is due only when:
+--   * it was never fired (the approve path never reached it, or rows that predate
+--     last_fired_at), or
+--   * it was fired at least p_min_age ago and nothing has settled it since, or
+--   * CHIP reported it failed after it was last fired (failed_at is stamped the
+--     first time only, so a second failure falls back on the age rule).
+-- Shared by claim_refund_fire and list_stuck_refunds so the button and the list
+-- can't disagree. Not SECURITY DEFINER: it reads nothing.
+-- =============================================
+CREATE OR REPLACE FUNCTION refund_fire_due(
+  p_last_fired_at timestamptz,
+  p_failed_at     timestamptz,
+  p_min_age       interval
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT p_last_fired_at IS NULL
+      OR p_last_fired_at <= now() - p_min_age
+      OR (p_failed_at IS NOT NULL AND p_failed_at >= p_last_fired_at);
+$$;
+
+-- =============================================
+-- CLAIM REFUND FIRE (#497)
+-- Called immediately before the app asks CHIP to refund (POST /purchases/{id}/
+-- refund/), by both the approve path and the ops re-fire. Locks the refund,
+-- re-checks it, and stamps last_fired_at in one step, so two admins pressing
+-- "Retry" together (or a retry racing the approve fan-out) can't both reach CHIP.
+--
+-- Refuses, without stamping, a refund that:
+--   * has processed_at or chip_refund_id set, or is 'approved' → 'settled'.
+--     Re-POSTing /refund/ against a purchase whose money already went back
+--     returns 400 purchase_refund_error; settle_refund is idempotent but CHIP
+--     is not ours to re-call.
+--   * is 'rejected' → 'rejected'.
+--   * isn't due (refund_fire_due) → 'in_flight'.
+--   * has no paid registration payment with a CHIP purchase id → 'no_purchase'.
+--     Nothing to refund against; left unstamped so it stays on the stuck list
+--     for someone to resolve by hand.
+--   * doesn't exist → 'not_found'.
+--
+-- Returns {"claimed": true, "original_chip_purchase_id": ...} once claimed, or
+-- {"claimed": false, "reason": <one of the above>}.
+-- =============================================
+CREATE OR REPLACE FUNCTION claim_refund_fire(
+  p_refund_id uuid,
+  p_min_age   interval
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_refund      refunds;
+  v_purchase_id varchar(255);
+BEGIN
+  SELECT * INTO v_refund FROM refunds WHERE id = p_refund_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('claimed', false, 'reason', 'not_found');
+  END IF;
+
+  IF v_refund.processed_at IS NOT NULL
+     OR v_refund.chip_refund_id IS NOT NULL
+     OR v_refund.status = 'approved' THEN
+    RETURN jsonb_build_object('claimed', false, 'reason', 'settled');
+  END IF;
+
+  IF v_refund.status = 'rejected' THEN
+    RETURN jsonb_build_object('claimed', false, 'reason', 'rejected');
+  END IF;
+
+  IF NOT refund_fire_due(v_refund.last_fired_at, v_refund.failed_at, p_min_age) THEN
+    RETURN jsonb_build_object('claimed', false, 'reason', 'in_flight');
+  END IF;
+
+  SELECT p.chip_transaction_id INTO v_purchase_id
+  FROM registrations r
+  JOIN payments p ON p.id = r.current_payment_id
+   AND p.type = 'registration'
+   AND p.status = 'paid'
+  WHERE r.id = v_refund.registration_id;
+
+  IF v_purchase_id IS NULL THEN
+    RETURN jsonb_build_object('claimed', false, 'reason', 'no_purchase');
+  END IF;
+
+  UPDATE refunds SET last_fired_at = now() WHERE id = p_refund_id;
+
+  RETURN jsonb_build_object(
+    'claimed', true,
+    'original_chip_purchase_id', v_purchase_id
+  );
+END;
+$$;
+
+-- =============================================
+-- LIST STUCK REFUNDS (#497)
+-- Every refund, across all tournaments, that is still owed and is due a re-fire
+-- (refund_fire_due): never fired, fired p_min_age ago with no answer, or failed
+-- since it was fired. What the admin "Stuck refunds" page lists and the admin
+-- dashboard counts. Oldest request first.
+--
+-- original_chip_purchase_id is NULL when the registration payment has no CHIP
+-- purchase: claim_refund_fire refuses those ('no_purchase'), so the page shows
+-- them as needing a hand rather than offering a retry.
+-- =============================================
+CREATE OR REPLACE FUNCTION list_stuck_refunds(p_min_age interval)
+RETURNS TABLE (
+  refund_id                 uuid,
+  registration_id           uuid,
+  tournament_id             uuid,
+  tournament_name           varchar(255),
+  player_name               text,
+  player_email              varchar(255),
+  amount_cents              integer,
+  requested_at              timestamptz,
+  last_fired_at             timestamptz,
+  failed_at                 timestamptz,
+  original_chip_purchase_id varchar(255)
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT rf.id, rf.registration_id, t.id, t.name,
+         NULLIF(trim(concat_ws(' ', u.first_name, u.last_name)), ''),
+         u.email,
+         rf.refund_amount_cents, rf.requested_at, rf.last_fired_at, rf.failed_at,
+         p.chip_transaction_id
+  FROM refunds rf
+  JOIN registrations r ON r.id = rf.registration_id
+  JOIN tournaments t   ON t.id = r.tournament_id
+  LEFT JOIN users u    ON u.id = r.user_id
+  LEFT JOIN payments p ON p.id = r.current_payment_id
+   AND p.type = 'registration'
+   AND p.status = 'paid'
+  WHERE rf.status = 'pending'
+    AND rf.processed_at IS NULL
+    AND rf.chip_refund_id IS NULL
+    AND refund_fire_due(rf.last_fired_at, rf.failed_at, p_min_age)
+  ORDER BY rf.requested_at, rf.id;
+$$;
+
+-- =============================================
 -- SETTLE REFUND (idempotent, keyed by a specific refund row)
 --   paid  → the CHIP refund cleared: append a type='refund' payment ledger row
 --           mirroring the original registration payment's positive magnitudes
@@ -1673,7 +1824,8 @@ $$;
 -- SECURITY DEFINER functions trust their arguments, and the checkout route,
 -- CHIP webhook and expiry/refund jobs call them through the service role. Left
 -- executable by clients, anyone could settle their own registration as paid,
--- settle refunds, list pending refunds across every organization, mark their own
+-- settle refunds, list pending or stuck refunds across every organization (with
+-- player emails), stamp a refund as fired so a real retry is refused, mark their own
 -- payout bank account verified, or book and queue payouts. The read-only payout
 -- functions are revoked too: they reveal any organization's balance.
 --
@@ -1686,6 +1838,8 @@ REVOKE EXECUTE ON FUNCTION settle_registration_payment       FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION expire_stale_pending_payments     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_pending_cancellation_refunds FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_refund                     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION claim_refund_fire                 FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_stuck_refunds                FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_bank_account_verification  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION available_payout_cents            FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION tournament_payout_block_reason    FROM PUBLIC, anon, authenticated;
@@ -1707,6 +1861,8 @@ GRANT EXECUTE ON FUNCTION settle_registration_payment       TO service_role;
 GRANT EXECUTE ON FUNCTION expire_stale_pending_payments     TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_cancellation_refunds TO service_role;
 GRANT EXECUTE ON FUNCTION settle_refund                     TO service_role;
+GRANT EXECUTE ON FUNCTION claim_refund_fire                 TO service_role;
+GRANT EXECUTE ON FUNCTION list_stuck_refunds                TO service_role;
 GRANT EXECUTE ON FUNCTION settle_bank_account_verification  TO service_role;
 GRANT EXECUTE ON FUNCTION available_payout_cents            TO service_role;
 GRANT EXECUTE ON FUNCTION tournament_payout_block_reason    TO service_role;
