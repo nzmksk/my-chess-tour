@@ -134,12 +134,14 @@ function InviteBar({ orgId }: { orgId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [warningMsg, setWarningMsg] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
+    setWarningMsg(null);
 
     try {
       const res = await fetch(`/api/v1/organizations/${orgId}/members/invite`, {
@@ -154,11 +156,22 @@ function InviteBar({ orgId }: { orgId: string }) {
         setError(json.error?.message ?? "Failed to send invitation");
       } else {
         const addedAs = json.data.role === "admin" ? "an admin" : "a member";
-        const msg =
-          json.data.status === "pending"
-            ? `Invitation sent to ${json.data.email}`
-            : `${json.data.email} has been added as ${addedAs}`;
-        setSuccessMsg(msg);
+        const pending = json.data.status === "pending";
+        // The membership exists either way; email_sent says whether they were
+        // told. A new member has no other way in, so say how they can get one.
+        if (json.data.email_sent === false) {
+          setWarningMsg(
+            pending
+              ? `${json.data.email} was invited, but the invitation email couldn't be sent. They can set a password with "Forgot password" on the sign-in page.`
+              : `${json.data.email} has been added as ${addedAs}, but the email letting them know couldn't be sent.`,
+          );
+        } else {
+          setSuccessMsg(
+            pending
+              ? `Invitation sent to ${json.data.email}`
+              : `${json.data.email} has been added as ${addedAs}`,
+          );
+        }
         setEmail("");
         setRole("member");
       }
@@ -228,6 +241,11 @@ function InviteBar({ orgId }: { orgId: string }) {
       {error && <p className="font-lato mt-2 text-xs text-red-400">{error}</p>}
       {successMsg && (
         <p className="font-lato mt-2 text-xs text-green-400">{successMsg}</p>
+      )}
+      {warningMsg && (
+        <p role="status" className="font-lato mt-2 text-xs text-amber-400">
+          {warningMsg}
+        </p>
       )}
     </div>
   );

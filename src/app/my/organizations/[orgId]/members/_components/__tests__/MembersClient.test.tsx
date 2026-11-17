@@ -89,4 +89,37 @@ describe("MembersClient invite", () => {
       await screen.findByText("Invitation sent to new@example.com"),
     ).toBeTruthy();
   });
+
+  it("warns when a new member's invitation email couldn't be sent", async () => {
+    respondWith({
+      email: "new@example.com",
+      role: "member",
+      status: "pending",
+      email_sent: false,
+    });
+    renderMembers();
+    invite("new@example.com", "member");
+
+    expect(
+      await screen.findByText(/new@example.com was invited, but the invitation email couldn't be sent/),
+    ).toBeTruthy();
+    expect(screen.queryByText("Invitation sent to new@example.com")).toBeNull();
+  });
+
+  it("warns when an added member couldn't be emailed", async () => {
+    respondWith({
+      email: "mail@example.com",
+      role: "admin",
+      status: "active",
+      email_sent: false,
+    });
+    renderMembers();
+    invite("mail@example.com", "admin");
+
+    expect(
+      await screen.findByText(
+        "mail@example.com has been added as an admin, but the email letting them know couldn't be sent.",
+      ),
+    ).toBeTruthy();
+  });
 });
