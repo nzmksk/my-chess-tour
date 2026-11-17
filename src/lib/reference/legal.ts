@@ -81,7 +81,7 @@ export const TERMS_HISTORY: readonly LegalVersion[] = [
  */
 export const ORGANIZER_AGREEMENT_HISTORY: readonly LegalVersion[] = [
   {
-    version: "2026-08-02",
+    version: "2026-11-18",
     changes: [
       "Entry fees are an administration fee for running the event. They never fund prizes, and every declared prize must name an external source — a sponsor, a grant, or your own funds.",
       "Commission is up to 10%, and you choose per tournament how much your organization absorbs against how much is added to the player's price.",
@@ -89,6 +89,7 @@ export const ORGANIZER_AGREEMENT_HISTORY: readonly LegalVersion[] = [
       "Early payouts are capped at 50% of net revenue, limited to two per tournament, available only after registration closes, and granted at the platform's discretion.",
       "Early payouts are advances: if a tournament is later cancelled or refunded, the shortfall is repayable.",
       "You may nominate another approved organization to receive a payout, but you remain fully liable regardless of who is paid.",
+      "If you appoint MY Chess Tour to distribute a sponsor-funded prize pool, registration opens only once the pool is fully funded, each winner you enter is reviewed before payment, and anything not awarded is returned to the funders pro rata.",
       "On an approved cancellation, every confirmed player is refunded in full including commission, and your revenue for that tournament goes to zero.",
       "Entry fees and prizes lock once a player has paid; everything else locks at tournament start.",
       "Bank details and verification documents are your responsibility, and failed transfers caused by wrong details are your cost.",

@@ -483,7 +483,7 @@ BEGIN
       'approved', now(),
       new_user_id, new_user_id,
       'society', 'PPM-' || lpad(i::text, 3, '0') || '-14-01012020',
-      '2026-08-02', now(), new_user_id
+      current_organizer_agreement_version(), now(), new_user_id
     ) RETURNING id INTO new_org_id;
 
     org_profile_ids := array_append(org_profile_ids, new_org_id);

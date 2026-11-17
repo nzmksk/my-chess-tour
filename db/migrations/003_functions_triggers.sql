@@ -1440,7 +1440,7 @@ RETURNS varchar(20)
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT '2026-08-02'::varchar(20);
+  SELECT '2026-11-18'::varchar(20);
 $$;
 
 -- =============================================
