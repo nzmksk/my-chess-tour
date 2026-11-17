@@ -104,7 +104,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Admin tournaments / transactions / users pages | A4, A5, A6 | ❌ | 🟡 | Use the Supabase dashboard directly. |
 | Self-serve correction of set-once fields / account changes | P5 | ❌ | 🟡 | Support-routed; monitor support load. |
 | Support-email inconsistency | V1 | ⚠️ | 🟡 | One-line fix (`mychesstour@gmail.com` → `support@mychesstour.com`). |
-| Member-invite acceptance / resend / expiry | O3 | ❌ | 🟢 | Direct insert already works; re-invite manually. |
+| Member-invite acceptance / resend / expiry | O3 | ✅ | — | Shipped in #121: accept/decline page, 30-day expiry, resend and revoke on the members page. |
 | Payment-expiry scheduled backstop | S2 | ⚠️ lazy-on-read | 🟢 | Lazy sweep + CHIP `due` suffice; add `pg_cron` later (shared prerequisite with #507). |
 | Dependent accounts (register on behalf of others) | P15 | ❌ | 🟢 | Each player needs their own account (#504). |
 | Account claiming (dependent takes ownership) | P16 | ❌ | 🟢 | N/A until dependents exist (#505). |
@@ -263,9 +263,9 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 - **Gaps:** ❌ nothing moves a bank account out of `pending` until CHIP Send lands (Phase 4, #519) — deliberate, see O9.
 
 ### O3. Team / member management — ⚠️ Partial
-- **Entry:** members page → `POST /api/v1/organizations/[orgId]/members/invite`. Existing user → membership inserted directly (active); new user → account created with `generateLink({ type: "invite" })` + pending membership. Role change/remove via `PATCH`/`DELETE .../members/[id]` (needs `org.manage`); you cannot change/remove yourself; owner is not assignable here.
-- **Notification (#121):** ✅ both paths email the member after the membership is written (`notifyMemberInvited`), naming the inviter, organization and role. An existing user gets `member-added.html` with a dashboard link. A new user gets `member-invitation.html` with a `token_hash` link to `/api/v1/auth/callback`, which verifies it, marks the account verified (opening the link proves the address) and lands on `/auth/update-password?invite=1` to set a first password. Supabase sends nothing. The send is best-effort; the response's `email_sent` tells the members page to warn the inviter, and an expired or lost invite is recovered with "Forgot password".
-- **Gaps:** ❌ **no acceptance workflow, no resend, no expiry** for pending invites (the MVP shows a "Resend" affordance); no leave-org 🟢.
+- **Entry:** members page → `POST /api/v1/organizations/[orgId]/members/invite` (needs `org.invite`). Role change/remove via `PATCH`/`DELETE .../members/[id]` (needs `org.manage`); you cannot change/remove yourself; owner is not assignable here.
+- **Invitations (#121):** ✅ inviting creates an `organization_invitations` row and grants nothing. Every invitee, with or without an account, gets `member-invitation.html` linking to `/invitations/[token]`, where they **accept** (signed in as the invited address, which inserts the membership with the offered role) or **decline** (no account needed). A new address signs up the normal way from that page and is brought back to it after verifying (no account is created on their behalf). Invitations **expire after 30 days**, derived from `expires_at`, so no job runs. Inviting the same address again refreshes the link and the 30 days. The members page lists pending (and unanswered expired) invitations with **Resend** and **Revoke**. Only the token's SHA-256 is stored. The email is best-effort; `email_sent: false` tells the inviter to resend. DB functions and their test: `create_/accept_/decline_/revoke_organization_invitation` in 003, `db/tests/organization_invitations.sql`.
+- **Gaps:** no email to the inviter when an invitation is accepted or declined (the members page shows the outcome); a signed-in user has no list of invitations addressed to them, only the emailed link; no leave-org 🟢.
 
 ### O4. Create tournament (5-step wizard) — ✅ Built
 - **Entry:** `/my/organizations/[orgId]/tournaments/create` → `POST .../tournaments`. Owner/admin of an **approved** org. Saved as `draft` with placeholder dates so incomplete drafts persist. Restrictions & fee tiers (early-bird/titled/rating/age; female/OKU tiers) authored here.
@@ -345,7 +345,7 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 - **Gap — retention 🟢 (#507).** No retention policy and no pruning. `FOR EACH ROW` on INSERT/UPDATE/DELETE across nine tables with two snapshots each means this will be the largest table by row count long before `payments` is. Not urgent (no volume yet), but it needs `prune_audit_logs` with dry-run + batched deletes, an index on `(table_name, created_at)`, and a schedule — which needs `pg_cron`, the **same missing prerequisite as S2**. Land them together.
 
 ### S4. Transactional email — ⚠️ Partial
-- Provider Resend (`src/services/email/email.ts`), templates in `templates/` (a test checks each is complete). Beyond auth (`sendVerificationEmail`, `sendPasswordResetEmail`) it sends: registration confirmation (#119, once per confirmation via `settle_registration_payment`'s `newly_confirmed`), organizer application result (#120), member invite / added (#121), OKU result (#449), tournament cancellation and cancellation review, bank verification, payout sent/failed/early-request review, admin payout alerts, payout nomination plus the nominee's accept/decline (#562), and refund completed/failed (#512, once per outcome via `settle_refund`'s `newly_settled`/`newly_failed`). Fan-out is best-effort and never fails the action (`services/email/recipients.ts`). The change-email, reauthentication, magic-link and invite-user templates are Supabase-dashboard copies, **not wired to app code** (member invites no longer go through Supabase's invite email at all).
+- Provider Resend (`src/services/email/email.ts`), templates in `templates/` (a test checks each is complete). Beyond auth (`sendVerificationEmail`, `sendPasswordResetEmail`) it sends: registration confirmation (#119, once per confirmation via `settle_registration_payment`'s `newly_confirmed`), organizer application result (#120), member invitation (#121), OKU result (#449), tournament cancellation and cancellation review, bank verification, payout sent/failed/early-request review, admin payout alerts, payout nomination plus the nominee's accept/decline (#562), and refund completed/failed (#512, once per outcome via `settle_refund`'s `newly_settled`/`newly_failed`). Fan-out is best-effort and never fails the action (`services/email/recipients.ts`). The change-email, reauthentication, magic-link and invite-user templates are Supabase-dashboard copies, **not wired to app code** (member invites no longer go through Supabase's invite email at all).
 - **Gaps:** ❌ tournament reminders. See the **Communications** gap in §9. 🟡
 
 ### S5. Notifications (in-app / SMS / push) — ❌ Not built
@@ -432,7 +432,7 @@ Flow IDs in brackets point back to the detail above.
 - [x] **[O6]** Decide whether editing a *published* tournament (dates/fees) after registrations is allowed. Decided in #536, see [tournament-editing.md](./tournament-editing.md).
 - [ ] **[O7]** Test cancel end to end: organizer files → admin approves → tournament `cancelled`, players emailed, refunds settle. Then re-run approve to confirm it's idempotent.
 - [x] **[O8]** Provide participant export (CSV/Excel) or a documented workaround for pairing. Built in #90.
-- [ ] **[O3]** Confirm invite (existing + new user) works; accept that resend/expiry are absent.
+- [ ] **[O3]** Confirm invite → accept (existing user, and a new address via signup), decline, revoke and resend on staging.
 
 **Admin**
 - [ ] **[A1]** Verify dashboard stats load and match reality.

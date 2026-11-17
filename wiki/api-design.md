@@ -833,10 +833,14 @@ CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=
 | POST   | `/organizer/:orgId/members/invite`    | Org owner   | Invite a new member |
 | PATCH  | `/organizer/:orgId/members/:memberId` | Org owner   | Change member role  |
 | DELETE | `/organizer/:orgId/members/:memberId` | Org owner   | Remove a member     |
+| GET    | `/organizer/:orgId/invitations`       | `org.invite` | List pending invitations |
+| DELETE | `/organizer/:orgId/invitations/:id`   | `org.invite` | Revoke an invitation |
+| POST   | `/invitations/:token/accept`          | Invitee     | Accept an invitation |
+| POST   | `/invitations/:token/decline`         | Anyone with the link | Decline an invitation |
 
 #### `POST /organizer/:orgId/members/invite`
 
-**Permission:** `owner` only.
+**Permission:** `org.invite` (owner and admin).
 
 **Request:**
 
@@ -849,9 +853,9 @@ CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=
 
 **Server-side logic:**
 
-1. Look up user by email. If no account exists, create one with an invite token (`generateLink`) and a membership (`status: "pending"` until they set a password).
-2. If account exists, add the membership directly (`status: "active"`).
-3. Email the member (best-effort): an accept link for a new account, a dashboard link for an existing one. `email_sent` reports whether it went out.
+1. `create_organization_invitation` writes a pending invitation that expires in 30 days, storing the SHA-256 of a random token. An address that already belongs to a member is refused (409). Inviting an address that already has a pending invitation refreshes it (new token, role and expiry) and reports `resent: true`.
+2. Email the invitee a link to `/invitations/{token}` (best-effort). `email_sent` reports whether it went out.
+3. Nothing is granted until the invitee accepts at `POST /invitations/:token/accept`, signed in as the invited address. Accept and decline answer `410` once the invitation has expired, and `409` once it was answered or revoked.
 
 **Response `201`:**
 
@@ -863,6 +867,9 @@ CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=
     "role": "admin",
     "status": "pending",
     "invited_at": "2026-02-22T16:00:00Z",
+    "expires_at": "2026-03-24T16:00:00Z",
+    "days_left": 30,
+    "resent": false,
     "email_sent": true
   }
 }
