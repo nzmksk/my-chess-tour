@@ -17,7 +17,7 @@ const {
   mockGetClaims,
   mockGetAuthClaims,
   mockHasOrgPermission,
-  mockInviteUserByEmail,
+  mockGenerateLink,
   mockNotifyMemberInvited,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: {
@@ -96,7 +96,7 @@ const {
     };
   });
   const mockHasOrgPermission = vi.fn().mockResolvedValue(true);
-  const mockInviteUserByEmail = vi.fn();
+  const mockGenerateLink = vi.fn();
   const mockNotifyMemberInvited = vi.fn();
 
   return {
@@ -110,7 +110,7 @@ const {
     mockGetClaims,
     mockGetAuthClaims,
     mockHasOrgPermission,
-    mockInviteUserByEmail,
+    mockGenerateLink,
     mockNotifyMemberInvited,
   };
 });
@@ -124,7 +124,7 @@ vi.mock("@/services/supabase/admin", () => ({
     from: mockFrom,
     auth: {
       admin: {
-        inviteUserByEmail: mockInviteUserByEmail,
+        generateLink: mockGenerateLink,
       },
     },
   },
@@ -261,8 +261,11 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
     setInsertResult(null);
     mockHasOrgPermission.mockResolvedValue(true);
     mockNotifyMemberInvited.mockResolvedValue(true);
-    mockInviteUserByEmail.mockResolvedValue({
-      data: { user: { id: NEW_USER_ID } },
+    mockGenerateLink.mockResolvedValue({
+      data: {
+        user: { id: NEW_USER_ID },
+        properties: { hashed_token: "hashed-abc" },
+      },
       error: null,
     });
   });
@@ -459,22 +462,80 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       expect(json.data.status).toBe("pending");
       expect(json.data.email).toBe("new@example.com");
       expect(json.data.role).toBe("member");
-      // inviteUserByEmail returns an AUTH id; the membership row and the response
+      // generateLink returns an AUTH id; the membership row and the response
       // both carry the resolved users.id.
       expect(json.data.id).toBe(appIdFor(NEW_USER_ID));
       expect(json.data).toHaveProperty("invited_at");
     });
 
-    it("calls inviteUserByEmail with the target email", async () => {
+    it("generates an invite link for the target email", async () => {
       await POST(
         makeRequest(ORG_ID, { email: "NEW@Example.com", role: "admin" }),
         { params: Promise.resolve({ orgId: ORG_ID }) },
       );
-      expect(mockInviteUserByEmail).toHaveBeenCalledWith("new@example.com");
+      expect(mockGenerateLink).toHaveBeenCalledWith({
+        type: "invite",
+        email: "new@example.com",
+      });
     });
 
-    it("returns 500 when inviteUserByEmail fails", async () => {
-      mockInviteUserByEmail.mockResolvedValue({
+    it("emails the new user a link to accept through the auth callback", async () => {
+      const res = await POST(
+        makeRequest(ORG_ID, { email: "new@example.com", role: "admin" }),
+        { params: Promise.resolve({ orgId: ORG_ID }) },
+      );
+      expect(mockNotifyMemberInvited).toHaveBeenCalledOnce();
+      const call = mockNotifyMemberInvited.mock.calls[0][0];
+      expect(call).toMatchObject({
+        orgId: ORG_ID,
+        inviterId: USER_ID,
+        memberId: appIdFor(NEW_USER_ID),
+        role: "admin",
+      });
+      const url = new URL(call.acceptUrl);
+      expect(url.pathname).toBe("/api/v1/auth/callback");
+      expect(url.searchParams.get("token_hash")).toBe("hashed-abc");
+      expect(url.searchParams.get("type")).toBe("invite");
+      expect(url.searchParams.get("next")).toBe("/auth/update-password");
+      expect((await res.json()).data.email_sent).toBe(true);
+    });
+
+    it("reports email_sent false when the invitation can't be sent", async () => {
+      mockNotifyMemberInvited.mockResolvedValue(false);
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.data.status).toBe("pending");
+      expect(json.data.email_sent).toBe(false);
+    });
+
+    it("reports email_sent false without emailing when no token came back", async () => {
+      mockGenerateLink.mockResolvedValue({
+        data: { user: { id: NEW_USER_ID }, properties: {} },
+        error: null,
+      });
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(res.status).toBe(201);
+      expect((await res.json()).data.email_sent).toBe(false);
+      expect(mockNotifyMemberInvited).not.toHaveBeenCalled();
+      errSpy.mockRestore();
+    });
+
+    it("sends no email when the membership insert fails", async () => {
+      setInsertResult(null, { message: "Insert error" });
+      await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(mockNotifyMemberInvited).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 when generateLink fails", async () => {
+      mockGenerateLink.mockResolvedValue({
         data: { user: null },
         error: { message: "Invite failed" },
       });
@@ -489,7 +550,7 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
     it("returns 409 ACCOUNT_UNLINKED when auth already holds the email (#565)", async () => {
       // No live users row matched, but GoTrue rejects the invite because an
       // auth account exists — the two have drifted apart.
-      mockInviteUserByEmail.mockResolvedValue({
+      mockGenerateLink.mockResolvedValue({
         data: { user: null },
         error: {
           code: "email_exists",
@@ -519,7 +580,7 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       expect(res.status).toBe(500);
       const json = await res.json();
       expect(json.error.code).toBe("INTERNAL_ERROR");
-      expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+      expect(mockGenerateLink).not.toHaveBeenCalled();
     });
 
     it("returns 500 when membership insert fails for new user", async () => {
@@ -593,11 +654,11 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       expect(mockNotifyMemberInvited).not.toHaveBeenCalled();
     });
 
-    it("does not call inviteUserByEmail for existing user", async () => {
+    it("does not create an invite link for existing user", async () => {
       await POST(makeRequest(), {
         params: Promise.resolve({ orgId: ORG_ID }),
       });
-      expect(mockInviteUserByEmail).not.toHaveBeenCalled();
+      expect(mockGenerateLink).not.toHaveBeenCalled();
     });
 
     it("returns 409 when user is already a member", async () => {

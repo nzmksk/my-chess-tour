@@ -219,8 +219,12 @@ export async function POST(
     );
   }
 
+  // Create the account and its invite token without Supabase sending anything:
+  // its dashboard invite template can't name the organization, and its link
+  // bypasses our auth callback. Our own email carries a token_hash link to the
+  // callback instead, the same way the password reset does.
   const { data: inviteData, error: inviteError } =
-    await supabaseAdmin.auth.admin.inviteUserByEmail(email);
+    await supabaseAdmin.auth.admin.generateLink({ type: "invite", email });
 
   if (inviteError) {
     // The lookup above succeeded and found no live users record, yet Auth
@@ -251,7 +255,7 @@ export async function POST(
     );
   }
 
-  // inviteUserByEmail returns an AUTH id. organization_memberships.user_id is a
+  // generateLink returns an AUTH id. organization_memberships.user_id is a
   // public.users.id, so it has to be resolved through the link. The record is
   // created synchronously by the on_auth_user_created trigger, so it exists by
   // the time the invite call returns.
@@ -284,6 +288,24 @@ export async function POST(
     );
   }
 
+  // The email is the new member's only way in, so the inviter is told
+  // (email_sent: false) when it did not go out.
+  const hashedToken = inviteData.properties?.hashed_token;
+  let emailSent = false;
+  if (hashedToken) {
+    emailSent = await notifyMemberInvited({
+      orgId,
+      inviterId: claims.id,
+      memberId: newUserId,
+      role,
+      acceptUrl: buildAcceptUrl(hashedToken),
+    });
+  } else {
+    console.error(
+      "POST /api/v1/organizations/[orgId]/members/invite: generateLink returned no hashed_token",
+    );
+  }
+
   return NextResponse.json(
     {
       data: {
@@ -292,8 +314,21 @@ export async function POST(
         role,
         status: "pending",
         invited_at: invitedAt,
+        email_sent: emailSent,
       },
     },
     { status: 201 },
   );
+}
+
+// The link in a new member's invitation. The callback verifies the token with
+// verifyOtp, which signs them in, then sends them on to set a password.
+function buildAcceptUrl(hashedToken: string): string {
+  const params = new URLSearchParams({
+    token_hash: hashedToken,
+    type: "invite",
+    next: "/auth/update-password",
+  });
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  return `${siteUrl}/api/v1/auth/callback?${params.toString()}`;
 }
