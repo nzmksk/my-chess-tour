@@ -6,6 +6,7 @@ import {
 import { describePayoutFailure } from "./failure-reason";
 import { sendToAll } from "@/services/email/recipients";
 import { loadOrganizationRecipients } from "./recipients";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Settlement is reached from two paths that must agree: the synchronous response
 // in executePayout, and the CHIP Send webhook. Both come through settlePayout, so
@@ -82,14 +83,17 @@ export async function settlePayout(
     );
   }
 
-  try {
-    await notifyPayoutSettled(input.payoutId);
-  } catch (err) {
-    console.error(
-      `Payout ${input.payoutId}: settlement email failed`,
-      err instanceof Error ? err.message : err,
-    );
-  }
+  // Sent after the response of whichever request settled it.
+  afterResponse(async () => {
+    try {
+      await notifyPayoutSettled(input.payoutId);
+    } catch (err) {
+      console.error(
+        `Payout ${input.payoutId}: settlement email failed`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  });
 
   return { error: null, settled: true };
 }

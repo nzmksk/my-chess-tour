@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -343,6 +344,7 @@ describe("awaiting budget", () => {
     givenPayout();
     mockAccounts.mockResolvedValue(balance(1));
     await executePayout(ID);
+    await runAfterCallbacks();
     expect(mockNotifyAdmins).toHaveBeenCalledOnce();
     expect(mockNotifyAdmins).toHaveBeenCalledWith(
       ID,
@@ -372,6 +374,7 @@ describe("awaiting budget", () => {
     expect(await executePayout(ID)).toBe("awaiting_budget");
     expect(mockGetLimit).toHaveBeenCalledWith(77);
     expect(mockIncrease).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 
@@ -398,6 +401,7 @@ describe("awaiting budget", () => {
     mockIncrease.mockRejectedValue(new ChipSendError(400, "no convertible balance"));
     expect(await executePayout(ID)).toBe("awaiting_budget");
     expect(mockSettle).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 

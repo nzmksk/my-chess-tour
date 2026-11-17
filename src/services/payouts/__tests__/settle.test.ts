@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -112,6 +113,7 @@ describe("settlePayout", () => {
       amountCents: 9000,
       receiptUrl: "https://chip.test/r/1",
     });
+    await runAfterCallbacks();
     expect(mockRpc).toHaveBeenCalledWith("settle_payout", {
       p_payout_id: PAYOUT_ID,
       p_chip_send_instruction_id: 8,
@@ -129,6 +131,7 @@ describe("settlePayout", () => {
       chipSendInstructionId: 8,
       paid: true,
     });
+    await runAfterCallbacks();
     expect(res).toEqual({ error: null, settled: true });
     const to = mockProcessed.mock.calls.map((c) => c[0]);
     expect(to.sort()).toEqual(["club@x.test", "owner@x.test"]);
@@ -144,12 +147,14 @@ describe("settlePayout", () => {
   it("never hands the full account number to the email", async () => {
     queueEmailData();
     await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: true });
+    await runAfterCallbacks();
     expect(JSON.stringify(mockProcessed.mock.calls)).not.toContain("514000001234");
   });
 
   it("notifies both sides when a beneficiary was paid", async () => {
     queueEmailData({ recipient_organization_id: BENEFICIARY });
     await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: true });
+    await runAfterCallbacks();
     const inCall = (mockFrom.mock.results.find(
       (_r, i) => mockFrom.mock.calls[i][0] === "organization_memberships",
     )?.value as { in: ReturnType<typeof vi.fn> }).in;
@@ -168,6 +173,7 @@ describe("settlePayout", () => {
       paid: false,
       failureReason: 'chip_send_400: {"message":"x"}',
     });
+    await runAfterCallbacks();
     expect(mockProcessed).not.toHaveBeenCalled();
     expect(mockFailed.mock.calls[0][1].failureReason).toBe(
       "The transfer could not be completed.",
@@ -184,6 +190,7 @@ describe("settlePayout", () => {
       chipSendInstructionId: 8,
       paid: true,
     });
+    await runAfterCallbacks();
     expect(res).toEqual({ error: null, settled: false });
     expect(mockProcessed).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();
@@ -200,6 +207,7 @@ describe("settlePayout", () => {
       chipSendInstructionId: 8,
       paid: true,
     });
+    await runAfterCallbacks();
     expect(res.settled).toBe(true);
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("more than was available"),
@@ -212,6 +220,7 @@ describe("settlePayout", () => {
       error: null,
     });
     await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: true });
+    await runAfterCallbacks();
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("already marked failed"),
     );
@@ -227,6 +236,7 @@ describe("settlePayout", () => {
       chipSendInstructionId: 8,
       paid: true,
     });
+    await runAfterCallbacks();
     expect(res).toEqual({
       error: { code: "40001", message: "serialization failure" },
       settled: false,
@@ -241,6 +251,7 @@ describe("settlePayout", () => {
       chipSendInstructionId: 8,
       paid: true,
     });
+    await runAfterCallbacks();
     expect(res).toEqual({ error: null, settled: true });
   });
 
@@ -248,6 +259,7 @@ describe("settlePayout", () => {
     queueEmailData();
     mockProcessed.mockRejectedValue(new Error("resend down"));
     await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: true });
+    await runAfterCallbacks();
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining(`payout email(s) for payout ${PAYOUT_ID}`),
       expect.arrayContaining(["resend down"]),
@@ -258,6 +270,7 @@ describe("settlePayout", () => {
     queueEmailData();
     tables.organizations = [{ data: null, error: { message: "orgs down" } }];
     await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: true });
+    await runAfterCallbacks();
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("failed to load organization contact addresses"),
       "orgs down",
@@ -267,6 +280,7 @@ describe("settlePayout", () => {
 
   it("logs which way a payout settled", async () => {
     await settlePayout({ payoutId: PAYOUT_ID, chipSendInstructionId: 8, paid: false });
+    await runAfterCallbacks();
     expect(console.info).toHaveBeenCalledWith(
       `Payout ${PAYOUT_ID}: settled as failed (instruction 8)`,
     );

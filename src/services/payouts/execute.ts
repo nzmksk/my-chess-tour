@@ -13,6 +13,7 @@ import { CHIP_SEND_FEE_CENTS, MIN_PAYOUT_CENTS } from "./constants";
 import { formatRinggit } from "./format";
 import { notifyAdminsOfPayout } from "./notify";
 import { settlePayout } from "./settle";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Sends one queued payout through CHIP Send. Shared by the admin trigger, the
 // approve path (Phase 6) and the sweep (Phase 7). The money state lives in
@@ -212,10 +213,13 @@ async function awaitBudget(
     );
     // Once per budget request, like CHIP's own approver email: a re-run that
     // finds this limit still pending returns above without alerting again.
-    await notifyAdminsOfPayout(
-      payout.id,
-      "awaiting_budget",
-      `A CHIP Send budget increase of ${formatRinggit(requestCents)} (payout plus the ${formatRinggit(CHIP_SEND_FEE_CENTS)} transfer fee) is waiting for an approver.`,
+    // Sent after the response.
+    afterResponse(() =>
+      notifyAdminsOfPayout(
+        payout.id,
+        "awaiting_budget",
+        `A CHIP Send budget increase of ${formatRinggit(requestCents)} (payout plus the ${formatRinggit(CHIP_SEND_FEE_CENTS)} transfer fee) is waiting for an approver.`,
+      ),
     );
   } catch (err) {
     console.error(
