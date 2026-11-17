@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/services/supabase/server";
-import { supabaseAdmin } from "@/services/supabase/admin";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -16,14 +15,11 @@ export async function GET(request: Request) {
   // verified with `verifyOtp`. The `code` branch remains as a fallback for any
   // PKCE-style links still in flight.
   if (tokenHash && type) {
-    const { data, error } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       type,
       token_hash: tokenHash,
     });
     if (!error) {
-      if (type === "invite" && data.user) {
-        await markInvitedUserVerified(data.user.id);
-      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   } else if (code) {
@@ -36,19 +32,4 @@ export async function GET(request: Request) {
   return NextResponse.redirect(
     `${origin}/auth/forgot-password?error=invalid_link`,
   );
-}
-
-// An organization invite is only ever sent to the invited address, so opening
-// its link proves the member owns that address. Record that, or their first
-// sign-in would stop them for the signup verification code as well. A failure
-// costs only that extra step, so it is logged rather than failing the link.
-async function markInvitedUserVerified(authUserId: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from("users")
-    .update({ is_verified: true, verified_at: new Date().toISOString() })
-    .eq("auth_user_id", authUserId)
-    .eq("is_verified", false);
-  if (error) {
-    console.error("Failed to mark invited user verified:", authUserId, error);
-  }
 }
