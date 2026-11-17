@@ -72,23 +72,6 @@ describe("UpdatePasswordForm", () => {
     expect(screen.getByRole("heading", { name: "New Password" })).toBeDefined();
   });
 
-  it("words the form for a first password when invited", () => {
-    const { container } = render(<UpdatePasswordForm invited />);
-    expect(
-      screen.getByRole("heading", { name: "Set Your Password" }),
-    ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Set Password" })).toBeDefined();
-    const hidden = container.querySelector(
-      'input[type="hidden"][name="invited"]',
-    ) as HTMLInputElement | null;
-    expect(hidden?.value).toBe("1");
-  });
-
-  it("carries no invited flag on a password reset", () => {
-    const { container } = render(<UpdatePasswordForm />);
-    expect(container.querySelector('input[name="invited"]')).toBeNull();
-  });
-
   it("renders password input", () => {
     render(<UpdatePasswordForm />);
     expect(screen.getByLabelText("New Password")).toBeDefined();

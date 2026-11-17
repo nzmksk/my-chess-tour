@@ -496,7 +496,7 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       expect(url.pathname).toBe("/api/v1/auth/callback");
       expect(url.searchParams.get("token_hash")).toBe("hashed-abc");
       expect(url.searchParams.get("type")).toBe("invite");
-      expect(url.searchParams.get("next")).toBe("/auth/update-password?invite=1");
+      expect(url.searchParams.get("next")).toBe("/auth/update-password");
       expect((await res.json()).data.email_sent).toBe(true);
     });
 

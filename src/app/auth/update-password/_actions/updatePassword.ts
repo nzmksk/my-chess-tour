@@ -15,7 +15,6 @@ export async function updatePassword(
 ): Promise<UpdatePasswordState> {
   const password = formData.get("password")?.toString() ?? "";
   const confirmPassword = formData.get("confirmPassword")?.toString() ?? "";
-  const invited = formData.get("invited") === "1";
 
   const { errors, isValid } = validateUpdatePasswordForm(
     password,
@@ -33,14 +32,12 @@ export async function updatePassword(
     return { error: describeUpdateError(error), fieldErrors: {} };
   }
 
-  // The recovery or invite link created an authenticated session. Clear it so
-  // the user re-authenticates with their new password instead of landing on the
-  // login page while silently still signed in.
+  // The recovery link created an authenticated session. Clear it so the user
+  // re-authenticates with their new password instead of landing on the login
+  // page while silently still signed in.
   await supabase.auth.signOut();
 
-  redirect(
-    `/auth/login?message=${invited ? "account-ready" : "password-updated"}`,
-  );
+  redirect("/auth/login?message=password-updated");
 }
 
 // The auth server's messages are not all written for end users (an unexpected

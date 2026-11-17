@@ -15,9 +15,7 @@ export default async function LoginPage({
   const successMessage =
     message === "password-updated"
       ? "Password updated successfully. Please log in again with your new password."
-      : message === "account-ready"
-        ? "Your password is set. Log in to get started."
-        : undefined;
+      : undefined;
   const infoMessage =
     message === "login-required"
       ? "Please log in to your account to continue."
