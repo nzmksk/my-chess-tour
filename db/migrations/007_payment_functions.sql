@@ -383,6 +383,60 @@ AS $$
 $$;
 
 -- =============================================
+-- LIST UNFIRED CANCELLATION REFUNDS (#496)
+-- The work list for the refund sweep (POST /api/v1/cron/refunds), which sends
+-- cancellation refunds to CHIP off the admin's request. Returns refunds, across
+-- every cancelled tournament, that are still owed and that nobody has fired yet
+-- (last_fired_at NULL). Oldest request first, at most p_limit rows, so each run
+-- takes a bounded chunk and the next run carries on.
+--
+-- Excludes:
+--   * refunds queued less than p_min_age ago. The approval emails players that
+--     the tournament is off after its response; this gap keeps a sweep that
+--     happens to run right then from settling a refund (and emailing "refund
+--     completed") ahead of that notice.
+--   * refunds whose registration payment has no CHIP purchase. claim_refund_fire
+--     refuses those ('no_purchase') without stamping them, so listing them would
+--     have every run retry them. They show on the stuck list instead.
+--   * refunds on tournaments that aren't cancelled: cancellation refunds are the
+--     only ones the sweep may send. A future player-requested refund (#509)
+--     that sits 'pending' awaiting review must not be fired by it.
+-- Once fired, a refund leaves this list for good; if it doesn't settle, it is
+-- the admin re-fire's (list_stuck_refunds / claim_refund_fire) to deal with.
+-- =============================================
+CREATE OR REPLACE FUNCTION list_unfired_cancellation_refunds(
+  p_min_age interval,
+  p_limit   integer
+)
+RETURNS TABLE (
+  refund_id     uuid,
+  tournament_id uuid,
+  requested_at  timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT rf.id, t.id, rf.requested_at
+  FROM refunds rf
+  JOIN registrations r ON r.id = rf.registration_id
+  JOIN tournaments t   ON t.id = r.tournament_id
+  JOIN payments p      ON p.id = r.current_payment_id
+   AND p.type = 'registration'
+   AND p.status = 'paid'
+   AND p.chip_transaction_id IS NOT NULL
+  WHERE t.status = 'cancelled'
+    AND rf.status = 'pending'
+    AND rf.processed_at IS NULL
+    AND rf.chip_refund_id IS NULL
+    AND rf.last_fired_at IS NULL
+    AND rf.requested_at <= now() - p_min_age
+  ORDER BY rf.requested_at, rf.id
+  LIMIT p_limit;
+$$;
+
+-- =============================================
 -- REFUND FIRE DUE (#497)
 -- Whether a pending refund may be sent to CHIP again. `pending` is overloaded: a
 -- refund that was fired a moment ago and is waiting on its payment.refunded
@@ -493,6 +547,13 @@ $$;
 -- since it was fired. What the admin "Stuck refunds" page lists and the admin
 -- dashboard counts. Oldest request first.
 --
+-- A never-fired refund counts only once it was queued p_min_age ago. The refund
+-- sweep (#496), not the approval, sends a new cancellation's refunds, so every
+-- refund starts out unfired; listing them straight away would raise the
+-- dashboard's stuck banner on every approval. One still unfired after
+-- p_min_age is one the sweep didn't get to, and that is worth a look. The list
+-- stays a subset of what claim_refund_fire accepts, so a Retry on it still works.
+--
 -- original_chip_purchase_id is NULL when the registration payment has no CHIP
 -- purchase: claim_refund_fire refuses those ('no_purchase'), so the page shows
 -- them as needing a hand rather than offering a retry.
@@ -532,6 +593,7 @@ AS $$
     AND rf.processed_at IS NULL
     AND rf.chip_refund_id IS NULL
     AND refund_fire_due(rf.last_fired_at, p_min_age)
+    AND (rf.last_fired_at IS NOT NULL OR rf.requested_at <= now() - p_min_age)
   ORDER BY rf.requested_at, rf.id;
 $$;
 
@@ -1839,6 +1901,7 @@ REVOKE EXECUTE ON FUNCTION start_new_payment_attempt         FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION settle_registration_payment       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION expire_stale_pending_payments     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_pending_cancellation_refunds FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_unfired_cancellation_refunds FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_refund                     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION claim_refund_fire                 FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_stuck_refunds                FROM PUBLIC, anon, authenticated;
@@ -1862,6 +1925,7 @@ GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
 GRANT EXECUTE ON FUNCTION settle_registration_payment       TO service_role;
 GRANT EXECUTE ON FUNCTION expire_stale_pending_payments     TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_cancellation_refunds TO service_role;
+GRANT EXECUTE ON FUNCTION list_unfired_cancellation_refunds TO service_role;
 GRANT EXECUTE ON FUNCTION settle_refund                     TO service_role;
 GRANT EXECUTE ON FUNCTION claim_refund_fire                 TO service_role;
 GRANT EXECUTE ON FUNCTION list_stuck_refunds                TO service_role;

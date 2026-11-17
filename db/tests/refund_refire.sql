@@ -6,7 +6,8 @@
 --     settled (processed_at, chip_refund_id or 'approved'), rejected, in flight,
 --     missing, or has no CHIP purchase to refund against
 --   * list_stuck_refunds — lists exactly the refunds claim_refund_fire would
---     accept, plus the no-purchase ones that need a hand
+--     accept, plus the no-purchase ones that need a hand, except an unfired
+--     refund queued too recently for the refund sweep to have run (#496)
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. The whole thing runs inside a transaction that
@@ -88,6 +89,19 @@ BEGIN
   IF v_refund_a IS NULL OR v_refund_b IS NULL OR v_refund_c IS NULL THEN
     RAISE EXCEPTION 'SETUP FAIL: approve did not queue a refund for each paid player';
   END IF;
+
+  -- ===== F0: a refund queued a moment ago isn't stuck yet (#496) =============
+  -- The refund sweep, not the approval, fires new refunds, so straight after an
+  -- approval every refund is unfired. That is not stuck: the sweep hasn't run.
+  IF EXISTS (SELECT 1 FROM list_stuck_refunds(c_age)
+             WHERE refund_id IN (v_refund_a, v_refund_b, v_refund_c)) THEN
+    RAISE EXCEPTION 'F0 FAIL: a refund queued moments ago was listed as stuck';
+  END IF;
+  RAISE NOTICE 'F0 PASS — an unfired refund queued moments ago is not stuck';
+
+  -- Age the queue past the threshold: from here on the sweep has had its chance.
+  UPDATE refunds SET requested_at = now() - interval '20 minutes'
+    WHERE id IN (v_refund_a, v_refund_b, v_refund_c);
 
   -- ===== F1: a never-fired refund is stuck and listed with its details =======
   SELECT count(*) INTO v_count FROM list_stuck_refunds(c_age)
