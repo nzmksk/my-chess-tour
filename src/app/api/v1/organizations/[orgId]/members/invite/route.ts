@@ -3,6 +3,7 @@ import { authorizeOrgPermission } from "@/app/api/v1/organizations/_lib/authoriz
 import { invitationErrorResponse } from "@/app/api/v1/organizations/_lib/invitation-errors";
 import { notifyMemberInvited } from "@/services/organizations/notify";
 import {
+  daysUntil,
   generateInvitationToken,
   hashInvitationToken,
   invitationUrl,
@@ -92,6 +93,7 @@ export async function POST(
         status: "pending",
         invited_at: invitation.created_at,
         expires_at: invitation.expires_at,
+        days_left: daysUntil(invitation.expires_at),
         resent: invitation.resent,
         email_sent: emailSent,
       },

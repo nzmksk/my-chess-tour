@@ -34,7 +34,8 @@ const USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const ORG_ID = "bbbbbbbb-0000-0000-0000-000000000001";
 const INVITATION_ID = "eeeeeeee-0000-0000-0000-000000000001";
 const CREATED_AT = "2026-11-17T01:00:00.000Z";
-const EXPIRES_AT = "2026-12-17T01:00:00.000Z";
+// 30 days out (less a second, so it rounds to 30 whatever the clock says).
+const EXPIRES_AT = new Date(Date.now() + 30 * 86_400_000 - 1000).toISOString();
 
 function makeRequest(body: unknown = { email: "new@example.com", role: "member" }) {
   return new NextRequest(
@@ -166,6 +167,7 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
         status: "pending",
         invited_at: CREATED_AT,
         expires_at: EXPIRES_AT,
+        days_left: 30,
         resent: false,
         email_sent: true,
       });
