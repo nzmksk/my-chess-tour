@@ -87,33 +87,12 @@ export function personName(
   return name || null;
 }
 
-/**
- * Looks up the invitation a link's token belongs to. Null for a malformed token
- * or one that matches nothing; throws on a database error so the caller can
- * tell "no such invitation" from "couldn't check".
- */
-export async function getInvitationByToken(
-  token: string,
-): Promise<InvitationView | null> {
-  if (!INVITATION_TOKEN_RE.test(token)) return null;
+const INVITATION_VIEW_SELECT = `id, email, status, expires_at,
+  roles(name),
+  organizations(id, name, approval_status, deleted_at),
+  inviter:users!invited_by(first_name, last_name)`;
 
-  const { data, error } = await supabaseAdmin
-    .from("organization_invitations")
-    .select(
-      `id, email, status, expires_at,
-       roles(name),
-       organizations(id, name, approval_status, deleted_at),
-       inviter:users!invited_by(first_name, last_name)`,
-    )
-    .eq("token_hash", hashInvitationToken(token))
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to load invitation: ${error.message}`);
-  }
-  if (!data) return null;
-
-  const row = data as unknown as InvitationRow;
+function toInvitationView(row: InvitationRow): InvitationView | null {
   if (!row.organizations || !row.roles) return null;
 
   return {
@@ -132,4 +111,70 @@ export async function getInvitationByToken(
     },
     inviterName: personName(row.inviter),
   };
+}
+
+/**
+ * Looks up the invitation a link's token belongs to. Null for a malformed token
+ * or one that matches nothing; throws on a database error so the caller can
+ * tell "no such invitation" from "couldn't check".
+ */
+export async function getInvitationByToken(
+  token: string,
+): Promise<InvitationView | null> {
+  if (!INVITATION_TOKEN_RE.test(token)) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("organization_invitations")
+    .select(INVITATION_VIEW_SELECT)
+    .eq("token_hash", hashInvitationToken(token))
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load invitation: ${error.message}`);
+  }
+  if (!data) return null;
+
+  return toInvitationView(data as unknown as InvitationRow);
+}
+
+/**
+ * The invitations a signed-in user can answer right now: pending, not expired,
+ * addressed to their account's email, from an organization that can still take
+ * members. Newest first. Matched on users.email, the same address
+ * accept_organization_invitation_by_id checks. Throws on a database error.
+ */
+export async function listInvitationsForUser(
+  userId: string,
+): Promise<InvitationView[]> {
+  const { data: user, error: userError } = await supabaseAdmin
+    .from("users")
+    .select("email")
+    .eq("id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (userError) {
+    throw new Error(`Failed to load user for invitations: ${userError.message}`);
+  }
+  const email = (user as { email: string | null } | null)?.email;
+  if (!email) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from("organization_invitations")
+    .select(INVITATION_VIEW_SELECT)
+    .eq("email", email.toLowerCase())
+    .eq("status", "pending")
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load invitations: ${error.message}`);
+  }
+
+  return (data as unknown as InvitationRow[])
+    .map(toInvitationView)
+    .filter(
+      (view): view is InvitationView =>
+        view !== null && view.state === "pending" && view.organization.available,
+    );
 }

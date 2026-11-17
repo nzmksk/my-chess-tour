@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockFrom, result, builder } = vi.hoisted(() => {
+const { mockFrom, result, builder, queue } = vi.hoisted(() => {
   const result: { data: unknown; error: unknown } = { data: null, error: null };
+  // When non-empty, each awaited query takes the next result from here instead.
+  const queue: Array<{ data: unknown; error: unknown }> = [];
   const builder: Record<string, unknown> = {};
-  for (const m of ["select", "eq", "maybeSingle"]) {
+  for (const m of ["select", "eq", "is", "gt", "order", "maybeSingle"]) {
     builder[m] = vi.fn(() => builder);
   }
   builder.then = (
     onfulfilled: (v: unknown) => unknown,
     onrejected?: (r: unknown) => unknown,
-  ) => Promise.resolve(result).then(onfulfilled, onrejected);
-  return { mockFrom: vi.fn(() => builder), result, builder };
+  ) => Promise.resolve(queue.shift() ?? result).then(onfulfilled, onrejected);
+  return { mockFrom: vi.fn(() => builder), result, builder, queue };
 });
 
 vi.mock("@/services/supabase/admin", () => ({
@@ -25,6 +27,7 @@ import {
   INVITATION_TOKEN_RE,
   invitationState,
   invitationUrl,
+  listInvitationsForUser,
 } from "../invitations";
 
 const TOKEN = "a".repeat(43);
@@ -54,6 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   result.data = null;
   result.error = null;
+  queue.length = 0;
 });
 
 describe("invitation tokens", () => {
@@ -147,5 +151,75 @@ describe("getInvitationByToken", () => {
   it("throws on a database error", async () => {
     result.error = { message: "boom" };
     await expect(getInvitationByToken(TOKEN)).rejects.toThrow(/boom/);
+  });
+});
+
+describe("listInvitationsForUser", () => {
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    id: "inv-1",
+    email: "farid@example.com",
+    status: "pending",
+    expires_at: FUTURE,
+    roles: { name: "member" },
+    organizations: {
+      id: "org-1",
+      name: "KL Chess Club",
+      approval_status: "approved",
+      deleted_at: null,
+    },
+    inviter: { first_name: "Aisha", last_name: null },
+    ...overrides,
+  });
+
+  it("lists the open invitations addressed to the user's email", async () => {
+    queue.push(
+      { data: { email: "Farid@Example.com" }, error: null },
+      { data: [row()], error: null },
+    );
+    const list = await listInvitationsForUser("user-1");
+
+    expect(builder.eq).toHaveBeenCalledWith("id", "user-1");
+    expect(builder.eq).toHaveBeenCalledWith("email", "farid@example.com");
+    expect(builder.eq).toHaveBeenCalledWith("status", "pending");
+    expect(builder.gt).toHaveBeenCalledWith("expires_at", expect.any(String));
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: "inv-1", role: "member", inviterName: "Aisha" });
+  });
+
+  it("leaves out organizations that can't take members", async () => {
+    queue.push(
+      { data: { email: "farid@example.com" }, error: null },
+      {
+        data: [
+          row(),
+          row({
+            id: "inv-2",
+            organizations: {
+              id: "org-2",
+              name: "Gone",
+              approval_status: "approved",
+              deleted_at: "2026-01-01T00:00:00Z",
+            },
+          }),
+        ],
+        error: null,
+      },
+    );
+    const list = await listInvitationsForUser("user-1");
+    expect(list.map((i) => i.id)).toEqual(["inv-1"]);
+  });
+
+  it("is empty for an account with no email on file", async () => {
+    queue.push({ data: null, error: null });
+    expect(await listInvitationsForUser("user-1")).toEqual([]);
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws on a database error", async () => {
+    queue.push(
+      { data: { email: "farid@example.com" }, error: null },
+      { data: null, error: { message: "boom" } },
+    );
+    await expect(listInvitationsForUser("user-1")).rejects.toThrow(/boom/);
   });
 });
