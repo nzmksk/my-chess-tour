@@ -13,7 +13,7 @@ const { mockFrom, mockRpc, tables, updates, mockRegister, mockSendEmail } =
 
     function makeBuilder(table: string) {
       const b: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "maybeSingle", "single"]) {
+      for (const m of ["select", "eq", "is", "lt", "order", "maybeSingle", "single"]) {
         b[m] = vi.fn(() => b);
       }
       b.update = vi.fn((values: unknown) => {
@@ -58,6 +58,7 @@ import {
   notifyBankVerification,
   registerActiveOrganizationBankAccount,
   registerOrganizationBankAccount,
+  registerPendingBankAccounts,
   settleBankAccountVerification,
 } from "../bank-account";
 
@@ -132,7 +133,7 @@ describe("registerOrganizationBankAccount", () => {
     queue("organization_bank_accounts", { data: null, error: null }); // update
     mockRegister.mockResolvedValue({ id: 84, status: "pending", rejection_reason: null });
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("pending");
 
     expect(mockRegister).toHaveBeenCalledWith({
       account_number: "157380112229",
@@ -153,7 +154,7 @@ describe("registerOrganizationBankAccount", () => {
     mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
     queueNotifyData("verified");
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("verified");
 
     expect(mockRpc).toHaveBeenCalledWith("settle_bank_account_verification", {
       p_bank_account_id: BANK_ID,
@@ -175,7 +176,7 @@ describe("registerOrganizationBankAccount", () => {
     });
     queueNotifyData("rejected", "Invalid account");
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("rejected");
 
     expect(mockRpc).toHaveBeenCalledWith(
       "settle_bank_account_verification",
@@ -188,8 +189,18 @@ describe("registerOrganizationBankAccount", () => {
     queue("organization_bank_accounts", { data: null, error: null });
     mockRegister.mockResolvedValue({ id: 84, status: "unverified", rejection_reason: null });
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("pending");
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("reports an error, leaving the row pending, when the verdict can't be recorded", async () => {
+    queue("organization_bank_accounts", { data: pendingRow, error: null });
+    queue("organization_bank_accounts", { data: null, error: null });
+    mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
+    mockRpc.mockResolvedValue({ data: null, error: { message: "db down" } });
+
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).toContain(BANK_ID);
   });
 
   it.each([
@@ -199,7 +210,7 @@ describe("registerOrganizationBankAccount", () => {
     ["missing", null],
   ])("skips a %s row without calling CHIP", async (_label, row) => {
     queue("organization_bank_accounts", { data: row, error: null });
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("skipped");
     expect(mockRegister).not.toHaveBeenCalled();
   });
 
@@ -209,9 +220,10 @@ describe("registerOrganizationBankAccount", () => {
       new ChipSendError(400, '{"account_number":"157380112229 is invalid"}'),
     );
 
-    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBeUndefined();
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
 
     const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logged).toContain(BANK_ID);
     expect(logged).toContain("400");
     expect(logged).not.toContain("157380112229");
     expect(updates).toHaveLength(0);
@@ -220,7 +232,7 @@ describe("registerOrganizationBankAccount", () => {
 
   it("never throws when the row load fails", async () => {
     queue("organization_bank_accounts", { data: null, error: { message: "db down" } });
-    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBeUndefined();
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
     expect(mockRegister).not.toHaveBeenCalled();
   });
 
@@ -228,7 +240,7 @@ describe("registerOrganizationBankAccount", () => {
     mockFrom.mockImplementationOnce(() => {
       throw new Error("kaboom");
     });
-    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBeUndefined();
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
   });
 });
 
@@ -249,6 +261,102 @@ describe("registerActiveOrganizationBankAccount", () => {
     queue("organization_bank_accounts", { data: null, error: null });
     await registerActiveOrganizationBankAccount(ORG_ID);
     expect(mockRegister).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// registerPendingBankAccounts
+// ---------------------------------------------------------------------------
+
+describe("registerPendingBankAccounts", () => {
+  const NOW = new Date("2026-11-17T01:00:00Z");
+
+  it("loads every active, pending account of an approved organization past the grace period", async () => {
+    queue("organization_bank_accounts", { data: [], error: null });
+
+    await registerPendingBankAccounts(NOW);
+
+    const builder = mockFrom.mock.results[0].value as Record<string, ReturnType<typeof vi.fn>>;
+    expect(mockFrom).toHaveBeenCalledWith("organization_bank_accounts");
+    expect(builder.select).toHaveBeenCalledWith("id, organizations!inner(approval_status)");
+    expect(builder.eq).toHaveBeenCalledWith("is_active", true);
+    expect(builder.eq).toHaveBeenCalledWith("status", "pending");
+    // Registered-but-unsettled accounts too: a re-post returns CHIP's current verdict.
+    expect(builder.is).not.toHaveBeenCalled();
+    expect(builder.eq).toHaveBeenCalledWith("organizations.approval_status", "approved");
+    expect(builder.lt).toHaveBeenCalledWith("created_at", "2026-11-17T00:45:00.000Z");
+  });
+
+  it("registers each row and counts what each came to", async () => {
+    const OTHER_ID = "33333333-3333-4333-8333-333333333333";
+    queue(
+      "organization_bank_accounts",
+      { data: [{ id: BANK_ID }, { id: OTHER_ID }], error: null },
+      // BANK_ID: load, then the chip id update. OTHER_ID: load fails.
+      { data: pendingRow, error: null },
+      { data: null, error: { message: "db down" } },
+      { data: null, error: null },
+    );
+    mockRegister.mockResolvedValue({ id: 84, status: "pending", rejection_reason: null });
+
+    const stats = await registerPendingBankAccounts(NOW);
+
+    expect(stats).toEqual({
+      checked: 2,
+      verified: 0,
+      rejected: 0,
+      pending: 1,
+      skipped: 0,
+      error: 1,
+    });
+    expect(mockRegister).toHaveBeenCalledOnce();
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ reference: BANK_ID }),
+    );
+  });
+
+  it("settles an account CHIP already has from its current verdict", async () => {
+    // A synchronous verdict whose settle failed earlier: the id was saved, the
+    // row is still pending.
+    queue(
+      "organization_bank_accounts",
+      { data: [{ id: BANK_ID }], error: null },
+      { data: { ...pendingRow, chip_bank_account_id: 84 }, error: null },
+      { data: null, error: null },
+    );
+    mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
+    queueNotifyData("verified");
+
+    const stats = await registerPendingBankAccounts(NOW);
+
+    expect(stats.verified).toBe(1);
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ reference: BANK_ID }),
+    );
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_bank_account_id: BANK_ID, p_verified: true }),
+    );
+  });
+
+  it("returns zero counts when nothing is waiting", async () => {
+    queue("organization_bank_accounts", { data: [], error: null });
+    await expect(registerPendingBankAccounts(NOW)).resolves.toEqual({
+      checked: 0,
+      verified: 0,
+      rejected: 0,
+      pending: 0,
+      skipped: 0,
+      error: 0,
+    });
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+
+  it("throws when the work list can't be loaded", async () => {
+    queue("organization_bank_accounts", { data: null, error: { message: "db down" } });
+    await expect(registerPendingBankAccounts(NOW)).rejects.toThrow(
+      "failed to load pending bank accounts",
+    );
   });
 });
 

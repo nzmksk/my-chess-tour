@@ -24,3 +24,11 @@ export const PAYOUT_CONCURRENCY = 3;
 
 /** A payout `processing` for this long is reconciled via GET, not left to the webhook. */
 export const PAYOUT_STUCK_HOURS = 24;
+
+/**
+ * A bank account the daily run re-registers must have been created at least
+ * this long ago. Keeps the run off a new row that the saving request's
+ * after-response task is registering at that moment. An overlap would still be safe, just a wasted
+ * CHIP call.
+ */
+export const BANK_REGISTRATION_GRACE_MINUTES = 15;

@@ -208,8 +208,9 @@ export async function PATCH(
     );
   }
 
-  // Emails go out after the response, in this order: the review outcome first,
-  // then the bank verification result if CHIP Send answers synchronously.
+  // Both run after the response, one after the other: the review email first,
+  // then the bank account registration, so a verification email from a
+  // synchronous CHIP Send answer can't overtake the approval it follows.
   await inOrderAfterResponse(async () => {
     // Best-effort and never throws.
     afterResponse(() => notifyApplicationReviewed(id));
@@ -217,10 +218,12 @@ export async function PATCH(
     // The approval has committed. Only now is the payout account registered with
     // CHIP Send — never at application time, so a pending applicant's details
     // don't reach the PSP and a rejected one doesn't cost a verification.
-    // Best-effort, like the cancellation route's refunds: it never throws, and a
-    // failure leaves the account 'pending' without affecting this response.
+    // After the response, so a slow CHIP doesn't hold up the admin (#555). It
+    // never throws: a failure is logged with the bank account id and leaves the
+    // account 'pending', and the daily payout run registers it
+    // (registerPendingBankAccounts).
     if (action === "approve") {
-      await registerActiveOrganizationBankAccount(id);
+      afterResponse(() => registerActiveOrganizationBankAccount(id));
     }
   });
 
