@@ -165,8 +165,11 @@ async function handleRefundEvent(
 
   // Emails the player only if this delivery settled the refund or recorded its
   // first failure; a duplicate or a refund the sync response already settled
-  // sends nothing. Never throws, so a Resend outage can't make CHIP redeliver.
-  await notifyRefundSettlement(refund.id, settled as SettleRefundResult | null);
+  // sends nothing. Sent after the 200, so a Resend outage can't make CHIP
+  // redeliver. Never throws.
+  afterResponse(() =>
+    notifyRefundSettlement(refund.id, settled as SettleRefundResult | null),
+  );
 
   return ack();
 }

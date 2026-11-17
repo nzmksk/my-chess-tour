@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 
 const { mockRpc, mockRefundChipPurchase, mockGetChipPurchase, mockNotify } =
   vi.hoisted(() => ({
@@ -80,6 +81,7 @@ describe("fireRefund", () => {
       p_paid: true,
       p_payment_method: null,
     });
+    await runAfterCallbacks();
     expect(mockNotify).toHaveBeenCalledWith("rf-1", SETTLED);
   });
 
@@ -113,6 +115,7 @@ describe("fireRefund", () => {
 
     await expect(fireRefund("rf-1")).resolves.toBe("processing");
     expect(mockRpc).not.toHaveBeenCalledWith("settle_refund", expect.anything());
+    await runAfterCallbacks();
     expect(mockNotify).not.toHaveBeenCalled();
   });
 
@@ -120,6 +123,7 @@ describe("fireRefund", () => {
     settleResult = { data: null, error: { message: "db down" } };
 
     await expect(fireRefund("rf-1")).resolves.toBe("error");
+    await runAfterCallbacks();
     expect(mockNotify).not.toHaveBeenCalled();
   });
 });
@@ -162,6 +166,7 @@ describe("fireRefund with reconcile (the ops re-fire)", () => {
       p_paid: true,
       p_payment_method: "fpx",
     });
+    await runAfterCallbacks();
     expect(mockNotify).toHaveBeenCalledWith("rf-1", SETTLED);
   });
 
@@ -218,6 +223,7 @@ describe("fireRefund with reconcile (the ops re-fire)", () => {
     settleResult = { data: null, error: { message: "db down" } };
 
     await expect(fireRefund("rf-1", { reconcile: true })).resolves.toBe("error");
+    await runAfterCallbacks();
     expect(mockNotify).not.toHaveBeenCalled();
   });
 
