@@ -3,7 +3,12 @@ import type {
   TournamentDetail as TournamentDetailType,
   StartingRankPlayer,
 } from "../types";
-import { formatRm, getMinFeeCents, toTitleCase } from "../../utils";
+import {
+  formatRm,
+  getMinFeeCents,
+  listFeeRows,
+  toTitleCase,
+} from "../../utils";
 import {
   formatCalendarDateRange,
   formatInstantDate,
@@ -60,6 +65,11 @@ interface Props {
   registrationStatus?: string | null;
   canViewStartingRank: boolean;
   startingRank: StartingRankPlayer[] | null;
+  /**
+   * ISO instant from the server: which fee tiers have ended is judged against
+   * it, so the page renders the same on the server and in the browser.
+   */
+  now: string;
 }
 
 export default function TournamentDetail({
@@ -68,6 +78,7 @@ export default function TournamentDetail({
   registrationStatus = null,
   canViewStartingRank,
   startingRank,
+  now,
 }: Props) {
   // Every date on this page is the venue's, shown in the venue's zone to every
   // viewer — a Bangkok event reads in ICT whether you open it from KL or Lisbon.
@@ -75,7 +86,12 @@ export default function TournamentDetail({
   const spotsLeft = t.max_participants - t.current_participants;
   const spotsRatio =
     t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
+  const nowDate = new Date(now);
+  // Open tiers cheapest first, then ended ones (#353).
+  const feeRows = listFeeRows(t.entry_fees, nowDate);
   const minFee = getMinFeeCents(t.entry_fees);
+  const lowestFeeEntry =
+    t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
   // registration_closed_at is the effective close time (deadline by default,
   // earlier if the organizer closed registration early).
   const { isClosed: isRegistrationClosed, closedEarly } =
@@ -83,8 +99,6 @@ export default function TournamentDetail({
       t.registration_closed_at,
       t.registration_deadline,
     );
-  const lowestFeeEntry =
-    t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
   // "Started" is a calendar question at the venue: the starting rank opens when
   // the start date has arrived there, not when it arrives for the reader.
   const tournamentStarted = t.start_date <= getTodayInTimeZone(timeZone);
@@ -174,16 +188,17 @@ export default function TournamentDetail({
               </tr>
             </thead>
             <tbody>
-              {t.entry_fees.additional?.map((fee, i) => (
-                <tr key={i}>
+              {feeRows.map(({ tier: fee, amount_cents, expired }, i) => (
+                <tr key={i} className={expired ? "opacity-50" : undefined}>
                   <td>
-                    {toTitleCase(fee.type)}
-                    {fee.valid_until && (
+                    {fee ? toTitleCase(fee.type) : "Standard"}
+                    {fee?.valid_until && (
                       <span className="text-text-muted block text-xs">
-                        before {formatInstantDate(fee.valid_until, timeZone)}
+                        {expired ? "ended" : "before"}{" "}
+                        {formatInstantDate(fee.valid_until, timeZone)}
                       </span>
                     )}
-                    {(fee.age_min != null || fee.age_max != null) && (
+                    {fee && (fee.age_min != null || fee.age_max != null) && (
                       <span className="text-text-muted block text-xs">
                         {fee.age_min != null && fee.age_max != null
                           ? `Age ${fee.age_min}–${fee.age_max}`
@@ -192,7 +207,8 @@ export default function TournamentDetail({
                             : `Age up to ${fee.age_max}`}
                       </span>
                     )}
-                    {(fee.rating_min != null || fee.rating_max != null) && (
+                    {fee &&
+                      (fee.rating_min != null || fee.rating_max != null) && (
                       <span className="text-text-muted block text-xs">
                         {fee.rating_min != null && fee.rating_max != null
                           ? `Rating ${fee.rating_min}–${fee.rating_max}`
@@ -203,16 +219,10 @@ export default function TournamentDetail({
                     )}
                   </td>
                   <td className="font-cinzel text-text-primary text-right font-semibold">
-                    {formatRm(fee.amount_cents)}
+                    {expired ? <s>{formatRm(amount_cents)}</s> : formatRm(amount_cents)}
                   </td>
                 </tr>
               ))}
-              <tr>
-                <td>Standard</td>
-                <td className="font-cinzel text-text-primary text-right font-semibold">
-                  {formatRm(t.entry_fees.standard.amount_cents)}
-                </td>
-              </tr>
             </tbody>
           </table>
         </Section>

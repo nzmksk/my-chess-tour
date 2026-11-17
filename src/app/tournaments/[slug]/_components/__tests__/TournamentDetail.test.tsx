@@ -94,12 +94,16 @@ const samplePlayers: StartingRankPlayer[] = [
   },
 ];
 
+// Before the fixture's early bird ends (2026-05-01), so it is still open.
+const NOW = "2026-04-01T00:00:00.000Z";
+
 function render(
   overrides: Partial<TournamentDetailType> = {},
   isAuthenticated = false,
   registrationStatus: string | null = null,
   canViewStartingRank = false,
   startingRank: StartingRankPlayer[] | null = null,
+  now: string = NOW,
 ): string {
   return renderToStaticMarkup(
     <TournamentDetail
@@ -108,6 +112,7 @@ function render(
       registrationStatus={registrationStatus}
       canViewStartingRank={canViewStartingRank}
       startingRank={startingRank}
+      now={now}
     />,
   );
 }
@@ -246,6 +251,38 @@ describe("entry fees section", () => {
   it("omits additional fees section when not present", () => {
     const html = render({ entry_fees: { standard: { amount_cents: 5000 } } });
     expect(html).not.toContain("Early Bird");
+  });
+
+  // The fee table, not the sidebar: the part of the page after its heading.
+  const feeTable = (html: string) => {
+    const start = html.indexOf("Entry Fees");
+    return html.slice(start, html.indexOf("</table>", start));
+  };
+
+  it("lists fees from lowest to highest (#353)", () => {
+    const html = feeTable(
+      render({
+        entry_fees: {
+          standard: { amount_cents: 5000 },
+          additional: [
+            { type: "titled", amount_cents: 4500, titles: ["FM"] },
+            { type: "junior", amount_cents: 2000, age_max: 18 },
+            { type: "early_bird", amount_cents: 3500, valid_until: "2026-05-01T00:00:00Z" },
+          ],
+        },
+      }),
+    );
+    const order = ["RM20.00", "RM35.00", "RM45.00", "RM50.00"].map((p) => html.indexOf(p));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("moves an ended tier to the end, struck through and marked ended", () => {
+    const html = feeTable(render({}, false, null, false, null, "2026-06-01T00:00:00.000Z"));
+    expect(html.indexOf("Standard")).toBeLessThan(html.indexOf("Early Bird"));
+    expect(html).toContain("ended");
+    expect(html).toContain("<s>RM35.00</s>");
+    expect(html).not.toContain("before");
   });
 });
 
