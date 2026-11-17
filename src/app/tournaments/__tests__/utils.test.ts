@@ -9,6 +9,9 @@ import {
   resolvePlayerRating,
   getTournamentDateState,
   getMinFeeCents,
+  getStartingFee,
+  isRestrictedTier,
+  listFeeRows,
 } from "../utils";
 import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 import type { EntryFees } from "../types";
@@ -409,5 +412,159 @@ describe("checkRatingEligibility", () => {
   it("returns null when no bounds are set", () => {
     expect(checkRatingEligibility(null, null, null)).toBeNull();
     expect(checkRatingEligibility(2400, null, null)).toBeNull();
+  });
+});
+
+describe("fee schedule", () => {
+  const NOW = new Date("2026-08-01T00:00:00Z");
+  const PAST = "2026-07-15T16:00:00Z";
+  const FUTURE = "2026-08-15T16:00:00Z";
+
+  // The Selangor case from #258: an under-12 tier is cheapest, the early bird
+  // has ended, and only the standard fee is open to everyone.
+  const selangor: EntryFees = {
+    standard: { amount_cents: 4000 },
+    additional: [
+      { type: "early_bird", amount_cents: 3200, valid_until: PAST },
+      { type: "age_based", amount_cents: 2400, age_min: 0, age_max: 12 },
+    ],
+  };
+
+  describe("isRestrictedTier", () => {
+    it.each([
+      ["an age range", { age_max: 12 }],
+      ["a rating floor", { rating_min: 1800 }],
+      ["a rating cap", { rating_max: 1500 }],
+      ["women only", { gender: "female" as const }],
+      ["OKU", { oku: true }],
+      ["titled players", { titles: ["GM" as const] }],
+    ])("treats a tier with %s as restricted", (_label, extra) => {
+      expect(isRestrictedTier({ type: "x", amount_cents: 1, ...extra })).toBe(true);
+    });
+
+    it("treats an early bird (only a deadline) as open to everyone", () => {
+      expect(
+        isRestrictedTier({ type: "early_bird", amount_cents: 1, valid_until: FUTURE, titles: [] }),
+      ).toBe(false);
+    });
+  });
+
+  describe("listFeeRows", () => {
+    it("lists open tiers cheapest first, ended tiers last", () => {
+      const rows = listFeeRows(selangor, NOW);
+      expect(rows.map((r) => [r.type, r.amount_cents, r.expired])).toEqual([
+        ["age_based", 2400, false],
+        ["standard", 4000, false],
+        ["early_bird", 3200, true],
+      ]);
+    });
+
+    it("sorts by price even when the organizer entered tiers out of order (#353)", () => {
+      const rows = listFeeRows(
+        {
+          standard: { amount_cents: 5000 },
+          additional: [
+            { type: "titled", amount_cents: 4500, titles: ["FM"] },
+            { type: "junior", amount_cents: 2000, age_max: 18 },
+            { type: "early_bird", amount_cents: 3500, valid_until: FUTURE },
+          ],
+        },
+        NOW,
+      );
+      expect(rows.map((r) => r.amount_cents)).toEqual([2000, 3500, 4500, 5000]);
+    });
+
+    it("keeps the organizer's order on a tie, standard after the tiers", () => {
+      const rows = listFeeRows(
+        {
+          standard: { amount_cents: 3000 },
+          additional: [
+            { type: "b", amount_cents: 3000, age_max: 12 },
+            { type: "a", amount_cents: 3000, oku: true },
+          ],
+        },
+        NOW,
+      );
+      expect(rows.map((r) => r.type)).toEqual(["b", "a", "standard"]);
+    });
+
+    it("counts a tier as ended from its valid_until instant", () => {
+      const rows = listFeeRows(
+        {
+          standard: { amount_cents: 4000 },
+          additional: [{ type: "early_bird", amount_cents: 3000, valid_until: NOW.toISOString() }],
+        },
+        NOW,
+      );
+      expect(rows.find((r) => r.type === "early_bird")?.expired).toBe(true);
+    });
+
+    it("drops rows with missing or non-numeric amounts", () => {
+      const fees = {
+        standard: {},
+        additional: [
+          { type: "broken", amount_cents: "30" },
+          { type: "early_bird", amount_cents: 2000 },
+        ],
+      } as unknown as EntryFees;
+      expect(listFeeRows(fees, NOW).map((r) => r.type)).toEqual(["early_bird"]);
+      expect(listFeeRows(null, NOW)).toEqual([]);
+    });
+  });
+
+  describe("getStartingFee", () => {
+    it("starts from what anyone can pay now, not an ended or restricted tier (#258)", () => {
+      const fee = getStartingFee(selangor, NOW);
+      expect(fee.amount_cents).toBe(4000);
+      expect(fee.row?.type).toBe("standard");
+      expect(fee.cheaperRestricted?.type).toBe("age_based");
+    });
+
+    it("starts from an early bird while it is still open", () => {
+      const fee = getStartingFee(
+        {
+          standard: { amount_cents: 4000 },
+          additional: [{ type: "early_bird", amount_cents: 3200, valid_until: FUTURE }],
+        },
+        NOW,
+      );
+      expect(fee.amount_cents).toBe(3200);
+      expect(fee.row?.type).toBe("early_bird");
+      expect(fee.cheaperRestricted).toBeNull();
+    });
+
+    it("ignores a restricted tier that isn't cheaper", () => {
+      const fee = getStartingFee(
+        {
+          standard: { amount_cents: 3000 },
+          additional: [{ type: "titled", amount_cents: 5000, titles: ["GM"] }],
+        },
+        NOW,
+      );
+      expect(fee.cheaperRestricted).toBeNull();
+    });
+
+    it("ignores a cheaper restricted tier that has ended", () => {
+      const fee = getStartingFee(
+        {
+          standard: { amount_cents: 4000 },
+          additional: [{ type: "junior", amount_cents: 2000, age_max: 12, valid_until: PAST }],
+        },
+        NOW,
+      );
+      expect(fee.cheaperRestricted).toBeNull();
+    });
+
+    it("is free when the standard fee is free", () => {
+      expect(getStartingFee({ standard: { amount_cents: 0 } }, NOW).amount_cents).toBe(0);
+    });
+
+    it("is 0 with no row when there are no valid fees", () => {
+      expect(getStartingFee(null, NOW)).toEqual({
+        amount_cents: 0,
+        row: null,
+        cheaperRestricted: null,
+      });
+    });
   });
 });

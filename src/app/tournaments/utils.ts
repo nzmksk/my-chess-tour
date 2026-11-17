@@ -183,6 +183,112 @@ export function getMinFeeCents(fees: EntryFees | null | undefined): number {
   return amounts.length > 0 ? Math.min(...amounts) : 0;
 }
 
+export type FeeTier = NonNullable<EntryFees["additional"]>[number];
+
+/** One row of a tournament's fee schedule: the standard fee or an additional tier. */
+export interface FeeRow {
+  type: string;
+  amount_cents: number;
+  /** The additional tier this row is, or null for the standard fee. */
+  tier: FeeTier | null;
+  /** Its valid_until has passed, so nobody can register at it any more. */
+  expired: boolean;
+  /** Only some players qualify for it (age, rating, gender, OKU or title). */
+  restricted: boolean;
+}
+
+/** Whether a tier is open only to players who meet a condition. */
+export function isRestrictedTier(tier: FeeTier): boolean {
+  return (
+    tier.age_min != null ||
+    tier.age_max != null ||
+    tier.rating_min != null ||
+    tier.rating_max != null ||
+    tier.gender != null ||
+    tier.oku === true ||
+    (tier.titles?.length ?? 0) > 0
+  );
+}
+
+/**
+ * The fee schedule as players should read it: tiers still open first, cheapest
+ * to dearest, then any that have ended (also by price), since an ended tier is
+ * no longer an option. Same order the register form offers them in. Rows with
+ * a missing or non-numeric amount are dropped (entry_fees is jsonb). Ties keep
+ * the organizer's order, with the standard fee after the tiers.
+ */
+export function listFeeRows(
+  fees: EntryFees | null | undefined,
+  now: Date,
+): FeeRow[] {
+  if (!fees) return [];
+  const valid = (n: unknown): n is number =>
+    typeof n === "number" && Number.isFinite(n);
+
+  const rows: FeeRow[] = [];
+  for (const tier of fees.additional ?? []) {
+    if (!valid(tier.amount_cents)) continue;
+    rows.push({
+      type: tier.type,
+      amount_cents: tier.amount_cents,
+      tier,
+      expired: !!tier.valid_until && new Date(tier.valid_until) <= now,
+      restricted: isRestrictedTier(tier),
+    });
+  }
+  if (valid(fees.standard?.amount_cents)) {
+    rows.push({
+      type: "standard",
+      amount_cents: fees.standard.amount_cents,
+      tier: null,
+      expired: false,
+      restricted: false,
+    });
+  }
+
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort(
+      (a, b) =>
+        Number(a.row.expired) - Number(b.row.expired) ||
+        a.row.amount_cents - b.row.amount_cents ||
+        a.index - b.index,
+    )
+    .map(({ row }) => row);
+}
+
+export interface StartingFee {
+  /** What anyone can register at right now; 0 renders as "Free". */
+  amount_cents: number;
+  /** The row that price comes from, or null when there are no valid fees. */
+  row: FeeRow | null;
+  /**
+   * The cheapest open tier below that price that only some players qualify for
+   * (e.g. "Age 0–12"), worth pointing out without leading with it.
+   */
+  cheaperRestricted: FeeRow | null;
+}
+
+/**
+ * The "starting from" price: the lowest fee anyone can still register at now.
+ * Ended tiers don't count, and neither do tiers only some players qualify for,
+ * since leading with an under-12 price misleads everyone else (#258). Those
+ * cheaper restricted tiers are reported separately.
+ */
+export function getStartingFee(
+  fees: EntryFees | null | undefined,
+  now: Date,
+): StartingFee {
+  const open = listFeeRows(fees, now).filter((row) => !row.expired);
+  const row = open.find((r) => !r.restricted) ?? null;
+  const amount = row?.amount_cents ?? 0;
+  const cheaperRestricted =
+    row === null
+      ? null
+      : (open.find((r) => r.restricted && r.amount_cents < amount) ?? null);
+  return { amount_cents: amount, row, cheaperRestricted };
+}
+
 // Moved to src/lib so lib code (the edit policy) can use it; re-exported here
 // for the pages that already import it from this module.
 export {
