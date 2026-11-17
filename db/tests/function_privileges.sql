@@ -53,6 +53,8 @@ DECLARE
     'create_organization_invitation',
     'accept_organization_invitation',
     'decline_organization_invitation',
+    'accept_organization_invitation_by_id',
+    'decline_organization_invitation_by_id',
     'revoke_organization_invitation',
     'available_payout_cents',
     'tournament_payout_block_reason',

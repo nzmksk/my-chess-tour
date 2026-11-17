@@ -23,6 +23,9 @@
 --   I11 revoking needs org.invite; a revoked link can't be accepted
 --   I12 a closed invitation frees the address for a fresh one
 --   I13 clients have no access to the table at all
+--   I14 from the invitee's own list (by id), only the invitee can decline
+--   I15 from the invitee's own list (by id), only the invitee can accept
+--   I16 the link-based functions report which invitation they answered
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations and seed (the owner/admin/member roles and their
@@ -53,6 +56,8 @@ DECLARE
   v_hash_c      text := encode(sha256('token-c'::bytea), 'hex');
   v_hash_d      text := encode(sha256('token-d'::bytea), 'hex');
   v_hash_e      text := encode(sha256('token-e'::bytea), 'hex');
+  v_hash_g      text := encode(sha256('token-g'::bytea), 'hex');
+  v_hash_h      text := encode(sha256('token-h'::bytea), 'hex');
 BEGIN
   SELECT id INTO v_owner_role  FROM roles WHERE name = 'owner'  AND scope = 'organization';
   SELECT id INTO v_admin_role  FROM roles WHERE name = 'admin'  AND scope = 'organization';
@@ -268,6 +273,60 @@ BEGIN
   END;
   RESET ROLE;
   RAISE NOTICE 'I13 PASS — clients have no access to invitations';
+
+  -- ---- I14: decline by id -------------------------------------------------
+  -- I12 left the stranger one pending invitation.
+  SELECT id INTO v_id FROM organization_invitations
+   WHERE organization_id = v_org AND email = 'inv-stranger@test.local' AND status = 'pending';
+  BEGIN
+    PERFORM decline_organization_invitation_by_id(v_id, v_invitee);
+    RAISE EXCEPTION 'I14 FAIL: another account declined by id';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    PERFORM decline_organization_invitation_by_id(v_id, NULL);
+    RAISE EXCEPTION 'I14 FAIL: declined by id with no account';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  v_res := decline_organization_invitation_by_id(v_id, v_stranger);
+  SELECT * INTO v_inv FROM organization_invitations WHERE id = v_id;
+  IF v_inv.status <> 'declined' OR v_inv.responded_by <> v_stranger
+     OR (v_res->>'invitation_id')::uuid <> v_id OR (v_res->>'already_declined')::boolean THEN
+    RAISE EXCEPTION 'I14 FAIL: the invitee could not decline by id (%)', v_res;
+  END IF;
+  IF NOT (decline_organization_invitation_by_id(v_id, v_stranger)->>'already_declined')::boolean THEN
+    RAISE EXCEPTION 'I14 FAIL: a repeated decline by id was not idempotent';
+  END IF;
+  RAISE NOTICE 'I14 PASS — only the invitee can decline by id';
+
+  -- ---- I15: accept by id --------------------------------------------------
+  v_res := create_organization_invitation(v_org, 'inv-stranger@test.local', 'member', v_owner, v_hash_g);
+  v_id := (v_res->>'id')::uuid;
+  BEGIN
+    PERFORM accept_organization_invitation_by_id(v_id, v_invitee);
+    RAISE EXCEPTION 'I15 FAIL: another account accepted by id';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  v_res := accept_organization_invitation_by_id(v_id, v_stranger);
+  IF (v_res->>'invitation_id')::uuid <> v_id OR NOT EXISTS (
+    SELECT 1 FROM organization_memberships
+     WHERE organization_id = v_org AND user_id = v_stranger AND role_id = v_member_role
+  ) THEN
+    RAISE EXCEPTION 'I15 FAIL: the invitee could not accept by id (%)', v_res;
+  END IF;
+  RAISE NOTICE 'I15 PASS — only the invitee can accept by id';
+
+  -- ---- I16: link-based results name the invitation ------------------------
+  v_res := create_organization_invitation(v_org, 'no-account@test.local', 'member', v_owner, v_hash_h);
+  v_id := (v_res->>'id')::uuid;
+  v_res := decline_organization_invitation(v_hash_h, NULL);
+  IF (v_res->>'invitation_id')::uuid IS DISTINCT FROM v_id THEN
+    RAISE EXCEPTION 'I16 FAIL: decline by link did not name the invitation (%)', v_res;
+  END IF;
+  IF (accept_organization_invitation(v_hash_b, v_invitee)->>'invitation_id') IS NULL THEN
+    RAISE EXCEPTION 'I16 FAIL: accept by link did not name the invitation';
+  END IF;
+  RAISE NOTICE 'I16 PASS — accept and decline by link report the invitation id';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END;

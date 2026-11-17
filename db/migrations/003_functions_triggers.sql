@@ -1626,13 +1626,14 @@ END;
 $$;
 
 -- The invitee accepting. p_user_id must be signed in with the invited address:
--- the token proves someone read the email, the address match proves it is the
--- person it was sent to (a forwarded link is not enough). Inserts the
--- membership with the offered role. Accepting twice is not an error, and an
--- invitee who has meanwhile become a member keeps the role they already hold.
-CREATE OR REPLACE FUNCTION accept_organization_invitation(
-  p_token_hash text,
-  p_user_id    uuid
+-- whoever reached the invitation (by the emailed link, or from their own list
+-- of invitations), the address match proves it is the person it was sent to, so
+-- a forwarded link is not enough. Inserts the membership with the offered role.
+-- Accepting twice is not an error, and an invitee who has meanwhile become a
+-- member keeps the role they already hold.
+CREATE OR REPLACE FUNCTION accept_organization_invitation_by_id(
+  p_invitation_id uuid,
+  p_user_id       uuid
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1645,9 +1646,10 @@ DECLARE
   v_joined boolean;
 BEGIN
   SELECT * INTO v_inv FROM organization_invitations
-   WHERE token_hash = p_token_hash FOR UPDATE;
+   WHERE id = p_invitation_id FOR UPDATE;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'INVITATION_NOT_FOUND: no invitation for this link' USING ERRCODE = 'P0002';
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: invitation % not found', p_invitation_id
+      USING ERRCODE = 'P0002';
   END IF;
 
   SELECT email INTO v_email FROM users WHERE id = p_user_id AND deleted_at IS NULL;
@@ -1658,6 +1660,7 @@ BEGIN
 
   IF v_inv.status = 'accepted' THEN
     RETURN jsonb_build_object(
+      'invitation_id',    v_inv.id,
       'organization_id',  v_inv.organization_id,
       'already_accepted', true
     );
@@ -1690,6 +1693,7 @@ BEGIN
    WHERE id = v_inv.id;
 
   RETURN jsonb_build_object(
+    'invitation_id',    v_inv.id,
     'organization_id',  v_inv.organization_id,
     'already_accepted', false,
     'already_member',   NOT v_joined
@@ -1697,13 +1701,11 @@ BEGIN
 END;
 $$;
 
--- The invitee turning it down. Holding the token is enough: declining grants
--- nothing, and someone who never wants an account should not need one to say
--- no. p_user_id records who declined when they were signed in (NULL otherwise).
--- Declining twice is not an error.
-CREATE OR REPLACE FUNCTION decline_organization_invitation(
+-- Accepting from the emailed link: the token finds the invitation, and
+-- accept_organization_invitation_by_id does the rest (including the address check).
+CREATE OR REPLACE FUNCTION accept_organization_invitation(
   p_token_hash text,
-  p_user_id    uuid DEFAULT NULL
+  p_user_id    uuid
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1711,16 +1713,57 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_inv organization_invitations;
+  v_id uuid;
 BEGIN
-  SELECT * INTO v_inv FROM organization_invitations
-   WHERE token_hash = p_token_hash FOR UPDATE;
+  SELECT id INTO v_id FROM organization_invitations WHERE token_hash = p_token_hash;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'INVITATION_NOT_FOUND: no invitation for this link' USING ERRCODE = 'P0002';
   END IF;
+  RETURN accept_organization_invitation_by_id(v_id, p_user_id);
+END;
+$$;
+
+-- The invitee turning it down. From their own list of invitations
+-- (p_require_invitee, the default) p_user_id must be signed in with the invited
+-- address. From the emailed link (decline_organization_invitation) holding the
+-- token is enough: declining grants nothing, and someone who never wants an
+-- account should not need one to say no. p_user_id records who declined when
+-- they were signed in (NULL otherwise). Declining twice is not an error.
+CREATE OR REPLACE FUNCTION decline_organization_invitation_by_id(
+  p_invitation_id   uuid,
+  p_user_id         uuid,
+  p_require_invitee boolean DEFAULT true
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_inv   organization_invitations;
+  v_email text;
+BEGIN
+  SELECT * INTO v_inv FROM organization_invitations
+   WHERE id = p_invitation_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: invitation % not found', p_invitation_id
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF p_require_invitee THEN
+    SELECT email INTO v_email FROM users WHERE id = p_user_id AND deleted_at IS NULL;
+    IF v_email IS NULL OR lower(v_email) <> v_inv.email THEN
+      RAISE EXCEPTION 'INVITATION_WRONG_ACCOUNT: this invitation was sent to a different address'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
 
   IF v_inv.status = 'declined' THEN
-    RETURN jsonb_build_object('organization_id', v_inv.organization_id, 'already_declined', true);
+    RETURN jsonb_build_object(
+      'invitation_id',    v_inv.id,
+      'organization_id',  v_inv.organization_id,
+      'already_declined', true
+    );
   END IF;
 
   IF v_inv.status <> 'pending' THEN
@@ -1736,7 +1779,32 @@ BEGIN
      SET status = 'declined', responded_at = now(), responded_by = p_user_id
    WHERE id = v_inv.id;
 
-  RETURN jsonb_build_object('organization_id', v_inv.organization_id, 'already_declined', false);
+  RETURN jsonb_build_object(
+    'invitation_id',    v_inv.id,
+    'organization_id',  v_inv.organization_id,
+    'already_declined', false
+  );
+END;
+$$;
+
+-- Declining from the emailed link: the token is the proof, so no address check.
+CREATE OR REPLACE FUNCTION decline_organization_invitation(
+  p_token_hash text,
+  p_user_id    uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_id uuid;
+BEGIN
+  SELECT id INTO v_id FROM organization_invitations WHERE token_hash = p_token_hash;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: no invitation for this link' USING ERRCODE = 'P0002';
+  END IF;
+  RETURN decline_organization_invitation_by_id(v_id, p_user_id, false);
 END;
 $$;
 
@@ -1829,7 +1897,9 @@ REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION decline_payout_nomination       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION create_organization_invitation  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION accept_organization_invitation  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION accept_organization_invitation_by_id  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION decline_organization_invitation FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION decline_organization_invitation_by_id FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION revoke_organization_invitation  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, authenticated;
@@ -1846,7 +1916,9 @@ GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
 GRANT EXECUTE ON FUNCTION decline_payout_nomination       TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_invitation  TO service_role;
 GRANT EXECUTE ON FUNCTION accept_organization_invitation  TO service_role;
+GRANT EXECUTE ON FUNCTION accept_organization_invitation_by_id  TO service_role;
 GRANT EXECUTE ON FUNCTION decline_organization_invitation TO service_role;
+GRANT EXECUTE ON FUNCTION decline_organization_invitation_by_id TO service_role;
 GRANT EXECUTE ON FUNCTION revoke_organization_invitation  TO service_role;
 GRANT EXECUTE ON FUNCTION anonymise_user_audit_logs       TO service_role;
 GRANT EXECUTE ON FUNCTION list_global_permission_holders  TO service_role;
