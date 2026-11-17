@@ -10,6 +10,13 @@ import {
   toChipSendDescription,
 } from "@/services/chip/send";
 import { CHIP_SEND_FEE_CENTS, MIN_PAYOUT_CENTS } from "./constants";
+import {
+  describeDbError,
+  describeSendError as describeError,
+  isRefusedBeforeSending,
+  isRetryableStatus,
+  redactDigits,
+} from "./send-errors";
 import { formatRinggit } from "./format";
 import { notifyAdminsOfPayout } from "./notify";
 import { settlePayout } from "./settle";
@@ -61,40 +68,6 @@ interface PayoutRow {
     status: string;
     chip_bank_account_id: number | null;
   } | null;
-}
-
-// CHIP error bodies can echo the submitted account number; keep long digit runs
-// out of the logs and out of failure_reason, which organizers can read.
-function redactDigits(text: string): string {
-  return text.replace(/\d{6,}/g, "[redacted]");
-}
-
-function describeError(err: unknown): string {
-  if (err instanceof ChipSendError) {
-    return `CHIP Send ${err.status}: ${redactDigits(err.body)}`;
-  }
-  return err instanceof Error ? redactDigits(err.message) : String(err);
-}
-
-// A PostgREST error's SQLSTATE says more than its message alone.
-function describeDbError(error: { code?: string; message: string }): string {
-  return error.code ? `${error.code}: ${error.message}` : error.message;
-}
-
-// A 4xx usually means CHIP refused this payout, which is terminal. These don't: a
-// 401 is our credentials or clock, and a 408/429 is timing. None of them says
-// anything about the payout, so failing it would email an organizer about a problem
-// that is ours, and re-sending later is safe because `reference` dedupes.
-function isRetryableStatus(status: number): boolean {
-  return status === 401 || status === 408 || status === 429 || status >= 500;
-}
-
-// Of the retryable failures, the ones where CHIP certainly created nothing: it
-// rejected our signature (401) or turned us away before reading the request
-// (429). A timeout, a 5xx or a dropped connection may have reached CHIP, so the
-// claim has to stay.
-function isRefusedBeforeSending(status: number): boolean {
-  return status === 401 || status === 429;
 }
 
 /**
