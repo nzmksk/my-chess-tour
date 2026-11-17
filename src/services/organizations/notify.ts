@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import {
   type MemberInvitationRole,
+  sendInvitationResponseEmail,
   sendMemberInvitationEmail,
   sendOrganizerApplicationReviewEmail,
 } from "@/services/email/email";
@@ -147,5 +148,76 @@ export async function notifyMemberInvited(params: {
       err instanceof Error ? err.message : err,
     );
     return false;
+  }
+}
+
+interface RespondedInvitationRow {
+  id: string;
+  email: string;
+  status: "pending" | "accepted" | "declined" | "revoked";
+  organization_id: string;
+  roles: { name: string } | null;
+  organizations: { name: string } | null;
+  inviter: {
+    email: string | null;
+    first_name: string | null;
+    deleted_at: string | null;
+  } | null;
+  responder: { first_name: string | null; last_name: string | null } | null;
+}
+
+/**
+ * Tells whoever sent an invitation that it was accepted or declined. Call it
+ * only for a fresh answer, not a repeated one (already_accepted /
+ * already_declined), so the inviter hears once.
+ *
+ * Best-effort and never throws: the answer has already been recorded. Reads the
+ * outcome back from the row rather than trusting the caller, and sends nothing
+ * when the inviter's account is gone.
+ */
+export async function notifyInvitationResponded(invitationId: string): Promise<void> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("organization_invitations")
+      .select(
+        `id, email, status, organization_id,
+         roles(name),
+         organizations(name),
+         inviter:users!invited_by(email, first_name, deleted_at),
+         responder:users!responded_by(first_name, last_name)`,
+      )
+      .eq("id", invitationId)
+      .single();
+    if (error || !data) {
+      console.error(
+        `Invitation ${invitationId}: failed to load response email data`,
+        error?.message,
+      );
+      return;
+    }
+
+    const inv = data as unknown as RespondedInvitationRow;
+    if (inv.status !== "accepted" && inv.status !== "declined") {
+      console.error(
+        `Invitation ${invitationId}: response email requested for a ${inv.status} invitation`,
+      );
+      return;
+    }
+    if (!inv.inviter?.email || inv.inviter.deleted_at) return;
+
+    await sendInvitationResponseEmail(inv.inviter.email, {
+      recipientName: inv.inviter.first_name?.trim() || "there",
+      inviteeName: personName(inv.responder) ?? inv.email,
+      inviteeEmail: inv.email,
+      organizationName: inv.organizations?.name ?? "your organization",
+      orgId: inv.organization_id,
+      role: (inv.roles?.name ?? "member") as MemberInvitationRole,
+      accepted: inv.status === "accepted",
+    });
+  } catch (err) {
+    console.error(
+      `Invitation ${invitationId}: response email failed`,
+      err instanceof Error ? err.message : err,
+    );
   }
 }

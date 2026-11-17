@@ -5,7 +5,11 @@ import {
   hashInvitationToken,
   INVITATION_TOKEN_RE,
 } from "@/services/organizations/invitations";
+import { notifyInvitationResponded } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
+
+// Answering emails the inviter, and email templates are read from disk.
+export const runtime = "nodejs";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -39,6 +43,12 @@ export async function POST(_request: NextRequest, { params }: Params): Promise<N
 
   if (error) {
     return invitationErrorResponse(error, "accepting an invitation");
+  }
+
+  // A repeated answer (double-click, retry) changes nothing and tells no one.
+  const result = data as { invitation_id: string; already_accepted?: boolean };
+  if (!result.already_accepted) {
+    await notifyInvitationResponded(result.invitation_id);
   }
 
   return NextResponse.json({ data }, { status: 200 });

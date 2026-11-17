@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockRpc, mockGetAuthClaims } = vi.hoisted(() => ({
+const { mockRpc, mockGetAuthClaims, mockNotify } = vi.hoisted(() => ({
   mockRpc: vi.fn(),
   mockGetAuthClaims: vi.fn(),
+  mockNotify: vi.fn(),
+}));
+
+vi.mock("@/services/organizations/notify", () => ({
+  notifyInvitationResponded: mockNotify,
 }));
 
 vi.mock("@/services/supabase/admin", () => ({
@@ -21,6 +26,7 @@ import { hashInvitationToken } from "@/services/organizations/invitations";
 const TOKEN = "T".repeat(43);
 const USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const ORG_ID = "bbbbbbbb-0000-0000-0000-000000000001";
+const INV_ID = "eeeeeeee-0000-0000-0000-000000000001";
 
 const req = (action: string) =>
   new NextRequest(`http://localhost/api/v1/invitations/${TOKEN}/${action}`, {
@@ -32,7 +38,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetAuthClaims.mockResolvedValue({ id: USER_ID, email: "farid@example.com" });
   mockRpc.mockResolvedValue({
-    data: { organization_id: ORG_ID, already_accepted: false },
+    data: { invitation_id: INV_ID, organization_id: ORG_ID, already_accepted: false },
     error: null,
   });
 });
@@ -46,6 +52,16 @@ describe("POST /api/v1/invitations/:token/accept", () => {
       p_user_id: USER_ID,
     });
     expect((await res.json()).data.organization_id).toBe(ORG_ID);
+    expect(mockNotify).toHaveBeenCalledWith(INV_ID);
+  });
+
+  it("doesn't tell the inviter twice about a repeated accept", async () => {
+    mockRpc.mockResolvedValue({
+      data: { invitation_id: INV_ID, organization_id: ORG_ID, already_accepted: true },
+      error: null,
+    });
+    await accept(req("accept"), params());
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
   it("requires a session", async () => {
@@ -78,6 +94,7 @@ describe("POST /api/v1/invitations/:token/accept", () => {
     });
     const res = await accept(req("accept"), params());
     expect(res.status).toBe(410);
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 });
 
@@ -90,6 +107,16 @@ describe("POST /api/v1/invitations/:token/decline", () => {
       p_token_hash: hashInvitationToken(TOKEN),
       p_user_id: null,
     });
+    expect(mockNotify).toHaveBeenCalledWith(INV_ID);
+  });
+
+  it("doesn't tell the inviter twice about a repeated decline", async () => {
+    mockRpc.mockResolvedValue({
+      data: { invitation_id: INV_ID, organization_id: ORG_ID, already_declined: true },
+      error: null,
+    });
+    await decline(req("decline"), params());
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
   it("records the signed-in user as the one who declined", async () => {
