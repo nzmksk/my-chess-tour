@@ -70,7 +70,7 @@ built.
 **Money-out has opened, but only along one path.** Cancelling a published tournament is built
 (organizer requests → admin approves) and approval now **refunds every paid player through CHIP**,
 end-to-end and tested — see [refund-flow.md](./refund-flow.md). What is still schema/view only:
-organizer payouts and prize disbursement (captured bank details are never read), and any refund
+organizer payouts and platform-distributed prizes (both built, unverified on staging), and any refund
 *not* triggered by a cancellation — a player or organizer cannot request one (#509, #510). Players
 and organizers can now see where a refund stands (#511), and the player is emailed when it lands or
 fails (#512). **Communications** now cover registration confirmation, application and OKU results,
@@ -95,7 +95,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Audit-log PII redaction + privacy-policy alignment | S3, P5 | ⚠️ built, scrub not yet run | 🟡 | Run the check in `db/maintenance/scrub_pre_redaction_audit_rows.sql` against staging and production, and get the `/privacy` wording reviewed (#503). |
 | Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | Code landed (#501); migration `009` still needs applying (#161). Follow-on #513. |
 | Organizer payout disbursement | O9, P7 | ⚠️ built, unverified on staging | 🟡 | CHIP Send payouts go out automatically 3 days after a tournament ends in its own timezone (#522), or when a platform admin triggers one; organizers can request admin-approved early payouts (#521). |
-| Prize disbursement to players | P14, P7 | ❌ | 🟡 | Manual; same timing/mechanism as payouts. |
+| Prize disbursement to players | P14, P7 | ⚠️ built, unverified on staging | 🟡 | Opt-in per tournament (#523): sponsors pay the pool in through CHIP Collect, registration opens once it is fully funded, organizers enter winners, admins approve, and CHIP Send pays verified player accounts. Residual return is manual. See [prize-flow.md](./prize-flow.md). Organizer-distributed prizes stay off-platform. |
 | Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ✅ built, not applied | 🟡 | Run `db/maintenance/apply_ledger_integrity.sql` against staging and production (#502). Payments taken before that have no recorded tier. |
 | Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅ (visible to player + organizer, outcome emailed); player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510). |
 | Participant CSV / Excel export | O8 | ✅ | — | Export CSV / Export Excel on the manage page (#90): name, title, gender, date of birth, nationality, verified OKU, FIDE/MCF IDs and ratings, fee tier, status, registration time. |
@@ -174,14 +174,10 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 - **Scenarios:** re-upload allowed only in `none`/`rejected`; double-review prevented (404 if already actioned).
 - **Notification:** ✅ approve/reject emails the player (`notifyOkuReviewed`, #449): verified, or rejected with the reason and a link back to Settings to re-upload.
 
-### P7. Banking details — ⚠️ Partial (captured, unused)
-- **Entry:** `/settings` → `BankingCard` → `PATCH /api/v1/profile/banking`. Account number 5–20 digits, freely editable, **never returned** (last-4 only). Purpose per UI: "pay out prize winnings and process refunds."
-- The fields and their rules (digit normalisation, lengths, the masked re-entry placeholder) live in `src/components/BankAccountFields.tsx`, shared with the organization payout destination (#518) so a player's account number and an organization's obey one rule.
-- **Gaps:** ❌ **nothing consumes this** — there is no disbursement path (see P14/O9), no just-in-time prompt forcing a prize winner to add it, and no account verification. ❌ The player side still takes a **free-text bank name**, not the SWIFT code CHIP Send needs; converting it is Phase 8's problem, and until then a player's stored details are not payable as-is 🟡.
-
----
-
-## 5. Player — tournament participation
+### P7. Banking details — ✅ Built (#523)
+- **Entry:** `/settings` → `BankingCard` → `PATCH /api/v1/profile/banking`. The bank is chosen from the SWIFT list, and the account number is 5–20 digits, **never returned** (last 4 only). Stored in `player_bank_accounts`: superseded on change, so a change is verified again.
+- **Use:** the destination for platform-distributed prizes (P14). Registered with CHIP Send the first time an approved prize needs it, never on save. The card shows the verification state, and a winner without a usable account is emailed to add or fix it.
+- **Gaps:** 🟡 not used for refunds (those go back through CHIP Collect to the original payment method).
 
 ### P8. Eligibility check — ✅ Built
 - **Two layers.** Server (authoritative, at checkout) in `.../tournaments/[slug]/registrations/validators.ts`: `checkRestrictions` (gender/nationality/title/rating/**age as of the tournament start date**), `checkFeeTierEligibility` (female-only, **verified-OKU-only**, titled, age bands), `checkRatedRequirements` (FIDE/MCF id present). Client mirror in `RegisterForm.tsx` → inline `CompleteProfilePrompt` that PATCHes the profile and re-runs eligibility **without leaving checkout**.
@@ -215,14 +211,9 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 - **Open operational risks** on the shipped path (`related_to` parsing #495, out-of-band CHIP-dashboard refunds #498, monitoring #499). Stuck `pending` refunds now have an admin re-fire and a dashboard alert (#497), and refunds fire from a scheduled sweep rather than the admin's request (#496) — see [refund-flow.md](./refund-flow.md) §Open risks.
 - **Priority:** 🟡 — the launch-blocking case (tournament cancelled, players owed money) is handled; the rest is a support-load and trust question.
 
-### P14. Prize claim / winner payout — ❌ Not built
-- No prize disbursement anywhere; captured banking details (P7) are never read; no `player_prize` payment row is ever created by code.
-- **Priority:** 🟡 (money owed to players; timing is post-event). Interim: manual, alongside organizer payouts (O9).
-
-> **P15–P17 are a deliberately deferred cluster**, not oversights. They share one prerequisite —
-> the identity indirection in S7 (#501) — which is why that item is 🔴 while these are 🟢: doing the
-> groundwork before launch is what keeps them cheap additions rather than migrations across live
-> payment records. Sequenced #504 → #505 → #506, ascending in risk.
+### P14. Prize claim / winner payout — ⚠️ Built, unverified on staging (#523)
+- Only for tournaments whose prizes MY Chess Tour distributes (`prizes.distribution = "platform"`). The organizer enters winners, a platform admin approves at `/admin/prizes`, CHIP Send pays the winner's verified `player_bank_accounts` row, and `settle_prize_award` books the `player_prize` row. Full flow: [prize-flow.md](./prize-flow.md).
+- **Gaps:** 🟡 returning undistributed funds to sponsors (and the whole pool on cancellation) is a manual ops step. 🟡 CHIP Send behaviour for player recipients still needs a sandbox run.
 
 ### P15. Dependent accounts (register on behalf of others) — ❌ Not built (deferred)
 - A guardian, coach, or carer cannot register a child, ward, student, or assisted OKU player. Every participant needs their own email and their own account. `guardianships`, `users.account_type`, and `registrations.registered_by` do not exist.
@@ -418,7 +409,7 @@ Flow IDs in brackets point back to the detail above.
 - [ ] **[P1]** Confirm the Resend-down rollback (no half-provisioned account blocks retry).
 - [ ] **[P5]** Decide on a correction path for mistyped set-once fields (admin tool vs support).
 - [ ] **[P6]** Decide whether OKU approve/reject needs an email (else players wait blind).
-- [ ] **[P7]** Decide when/where banking details get collected from actual prize winners.
+- [x] **[P7]** Decide when/where banking details get collected from actual prize winners. Settings, prompted by the prize-awarded email; verified the first time a prize needs it (#523).
 
 **Player — participation**
 - [ ] **[P8]** Verify eligibility gates: wrong gender/age/nationality/title, unverified OKU tier, missing FIDE/MCF id.

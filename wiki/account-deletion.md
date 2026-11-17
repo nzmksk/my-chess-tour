@@ -48,6 +48,11 @@ SELECT
   (SELECT count(*) FROM registrations r JOIN tournaments t ON t.id = r.tournament_id
     WHERE r.user_id = '<users.id>' AND r.status = 'confirmed'
       AND t.end_date >= current_date)                                        AS upcoming_entries,
+  -- A prize from a platform-distributed pool not yet paid (#523). Deleting the
+  -- account leaves the award with no winner, and it can't be sent.
+  (SELECT count(*) FROM prize_awards
+    WHERE user_id = '<users.id>' AND approval <> 'rejected'
+      AND processed_at IS NULL)                                              AS unpaid_prizes,
   -- Organisations they belong to. If they are the only admin, someone else
   -- has to be made admin first or the organisation is left unmanaged.
   (SELECT count(*) FROM organization_memberships WHERE user_id = '<users.id>') AS org_memberships,
@@ -80,7 +85,8 @@ BEGIN;
 DELETE FROM waitlist WHERE lower(email) = lower('<their email>');
 DELETE FROM organization_invitations WHERE email = lower('<their email>');
 
--- Cascades to player_profiles, organization_memberships and user_global_roles;
+-- Cascades to player_profiles, player_bank_accounts, organization_memberships
+-- and user_global_roles;
 -- sets user_id / *_by to NULL everywhere else.
 DELETE FROM users WHERE id = '<users.id>';
 
