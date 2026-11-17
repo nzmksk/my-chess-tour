@@ -12,7 +12,6 @@ const {
   mockRegistrationsBuilder,
   mockMembershipsBuilder,
   mockOrganizationsBuilder,
-  mockRefundsBuilder,
   mockFrom,
   mockGetClaims,
   mockRpc,
@@ -37,12 +36,10 @@ const {
   const mockRegistrationsBuilder = makeBuilder({ data: [], error: null });
   const mockMembershipsBuilder = makeBuilder({ data: [], error: null });
   const mockOrganizationsBuilder = makeBuilder({ data: null, error: null });
-  const mockRefundsBuilder = makeBuilder({ data: null, error: null });
   const mockFrom = vi.fn((table: string) => {
     if (table === "registrations") return mockRegistrationsBuilder;
     if (table === "organization_memberships") return mockMembershipsBuilder;
     if (table === "organizations") return mockOrganizationsBuilder;
-    if (table === "refunds") return mockRefundsBuilder;
     return mockTournamentBuilder;
   });
   const mockGetClaims = vi.fn();
@@ -57,7 +54,6 @@ const {
     mockRegistrationsBuilder,
     mockMembershipsBuilder,
     mockOrganizationsBuilder,
-    mockRefundsBuilder,
     mockFrom,
     mockGetClaims,
     mockRpc,
@@ -140,50 +136,16 @@ function setNoUser() {
   mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
 }
 
-// Pending refunds returned by list_pending_cancellation_refunds; default none.
-let pendingRefunds: unknown[] = [];
-function setPendingRefunds(...refunds: unknown[]) {
-  pendingRefunds = refunds;
-}
-
-// Dispatches supabaseAdmin.rpc by name so the review RPC, the refund list, and
-// settle_refund each return sensible defaults. Individual tests can still call
-// mockAdminRpc.mockResolvedValue(...) to force the review outcome (those cases
-// short-circuit before the refund path runs).
+// Dispatches supabaseAdmin.rpc. The route's only RPC is the review itself;
+// individual tests can still call mockAdminRpc.mockResolvedValue(...) to force
+// its outcome.
 function setAdminRpcDispatch(
   reviewResult: { data?: unknown; error?: unknown } = {
     data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
     error: null,
   },
 ) {
-  mockAdminRpc.mockImplementation((name: string, args?: unknown) => {
-    if (name === "list_pending_cancellation_refunds") {
-      return Promise.resolve({ data: pendingRefunds, error: null });
-    }
-    if (name === "claim_refund_fire") return claimFor(args);
-    if (name === "settle_refund") {
-      return Promise.resolve({
-        data: { settled: true, newly_settled: true, newly_failed: false },
-        error: null,
-      });
-    }
-    return Promise.resolve(reviewResult);
-  });
-}
-
-// claim_refund_fire hands back the purchase the refund is issued against, or
-// refuses one whose registration payment has no CHIP purchase.
-function claimFor(args: unknown) {
-  const { p_refund_id } = args as { p_refund_id: string };
-  const refund = (
-    pendingRefunds as { refund_id: string; original_chip_purchase_id: string | null }[]
-  ).find((r) => r.refund_id === p_refund_id);
-  return Promise.resolve({
-    data: refund?.original_chip_purchase_id
-      ? { claimed: true, original_chip_purchase_id: refund.original_chip_purchase_id }
-      : { claimed: false, reason: refund ? "no_purchase" : "not_found" },
-    error: null,
-  });
+  mockAdminRpc.mockImplementation(() => Promise.resolve(reviewResult));
 }
 
 // ---------------------------------------------------------------------------
@@ -193,11 +155,8 @@ function claimFor(args: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   setAdmin();
-  setPendingRefunds();
   setAdminRpcDispatch();
-  mockRefundsBuilder.result = { data: null, error: null };
-  // A completed refund is a Payment object — no `status` field. The in-flight
-  // case returns a Purchase instead (see the pending_refund test below).
+  // Would refund on the spot, if anything called it: the route must not.
   mockRefundChipPurchase.mockResolvedValue({
     type: "payment",
     id: "refund-pay-1",
@@ -611,230 +570,20 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     expect(mockSendReviewEmail).not.toHaveBeenCalled();
   });
 
-  // --- Refund initiation on approval ---------------------------------------
+  // --- Refunds are left to the sweep (#496) --------------------------------
 
-  it("fires a full CHIP refund per pending refund and settles synchronous successes", async () => {
-    setPendingRefunds(
-      {
-        refund_id: "rf-1",
-        registration_id: "reg-1",
-        amount_cents: 5500,
-        original_chip_purchase_id: "chip-1",
-      },
-      {
-        refund_id: "rf-2",
-        registration_id: "reg-2",
-        amount_cents: 4000,
-        original_chip_purchase_id: "chip-2",
-      },
-    );
-
+  it("queues refunds through the review RPC but sends none to CHIP", async () => {
     const res = await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),
     });
+    await runAfterCallbacks();
 
     expect(res.status).toBe(200);
-    // Full refund → no amount argument.
-    expect(mockRefundChipPurchase).toHaveBeenCalledTimes(2);
-    expect(mockRefundChipPurchase).toHaveBeenCalledWith("chip-1");
-    expect(mockRefundChipPurchase).toHaveBeenCalledWith("chip-2");
-    expect(mockAdminRpc).toHaveBeenCalledWith("settle_refund", {
-      p_refund_id: "rf-1",
-      p_chip_refund_id: "refund-pay-1",
-      p_paid: true,
-      p_payment_method: null,
-    });
-    expect(mockAdminRpc).toHaveBeenCalledWith("settle_refund", {
-      p_refund_id: "rf-2",
-      p_chip_refund_id: "refund-pay-1",
-      p_paid: true,
-      p_payment_method: null,
-    });
-    // Each settle's result goes to the notifier, which emails only on a new settle.
-    await runAfterCallbacks();
-    expect(mockNotifyRefund).toHaveBeenCalledWith("rf-1", {
-      settled: true,
-      newly_settled: true,
-      newly_failed: false,
-    });
-    expect(mockNotifyRefund).toHaveBeenCalledWith("rf-2", expect.anything());
-  });
-
-  it("sends the cancellation notice before any refund outcome email", async () => {
-    setPendingRefunds({
-      refund_id: "rf-1",
-      registration_id: "reg-1",
-      amount_cents: 5500,
-      original_chip_purchase_id: "chip-1",
-    });
-
-    await PATCH(makeRequest({ action: "approve" }), {
-      params: Promise.resolve({ id: REQ_ID }),
-    });
-    await runAfterCallbacks();
-
-    const lastNotice = Math.max(...mockSendCancellationEmail.mock.invocationCallOrder);
-    const [firstRefund] = mockNotifyRefund.mock.invocationCallOrder;
-    expect(firstRefund).toBeDefined();
-    expect(lastNotice).toBeLessThan(firstRefund);
-  });
-
-  it("does not notify when settle_refund errors", async () => {
-    setPendingRefunds({
-      refund_id: "rf-1",
-      registration_id: "reg-1",
-      amount_cents: 5500,
-      original_chip_purchase_id: "chip-1",
-    });
-    mockAdminRpc.mockImplementation((name: string, args?: unknown) => {
-      if (name === "list_pending_cancellation_refunds") {
-        return Promise.resolve({ data: pendingRefunds, error: null });
-      }
-      if (name === "claim_refund_fire") return claimFor(args);
-      if (name === "settle_refund") {
-        return Promise.resolve({ data: null, error: { message: "db down" } });
-      }
-      return Promise.resolve({
-        data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
-        error: null,
-      });
-    });
-
-    const res = await PATCH(makeRequest({ action: "approve" }), {
-      params: Promise.resolve({ id: REQ_ID }),
-    });
-
-    expect(res.status).toBe(200);
-    await runAfterCallbacks();
+    // review_tournament_cancellation queues them; the refund sweep fires them.
+    expect(mockAdminRpc.mock.calls.map(([name]) => name)).toEqual([
+      "review_tournament_cancellation",
+    ]);
+    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
     expect(mockNotifyRefund).not.toHaveBeenCalled();
-  });
-
-  it("does not fire refunds on rejection", async () => {
-    setPendingRefunds({
-      refund_id: "rf-1",
-      registration_id: "reg-1",
-      amount_cents: 5500,
-      original_chip_purchase_id: "chip-1",
-    });
-    setAdminRpcDispatch({
-      data: { id: REQ_ID, tournament_id: TOUR_ID, status: "rejected" },
-      error: null,
-    });
-
-    await PATCH(
-      makeRequest({ action: "reject", rejection_reason: "Event is proceeding" }),
-      { params: Promise.resolve({ id: REQ_ID }) },
-    );
-
-    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
-    expect(mockAdminRpc).not.toHaveBeenCalledWith(
-      "settle_refund",
-      expect.anything(),
-    );
-  });
-
-  it("one player's CHIP failure doesn't block others or fail the request", async () => {
-    setPendingRefunds(
-      {
-        refund_id: "rf-1",
-        registration_id: "reg-1",
-        amount_cents: 5500,
-        original_chip_purchase_id: "chip-1",
-      },
-      {
-        refund_id: "rf-2",
-        registration_id: "reg-2",
-        amount_cents: 4000,
-        original_chip_purchase_id: "chip-2",
-      },
-    );
-    mockRefundChipPurchase
-      .mockRejectedValueOnce(new Error("CHIP down"))
-      .mockResolvedValueOnce({ type: "payment", id: "refund-pay-2" });
-
-    const res = await PATCH(makeRequest({ action: "approve" }), {
-      params: Promise.resolve({ id: REQ_ID }),
-    });
-
-    expect(res.status).toBe(200);
-    // Only the successful one settles; the failed refund stays pending.
-    expect(mockAdminRpc).toHaveBeenCalledWith("settle_refund", {
-      p_refund_id: "rf-2",
-      p_chip_refund_id: "refund-pay-2",
-      p_paid: true,
-      p_payment_method: null,
-    });
-    expect(mockAdminRpc).not.toHaveBeenCalledWith("settle_refund", {
-      p_refund_id: "rf-1",
-      p_chip_refund_id: expect.anything(),
-      p_paid: true,
-      p_payment_method: null,
-    });
-  });
-
-  it("neither settles nor stamps an id when CHIP returns pending_refund", async () => {
-    setPendingRefunds({
-      refund_id: "rf-1",
-      registration_id: "reg-1",
-      amount_cents: 5500,
-      original_chip_purchase_id: "chip-1",
-    });
-    // In-flight refunds come back as the *Purchase*, so `id` is the purchase id —
-    // there is no refund Payment id yet. Writing it to chip_refund_id would put a
-    // purchase id in a refund-id column; the payment.refunded webhook supplies
-    // the real one.
-    mockRefundChipPurchase.mockResolvedValue({
-      id: "chip-1",
-      status: "pending_refund",
-    });
-
-    const res = await PATCH(makeRequest({ action: "approve" }), {
-      params: Promise.resolve({ id: REQ_ID }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(mockRefundsBuilder.update).not.toHaveBeenCalled();
-    // The webhook settles it, and emails from there.
-    await runAfterCallbacks();
-    expect(mockNotifyRefund).not.toHaveBeenCalled();
-    expect(mockAdminRpc).not.toHaveBeenCalledWith(
-      "settle_refund",
-      expect.anything(),
-    );
-  });
-
-  it("skips a refund whose registration payment has no CHIP purchase id", async () => {
-    setPendingRefunds({
-      refund_id: "rf-1",
-      registration_id: "reg-1",
-      amount_cents: 5500,
-      original_chip_purchase_id: null,
-    });
-
-    const res = await PATCH(makeRequest({ action: "approve" }), {
-      params: Promise.resolve({ id: REQ_ID }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
-  });
-
-  it("still succeeds (200) when loading pending refunds fails", async () => {
-    mockAdminRpc.mockImplementation((name: string) => {
-      if (name === "list_pending_cancellation_refunds") {
-        return Promise.resolve({ data: null, error: { message: "db down" } });
-      }
-      return Promise.resolve({
-        data: { id: REQ_ID, tournament_id: TOUR_ID, status: "approved" },
-        error: null,
-      });
-    });
-
-    const res = await PATCH(makeRequest({ action: "approve" }), {
-      params: Promise.resolve({ id: REQ_ID }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(mockRefundChipPurchase).not.toHaveBeenCalled();
   });
 });

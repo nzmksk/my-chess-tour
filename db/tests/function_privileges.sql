@@ -41,7 +41,6 @@ DECLARE
     'start_new_payment_attempt',
     'settle_registration_payment',
     'expire_stale_pending_payments',
-    'list_pending_cancellation_refunds',
     'list_unfired_cancellation_refunds',
     'settle_refund',
     'claim_refund_fire',

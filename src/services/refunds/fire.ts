@@ -140,8 +140,9 @@ async function reconcileWithChip(
 
 /**
  * Fires one refund through CHIP and settles it if CHIP answers on the spot.
- * Shared by the cancellation approval (the first fire) and the admin re-fire of
- * a stuck refund (`reconcile: true`, which checks the purchase at CHIP first).
+ * Shared by the refund sweep (the first fire, src/services/refunds/sweep.ts)
+ * and the admin re-fire of a stuck refund (`reconcile: true`, which checks the
+ * purchase at CHIP first).
  *
  * claim_refund_fire runs first. It is what makes this safe to call for any
  * refund at any time: it refuses a refund whose money already moved, one fired
@@ -209,39 +210,4 @@ export async function fireRefund(
     `Refund ${refundId}: CHIP returned pending_refund; awaiting payment.refunded webhook`,
   );
   return "processing";
-}
-
-// How many CHIP refund calls to have in flight at once. Bounds the fan-out for a
-// large tournament so we don't open hundreds of concurrent connections in a
-// single request.
-const REFUND_CONCURRENCY = 5;
-
-/**
- * Fires the CHIP refund for every pending refund queued when a tournament's
- * cancellation was approved. Best-effort and concurrency-capped: one player's
- * failure never blocks the others or fails the (already-committed)
- * cancellation. A refund that doesn't go through shows up on the admin's stuck
- * refunds page once it is due.
- */
-export async function initiateCancellationRefunds(
-  tournamentId: string,
-): Promise<void> {
-  const { data, error } = await supabaseAdmin.rpc(
-    "list_pending_cancellation_refunds",
-    { p_tournament_id: tournamentId },
-  );
-
-  if (error) {
-    console.error(
-      `Failed to load pending refunds for cancelled tournament ${tournamentId}:`,
-      error,
-    );
-    return;
-  }
-
-  const refunds = (data as { refund_id: string }[] | null) ?? [];
-  for (let i = 0; i < refunds.length; i += REFUND_CONCURRENCY) {
-    const batch = refunds.slice(i, i + REFUND_CONCURRENCY);
-    await Promise.allSettled(batch.map((r) => fireRefund(r.refund_id)));
-  }
 }

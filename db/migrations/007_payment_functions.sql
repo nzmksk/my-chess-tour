@@ -348,41 +348,6 @@ END;
 $$;
 
 -- =============================================
--- LIST PENDING CANCELLATION REFUNDS
--- Read helper for the refund-orchestration loop (initiateCancellationRefunds).
--- Returns the not-yet-processed refunds for a tournament together with the CHIP
--- purchase id of the original (paid) registration payment — the id the CHIP
--- refund is issued against (POST /purchases/{original_chip_purchase_id}/refund/).
--- A refund whose registration payment somehow lacks a chip id is still returned
--- (original_chip_purchase_id NULL) so the caller can log it rather than silently
--- skip. Encapsulates the refunds → registrations → paid-payment join.
--- =============================================
-CREATE OR REPLACE FUNCTION list_pending_cancellation_refunds(
-  p_tournament_id uuid
-)
-RETURNS TABLE (
-  refund_id                 uuid,
-  registration_id           uuid,
-  amount_cents              integer,
-  original_chip_purchase_id varchar(255)
-)
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT rf.id, rf.registration_id, rf.refund_amount_cents, p.chip_transaction_id
-  FROM refunds rf
-  JOIN registrations r ON r.id = rf.registration_id
-  JOIN payments p ON p.id = r.current_payment_id
-   AND p.type = 'registration'
-   AND p.status = 'paid'
-  WHERE r.tournament_id = p_tournament_id
-    AND rf.status <> 'rejected'
-    AND rf.processed_at IS NULL;
-$$;
-
--- =============================================
 -- LIST UNFIRED CANCELLATION REFUNDS (#496)
 -- The work list for the refund sweep (POST /api/v1/cron/refunds), which sends
 -- cancellation refunds to CHIP off the admin's request. Returns refunds, across
@@ -441,8 +406,8 @@ $$;
 -- Whether a pending refund may be sent to CHIP again. `pending` is overloaded: a
 -- refund that was fired a moment ago and is waiting on its payment.refunded
 -- webhook looks exactly like one that is stuck. So a refund is due only when:
---   * it was never fired (the approve path never reached it, or rows that predate
---     last_fired_at), or
+--   * it was never fired (the refund sweep hasn't reached it, or rows that
+--     predate last_fired_at), or
 --   * it was fired at least p_min_age ago and nothing has settled it since.
 -- A reported failure does NOT shorten the wait. purchase.refund_failure is
 -- correlated by the original purchase only, so a late failure from an earlier
@@ -468,9 +433,9 @@ $$;
 -- =============================================
 -- CLAIM REFUND FIRE (#497)
 -- Called immediately before the app asks CHIP to refund (POST /purchases/{id}/
--- refund/), by both the approve path and the ops re-fire. Locks the refund,
+-- refund/), by both the refund sweep and the ops re-fire. Locks the refund,
 -- re-checks it, and stamps last_fired_at in one step, so two admins pressing
--- "Retry" together (or a retry racing the approve fan-out) can't both reach CHIP.
+-- "Retry" together (or a retry racing the refund sweep) can't both reach CHIP.
 --
 -- Refuses, without stamping, a refund that:
 --   * has processed_at or chip_refund_id set, or is 'approved' → 'settled'.
@@ -1602,7 +1567,7 @@ $$;
 -- =============================================
 -- PAYOUT READ HELPERS
 -- Encapsulate the joins for the payout pages, the way
--- list_pending_cancellation_refunds does for the refund job, and answer "how much
+-- list_unfired_cancellation_refunds does for the refund sweep, and answer "how much
 -- is available" through available_payout_cents rather than re-deriving it.
 -- =============================================
 
@@ -1802,7 +1767,7 @@ $$;
 -- =============================================
 -- LIST PAYABLE TOURNAMENTS
 -- The automatic payout sweep's work list (POST /api/v1/cron/payouts), encapsulating
--- the join the way list_pending_cancellation_refunds does for refunds. A tournament
+-- the join the way list_unfired_cancellation_refunds does for refunds. A tournament
 -- is payable when ALL of these hold:
 --
 --   * it is published (never draft, never cancelled);
@@ -1900,7 +1865,6 @@ REVOKE EXECUTE ON FUNCTION create_registration_with_payment  FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION start_new_payment_attempt         FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_registration_payment       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION expire_stale_pending_payments     FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION list_pending_cancellation_refunds FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_unfired_cancellation_refunds FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_refund                     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION claim_refund_fire                 FROM PUBLIC, anon, authenticated;
@@ -1924,7 +1888,6 @@ GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
 GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
 GRANT EXECUTE ON FUNCTION settle_registration_payment       TO service_role;
 GRANT EXECUTE ON FUNCTION expire_stale_pending_payments     TO service_role;
-GRANT EXECUTE ON FUNCTION list_pending_cancellation_refunds TO service_role;
 GRANT EXECUTE ON FUNCTION list_unfired_cancellation_refunds TO service_role;
 GRANT EXECUTE ON FUNCTION settle_refund                     TO service_role;
 GRANT EXECUTE ON FUNCTION claim_refund_fire                 TO service_role;

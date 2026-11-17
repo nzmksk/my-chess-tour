@@ -6,7 +6,6 @@ import {
   sendTournamentCancellationEmail,
 } from "@/services/email/email";
 import { formatRinggit, parseSentinel } from "@/services/payouts/format";
-import { initiateCancellationRefunds } from "@/services/refunds/fire";
 import {
   PURGE_PROFILE,
   TOURNAMENTS_LIST_TAG,
@@ -15,7 +14,7 @@ import {
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
-import { afterResponse, inOrderAfterResponse } from "@/lib/http/after-response";
+import { afterResponse } from "@/lib/http/after-response";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -196,9 +195,9 @@ async function checkAdminAccess(
 
 // Admin approves/rejects an organizer's tournament cancellation request.
 // Approve flips the tournament to 'cancelled' and queues a pending refund for
-// every confirmed player atomically (via the RPC); we then fire those refunds
-// through CHIP best-effort (initiateCancellationRefunds) — the webhook and
-// settle_refund RPC finalise them.
+// every confirmed player atomically (via the RPC). The refunds are sent to CHIP
+// by the refund sweep (POST /api/v1/cron/refunds, #496), not here: for a large
+// tournament the fan-out could outlast this request's time limit.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -341,37 +340,31 @@ export async function PATCH(
     .single();
   const tournamentName = t?.name ?? "your tournament";
 
-  // Every email here goes out after the response, one after another in the
-  // order scheduled. The cancellation notice comes first: a refund that settles
-  // synchronously emails the player "refund completed", which must not arrive
-  // before the email saying the tournament is off. Refunds leave registration
-  // statuses alone, so sending the notice after them doesn't change who gets it.
-  await inOrderAfterResponse(async () => {
-    // On approval the tournament left the public 'published' listing; drop it
-    // from the caches so it disappears from the browse list and its detail page,
-    // tell registered players that their tournament is off, and refund them.
-    if (action === "approve") {
-      revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
-      if (t?.slug) revalidateTag(tournamentTag(t.slug), PURGE_PROFILE);
+  // On approval the tournament left the public 'published' listing; drop it
+  // from the caches so it disappears from the browse list and its detail page,
+  // and tell registered players that their tournament is off. Their refunds
+  // follow from the sweep, which waits out a grace period so this notice goes
+  // out before any "refund completed" email.
+  if (action === "approve") {
+    revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
+    if (t?.slug) revalidateTag(tournamentTag(t.slug), PURGE_PROFILE);
 
-      afterResponse(() => notifyRegisteredPlayers(tournamentId, tournamentName));
-      await initiateCancellationRefunds(tournamentId);
-    }
+    afterResponse(() => notifyRegisteredPlayers(tournamentId, tournamentName));
+  }
 
-    // Notify the organization members who can cancel tournaments of the review
-    // outcome — for both approvals and rejections.
-    if (t?.organization_id) {
-      const organizationId = t.organization_id;
-      afterResponse(() =>
-        notifyCancellationReviewers(organizationId, {
-          tournamentName,
-          approved: action === "approve",
-          rejectionReason:
-            action === "reject" ? rejection_reason!.trim() : undefined,
-        }),
-      );
-    }
-  });
+  // Notify the organization members who can cancel tournaments of the review
+  // outcome — for both approvals and rejections.
+  if (t?.organization_id) {
+    const organizationId = t.organization_id;
+    afterResponse(() =>
+      notifyCancellationReviewers(organizationId, {
+        tournamentName,
+        approved: action === "approve",
+        rejectionReason:
+          action === "reject" ? rejection_reason!.trim() : undefined,
+      }),
+    );
+  }
 
   return NextResponse.json({ data }, { status: 200 });
 }
