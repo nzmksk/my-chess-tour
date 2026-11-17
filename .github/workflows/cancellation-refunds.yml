@@ -1,0 +1,52 @@
+name: Cancellation refund sweep
+
+# Sends the refunds an approved tournament cancellation queued to CHIP
+# (src/app/api/v1/cron/refunds/route.ts, #496). The approval only queues them,
+# so a large tournament can't run the admin's request past its time limit.
+#
+# Each call fires a time-boxed chunk and answers `more: true` while refunds are
+# left, so this keeps calling until they're gone, up to MAX_CALLS per run. What
+# a run doesn't finish, the next one picks up.
+#
+# Every 5 minutes, GitHub's shortest schedule (and it may start a run late).
+# A refund is a player waiting for their money, so it shouldn't wait for a
+# daily run. Also runnable on demand from the Actions tab, and safe to re-run
+# or overlap at any time: each refund is claimed under a row lock before CHIP
+# is called.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+# This workflow only makes outbound requests; it needs no GITHUB_TOKEN access.
+permissions: {}
+
+# A run still draining a big cancellation is left to finish; the next waits.
+concurrency:
+  group: cancellation-refunds
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Fire queued cancellation refunds
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: POST to the cron route until nothing is left
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          MAX_CALLS: "40"
+        # Each call stops starting refunds after a few seconds; the route's
+        # ceiling is its 60s maxDuration.
+        run: |
+          for i in $(seq 1 "$MAX_CALLS"); do
+            body=$(curl -fsS --max-time 70 -X POST \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              "${PRODUCTION_URL}/api/v1/cron/refunds")
+            echo "call $i: $body"
+            if [ "$(echo "$body" | jq -r '.data.more')" != "true" ]; then
+              exit 0
+            fi
+          done
+          echo "::warning::Refunds still queued after $MAX_CALLS calls; the next run continues."
