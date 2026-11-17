@@ -837,6 +837,8 @@ CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=
 | DELETE | `/organizer/:orgId/invitations/:id`   | `org.invite` | Revoke an invitation |
 | POST   | `/invitations/:token/accept`          | Invitee     | Accept an invitation |
 | POST   | `/invitations/:token/decline`         | Anyone with the link | Decline an invitation |
+| POST   | `/me/invitations/:id/accept`          | Invitee (session) | Accept one of your own invitations |
+| POST   | `/me/invitations/:id/decline`         | Invitee (session) | Decline one of your own invitations |
 
 #### `POST /organizer/:orgId/members/invite`
 
@@ -855,7 +857,7 @@ CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=
 
 1. `create_organization_invitation` writes a pending invitation that expires in 30 days, storing the SHA-256 of a random token. An address that already belongs to a member is refused (409). Inviting an address that already has a pending invitation refreshes it (new token, role and expiry) and reports `resent: true`.
 2. Email the invitee a link to `/invitations/{token}` (best-effort). `email_sent` reports whether it went out.
-3. Nothing is granted until the invitee accepts at `POST /invitations/:token/accept`, signed in as the invited address. Accept and decline answer `410` once the invitation has expired, and `409` once it was answered or revoked.
+3. Nothing is granted until the invitee accepts, signed in as the invited address: from the link (`POST /invitations/:token/accept`) or from their dashboard (`POST /me/invitations/:id/accept`). Accept and decline answer `410` once the invitation has expired, and `409` once it was answered or revoked. A fresh answer emails the inviter.
 
 **Response `201`:**
 
