@@ -4,9 +4,13 @@ import {
   getAuthClaims,
 } from "@/services/supabase/permission";
 import { lookupAppUserId } from "@/services/supabase/identity";
+import { notifyMemberInvited } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { validateInviteRequest } from "./validators";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+
+// Inviting emails the new member, and email templates are read from disk.
+export const runtime = "nodejs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -192,6 +196,14 @@ export async function POST(
       );
     }
 
+    // They are a member as of the insert above; the email only tells them so.
+    const emailSent = await notifyMemberInvited({
+      orgId,
+      inviterId: claims.id,
+      memberId: existingUser.id,
+      role,
+    });
+
     return NextResponse.json(
       {
         data: {
@@ -200,6 +212,7 @@ export async function POST(
           role,
           status: "active",
           invited_at: invitedAt,
+          email_sent: emailSent,
         },
       },
       { status: 201 },

@@ -18,6 +18,7 @@ const {
   mockGetAuthClaims,
   mockHasOrgPermission,
   mockInviteUserByEmail,
+  mockNotifyMemberInvited,
 } = vi.hoisted(() => {
   function makeBuilder(finalResult: {
     data?: unknown;
@@ -96,6 +97,7 @@ const {
   });
   const mockHasOrgPermission = vi.fn().mockResolvedValue(true);
   const mockInviteUserByEmail = vi.fn();
+  const mockNotifyMemberInvited = vi.fn();
 
   return {
     mockOrgBuilder,
@@ -109,8 +111,13 @@ const {
     mockGetAuthClaims,
     mockHasOrgPermission,
     mockInviteUserByEmail,
+    mockNotifyMemberInvited,
   };
 });
+
+vi.mock("@/services/organizations/notify", () => ({
+  notifyMemberInvited: mockNotifyMemberInvited,
+}));
 
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
@@ -253,6 +260,7 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
     setTargetMembershipResult(0);
     setInsertResult(null);
     mockHasOrgPermission.mockResolvedValue(true);
+    mockNotifyMemberInvited.mockResolvedValue(true);
     mockInviteUserByEmail.mockResolvedValue({
       data: { user: { id: NEW_USER_ID } },
       error: null,
@@ -542,6 +550,47 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       expect(json.data.status).toBe("active");
       expect(json.data.id).toBe(TARGET_USER_ID);
       expect(json.data.role).toBe("admin");
+    });
+
+    it("emails the existing user that they were added", async () => {
+      const res = await POST(
+        makeRequest(ORG_ID, { email: "existing@example.com", role: "admin" }),
+        { params: Promise.resolve({ orgId: ORG_ID }) },
+      );
+      expect(mockNotifyMemberInvited).toHaveBeenCalledWith({
+        orgId: ORG_ID,
+        inviterId: USER_ID,
+        memberId: TARGET_USER_ID,
+        role: "admin",
+      });
+      expect((await res.json()).data.email_sent).toBe(true);
+    });
+
+    it("still adds the member when the email can't be sent", async () => {
+      mockNotifyMemberInvited.mockResolvedValue(false);
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.data.status).toBe("active");
+      expect(json.data.email_sent).toBe(false);
+    });
+
+    it("sends no email when the user is already a member", async () => {
+      setTargetMembershipResult(1);
+      await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(mockNotifyMemberInvited).not.toHaveBeenCalled();
+    });
+
+    it("sends no email when the membership insert fails", async () => {
+      setInsertResult(null, { message: "Insert error" });
+      await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      expect(mockNotifyMemberInvited).not.toHaveBeenCalled();
     });
 
     it("does not call inviteUserByEmail for existing user", async () => {
