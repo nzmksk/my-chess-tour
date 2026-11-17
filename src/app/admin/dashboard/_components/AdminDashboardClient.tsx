@@ -323,6 +323,12 @@ export default function AdminDashboardClient({ data }: Props) {
           Payouts →
         </Link>
         <Link
+          href="/admin/prizes"
+          className="card hover:border-gold-dim font-lato text-text-primary flex-1 rounded-md px-4 py-3 text-sm font-semibold transition-colors"
+        >
+          Prizes →
+        </Link>
+        <Link
           href="/admin/refunds"
           className="card hover:border-gold-dim font-lato text-text-primary flex-1 rounded-md px-4 py-3 text-sm font-semibold transition-colors"
         >

@@ -9,6 +9,7 @@ import { hasPaidRegistration } from "@/services/payments/paid-registration";
 import { loadRoster, rosterDisplayName } from "@/services/registrations/roster";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
 import { refundState, type RefundState } from "@/lib/refunds/state";
+import type { PrizesJson } from "@/lib/tournaments/prize-funding";
 import {
   INTERNAL_ERROR_MESSAGE,
   logInternalError,
@@ -75,7 +76,7 @@ interface TournamentManageData {
     is_mcf_rated: boolean;
     max_participants: number;
     entry_fees: unknown;
-    prizes: unknown;
+    prizes: PrizesJson | null;
     restrictions: unknown;
     /** The organization that runs the tournament. */
     organization: { id: string; name: string | null };
