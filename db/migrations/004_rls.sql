@@ -344,8 +344,8 @@ USING (
 -- processed_at. A JWT holder could therefore
 --   * pre-insert a live refund on their own registration with any amount; when
 --     the tournament is cancelled, review_tournament_cancellation's
---     ON CONFLICT DO NOTHING keeps that row, and list_pending_cancellation_refunds
---     hands the inflated amount to the refund job, or
+--     ON CONFLICT DO NOTHING keeps that row, and the refund job refunds that
+--     row's inflated amount, or
 --   * insert a near-zero live refund on ANOTHER player's registration, which
 --     uniq_active_refund_per_registration then lets stand in place of their
 --     real cancellation refund.

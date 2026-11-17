@@ -1173,7 +1173,7 @@ $$;
 -- instant the cancellation commits. Reject → the request is marked 'rejected'
 -- with a reason and the tournament stays published. The refund rows are only
 -- created here; the actual CHIP refund + type='refund' ledger row are executed
--- afterwards by the app (see initiateCancellationRefunds) and settled by
+-- afterwards by the app (the refund sweep, src/services/refunds/sweep.ts) and settled by
 -- settle_refund (007_payment_functions.sql) — a network call can't run in this
 -- transaction.
 --

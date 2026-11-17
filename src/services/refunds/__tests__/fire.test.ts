@@ -27,7 +27,7 @@ vi.mock("@/services/refunds/notify", () => ({
   notifyRefundSettlement: mockNotify,
 }));
 
-import { fireRefund, initiateCancellationRefunds } from "../fire";
+import { fireRefund } from "../fire";
 import { REFUND_STUCK_AFTER_INTERVAL } from "@/lib/refunds/stuck-after";
 
 const SETTLED = { settled: true, newly_settled: true, newly_failed: false };
@@ -35,7 +35,6 @@ const SETTLED = { settled: true, newly_settled: true, newly_failed: false };
 type RpcResult = { data?: unknown; error?: unknown };
 let claimResult: RpcResult;
 let settleResult: RpcResult;
-let pendingRefunds: RpcResult;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -44,13 +43,9 @@ beforeEach(() => {
     error: null,
   };
   settleResult = { data: SETTLED, error: null };
-  pendingRefunds = { data: [], error: null };
   mockRpc.mockImplementation((name: string) => {
     if (name === "claim_refund_fire") return Promise.resolve(claimResult);
     if (name === "settle_refund") return Promise.resolve(settleResult);
-    if (name === "list_pending_cancellation_refunds") {
-      return Promise.resolve(pendingRefunds);
-    }
     throw new Error(`unexpected rpc ${name}`);
   });
   // A completed refund is a Payment object, with no `status`.
@@ -232,47 +227,5 @@ describe("fireRefund with reconcile (the ops re-fire)", () => {
 
     await expect(fireRefund("rf-1", { reconcile: true })).resolves.toBe("in_flight");
     expect(mockGetChipPurchase).not.toHaveBeenCalled();
-  });
-});
-
-describe("initiateCancellationRefunds", () => {
-  it("fires every pending refund of the tournament", async () => {
-    pendingRefunds = {
-      data: [{ refund_id: "rf-1" }, { refund_id: "rf-2" }, { refund_id: "rf-3" }],
-      error: null,
-    };
-
-    await initiateCancellationRefunds("t-1");
-
-    expect(mockRpc).toHaveBeenCalledWith("list_pending_cancellation_refunds", {
-      p_tournament_id: "t-1",
-    });
-    const claimed = mockRpc.mock.calls
-      .filter(([name]) => name === "claim_refund_fire")
-      .map(([, args]) => (args as { p_refund_id: string }).p_refund_id);
-    expect(claimed).toEqual(["rf-1", "rf-2", "rf-3"]);
-  });
-
-  it("keeps going when one refund's CHIP call fails", async () => {
-    pendingRefunds = { data: [{ refund_id: "rf-1" }, { refund_id: "rf-2" }], error: null };
-    mockRefundChipPurchase
-      .mockRejectedValueOnce(new Error("boom"))
-      .mockResolvedValueOnce({ type: "payment", id: "refund-pay-2" });
-
-    await initiateCancellationRefunds("t-1");
-
-    expect(mockRefundChipPurchase).toHaveBeenCalledTimes(2);
-    expect(mockRpc).toHaveBeenCalledWith(
-      "settle_refund",
-      expect.objectContaining({ p_chip_refund_id: "refund-pay-2" }),
-    );
-  });
-
-  it("does nothing when the pending refunds can't be loaded", async () => {
-    pendingRefunds = { data: null, error: { message: "db down" } };
-
-    await initiateCancellationRefunds("t-1");
-
-    expect(mockRpc).not.toHaveBeenCalledWith("claim_refund_fire", expect.anything());
   });
 });
