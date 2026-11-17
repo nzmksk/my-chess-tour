@@ -67,6 +67,13 @@ DECLARE
   v_amounts                  record;
   v_payment_id               uuid;
 BEGIN
+  -- A platform-distributed prize pool must be fully funded before anyone can
+  -- enter (#523). The checkout route checks first; this is the backstop.
+  IF prize_pool_blocks_registration(p_tournament_id) THEN
+    RAISE EXCEPTION 'PRIZE_POOL_NOT_FUNDED: registration opens once the prize pool is funded'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   INSERT INTO registrations (user_id, tournament_id, fee_tier, status)
   VALUES (p_user_id, p_tournament_id, p_fee_tier, 'pending_payment')
   RETURNING * INTO v_registration;
@@ -153,6 +160,11 @@ BEGIN
 
   IF v_reg.status NOT IN ('pending_payment', 'failed_payment', 'cancelled_payment') THEN
     RAISE EXCEPTION 'registration % is not resumable (status %)', p_registration_id, v_reg.status
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF prize_pool_blocks_registration(v_reg.tournament_id) THEN
+    RAISE EXCEPTION 'PRIZE_POOL_NOT_FUNDED: registration opens once the prize pool is funded'
       USING ERRCODE = 'P0001';
   END IF;
 
@@ -1890,6 +1902,696 @@ AS $$
 $$;
 
 -- =============================================
+-- PLATFORM-MANAGED PRIZE POOL (#523)
+-- Opt-in per tournament via prizes.distribution = 'platform'. The governing rule:
+-- THE PLATFORM NEVER PAYS OUT PRIZE MONEY IT HAS NOT COLLECTED. Prize money is
+-- ring-fenced from organizer revenue at every level: its own ledger types
+-- (prize_funding in, player_prize out), its own balance in the summary view
+-- (prize_pool_balance_cents, which net_payout_cents never reads), and a hard
+-- funding check before any winner is paid.
+--
+--   funded    = prize_funding paid in                    (view)
+--   paid out  = player_prize paid out                    (view)
+--   balance   = funded - paid out                        prize_pool_balance_cents
+--   reserved  = APPROVED awards not yet settled          (prize_awards)
+--   available = balance - reserved                       available_prize_pool_cents
+--
+-- An award awaiting review reserves nothing; approving it is what commits the
+-- money, under the tournament row lock, so two concurrent approvals can't both
+-- see the same balance. The send then mirrors a payout: claim under the same
+-- lock, CHIP Send with reference = award id, settle once (settle_prize_award).
+--
+-- Funds left over once every prize is settled (a category with no eligible
+-- winner, a no-show) are returned to the funders. That is an operations step,
+-- not automated here; see wiki/prize-flow.md and section 9 of the Organizer
+-- Agreement, which says the same.
+-- =============================================
+
+-- Total declared prize money in a tournaments.prizes document: every category
+-- entry plus every special prize. The SQL twin of totalDeclaredPrizeCents
+-- (src/lib/tournaments/prize-funding.ts): only JSON numbers count, anything
+-- else is ignored rather than raising, as there.
+CREATE OR REPLACE FUNCTION declared_prize_total_cents(p_prizes jsonb)
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT COALESCE((
+    SELECT SUM((e->>'amount_cents')::numeric)
+    FROM jsonb_array_elements(
+           CASE WHEN jsonb_typeof(p_prizes->'categories') = 'array'
+                THEN p_prizes->'categories' ELSE '[]'::jsonb END) c,
+         jsonb_array_elements(
+           CASE WHEN jsonb_typeof(c->'entries') = 'array'
+                THEN c->'entries' ELSE '[]'::jsonb END) e
+    WHERE jsonb_typeof(e->'amount_cents') = 'number'
+  ), 0)::integer
+  + COALESCE((
+    SELECT SUM((s->>'amount_cents')::numeric)
+    FROM jsonb_array_elements(
+           CASE WHEN jsonb_typeof(p_prizes->'special') = 'array'
+                THEN p_prizes->'special' ELSE '[]'::jsonb END) s
+    WHERE jsonb_typeof(s->'amount_cents') = 'number'
+  ), 0)::integer;
+$$;
+
+-- The declared amount of one prize: a category's placed entry, or (p_place NULL)
+-- a special prize by name. NULL when the tournament declares no such prize.
+CREATE OR REPLACE FUNCTION declared_prize_amount_cents(
+  p_prizes   jsonb,
+  p_category text,
+  p_place    text
+)
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_place IS NULL THEN (
+      SELECT (s->>'amount_cents')::integer
+      FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(p_prizes->'special') = 'array'
+                  THEN p_prizes->'special' ELSE '[]'::jsonb END) s
+      WHERE btrim(s->>'name') = btrim(p_category)
+        AND jsonb_typeof(s->'amount_cents') = 'number'
+      LIMIT 1
+    )
+    ELSE (
+      SELECT (e->>'amount_cents')::integer
+      FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(p_prizes->'categories') = 'array'
+                  THEN p_prizes->'categories' ELSE '[]'::jsonb END) c,
+           jsonb_array_elements(
+             CASE WHEN jsonb_typeof(c->'entries') = 'array'
+                  THEN c->'entries' ELSE '[]'::jsonb END) e
+      WHERE btrim(c->>'name') = btrim(p_category)
+        AND btrim(e->>'place') = btrim(p_place)
+        AND jsonb_typeof(e->'amount_cents') = 'number'
+      LIMIT 1
+    )
+  END;
+$$;
+
+-- Where a tournament's prize pool stands, in one row. Every caller (the
+-- registration gate, the review guard, both dashboards) reads it from here.
+CREATE OR REPLACE FUNCTION prize_pool_position(p_tournament_id uuid)
+RETURNS TABLE (
+  distribution        text,
+  declared_cents      integer,
+  funded_cents        integer,
+  paid_out_cents      integer,
+  balance_cents       integer,
+  reserved_cents      integer,
+  pending_review_cents integer,
+  available_cents     integer,
+  fully_funded        boolean
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH t AS (
+    SELECT COALESCE(tt.prizes->>'distribution', 'organizer') AS distribution,
+           declared_prize_total_cents(tt.prizes) AS declared
+    FROM tournaments tt
+    WHERE tt.id = p_tournament_id
+  ),
+  ledger AS (
+    SELECT COALESCE(SUM(s.total_prize_funding_cents), 0)::integer AS funded,
+           COALESCE(SUM(s.total_prizes_cents), 0)::integer        AS paid_out
+    FROM tournament_payout_summary s
+    WHERE s.tournament_id = p_tournament_id
+  ),
+  awards AS (
+    SELECT
+      COALESCE(SUM(a.amount_cents) FILTER (
+        WHERE a.approval = 'approved' AND a.status IN ('pending', 'processing')
+      ), 0)::integer AS reserved,
+      COALESCE(SUM(a.amount_cents) FILTER (
+        WHERE a.approval = 'pending'
+      ), 0)::integer AS pending_review
+    FROM prize_awards a
+    WHERE a.tournament_id = p_tournament_id
+  )
+  SELECT
+    t.distribution,
+    t.declared,
+    l.funded,
+    l.paid_out,
+    l.funded - l.paid_out,
+    a.reserved,
+    a.pending_review,
+    GREATEST(0, l.funded - l.paid_out - a.reserved),
+    -- Only a platform-distributed pool has to be funded. Nothing declared is
+    -- trivially funded.
+    t.distribution <> 'platform' OR l.funded >= t.declared
+  FROM t, ledger l, awards a;
+$$;
+
+-- How much of the pool may still be committed to awards, optionally ignoring
+-- one award's own reservation ("how much is available to ME").
+CREATE OR REPLACE FUNCTION available_prize_pool_cents(
+  p_tournament_id    uuid,
+  p_exclude_award_id uuid DEFAULT NULL
+)
+RETURNS integer
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT GREATEST(
+    0,
+    COALESCE((
+      SELECT SUM(s.total_prize_funding_cents - s.total_prizes_cents)
+      FROM tournament_payout_summary s
+      WHERE s.tournament_id = p_tournament_id
+    ), 0)
+    - COALESCE((
+      SELECT SUM(a.amount_cents)
+      FROM prize_awards a
+      WHERE a.tournament_id = p_tournament_id
+        AND a.approval = 'approved'
+        AND a.status IN ('pending', 'processing')
+        AND a.id IS DISTINCT FROM p_exclude_award_id
+    ), 0)
+  )::integer;
+$$;
+
+-- THE REGISTRATION GATE. A platform-distributed tournament may publish before
+-- its pool is funded, but no player may register (or pay) until it is fully
+-- funded: otherwise players enter an event whose advertised prizes have no
+-- money behind them. Checked by the checkout route and, as the last line of
+-- defence, by create_registration_with_payment and start_new_payment_attempt.
+CREATE OR REPLACE FUNCTION prize_pool_blocks_registration(p_tournament_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE((SELECT NOT p.fully_funded FROM prize_pool_position(p_tournament_id) p), false);
+$$;
+
+-- =============================================
+-- SETTLE PRIZE FUNDING (idempotent, keyed by a prize_fundings row)
+-- Called by the CHIP Collect webhook when a prize-funding purchase reports an
+-- outcome. The settle_registration_payment shape:
+--   paid  → book ONE type='prize_funding' ledger row (which feeds
+--           prize_pool_balance_cents) and mark the contribution paid. "Real money
+--           wins": honored over a row already marked failed. Only honored when
+--           p_amount_cents matches what the funder was asked for; a mismatch is
+--           left as-is and reported back for manual reconciliation.
+--   !paid → only a still-pending row becomes failed; a paid one is never undone.
+--   already paid → no-op, reported back.
+--
+-- The ledger row carries the ORGANIZING org, like every payments row, so it
+-- groups with the tournament's other money in the summary view; it moves
+-- net_payout_cents by nothing because the view never reads prize types there.
+-- =============================================
+CREATE OR REPLACE FUNCTION settle_prize_funding(
+  p_funding_id     uuid,
+  p_paid           boolean,
+  p_amount_cents   integer DEFAULT NULL,
+  p_payment_method varchar(50) DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_funding         prize_fundings;
+  v_org_id          uuid;
+  v_payment_id      uuid;
+  v_amount_mismatch boolean := false;
+  v_newly_paid      boolean := false;
+BEGIN
+  SELECT * INTO v_funding FROM prize_fundings WHERE id = p_funding_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'prize funding % not found', p_funding_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF p_paid THEN
+    IF v_funding.status <> 'paid' THEN
+      IF p_amount_cents IS NOT NULL AND p_amount_cents <> v_funding.amount_cents THEN
+        v_amount_mismatch := true;
+      ELSE
+        SELECT organization_id INTO v_org_id FROM tournaments WHERE id = v_funding.tournament_id;
+
+        INSERT INTO payments (
+          type, tournament_id, user_id, organization_id,
+          gross_amount_cents, platform_fee_cents, organizer_commission_cents,
+          player_commission_cents, net_amount_cents, currency,
+          payment_method, chip_transaction_id, status, paid_at
+        ) VALUES (
+          'prize_funding', v_funding.tournament_id, NULL, v_org_id,
+          v_funding.amount_cents, 0, 0,
+          0, v_funding.amount_cents, 'MYR',
+          p_payment_method, v_funding.chip_transaction_id, 'paid', now()
+        )
+        RETURNING id INTO v_payment_id;
+
+        UPDATE prize_fundings
+          SET status         = 'paid',
+              payment_id     = v_payment_id,
+              paid_at        = now(),
+              payment_method = COALESCE(p_payment_method, payment_method)
+          WHERE id = p_funding_id;
+
+        v_newly_paid := true;
+      END IF;
+    END IF;
+  ELSIF v_funding.status = 'pending' THEN
+    UPDATE prize_fundings SET status = 'failed' WHERE id = p_funding_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'funding_id',        p_funding_id,
+    'tournament_id',     v_funding.tournament_id,
+    'already_processed', v_funding.status = 'paid',
+    'amount_mismatch',   v_amount_mismatch,
+    'newly_paid',        v_newly_paid
+  );
+END;
+$$;
+
+-- =============================================
+-- ENTER PRIZE AWARD
+-- The organizer names a winner, after the event. Nothing is reserved and
+-- nothing moves until a platform admin approves it (review_prize_award). Refused
+-- with PRIZE_AWARD_NOT_ALLOWED: <code> when:
+--   not_platform_distributed  the organizer pays this tournament's winners
+--   tournament_not_published / tournament_cancelled / cancellation_pending
+--   tournament_not_finished   before the last day of play, in the venue's zone
+--   winner_not_registered     the winner holds no confirmed registration: a
+--                             prize can only go to someone who played
+--   prize_not_declared        no such category + place (or special prize)
+-- and PRIZE_AWARD_EXCEEDS_PRIZE when the live awards for that prize would add
+-- up to more than it declares. Several awards for one prize are allowed (a tie
+-- split between players) as long as they fit inside it.
+--
+-- Takes the tournament lock, so two entries for one prize can't both fit.
+-- =============================================
+CREATE OR REPLACE FUNCTION enter_prize_award(
+  p_tournament_id uuid,
+  p_user_id       uuid,
+  p_category      text,
+  p_place         text,
+  p_amount_cents  integer,
+  p_entered_by    uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+  v_category   text := btrim(p_category);
+  v_place      text := NULLIF(btrim(p_place), '');
+  v_declared   integer;
+  v_committed  integer;
+  v_id         uuid;
+BEGIN
+  IF p_amount_cents IS NULL OR p_amount_cents <= 0 THEN
+    RAISE EXCEPTION 'amount_cents must be positive' USING ERRCODE = '22023';
+  END IF;
+  IF v_category IS NULL OR v_category = '' THEN
+    RAISE EXCEPTION 'category is required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF COALESCE(v_tournament.prizes->>'distribution', 'organizer') <> 'platform' THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: not_platform_distributed' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_tournament.status = 'cancelled' THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: tournament_cancelled' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_tournament.status <> 'published' THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: tournament_not_published' USING ERRCODE = 'P0001';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM tournament_cancellation_requests c
+    WHERE c.tournament_id = p_tournament_id AND c.status = 'pending'
+  ) THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: cancellation_pending' USING ERRCODE = 'P0001';
+  END IF;
+  -- The final round is played on end_date, so results exist from that day on.
+  IF (v_tournament.end_date::timestamp AT TIME ZONE v_tournament.timezone) > now() THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: tournament_not_finished' USING ERRCODE = 'P0001';
+  END IF;
+  IF p_user_id IS NULL OR NOT EXISTS (
+    SELECT 1 FROM registrations r
+    WHERE r.tournament_id = p_tournament_id AND r.user_id = p_user_id AND r.status = 'confirmed'
+  ) THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: winner_not_registered' USING ERRCODE = 'P0001';
+  END IF;
+
+  v_declared := declared_prize_amount_cents(v_tournament.prizes, v_category, v_place);
+  IF v_declared IS NULL OR v_declared <= 0 THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: prize_not_declared' USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT COALESCE(SUM(a.amount_cents), 0) INTO v_committed
+    FROM prize_awards a
+    WHERE a.tournament_id = p_tournament_id
+      AND a.category = v_category
+      AND a.place IS NOT DISTINCT FROM v_place
+      AND a.approval <> 'rejected'
+      AND a.status <> 'failed';
+
+  IF v_committed + p_amount_cents > v_declared THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_EXCEEDS_PRIZE: % cents requested, % cents of this prize is left',
+      p_amount_cents, v_declared - v_committed
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  INSERT INTO prize_awards (
+    tournament_id, organization_id, user_id, category, place, amount_cents, entered_by
+  ) VALUES (
+    p_tournament_id, v_tournament.organization_id, p_user_id, v_category, v_place,
+    p_amount_cents, p_entered_by
+  )
+  RETURNING id INTO v_id;
+
+  RETURN v_id;
+END;
+$$;
+
+-- =============================================
+-- REVIEW PRIZE AWARD
+-- A platform admin approves or rejects an entered award. The review_payout_request
+-- shape: tournament lock, then the award; P0002 when missing; P0001
+-- PRIZE_AWARD_ALREADY_REVIEWED once reviewed.
+--
+-- Approve is where the hard guard lives. Under the tournament lock it refuses
+-- unless the pool is FULLY funded (PRIZE_AWARD_NOT_ALLOWED: pool_not_funded) and
+-- the award fits in what is still uncommitted:
+--
+--   amount <= available_prize_pool_cents(tournament, this award)
+--
+-- else PRIZE_AWARD_EXCEEDS_POOL. Because every approval takes the same row lock
+-- and reads the reservations committed before it, concurrent approvals can never
+-- together exceed the collected pool. It also refuses on a cancelled or
+-- cancelling tournament, or an award whose winner's account has been deleted.
+--
+-- Approve does NOT move money: the route calls executePrizeAward afterwards.
+-- Reject records the reason and frees nothing (nothing was reserved).
+-- =============================================
+CREATE OR REPLACE FUNCTION review_prize_award(
+  p_award_id         uuid,
+  p_reviewer_id      uuid,
+  p_action           text,
+  p_rejection_reason text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament_id uuid;
+  v_tournament    tournaments;
+  v_award         prize_awards;
+  v_position      record;
+  v_available     integer;
+  v_new_approval  approval_status;
+  v_reviewed_at   timestamptz := now();
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('approve', 'reject') THEN
+    RAISE EXCEPTION 'action must be approve or reject, got %', p_action USING ERRCODE = '22023';
+  END IF;
+  IF p_action = 'reject' AND (p_rejection_reason IS NULL OR btrim(p_rejection_reason) = '') THEN
+    RAISE EXCEPTION 'a rejection reason is required' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT tournament_id INTO v_tournament_id FROM prize_awards WHERE id = p_award_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'prize award % not found', p_award_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_tournament FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
+  SELECT * INTO v_award FROM prize_awards WHERE id = p_award_id FOR UPDATE;
+
+  IF v_award.approval <> 'pending' THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_ALREADY_REVIEWED: prize award % already reviewed', p_award_id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_action = 'approve' THEN
+    IF v_tournament.status = 'cancelled' THEN
+      RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: tournament_cancelled' USING ERRCODE = 'P0001';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM tournament_cancellation_requests c
+      WHERE c.tournament_id = v_tournament_id AND c.status = 'pending'
+    ) THEN
+      RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: cancellation_pending' USING ERRCODE = 'P0001';
+    END IF;
+    IF v_award.user_id IS NULL THEN
+      RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: winner_missing' USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT * INTO v_position FROM prize_pool_position(v_tournament_id);
+    IF v_position.distribution <> 'platform' THEN
+      RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: not_platform_distributed' USING ERRCODE = 'P0001';
+    END IF;
+    IF NOT v_position.fully_funded THEN
+      RAISE EXCEPTION 'PRIZE_AWARD_NOT_ALLOWED: pool_not_funded' USING ERRCODE = 'P0001';
+    END IF;
+
+    v_available := available_prize_pool_cents(v_tournament_id, p_award_id);
+    IF v_award.amount_cents > v_available THEN
+      RAISE EXCEPTION 'PRIZE_AWARD_EXCEEDS_POOL: % cents requested, % cents of the collected pool is uncommitted',
+        v_award.amount_cents, v_available
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    v_new_approval := 'approved';
+    UPDATE prize_awards
+      SET approval    = v_new_approval,
+          reviewed_by = p_reviewer_id,
+          reviewed_at = v_reviewed_at
+      WHERE id = p_award_id;
+  ELSE
+    v_new_approval := 'rejected';
+    UPDATE prize_awards
+      SET approval         = v_new_approval,
+          reviewed_by      = p_reviewer_id,
+          reviewed_at      = v_reviewed_at,
+          rejection_reason = btrim(p_rejection_reason)
+      WHERE id = p_award_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'id',              v_award.id,
+    'tournament_id',   v_award.tournament_id,
+    'organization_id', v_award.organization_id,
+    'user_id',         v_award.user_id,
+    'amount_cents',    v_award.amount_cents,
+    'approval',        v_new_approval,
+    'reviewed_at',     v_reviewed_at
+  );
+END;
+$$;
+
+-- =============================================
+-- CLAIM PRIZE AWARD SEND
+-- claim_payout_send for an award. executePrizeAward calls it immediately before
+-- asking CHIP for the transfer. Under the tournament lock it re-checks that the
+-- tournament isn't cancelled or cancelling and that the award still fits in the
+-- pool, snapshots the winner's active VERIFIED bank account, and moves the row
+-- from 'pending' to 'processing'.
+--
+-- Returns NULL once claimed, else why not: 'not_claimable' (missing, unapproved,
+-- settled or already claimed), 'tournament_cancelled', 'cancellation_pending',
+-- 'winner_missing', 'bank_account_not_verified' (the winner has no verified
+-- account yet: the award waits, with its money reserved), or 'pool_insufficient'.
+-- =============================================
+CREATE OR REPLACE FUNCTION claim_prize_award_send(p_award_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament_id uuid;
+  v_status        tournament_status;
+  v_award         prize_awards;
+  v_bank_id       uuid;
+BEGIN
+  SELECT tournament_id INTO v_tournament_id FROM prize_awards WHERE id = p_award_id;
+  IF NOT FOUND THEN
+    RETURN 'not_claimable';
+  END IF;
+
+  SELECT status INTO v_status FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
+  SELECT * INTO v_award FROM prize_awards WHERE id = p_award_id FOR UPDATE;
+
+  IF v_award.processed_at IS NOT NULL
+     OR v_award.approval <> 'approved'
+     OR v_award.status <> 'pending' THEN
+    RETURN 'not_claimable';
+  END IF;
+
+  IF v_status = 'cancelled' THEN
+    RETURN 'tournament_cancelled';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM tournament_cancellation_requests c
+    WHERE c.tournament_id = v_tournament_id AND c.status = 'pending'
+  ) THEN
+    RETURN 'cancellation_pending';
+  END IF;
+  IF v_award.user_id IS NULL THEN
+    RETURN 'winner_missing';
+  END IF;
+
+  -- The reservation was made at approval; this only catches a ledger that moved
+  -- underneath it (e.g. an over-settled award booked in between).
+  IF v_award.amount_cents > available_prize_pool_cents(v_tournament_id, p_award_id) THEN
+    RETURN 'pool_insufficient';
+  END IF;
+
+  SELECT b.id INTO v_bank_id
+    FROM player_bank_accounts b
+    WHERE b.user_id = v_award.user_id
+      AND b.is_active
+      AND b.status = 'verified'
+      AND b.chip_bank_account_id IS NOT NULL;
+  IF v_bank_id IS NULL THEN
+    RETURN 'bank_account_not_verified';
+  END IF;
+
+  UPDATE prize_awards
+    SET status = 'processing', bank_account_id = v_bank_id
+    WHERE id = p_award_id;
+  RETURN NULL;
+END;
+$$;
+
+-- =============================================
+-- SETTLE PRIZE AWARD (idempotent, keyed by a prize_awards row)
+-- settle_payout for an award, reached from the synchronous send response or the
+-- CHIP Send webhook, whichever comes first:
+--   paid  → book ONE type='player_prize' ledger row (user_id = the winner,
+--           organization_id = the organizing org) and stamp the award paid. The
+--           ledger row drains prize_pool_balance_cents and nothing else.
+--   !paid → record why, status 'failed', processed. No ledger row. Terminal, as
+--           for payouts: CHIP dedupes on `reference`, so the winner is entered
+--           again as a new award.
+--   already processed → no-op, reported back.
+--
+-- chip_transaction_id = 'send_' || instruction id, for the same reason as payouts:
+-- idx_payments_chip_transaction is unique across ALL payment types.
+--
+-- "Real money wins": more settled than the pool had available is booked anyway and
+-- reported as over_award, to be logged at error level.
+-- =============================================
+CREATE OR REPLACE FUNCTION settle_prize_award(
+  p_award_id                 uuid,
+  p_chip_send_instruction_id bigint,
+  p_paid                     boolean,
+  p_amount_cents             integer DEFAULT NULL,
+  p_receipt_url              text DEFAULT NULL,
+  p_failure_reason           text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_award       prize_awards;
+  v_instruction bigint;
+  v_settled     integer;
+  v_payment_id  uuid;
+  v_over_award  boolean := false;
+BEGIN
+  SELECT * INTO v_award FROM prize_awards WHERE id = p_award_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'prize award % not found', p_award_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_award.processed_at IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'award_id',          v_award.id,
+      'tournament_id',     v_award.tournament_id,
+      'already_processed', true,
+      'settled',           true,
+      'paid',              v_award.status = 'paid',
+      'paid_after_failed', p_paid AND v_award.status = 'failed'
+    );
+  END IF;
+
+  v_instruction := COALESCE(p_chip_send_instruction_id, v_award.chip_send_instruction_id);
+
+  IF p_paid THEN
+    IF v_instruction IS NULL THEN
+      RAISE EXCEPTION 'prize award % settled as paid with no send instruction id', p_award_id
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    v_settled := COALESCE(p_amount_cents, v_award.amount_cents);
+    IF v_settled <= 0 THEN
+      RAISE EXCEPTION 'prize award % settled with a non-positive amount (%)', p_award_id, v_settled
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    v_over_award := v_settled > available_prize_pool_cents(v_award.tournament_id, p_award_id);
+
+    INSERT INTO payments (
+      type, tournament_id, user_id, organization_id,
+      gross_amount_cents, platform_fee_cents, organizer_commission_cents,
+      player_commission_cents, net_amount_cents, currency,
+      payment_method, chip_transaction_id, status, paid_at
+    ) VALUES (
+      'player_prize', v_award.tournament_id, v_award.user_id, v_award.organization_id,
+      v_settled, 0, 0,
+      0, v_settled, 'MYR',
+      'chip_send', 'send_' || v_instruction, 'paid', now()
+    )
+    RETURNING id INTO v_payment_id;
+
+    UPDATE prize_awards
+      SET status                   = 'paid',
+          payment_id               = v_payment_id,
+          settled_amount_cents     = v_settled,
+          chip_send_instruction_id = v_instruction,
+          chip_receipt_url         = COALESCE(p_receipt_url, chip_receipt_url),
+          failure_reason           = NULL,
+          processed_at             = now()
+      WHERE id = p_award_id;
+  ELSE
+    UPDATE prize_awards
+      SET status                   = 'failed',
+          chip_send_instruction_id = v_instruction,
+          failure_reason           = COALESCE(NULLIF(btrim(p_failure_reason), ''), 'send_instruction_failed'),
+          processed_at             = now()
+      WHERE id = p_award_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'award_id',          v_award.id,
+    'tournament_id',     v_award.tournament_id,
+    'already_processed', false,
+    'settled',           true,
+    'paid',              p_paid,
+    'amount_cents',      v_settled,
+    'over_award',        v_over_award
+  );
+END;
+$$;
+
+-- =============================================
 -- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
 -- Same reasoning as the block at the end of 003_functions_triggers.sql: these
 -- SECURITY DEFINER functions trust their arguments, and the checkout route,
@@ -1925,6 +2627,14 @@ REVOKE EXECUTE ON FUNCTION list_organization_payout_overview FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION list_pending_payout_nominations   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_admin_payout_candidates      FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_payable_tournaments          FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION prize_pool_position               FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION available_prize_pool_cents        FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION prize_pool_blocks_registration    FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION settle_prize_funding              FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION enter_prize_award                 FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_prize_award                FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION claim_prize_award_send            FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION settle_prize_award                FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
 GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
@@ -1948,3 +2658,11 @@ GRANT EXECUTE ON FUNCTION list_organization_payout_overview TO service_role;
 GRANT EXECUTE ON FUNCTION list_pending_payout_nominations   TO service_role;
 GRANT EXECUTE ON FUNCTION list_admin_payout_candidates      TO service_role;
 GRANT EXECUTE ON FUNCTION list_payable_tournaments          TO service_role;
+GRANT EXECUTE ON FUNCTION prize_pool_position               TO service_role;
+GRANT EXECUTE ON FUNCTION available_prize_pool_cents        TO service_role;
+GRANT EXECUTE ON FUNCTION prize_pool_blocks_registration    TO service_role;
+GRANT EXECUTE ON FUNCTION settle_prize_funding              TO service_role;
+GRANT EXECUTE ON FUNCTION enter_prize_award                 TO service_role;
+GRANT EXECUTE ON FUNCTION review_prize_award                TO service_role;
+GRANT EXECUTE ON FUNCTION claim_prize_award_send            TO service_role;
+GRANT EXECUTE ON FUNCTION settle_prize_award                TO service_role;
