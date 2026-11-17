@@ -8,6 +8,7 @@ import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 import { registerOrganizationBankAccount } from "@/services/payouts/bank-account";
 import { validateBankAccountRequest } from "./validators";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -216,7 +217,7 @@ export async function PUT(
   }
 
   // The RPC already returns the masked shape.
-  let result = data as BankAccountResult;
+  const result = data as { id: string; status: string };
 
   // An APPROVED organization's account must reach CHIP Send now — approval
   // (admin/applications/[id]) is the only other trigger, and it has already
@@ -225,35 +226,17 @@ export async function PUT(
   // Keyed on "the active row is pending", not on `changed`: an unchanged
   // re-save of a pending row is then also the organizer's retry after a failed
   // registration. That is safe because CHIP dedupes on `reference` (our row id)
-  // and registerOrganizationBankAccount skips anything not pending. Best-effort:
-  // it never throws, and a failure leaves the row pending.
+  // and registerOrganizationBankAccount skips anything not pending.
+  //
+  // After the response, so a slow CHIP doesn't hold up the save (#555). The
+  // response therefore always shows the account `pending`, even when CHIP
+  // verifies it on the spot; the settings page re-reads it on its next load.
+  // It never throws: a failure is logged with the bank account id and leaves
+  // the row pending, and the daily payout run registers it
+  // (registerUnregisteredBankAccounts).
   if (auth.approved && result.status === "pending") {
-    await registerOrganizationBankAccount(result.id);
-    result = await withCurrentVerification(result);
+    afterResponse(() => registerOrganizationBankAccount(result.id));
   }
 
   return NextResponse.json({ data: result }, { status: 200 });
-}
-
-interface BankAccountResult {
-  id: string;
-  status: string;
-  rejection_reason: string | null;
-  verified_at: string | null;
-  [key: string]: unknown;
-}
-
-// CHIP can verify (or reject) synchronously during registration; re-read the
-// verification fields so the response doesn't show a stale 'pending'. Falls
-// back to the RPC's result if the read fails — the save itself succeeded.
-async function withCurrentVerification(
-  result: BankAccountResult,
-): Promise<BankAccountResult> {
-  const { data, error } = await supabaseAdmin
-    .from("organization_bank_accounts")
-    .select("status, rejection_reason, verified_at")
-    .eq("id", result.id)
-    .maybeSingle();
-  if (error || !data) return result;
-  return { ...result, ...data };
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -321,10 +322,13 @@ describe("PUT /api/v1/organizations/[orgId]/bank-account — CHIP Send registrat
     });
   }
 
-  it("registers the new pending account of an approved organization", async () => {
+  it("registers the new pending account of an approved organization after the response", async () => {
     asApproved();
     const res = await PUT(makePut(), params());
     expect(res.status).toBe(200);
+    // The response didn't wait on CHIP Send.
+    expect(mockRegisterBank).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockRegisterBank).toHaveBeenCalledOnce();
     expect(mockRegisterBank).toHaveBeenCalledWith(ROW_ID);
     expect(mockRpc.mock.invocationCallOrder[0]).toBeLessThan(
@@ -339,29 +343,18 @@ describe("PUT /api/v1/organizations/[orgId]/bank-account — CHIP Send registrat
       error: null,
     });
     await PUT(makePut(), params());
+    await runAfterCallbacks();
     expect(mockRegisterBank).toHaveBeenCalledWith(ROW_ID);
   });
 
-  it("returns the verification state CHIP settled synchronously", async () => {
+  it("returns the saved row as pending without re-reading it", async () => {
     asApproved();
-    maybeSingle().mockResolvedValue({
-      data: { status: "verified", rejection_reason: null, verified_at: "2026-11-01T00:00:00Z" },
-      error: null,
-    });
     const res = await PUT(makePut(), params());
     const json = await res.json();
-    expect(json.data.status).toBe("verified");
-    expect(json.data.verified_at).toBe("2026-11-01T00:00:00Z");
+    expect(json.data.status).toBe("pending");
     expect(json.data.account_number_last4).toBe("5678");
     expect(JSON.stringify(json)).not.toContain("account_number\"");
-  });
-
-  it("falls back to the RPC result when the re-read fails", async () => {
-    asApproved();
-    maybeSingle().mockResolvedValue({ data: null, error: { message: "x" } });
-    const res = await PUT(makePut(), params());
-    expect(res.status).toBe(200);
-    expect((await res.json()).data.status).toBe("pending");
+    expect(maybeSingle()).not.toHaveBeenCalled();
   });
 
   it("does not re-register a verified account on a no-op save", async () => {
@@ -371,6 +364,7 @@ describe("PUT /api/v1/organizations/[orgId]/bank-account — CHIP Send registrat
       error: null,
     });
     await PUT(makePut(), params());
+    await runAfterCallbacks();
     expect(mockRegisterBank).not.toHaveBeenCalled();
   });
 
@@ -379,6 +373,7 @@ describe("PUT /api/v1/organizations/[orgId]/bank-account — CHIP Send registrat
     async (status) => {
       asApproved(status);
       await PUT(makePut(), params());
+      await runAfterCallbacks();
       expect(mockRegisterBank).not.toHaveBeenCalled();
     },
   );
@@ -388,6 +383,7 @@ describe("PUT /api/v1/organizations/[orgId]/bank-account — CHIP Send registrat
     mockRpc.mockResolvedValue({ data: null, error: { code: "23505", message: "dup" } });
     const res = await PUT(makePut(), params());
     expect(res.status).toBe(409);
+    await runAfterCallbacks();
     expect(mockRegisterBank).not.toHaveBeenCalled();
   });
 });
