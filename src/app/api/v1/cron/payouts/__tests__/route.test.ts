@@ -15,6 +15,7 @@ const {
   mockExecute,
   mockSettle,
   mockGetInstruction,
+  mockRegisterBanks,
 } = vi.hoisted(() => {
   // Each from("payouts") query records its filters; the stuck pass is the one
   // filtering on updated_at.
@@ -54,6 +55,7 @@ const {
     mockExecute: vi.fn(),
     mockSettle: vi.fn(),
     mockGetInstruction: vi.fn(),
+    mockRegisterBanks: vi.fn(),
   };
 });
 
@@ -65,6 +67,9 @@ vi.mock("@/services/payouts/execute", () => ({
 }));
 vi.mock("@/services/payouts/settle", () => ({
   settlePayout: mockSettle,
+}));
+vi.mock("@/services/payouts/bank-account", () => ({
+  registerUnregisteredBankAccounts: mockRegisterBanks,
 }));
 vi.mock("@/services/chip/send", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services/chip/send")>();
@@ -89,6 +94,15 @@ function makeReq(auth?: string) {
 }
 
 const authed = () => POST(makeReq(`Bearer ${SECRET}`));
+
+const BANK_ZERO = {
+  checked: 0,
+  verified: 0,
+  rejected: 0,
+  pending: 0,
+  skipped: 0,
+  error: 0,
+};
 
 const ZERO = {
   sent: 0,
@@ -137,6 +151,7 @@ describe("POST /api/v1/cron/payouts", () => {
     setRpcs([]);
     mockExecute.mockResolvedValue("sent");
     mockSettle.mockResolvedValue({ error: null, settled: true });
+    mockRegisterBanks.mockResolvedValue(BANK_ZERO);
     vi.spyOn(console, "info").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -153,6 +168,7 @@ describe("POST /api/v1/cron/payouts", () => {
     expect(res.status).toBe(401);
     expect(mockFrom).not.toHaveBeenCalled();
     expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockRegisterBanks).not.toHaveBeenCalled();
   });
 
   it("401s with a wrong secret", async () => {
@@ -392,6 +408,42 @@ describe("POST /api/v1/cron/payouts", () => {
 
     await authed();
     expect(mockExecute.mock.calls.map(([id]) => id)).toEqual(["p-old", "payout-t1"]);
+  });
+
+  // ----- unregistered bank accounts ---------------------------------------
+
+  it("registers bank accounts a request left unregistered, and reports the counts", async () => {
+    mockRegisterBanks.mockResolvedValue({ ...BANK_ZERO, checked: 2, verified: 1, pending: 1 });
+
+    const res = await authed();
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(mockRegisterBanks).toHaveBeenCalledOnce();
+    expect(data.bankAccounts).toEqual({ ...BANK_ZERO, checked: 2, verified: 1, pending: 1 });
+  });
+
+  it("registers bank accounts before any payout pass, so a fresh verification can be paid", async () => {
+    responses.pending = { data: [{ id: "p-old" }], error: null };
+    setRpcs(["t1"]);
+
+    await authed();
+    expect(mockRegisterBanks.mock.invocationCallOrder[0]).toBeLessThan(
+      mockFrom.mock.invocationCallOrder[0],
+    );
+    expect(mockRegisterBanks.mock.invocationCallOrder[0]).toBeLessThan(
+      mockExecute.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("500s when the bank account pass can't load its work, after running the payout passes", async () => {
+    mockRegisterBanks.mockRejectedValue(new Error("failed to load unregistered bank accounts"));
+    setRpcs(["t1"]);
+
+    const res = await authed();
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.data.bankAccounts).toBeNull();
+    expect(body.data.sweep).toEqual({ ...ZERO, swept: 1, queued: 1, sent: 1 });
   });
 
   // ----- a pass that can't run ---------------------------------------------

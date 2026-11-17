@@ -10,6 +10,10 @@ import {
   retryPendingPayouts,
   sweepPayableTournaments,
 } from "@/services/payouts/sweep";
+import {
+  type BankRegistrationStats,
+  registerUnregisteredBankAccounts,
+} from "@/services/payouts/bank-account";
 
 // Session-less background job (mirrors the CHIP webhook and the FIDE cron): uses
 // supabaseAdmin only, and needs the Node runtime for CHIP Send's HMAC signing and
@@ -20,6 +24,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 interface RunStats {
+  bankAccounts: BankRegistrationStats | null;
   stuck: PassStats | null;
   retried: PassStats | null;
   sweep: SweepStats | null;
@@ -44,8 +49,10 @@ async function runPass<T>(
 /**
  * The daily organizer payout run. Triggered by a GitHub Actions schedule (see
  * .github/workflows/organizer-payouts.yml) that POSTs here with the shared
- * CRON_SECRET. Reconciles stuck payouts, retries pending ones, then pays every
- * tournament whose automatic payout has fallen due (src/services/payouts/sweep.ts).
+ * CRON_SECRET. Registers bank accounts a request left unregistered with CHIP
+ * Send (src/services/payouts/bank-account.ts), reconciles stuck payouts, retries
+ * pending ones, then pays every tournament whose automatic payout has fallen due
+ * (src/services/payouts/sweep.ts).
  *
  * Per-payout failures are counted and skipped, never failing the whole run. A pass
  * that couldn't run at all makes this a 500, so the scheduled job shows as failed,
@@ -72,9 +79,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // In this order: a payout the sweep parks on budget shouldn't be retried a
+  // In this order: an account CHIP verifies on the spot can be paid by this
+  // run's sweep, and a payout the sweep parks on budget shouldn't be retried a
   // moment later by the pending pass.
   const stats: RunStats = {
+    bankAccounts: await runPass("unregistered bank account", () =>
+      registerUnregisteredBankAccounts(),
+    ),
     stuck: await runPass("stuck payout", () => reconcileStuckPayouts()),
     retried: await runPass("pending payout", retryPendingPayouts),
     sweep: await runPass("payable tournament", sweepPayableTournaments),
@@ -82,7 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   console.info(`Payout cron: ${JSON.stringify(stats)}`);
 
-  if (!stats.stuck || !stats.retried || !stats.sweep) {
+  if (!stats.bankAccounts || !stats.stuck || !stats.retried || !stats.sweep) {
     return NextResponse.json(
       {
         error: { code: "INTERNAL_ERROR", message: INTERNAL_ERROR_MESSAGE },

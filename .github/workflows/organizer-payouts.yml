@@ -1,7 +1,8 @@
 name: Organizer payout sweep
 
-# Pays every tournament whose automatic payout has fallen due, and reconciles
-# stuck and pending payouts (src/app/api/v1/cron/payouts/route.ts).
+# Pays every tournament whose automatic payout has fallen due, reconciles stuck
+# and pending payouts, and registers any bank account a request left
+# unregistered with CHIP Send (src/app/api/v1/cron/payouts/route.ts).
 #
 # GitHub cron is always UTC. 01:00 UTC is 09:00 MYT and 10:00 at GMT+9, banking
 # hours across ASEAN. Eligibility is an instant comparison in the database, so
