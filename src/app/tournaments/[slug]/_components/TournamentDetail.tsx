@@ -5,7 +5,7 @@ import type {
 } from "../types";
 import {
   formatRm,
-  getMinFeeCents,
+  getStartingFee,
   listFeeRows,
   toTitleCase,
 } from "../../utils";
@@ -89,9 +89,8 @@ export default function TournamentDetail({
   const nowDate = new Date(now);
   // Open tiers cheapest first, then ended ones (#353).
   const feeRows = listFeeRows(t.entry_fees, nowDate);
-  const minFee = getMinFeeCents(t.entry_fees);
-  const lowestFeeEntry =
-    t.entry_fees.additional?.find((f) => f.amount_cents === minFee) ?? null;
+  // What anyone can register at now, not an ended or restricted tier (#258).
+  const startingFee = getStartingFee(t.entry_fees, nowDate);
   // registration_closed_at is the effective close time (deadline by default,
   // earlier if the organizer closed registration early).
   const { isClosed: isRegistrationClosed, closedEarly } =
@@ -395,13 +394,21 @@ export default function TournamentDetail({
           {/* Price */}
           <div>
             <div className="font-cinzel text-text-primary text-3xl font-bold">
-              {minFee > 0 ? formatRm(minFee) : "Free"}
+              {formatRm(startingFee.amount_cents)}
             </div>
-            {lowestFeeEntry && (
+            {startingFee.row?.tier && (
               <p className="font-lato text-text-muted text-sm">
-                {toTitleCase(lowestFeeEntry.type)} price
-                {lowestFeeEntry.valid_until &&
-                  ` (ends ${formatInstantDate(lowestFeeEntry.valid_until, timeZone)})`}
+                {toTitleCase(startingFee.row.tier.type)} price
+                {startingFee.row.tier.valid_until &&
+                  ` (ends ${formatInstantDate(startingFee.row.tier.valid_until, timeZone)})`}
+              </p>
+            )}
+            {startingFee.cheaperRestricted && (
+              <p className="font-lato text-text-muted mt-1 text-xs">
+                {startingFee.cheaperRestricted.amount_cents === 0
+                  ? "Free entry"
+                  : `From ${formatRm(startingFee.cheaperRestricted.amount_cents)}`}{" "}
+                for eligible players — see Entry Fees.
               </p>
             )}
           </div>

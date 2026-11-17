@@ -286,6 +286,62 @@ describe("entry fees section", () => {
   });
 });
 
+// ── Register card price ───────────────────────────────────────
+
+describe("register card price", () => {
+  // The card is the aside; the price is its first figure.
+  const card = (html: string) => html.slice(html.indexOf("Register for this tournament"));
+
+  // The Selangor case from #258.
+  const selangor = {
+    entry_fees: {
+      standard: { amount_cents: 4000 },
+      additional: [
+        { type: "early_bird", amount_cents: 3200, valid_until: "2026-05-01T00:00:00Z" },
+        { type: "age_based", amount_cents: 2400, age_min: 0, age_max: 12 },
+      ],
+    },
+  };
+
+  it("leads with an early bird while it's open", () => {
+    const html = card(render(selangor));
+    expect(html).toContain("RM32.00");
+    expect(html).toContain("Early Bird price (ends");
+  });
+
+  it("leads with the standard fee once the early bird has ended (#258)", () => {
+    const html = card(render(selangor, false, null, false, null, "2026-06-01T00:00:00.000Z"));
+    expect(html).toContain("RM40.00");
+    expect(html).not.toContain("RM32.00");
+    expect(html).not.toContain("price (ends");
+  });
+
+  it("never leads with a tier only some players qualify for, but mentions it", () => {
+    const html = card(render(selangor, false, null, false, null, "2026-06-01T00:00:00.000Z"));
+    expect(html.indexOf("RM40.00")).toBeLessThan(html.indexOf("RM24.00"));
+    expect(html).toContain("From RM24.00 for eligible players");
+  });
+
+  it("says when eligible players enter free", () => {
+    const html = card(
+      render({
+        entry_fees: {
+          standard: { amount_cents: 3000 },
+          additional: [{ type: "oku", amount_cents: 0, oku: true }],
+        },
+      }),
+    );
+    expect(html).toContain("RM30.00");
+    expect(html).toContain("Free entry for eligible players");
+  });
+
+  it("shows Free for a free tournament", () => {
+    const html = card(render({ entry_fees: { standard: { amount_cents: 0 } } }));
+    expect(html).toContain("Free");
+    expect(html).not.toContain("eligible players");
+  });
+});
+
 // ── Prizes section ────────────────────────────────────────────
 
 describe("prizes section", () => {
