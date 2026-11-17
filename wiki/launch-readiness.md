@@ -212,7 +212,7 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 - **Built and wired end-to-end:** when an admin approves a tournament cancellation, `review_tournament_cancellation()` queues one `refunds` row per confirmed+paid registration, the admin route fires `refundChipPurchase()` per player, and `settle_refund()` appends the mirrored `type='refund'` ledger row — synchronously on a terminal CHIP response, or from the `payment.refunded` webhook. Idempotent at three layers; covered by route tests and `db/tests/settle_refund.sql`. Full detail in **[refund-flow.md](./refund-flow.md)**.
 - **Visible and communicated:** the player sees the refund's state on `/my` and the organizer sees the tournament's refunds on its manage page (**#511**); the player is emailed once when the refund lands and once if it fails (**#512**). See [refund-flow.md](./refund-flow.md) §Who sees what, §Outcome emails.
 - **Still missing:** a player cannot request a refund (**#509**); an organizer cannot refund from the roster (**#510**); and there is no cross-tournament admin list of refunds (owned by the transactions screen, A5). Consequently `refunds.reviewed_by`/`reviewed_at` are still unexercised — cancellation refunds are auto-approved wholesale.
-- **Open operational risks** on the shipped path (`related_to` parsing #495, inline fan-out timeout #496, no re-fire for stuck `pending` #497, out-of-band CHIP-dashboard refunds #498, monitoring #499) — see [refund-flow.md](./refund-flow.md) §Open risks.
+- **Open operational risks** on the shipped path (`related_to` parsing #495, inline fan-out timeout #496, out-of-band CHIP-dashboard refunds #498, monitoring #499). Stuck `pending` refunds now have an admin re-fire and a dashboard alert (#497) — see [refund-flow.md](./refund-flow.md) §Open risks.
 - **Priority:** 🟡 — the launch-blocking case (tournament cancelled, players owed money) is handled; the rest is a support-load and trust question.
 
 ### P14. Prize claim / winner payout — ❌ Not built
@@ -279,7 +279,7 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 ### O7. Close registration / cancel tournament — ✅ Built
 - **Close registration early:** `POST .../tournaments/[id]/close-registration` — stamps `registration_closed_at`, which is also populated on publish (from `registration_deadline`) so the two paths can't drift. Checkout and the public detail page both read it.
 - **Cancel:** two-step, because cancelling a published tournament moves money. The organizer files a request via `POST .../tournaments/[id]/cancel` (blocked for ongoing/completed tournaments); a platform admin reviews it at `/admin/cancellations` → `PATCH /api/v1/admin/tournament-cancellations/[id]`. Approve runs `review_tournament_cancellation()`, which flips `tournaments.status='cancelled'` **and** queues a refund per paid registration in one transaction, then the route fires the CHIP refunds and emails every registered player. Approval is refused (409) once an organizer payout has been paid or is being sent, because the refunds would then be unfundable; the money has to be recovered by hand first (#521).
-- **Gaps:** none blocking. The refund fan-out runs inline in the admin request (#496) and there is no re-fire for a refund left `pending` (#497).
+- **Gaps:** none blocking. The refund fan-out runs inline in the admin request (#496). A refund left `pending` can be retried from `/admin/refunds`, and the admin dashboard flags it (#497); nothing retries on a schedule.
 
 ### O8. Participant roster / management — ⚠️ Partial
 - **Entry:** tournament manage page → `getTournamentManageData` (roster with statuses, live expiry sweep).
@@ -313,10 +313,10 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 
 ### A4. Admin tournament moderation — ⚠️ Partial
 - MVP lists an `/admin/tournaments` panel; **no such page exists** (#107, #108) — admins cannot browse or moderate tournaments in-app. Interim: Supabase dashboard. 🟡
-- What *does* exist: **`/admin/cancellations`**, where admins review organizer cancellation requests (approve → cancel + refund, or reject with a reason). See O7.
+- What *does* exist: **`/admin/cancellations`**, where admins review organizer cancellation requests (approve → cancel + refund, or reject with a reason). See O7. And **`/admin/refunds`**, where admins retry refunds stuck in `pending` (#497).
 
 ### A5. Admin transactions view — ❌ Not built
-- MVP lists `/admin/transactions`; **no route/page exists** (#109, #110). No cross-tournament view of payments **or refunds**: an admin can see one tournament's refunds on its read-only manage page (#511), but spotting a refund stuck in `pending` across tournaments still means querying the DB (and #499 for metrics). Interim: Supabase dashboard. 🟡
+- MVP lists `/admin/transactions`; **no route/page exists** (#109, #110). No cross-tournament view of payments **or refunds**: an admin can see one tournament's refunds on its read-only manage page (#511). The exception is refunds stuck in `pending`, which have their own page, `/admin/refunds`, with a retry each and a dashboard banner (#497). Interim: Supabase dashboard. 🟡
 
 ### A6. Admin users management — ❌ Not built
 - MVP sidebar lists "Users"; **no page exists**. 🟢

@@ -490,6 +490,11 @@ CREATE TABLE refunds (
   -- kept after a later successful retry, as history; processed_at is what says
   -- the money went back. Gates the one "refund failed" email (#512).
   failed_at             timestamptz,
+  -- When the app last asked CHIP for this refund (claim_refund_fire, #497). A
+  -- refund awaiting its payment.refunded webhook is `pending` too, so this is
+  -- what tells "fired a moment ago" apart from "stuck": only one not fired
+  -- recently (or that failed since it was fired) may be fired again.
+  last_fired_at         timestamptz,
 
   CONSTRAINT chk_reviewed_at
     CHECK (reviewed_at IS NULL OR reviewed_at >= requested_at)

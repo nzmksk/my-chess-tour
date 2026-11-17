@@ -3,6 +3,7 @@ import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { loadStuckRefunds } from "@/services/refunds/stuck";
 
 type OrgStatusRow = { approval_status: string };
 type TournamentStatusRow = { status: string };
@@ -57,6 +58,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
     { data: payoutRows, error: payoutError },
     { data: pendingOrgs, error: pendingOrgsError },
     { data: recentTournamentRows, error: recentTourError },
+    { data: stuckRefunds, error: stuckRefundsError },
   ] = await Promise.all([
     supabaseAdmin
       .from("users")
@@ -86,7 +88,17 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       .select("id, name, start_date, status, max_participants, organization_id")
       .order("created_at", { ascending: false })
       .limit(5),
+    loadStuckRefunds(),
   ]);
+
+  // Not fatal: the rest of the dashboard is still worth showing. null tells the
+  // page it couldn't check, which it says out loud rather than showing zero.
+  if (stuckRefundsError) {
+    console.error(
+      "GET /api/v1/admin/dashboard: failed to count stuck refunds",
+      stuckRefundsError,
+    );
+  }
 
   if (userError) {
     return internalErrorResponse(
@@ -227,6 +239,8 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
           total_registrations: totalRegistrations ?? 0,
           platform_revenue_cents: platformRevenueCents,
         },
+        // Refunds still owed that nothing is moving (#497); null = couldn't check.
+        stuck_refunds: stuckRefunds ? stuckRefunds.length : null,
         pending_organizations: (pendingOrgs ?? []).map((o: PendingOrgRow) => ({
           id: o.id,
           name: o.name,

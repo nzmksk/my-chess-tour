@@ -155,10 +155,11 @@ function setAdminRpcDispatch(
     error: null,
   },
 ) {
-  mockAdminRpc.mockImplementation((name: string) => {
+  mockAdminRpc.mockImplementation((name: string, args?: unknown) => {
     if (name === "list_pending_cancellation_refunds") {
       return Promise.resolve({ data: pendingRefunds, error: null });
     }
+    if (name === "claim_refund_fire") return claimFor(args);
     if (name === "settle_refund") {
       return Promise.resolve({
         data: { settled: true, newly_settled: true, newly_failed: false },
@@ -166,6 +167,21 @@ function setAdminRpcDispatch(
       });
     }
     return Promise.resolve(reviewResult);
+  });
+}
+
+// claim_refund_fire hands back the purchase the refund is issued against, or
+// refuses one whose registration payment has no CHIP purchase.
+function claimFor(args: unknown) {
+  const { p_refund_id } = args as { p_refund_id: string };
+  const refund = (
+    pendingRefunds as { refund_id: string; original_chip_purchase_id: string | null }[]
+  ).find((r) => r.refund_id === p_refund_id);
+  return Promise.resolve({
+    data: refund?.original_chip_purchase_id
+      ? { claimed: true, original_chip_purchase_id: refund.original_chip_purchase_id }
+      : { claimed: false, reason: refund ? "no_purchase" : "not_found" },
+    error: null,
   });
 }
 
@@ -651,10 +667,11 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       amount_cents: 5500,
       original_chip_purchase_id: "chip-1",
     });
-    mockAdminRpc.mockImplementation((name: string) => {
+    mockAdminRpc.mockImplementation((name: string, args?: unknown) => {
       if (name === "list_pending_cancellation_refunds") {
         return Promise.resolve({ data: pendingRefunds, error: null });
       }
+      if (name === "claim_refund_fire") return claimFor(args);
       if (name === "settle_refund") {
         return Promise.resolve({ data: null, error: { message: "db down" } });
       }

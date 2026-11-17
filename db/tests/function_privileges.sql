@@ -43,6 +43,8 @@ DECLARE
     'expire_stale_pending_payments',
     'list_pending_cancellation_refunds',
     'settle_refund',
+    'claim_refund_fire',
+    'list_stuck_refunds',
     'settle_bank_account_verification',
     'payout_recipient_problem',
     'nominate_payout_beneficiary',
