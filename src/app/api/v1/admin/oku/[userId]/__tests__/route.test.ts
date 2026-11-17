@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { runAfterCallbacks } from "@/test/after";
 
 const { mockBuilder, mockFrom, mockGetClaims, mockRpc } = vi.hoisted(() => {
   function makeBuilder(finalResult: { data?: unknown; error?: unknown }) {
@@ -117,6 +118,9 @@ describe("PATCH /api/v1/admin/oku/:userId", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.data.oku_status).toBe("verified");
+    // Sent after the response, not before it.
+    expect(mockNotifyOku).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyOku).toHaveBeenCalledOnce();
     expect(mockNotifyOku).toHaveBeenCalledWith(USER);
   });
@@ -131,6 +135,7 @@ describe("PATCH /api/v1/admin/oku/:userId", () => {
       { params: Promise.resolve({ userId: USER }) },
     );
     expect(res.status).toBe(200);
+    await runAfterCallbacks();
     expect(mockNotifyOku).toHaveBeenCalledWith(USER);
   });
 
@@ -141,6 +146,7 @@ describe("PATCH /api/v1/admin/oku/:userId", () => {
     });
     expect(res.status).toBe(404);
     // Nothing was reviewed, so the player hears nothing.
+    await runAfterCallbacks();
     expect(mockNotifyOku).not.toHaveBeenCalled();
   });
 });

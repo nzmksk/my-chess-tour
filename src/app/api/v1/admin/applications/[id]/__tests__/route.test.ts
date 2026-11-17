@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { afterResponse } from "@/lib/http/after-response";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -389,15 +391,36 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       );
     });
 
-    it("emails the applicant after approving", async () => {
+    it("emails the applicant after approving, once the response has gone out", async () => {
       await PATCH(makePatchRequest(APP_ID, { action: "approve" }), {
         params: Promise.resolve({ id: APP_ID }),
       });
+      expect(mockNotifyReviewed).not.toHaveBeenCalled();
+      await runAfterCallbacks();
       expect(mockNotifyReviewed).toHaveBeenCalledOnce();
       expect(mockNotifyReviewed).toHaveBeenCalledWith(APP_ID);
       expect(mockAdminRpc.mock.invocationCallOrder[0]).toBeLessThan(
         mockNotifyReviewed.mock.invocationCallOrder[0],
       );
+    });
+
+    it("sends the approval email before a bank verification email from a synchronous CHIP Send answer", async () => {
+      const sent: string[] = [];
+      mockNotifyReviewed.mockImplementationOnce(async () => {
+        sent.push("application reviewed");
+      });
+      mockRegisterBank.mockImplementationOnce(async () => {
+        afterResponse(async () => {
+          sent.push("bank verified");
+        });
+      });
+
+      await PATCH(makePatchRequest(APP_ID, { action: "approve" }), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
+      await runAfterCallbacks();
+
+      expect(sent).toEqual(["application reviewed", "bank verified"]);
     });
   });
 
@@ -445,6 +468,7 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
         }),
         { params: Promise.resolve({ id: APP_ID }) },
       );
+      await runAfterCallbacks();
       expect(mockNotifyReviewed).toHaveBeenCalledWith(APP_ID);
     });
   });
@@ -472,6 +496,7 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
         params: Promise.resolve({ id: APP_ID }),
       });
       expect(res.status).toBe(500);
+      await runAfterCallbacks();
       expect(mockRegisterBank).not.toHaveBeenCalled();
       expect(mockNotifyReviewed).not.toHaveBeenCalled();
     });

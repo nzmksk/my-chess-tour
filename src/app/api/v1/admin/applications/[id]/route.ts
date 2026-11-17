@@ -5,6 +5,7 @@ import { registerActiveOrganizationBankAccount } from "@/services/payouts/bank-a
 import { notifyApplicationReviewed } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse, inOrderAfterResponse } from "@/lib/http/after-response";
 
 // Reviewing emails the applicant, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -207,17 +208,21 @@ export async function PATCH(
     );
   }
 
-  // The approval has committed. Only now is the payout account registered with
-  // CHIP Send — never at application time, so a pending applicant's details
-  // don't reach the PSP and a rejected one doesn't cost a verification.
-  // Best-effort, like the cancellation route's refunds: it never throws, and a
-  // failure leaves the account 'pending' without affecting this response.
-  if (action === "approve") {
-    await registerActiveOrganizationBankAccount(id);
-  }
+  // Emails go out after the response, in this order: the review outcome first,
+  // then the bank verification result if CHIP Send answers synchronously.
+  await inOrderAfterResponse(async () => {
+    // Best-effort and never throws.
+    afterResponse(() => notifyApplicationReviewed(id));
 
-  // Best-effort and never throws, like the bank registration above.
-  await notifyApplicationReviewed(id);
+    // The approval has committed. Only now is the payout account registered with
+    // CHIP Send — never at application time, so a pending applicant's details
+    // don't reach the PSP and a rejected one doesn't cost a verification.
+    // Best-effort, like the cancellation route's refunds: it never throws, and a
+    // failure leaves the account 'pending' without affecting this response.
+    if (action === "approve") {
+      await registerActiveOrganizationBankAccount(id);
+    }
+  });
 
   return NextResponse.json({ data }, { status: 200 });
 }
