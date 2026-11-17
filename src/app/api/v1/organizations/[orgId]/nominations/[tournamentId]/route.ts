@@ -8,6 +8,7 @@ import {
 import { notifyNominationResponded } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Responding emails the organizer, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -102,7 +103,7 @@ export async function POST(_request: NextRequest, { params }: Params): Promise<N
 
   // A repeated accept (double-click, retry) changes nothing, so it tells no one.
   if (!(data as { already_accepted?: boolean } | null)?.already_accepted) {
-    await notifyNominationResponded(tournamentId, orgId, true);
+    afterResponse(() => notifyNominationResponded(tournamentId, orgId, true));
   }
 
   return NextResponse.json({ data }, { status: 200 });
@@ -128,7 +129,7 @@ export async function DELETE(_request: NextRequest, { params }: Params): Promise
     return nominationErrorResponse(error, `declining the nomination for tournament ${tournamentId}`);
   }
 
-  await notifyNominationResponded(tournamentId, orgId, false);
+  afterResponse(() => notifyNominationResponded(tournamentId, orgId, false));
 
   return NextResponse.json({ data }, { status: 200 });
 }

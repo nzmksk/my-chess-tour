@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -342,6 +343,7 @@ describe("POST /organizations/[orgId]/payouts", () => {
 
   it("alerts the platform admins about the new request", async () => {
     await post(validBody);
+    await runAfterCallbacks();
     expect(mockNotifyAdmins).toHaveBeenCalledWith(PAYOUT_ID, "early_request");
   });
 
@@ -389,6 +391,7 @@ describe("POST /organizations/[orgId]/payouts", () => {
     const body = await res.json();
     expect(body.error.code).toBe(errorCode);
     expect(body.error.message).toMatch(expected);
+    await runAfterCallbacks();
     expect(mockNotifyAdmins).not.toHaveBeenCalled();
   });
 });

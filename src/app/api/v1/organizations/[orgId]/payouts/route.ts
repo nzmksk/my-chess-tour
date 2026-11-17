@@ -12,6 +12,7 @@ import { notifyAdminsOfPayout } from "@/services/payouts/notify";
 import { validateEarlyPayoutRequest } from "./validators";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Filing a request emails the platform admins, and templates are read from disk.
 export const runtime = "nodejs";
@@ -296,7 +297,7 @@ export async function POST(
   );
 
   // The admin queue would otherwise be the only way anyone finds out.
-  await notifyAdminsOfPayout(payoutId as string, "early_request");
+  afterResponse(() => notifyAdminsOfPayout(payoutId as string, "early_request"));
 
   return NextResponse.json({ data: { payout_id: payoutId } }, { status: 201 });
 }
