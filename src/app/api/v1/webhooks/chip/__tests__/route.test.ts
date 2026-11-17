@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, setPaymentResult, setRefundResult } = vi.hoisted(
+const { mockFrom, mockRpc, setPaymentResult, setRefundResult, setFundingResult } = vi.hoisted(
   () => {
     function makeBuilder(getResult: () => unknown) {
       const b: Record<string, unknown> = {};
@@ -38,7 +38,19 @@ const { mockFrom, mockRpc, setPaymentResult, setRefundResult } = vi.hoisted(
       ridx = 0;
     };
 
+    // Successive `from("prize_fundings")` lookups (purchase id, then reference).
+    let fundingResults: Array<unknown> = [];
+    let fidx = 0;
+    const setFundingResult = (...results: Array<unknown>) => {
+      fundingResults = results;
+      fidx = 0;
+    };
+
     const mockFrom = vi.fn((table: string) => {
+      if (table === "prize_fundings")
+        return makeBuilder(
+          () => fundingResults[fidx++] ?? { data: null, error: null },
+        );
       if (table === "payments")
         return makeBuilder(
           () => paymentResults[idx++] ?? { data: null, error: null },
@@ -53,7 +65,7 @@ const { mockFrom, mockRpc, setPaymentResult, setRefundResult } = vi.hoisted(
     const mockRpc = vi.fn<() => Promise<{ data: unknown; error: unknown }>>(() =>
       Promise.resolve({ data: { already_processed: false }, error: null }),
     );
-    return { mockFrom, mockRpc, setPaymentResult, setRefundResult };
+    return { mockFrom, mockRpc, setPaymentResult, setRefundResult, setFundingResult };
   },
 );
 
@@ -108,6 +120,7 @@ beforeEach(() => {
   vi.stubEnv("CHIP_WEBHOOK_PUBLIC_KEY", publicKey);
   setPaymentResult({ data: null, error: null });
   setRefundResult({ data: null, error: null });
+  setFundingResult({ data: null, error: null });
   // The handler logs expected failure reasons; keep test output clean.
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -523,5 +536,136 @@ describe("refund outcome email", () => {
 
     await runAfterCallbacks();
     expect(mockNotifyRefund).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prize funding purchases (#523)
+// ---------------------------------------------------------------------------
+
+describe("POST /api/v1/webhooks/chip — prize funding", () => {
+  const FUNDING_ID = "44444444-4444-4444-8444-444444444444";
+
+  it("settles a paid prize-funding purchase as a funding, never as a registration", async () => {
+    setFundingResult({ data: { id: FUNDING_ID }, error: null });
+    mockRpc.mockResolvedValueOnce({
+      data: { tournament_id: "t-1", newly_paid: true, amount_mismatch: false, already_processed: false },
+      error: null,
+    });
+
+    const res = await POST(
+      makeRequest({
+        id: "chip-fund-1",
+        reference: FUNDING_ID,
+        status: "paid",
+        event_type: "purchase.paid",
+        purchase: { total: 50000 },
+        transaction_data: { payment_method: "fpx_b2c" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith("settle_prize_funding", {
+      p_funding_id: FUNDING_ID,
+      p_paid: true,
+      p_amount_cents: 50000,
+      p_payment_method: "fpx_b2c",
+    });
+    expect(mockRpc).not.toHaveBeenCalledWith(
+      "settle_registration_payment",
+      expect.anything(),
+    );
+    // The registration payments table is never consulted.
+    expect(mockFrom).not.toHaveBeenCalledWith("payments");
+    expect(mockNotifyConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("finds the funding by reference when the purchase id wasn't recorded", async () => {
+    setFundingResult(
+      { data: null, error: null }, // purchase id miss
+      { data: { id: FUNDING_ID }, error: null }, // reference hit
+    );
+    mockRpc.mockResolvedValueOnce({
+      data: { tournament_id: "t-1", newly_paid: true, amount_mismatch: false, already_processed: false },
+      error: null,
+    });
+
+    await POST(
+      makeRequest({ id: "chip-fund-2", reference: FUNDING_ID, status: "paid" }),
+    );
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_prize_funding",
+      expect.objectContaining({ p_funding_id: FUNDING_ID, p_paid: true }),
+    );
+  });
+
+  it("records a failed funder payment", async () => {
+    setFundingResult({ data: { id: FUNDING_ID }, error: null });
+    mockRpc.mockResolvedValueOnce({
+      data: { tournament_id: "t-1", newly_paid: false, amount_mismatch: false, already_processed: false },
+      error: null,
+    });
+
+    const res = await POST(
+      makeRequest({
+        id: "chip-fund-3",
+        reference: FUNDING_ID,
+        status: "error",
+        event_type: "purchase.payment_failure",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_prize_funding",
+      expect.objectContaining({ p_funding_id: FUNDING_ID, p_paid: false }),
+    );
+  });
+
+  it("acks an amount mismatch, leaving it for a person", async () => {
+    setFundingResult({ data: { id: FUNDING_ID }, error: null });
+    mockRpc.mockResolvedValueOnce({
+      data: { tournament_id: "t-1", newly_paid: false, amount_mismatch: true, already_processed: false },
+      error: null,
+    });
+
+    const res = await POST(
+      makeRequest({ id: "chip-fund-4", status: "paid", purchase: { total: 1 } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it("returns 500 when settle_prize_funding fails, so CHIP redelivers", async () => {
+    setFundingResult({ data: { id: FUNDING_ID }, error: null });
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: "db down" } });
+
+    const res = await POST(makeRequest({ id: "chip-fund-5", status: "paid" }));
+
+    expect(res.status).toBe(500);
+  });
+
+  it("returns 500 when the funding lookup fails", async () => {
+    setFundingResult({ data: null, error: { message: "db down" } });
+
+    const res = await POST(makeRequest({ id: "chip-fund-6", status: "paid" }));
+
+    expect(res.status).toBe(500);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("falls through to registration settlement when the purchase isn't a funding", async () => {
+    setPaymentResult({ data: { id: "pay-1", chip_transaction_id: "chip-1" }, error: null });
+
+    await POST(makeRequest({ id: "chip-1", status: "paid", purchase: { total: 11000 } }));
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_registration_payment",
+      expect.objectContaining({ p_payment_id: "pay-1" }),
+    );
+    expect(mockRpc).not.toHaveBeenCalledWith("settle_prize_funding", expect.anything());
   });
 });

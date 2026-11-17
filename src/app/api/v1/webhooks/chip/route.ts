@@ -15,6 +15,10 @@ import {
   notifyRefundSettlement,
   type SettleRefundResult,
 } from "@/services/refunds/notify";
+import {
+  findPrizeFundingForPurchase,
+  settlePrizeFunding,
+} from "@/services/prizes/funding";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -247,6 +251,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ data: { received: true } }, { status: 200 });
   }
   const paid = outcome === "paid";
+
+  // A sponsor paying into a platform-distributed prize pool (#523) uses this
+  // same webhook. Its purchase is a prize_fundings row, not a registration
+  // payment, and must never reach settle_registration_payment: routed out
+  // first, the way refunds are.
+  const funding = await findPrizeFundingForPurchase(purchaseId, reference);
+  if ("error" in funding) {
+    return internalErrorResponse(
+      `CHIP webhook: failed to look up a prize funding for purchase ${purchaseId ?? reference}; asking CHIP to redeliver`,
+      funding.error,
+    );
+  }
+  if (funding.id) {
+    const { error: fundingError } = await settlePrizeFunding({
+      fundingId: funding.id,
+      paid,
+      amountCents: payload.purchase?.total ?? null,
+      paymentMethod: payload.transaction_data?.payment_method ?? null,
+    });
+    if (fundingError) {
+      return internalErrorResponse(
+        `CHIP webhook: settle_prize_funding failed for funding ${funding.id} (${paid ? "paid" : "failed"}); asking CHIP to redeliver`,
+        fundingError,
+      );
+    }
+    return ack();
+  }
 
   // Correlate on the CHIP purchase id (stored as chip_transaction_id), which is
   // always set after checkout; fall back to our reference (payments.id).
