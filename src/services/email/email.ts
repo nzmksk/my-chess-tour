@@ -443,7 +443,7 @@ export async function sendPayoutReviewEmail(
  *   early_request    an organizer filed an early payout request to review
  *   awaiting_budget  a payout is parked until a CHIP Send budget request is approved
  */
-export type AdminPayoutAlert = "early_request" | "awaiting_budget";
+export type AdminPayoutAlert = "early_request" | "awaiting_budget" | "prize_review";
 
 const ADMIN_ALERTS: Record<
   AdminPayoutAlert,
@@ -461,6 +461,13 @@ const ADMIN_ALERTS: Record<
       "A payout could not be sent because the CHIP Send balance is too low. A budget increase has been requested; the payout goes out on the next run once it is approved.",
     subject: "Payout waiting on CHIP Send budget",
     ctaLabel: "View Payouts",
+  },
+  prize_review: {
+    headline: "Prize Winners to Review",
+    intro:
+      "An organizer has entered prize winners for a tournament whose prizes MY Chess Tour distributes. No money moves until you approve each award.",
+    subject: "Prize winners to review",
+    ctaLabel: "Review Prizes",
   },
 };
 

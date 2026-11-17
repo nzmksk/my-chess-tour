@@ -2,9 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
-const { mockRpc, mockGetClaims } = vi.hoisted(() => ({
+const { mockRpc, mockGetClaims, mockSendAwaiting } = vi.hoisted(() => ({
   mockRpc: vi.fn(),
   mockGetClaims: vi.fn(),
+  mockSendAwaiting: vi.fn(),
+}));
+
+vi.mock("@/services/prizes/execute", () => ({
+  sendAwardsAwaitingBank: mockSendAwaiting,
 }));
 
 vi.mock("@/services/supabase/admin", () => ({
@@ -20,6 +25,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { PATCH } from "../route";
+import { runAfterCallbacks } from "@/test/after";
 
 const USER = "bbbbbbbb-0000-0000-0000-000000000001";
 
@@ -160,5 +166,21 @@ describe("PATCH /api/v1/profile/banking", () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: "db down" } });
     const res = await PATCH(makeReq(VALID));
     expect(res.status).toBe(500);
+  });
+
+  it("sends any prize waiting on the winner after the response (#523)", async () => {
+    await PATCH(makeReq(VALID));
+    expect(mockSendAwaiting).not.toHaveBeenCalled();
+    await runAfterCallbacks();
+    expect(mockSendAwaiting).toHaveBeenCalledWith(appIdFor(USER));
+  });
+
+  it("doesn't try to send prizes to a cleared or rejected account", async () => {
+    mockRpc.mockResolvedValue({ data: { changed: true, id: null }, error: null });
+    await PATCH(makeReq({ bank_code: null, account_holder: null, account_number: null }));
+    mockRpc.mockResolvedValue({ data: { ...SAVED, changed: false, status: "rejected" }, error: null });
+    await PATCH(makeReq(VALID));
+    await runAfterCallbacks();
+    expect(mockSendAwaiting).not.toHaveBeenCalled();
   });
 });

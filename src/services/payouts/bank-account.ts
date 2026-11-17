@@ -80,6 +80,12 @@ export interface SettleBankAccountResult {
   error: { code?: string; message: string } | null;
   /** True when this call changed the row (false for a no-op repeat). */
   settled: boolean;
+  /**
+   * Set when this call settled an ACTIVE player prize account (#523), so the
+   * caller can send any prize waiting on it, or tell the winner it was rejected.
+   * Organization accounts are handled here; player follow-up lives with prizes.
+   */
+  playerVerdict?: { userId: string; verified: boolean };
 }
 
 /**
@@ -108,6 +114,7 @@ export async function settleBankAccountVerification(
   const result = data as {
     owner?: BankAccountOwner;
     organization_id: string | null;
+    user_id?: string | null;
     already_processed: boolean;
     is_active: boolean;
   };
@@ -131,6 +138,13 @@ export async function settleBankAccountVerification(
     });
   }
 
+  if (result.owner === "player" && result.is_active && result.user_id) {
+    return {
+      error: null,
+      settled: true,
+      playerVerdict: { userId: result.user_id, verified: input.verified },
+    };
+  }
   return { error: null, settled: true };
 }
 

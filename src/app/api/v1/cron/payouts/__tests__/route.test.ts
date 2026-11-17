@@ -16,6 +16,8 @@ const {
   mockSettle,
   mockGetInstruction,
   mockRegisterBanks,
+  mockStuckPrizes,
+  mockRetryPrizes,
 } = vi.hoisted(() => {
   // Each from("payouts") query records its filters; the stuck pass is the one
   // filtering on updated_at.
@@ -56,6 +58,8 @@ const {
     mockSettle: vi.fn(),
     mockGetInstruction: vi.fn(),
     mockRegisterBanks: vi.fn(),
+    mockStuckPrizes: vi.fn(),
+    mockRetryPrizes: vi.fn(),
   };
 });
 
@@ -70,6 +74,10 @@ vi.mock("@/services/payouts/settle", () => ({
 }));
 vi.mock("@/services/payouts/bank-account", () => ({
   registerPendingBankAccounts: mockRegisterBanks,
+}));
+vi.mock("@/services/prizes/sweep", () => ({
+  reconcileStuckPrizeAwards: mockStuckPrizes,
+  retryPendingPrizeAwards: mockRetryPrizes,
 }));
 vi.mock("@/services/chip/send", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services/chip/send")>();
@@ -152,6 +160,8 @@ describe("POST /api/v1/cron/payouts", () => {
     mockExecute.mockResolvedValue("sent");
     mockSettle.mockResolvedValue({ error: null, settled: true });
     mockRegisterBanks.mockResolvedValue(BANK_ZERO);
+    mockStuckPrizes.mockResolvedValue({ checked: 0, ...ZERO });
+    mockRetryPrizes.mockResolvedValue({ checked: 0, ...ZERO });
     vi.spyOn(console, "info").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -469,5 +479,43 @@ describe("POST /api/v1/cron/payouts", () => {
     const body = await res.json();
     expect(body.data.sweep).toBeNull();
     expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  // ----- prize awards (#523) -----------------------------------------------
+
+  it("reconciles and retries prize awards after the payout passes, and reports them", async () => {
+    const order: string[] = [];
+    mockExecute.mockImplementation(async () => {
+      order.push("payout");
+      return "sent";
+    });
+    mockStuckPrizes.mockImplementation(async () => {
+      order.push("stuck-prizes");
+      return { ...ZERO, checked: 1, paid: 1 };
+    });
+    mockRetryPrizes.mockImplementation(async () => {
+      order.push("retry-prizes");
+      return { ...ZERO, checked: 2, blocked: 2 };
+    });
+    setRpcs(["t1"]);
+
+    const res = await authed();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.stuckPrizes).toEqual({ ...ZERO, checked: 1, paid: 1 });
+    expect(body.data.retriedPrizes).toEqual({ ...ZERO, checked: 2, blocked: 2 });
+    expect(order).toEqual(["payout", "stuck-prizes", "retry-prizes"]);
+  });
+
+  it("500s when a prize pass can't load its work, after running everything else", async () => {
+    mockRetryPrizes.mockRejectedValue(new Error("failed to load pending prize awards"));
+    setRpcs(["t1"]);
+
+    const res = await authed();
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.data.retriedPrizes).toBeNull();
+    expect(body.data.sweep).toEqual({ ...ZERO, swept: 1, queued: 1, sent: 1 });
+    expect(body.data.stuckPrizes).toEqual({ ...ZERO, checked: 0 });
   });
 });

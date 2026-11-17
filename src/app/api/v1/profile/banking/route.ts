@@ -4,6 +4,8 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 import { validateBankAccountRequest } from "@/app/api/v1/organizations/[orgId]/bank-account/validators";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
+import { sendAwardsAwaitingBank } from "@/services/prizes/execute";
 
 // The player's prize destination (player_bank_accounts, #523). Freely editable
 // (bank accounts change), but never updated in place: set_player_bank_account
@@ -88,7 +90,14 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
 
   // Already masked by the RPC. A cleared account comes back with id null.
-  const result = data as { id: string | null } & Record<string, unknown>;
+  const result = data as { id: string | null; status?: string } & Record<string, unknown>;
+
+  // A winner fixing or adding their details: any approved prize waiting on them
+  // is registered with CHIP and sent now, after the response, rather than on the
+  // next daily run. With nothing waiting this is one query and no CHIP call.
+  if (result.id !== null && result.status !== "rejected") {
+    afterResponse(() => sendAwardsAwaitingBank(claims.id));
+  }
   return NextResponse.json(
     { data: result.id === null ? null : result },
     { status: 200 },
