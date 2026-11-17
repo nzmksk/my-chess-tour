@@ -622,6 +622,102 @@ CREATE TABLE payouts (
   CONSTRAINT chk_payout_paid_shape       CHECK (status <> 'paid' OR (payment_id IS NOT NULL AND settled_amount_cents IS NOT NULL))
 );
 
+-- =============================================
+-- PRIZE FUNDINGS
+-- Money IN for a platform-distributed prize pool (#523), only for tournaments
+-- whose prizes.distribution is "platform". One row per contribution: a pool may
+-- have several sponsors, each paying through their own CHIP Collect purchase.
+-- The organizer creates the row and forwards its checkout link to the funder.
+--
+-- The CHIP purchase `reference` is id::text. The paid contribution itself is
+-- the type='prize_funding' ledger row in payments (payment_id), booked by
+-- settle_prize_funding, which is what feeds
+-- tournament_payout_summary.prize_pool_balance_cents. A pending or failed row
+-- funds nothing.
+--
+-- Entry fees never fund prizes (src/lib/tournaments/prize-funding.ts), so
+-- nothing here is ever netted against the organizer's revenue.
+-- =============================================
+CREATE TABLE prize_fundings (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id       uuid NOT NULL REFERENCES tournaments(id) ON DELETE RESTRICT,
+  funder_name         varchar(255) NOT NULL,
+  funder_email        varchar(255) NOT NULL,
+  amount_cents        integer NOT NULL,
+  status              payment_status NOT NULL DEFAULT 'pending',
+  chip_transaction_id varchar(255),           -- CHIP purchase id
+  checkout_url        text,                   -- forwarded to the funder
+  payment_method      varchar(50),
+  payment_id          uuid REFERENCES payments(id) ON DELETE RESTRICT,
+  paid_at             timestamptz,
+  created_by          uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_prize_funding_amount_positive CHECK (amount_cents > 0),
+  CONSTRAINT chk_prize_funding_paid_shape
+    CHECK ((status = 'paid') = (payment_id IS NOT NULL AND paid_at IS NOT NULL))
+);
+
+-- =============================================
+-- PRIZE AWARDS
+-- Money OUT of a platform-distributed prize pool to a winning player, via CHIP
+-- Send (#523). The organizer enters each winner after the event; a platform
+-- admin approves the award before any money moves, because a wrong name here
+-- is an irreversible transfer. Then it is sent exactly like a payout:
+-- claim_prize_award_send, a CHIP send instruction with `reference` = id::text,
+-- and settle_prize_award, which books the type='player_prize' ledger row that
+-- drains prize_pool_balance_cents.
+--
+-- A live award is one not rejected and not failed. Only APPROVED live awards
+-- reserve pool money (available_prize_pool_cents); one awaiting review does not.
+-- As with payouts, a failed award is terminal: the organizer enters the winner
+-- again and an admin approves the new row.
+--
+-- organization_id is the ORGANIZING org, for the same reason as on payouts: the
+-- ledger row carries it, and the summary view groups on it.
+-- bank_account_id is the account the money is sent to, snapshotted when the
+-- send is claimed (the player may have no verified account at approval time).
+-- =============================================
+CREATE TABLE prize_awards (
+  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id            uuid NOT NULL REFERENCES tournaments(id)   ON DELETE RESTRICT,
+  organization_id          uuid NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  -- The winner. SET NULL keeps the money record if the account is deleted;
+  -- an award with no winner can't be sent (claim_prize_award_send).
+  user_id                  uuid REFERENCES users(id) ON DELETE SET NULL,
+  -- SET NULL, not RESTRICT as on payouts: deleting a player's account cascades
+  -- to their bank accounts, and a paid prize must not block that. The money
+  -- record survives in payments and on this row.
+  bank_account_id          uuid REFERENCES player_bank_accounts(id) ON DELETE SET NULL,
+  -- Which declared prize this is: a category name with its place, or a
+  -- special prize's name with place NULL. Checked against tournaments.prizes.
+  category                 varchar(255) NOT NULL,
+  place                    varchar(50),
+  amount_cents             integer NOT NULL,
+  settled_amount_cents     integer,
+  approval                 approval_status NOT NULL DEFAULT 'pending',
+  status                   payout_status   NOT NULL DEFAULT 'pending',
+  entered_by               uuid REFERENCES users(id) ON DELETE SET NULL,
+  entered_at               timestamptz NOT NULL DEFAULT now(),
+  reviewed_by              uuid REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at              timestamptz,
+  rejection_reason         text,
+  chip_send_instruction_id bigint,
+  chip_send_limit_id       bigint,
+  chip_receipt_url         text,
+  failure_reason           text,
+  payment_id               uuid REFERENCES payments(id) ON DELETE RESTRICT,
+  processed_at             timestamptz,  -- set once by settle_prize_award; the idempotency marker
+  created_at               timestamptz NOT NULL DEFAULT now(),
+  updated_at               timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_prize_award_amount_positive CHECK (amount_cents > 0),
+  CONSTRAINT chk_prize_award_reviewed_at     CHECK (reviewed_at IS NULL OR reviewed_at >= entered_at),
+  CONSTRAINT chk_prize_award_paid_shape      CHECK (status <> 'paid' OR (payment_id IS NOT NULL AND settled_amount_cents IS NOT NULL)),
+  -- Nothing moves before an admin has approved it.
+  CONSTRAINT chk_prize_award_moves_approved  CHECK (status = 'pending' OR approval = 'approved')
+);
 
 -- =============================================
 -- AUDIT LOGS

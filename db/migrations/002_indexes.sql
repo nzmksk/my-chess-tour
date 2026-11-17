@@ -135,3 +135,24 @@ CREATE INDEX idx_payouts_org_status       ON payouts (organization_id, status, c
 CREATE INDEX idx_payouts_recipient_status ON payouts (recipient_organization_id, status, created_at);
 CREATE INDEX idx_payouts_pending_review   ON payouts (requested_at) WHERE approval = 'pending';
 CREATE INDEX idx_payouts_in_flight        ON payouts (status, updated_at) WHERE status = 'processing';
+
+-- Prize fundings
+-- One CHIP purchase per contribution, so webhook correlation can't fan out.
+CREATE UNIQUE INDEX uniq_prize_fundings_chip_transaction
+  ON prize_fundings (chip_transaction_id) WHERE chip_transaction_id IS NOT NULL;
+CREATE INDEX idx_prize_fundings_tournament ON prize_fundings (tournament_id, created_at);
+
+-- Prize awards
+CREATE UNIQUE INDEX uniq_prize_awards_chip_send_instruction
+  ON prize_awards (chip_send_instruction_id) WHERE chip_send_instruction_id IS NOT NULL;
+-- The same winner can't hold the same prize twice. A tie splits a prize between
+-- DIFFERENT players, which this allows; enter_prize_award caps the split at the
+-- declared amount. Rejected and failed awards fall out, so the winner can be
+-- entered again.
+CREATE UNIQUE INDEX uniq_live_prize_award
+  ON prize_awards (tournament_id, category, COALESCE(place, ''), user_id)
+  WHERE approval <> 'rejected' AND status <> 'failed';
+CREATE INDEX idx_prize_awards_tournament     ON prize_awards (tournament_id, entered_at);
+CREATE INDEX idx_prize_awards_user           ON prize_awards (user_id);
+CREATE INDEX idx_prize_awards_pending_review ON prize_awards (entered_at) WHERE approval = 'pending';
+CREATE INDEX idx_prize_awards_in_flight      ON prize_awards (status, updated_at) WHERE status = 'processing';

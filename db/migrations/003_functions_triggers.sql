@@ -37,6 +37,12 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON payouts
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_bank_accounts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_fundings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_awards
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- =============================================
 -- AUTH SIGNUP TRIGGER
 -- Creates user + player_profile on auth signup.
@@ -377,10 +383,10 @@ BEGIN
     v_org_id := v_record_id::uuid;
   ELSIF TG_TABLE_NAME IN (
     'organization_memberships', 'tournaments', 'payments', 'payouts',
-    'organization_bank_accounts', 'organization_documents'
+    'organization_bank_accounts', 'organization_documents', 'prize_awards'
   ) THEN
     v_org_id := (COALESCE(v_new, v_old) ->> 'organization_id')::uuid;
-  ELSIF TG_TABLE_NAME = 'registrations' THEN
+  ELSIF TG_TABLE_NAME IN ('registrations', 'prize_fundings') THEN
     SELECT t.organization_id INTO v_org_id
     FROM tournaments t
     WHERE t.id = (COALESCE(v_new, v_old) ->> 'tournament_id')::uuid;
@@ -457,6 +463,12 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON payouts
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON player_bank_accounts
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON prize_fundings
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON prize_awards
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
 -- Good practice: status transitions
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournaments
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
@@ -489,8 +501,8 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancel
 --      hard delete of the users row does this by itself; this covers a soft
 --      delete, where the row survives.
 --
--- What it deliberately leaves alone: payments, refunds, payouts and
--- registrations audit rows, including their changed_by. They are financial
+-- What it deliberately leaves alone: payments, refunds, payouts, prize awards,
+-- prize fundings and registrations audit rows, including their changed_by. They are financial
 -- records under the 7-year obligation, which overrides the deletion request.
 -- Their snapshots hold ids and amounts, not profile data, and once the account
 -- is deleted a changed_by there resolves to nothing personal.
@@ -534,7 +546,9 @@ DECLARE
   c_keep_player_bank     constant text[] := ARRAY[
     'id', 'user_id', 'status', 'is_active', 'verified_at', 'created_at', 'updated_at'
   ];
-  c_financial            constant text[] := ARRAY['payments', 'refunds', 'payouts', 'registrations'];
+  c_financial            constant text[] := ARRAY[
+    'payments', 'refunds', 'payouts', 'registrations', 'prize_awards', 'prize_fundings'
+  ];
   v_bank_rows            integer;
 BEGIN
   IF p_user_id IS NULL THEN
