@@ -361,21 +361,28 @@ export interface BankRegistrationStats extends Record<BankRegistrationOutcome, n
 }
 
 /**
- * Registers every bank account a request meant to register but didn't get to:
- * the active, `pending` account of an APPROVED organization that CHIP has never
- * given an id. Approval and the organizer's save both register from an
- * after-response task, so a CHIP outage, a crash or a timed-out function leaves
- * exactly this behind. Run daily by POST /api/v1/cron/payouts.
+ * Re-registers every active, `pending` bank account of an APPROVED
+ * organization. Run daily by POST /api/v1/cron/payouts. It recovers each way an
+ * account can be left without a verdict:
+ *   - the registration never reached CHIP (an outage, a crash, or a timed-out
+ *     after-response task from the approval or the organizer's save), so the
+ *     row has no chip_bank_account_id;
+ *   - CHIP answered verified/rejected on the spot but the settle RPC failed
+ *     after the id was saved;
+ *   - CHIP's verdict webhook never arrived.
+ * Posting an account CHIP already has returns CHIP's existing record for our
+ * `reference` (the row id) with its current status, so the last two cases are
+ * settled from that answer, and an account CHIP is still verifying stays
+ * pending.
  *
  * A row created inside BANK_REGISTRATION_GRACE_MINUTES is left to the request
- * still registering it. Re-registering is safe either way: CHIP returns its
- * existing record for our `reference` (the row id), and the settle RPC keeps
- * the first verdict.
+ * still registering it. Overlapping is safe either way: CHIP dedupes on the
+ * reference, and the settle RPC keeps the first verdict.
  *
  * Throws only when the work list can't be loaded. Each registration never
  * throws and logs its own failure with the bank account id.
  */
-export async function registerUnregisteredBankAccounts(
+export async function registerPendingBankAccounts(
   now: Date = new Date(),
 ): Promise<BankRegistrationStats> {
   const cutoff = new Date(now.getTime() - BANK_REGISTRATION_GRACE_MINUTES * 60_000);
@@ -384,12 +391,11 @@ export async function registerUnregisteredBankAccounts(
     .select("id, organizations!inner(approval_status)")
     .eq("is_active", true)
     .eq("status", "pending")
-    .is("chip_bank_account_id", null)
     .eq("organizations.approval_status", "approved")
     .lt("created_at", cutoff.toISOString())
     .order("created_at", { ascending: true });
   if (error) {
-    throw new Error(`failed to load unregistered bank accounts: ${error.message}`, {
+    throw new Error(`failed to load pending bank accounts: ${error.message}`, {
       cause: error,
     });
   }

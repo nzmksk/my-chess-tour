@@ -58,7 +58,7 @@ import {
   notifyBankVerification,
   registerActiveOrganizationBankAccount,
   registerOrganizationBankAccount,
-  registerUnregisteredBankAccounts,
+  registerPendingBankAccounts,
   settleBankAccountVerification,
 } from "../bank-account";
 
@@ -265,23 +265,24 @@ describe("registerActiveOrganizationBankAccount", () => {
 });
 
 // ---------------------------------------------------------------------------
-// registerUnregisteredBankAccounts
+// registerPendingBankAccounts
 // ---------------------------------------------------------------------------
 
-describe("registerUnregisteredBankAccounts", () => {
+describe("registerPendingBankAccounts", () => {
   const NOW = new Date("2026-11-17T01:00:00Z");
 
-  it("loads only active, pending, never-registered accounts of approved organizations past the grace period", async () => {
+  it("loads every active, pending account of an approved organization past the grace period", async () => {
     queue("organization_bank_accounts", { data: [], error: null });
 
-    await registerUnregisteredBankAccounts(NOW);
+    await registerPendingBankAccounts(NOW);
 
     const builder = mockFrom.mock.results[0].value as Record<string, ReturnType<typeof vi.fn>>;
     expect(mockFrom).toHaveBeenCalledWith("organization_bank_accounts");
     expect(builder.select).toHaveBeenCalledWith("id, organizations!inner(approval_status)");
     expect(builder.eq).toHaveBeenCalledWith("is_active", true);
     expect(builder.eq).toHaveBeenCalledWith("status", "pending");
-    expect(builder.is).toHaveBeenCalledWith("chip_bank_account_id", null);
+    // Registered-but-unsettled accounts too: a re-post returns CHIP's current verdict.
+    expect(builder.is).not.toHaveBeenCalled();
     expect(builder.eq).toHaveBeenCalledWith("organizations.approval_status", "approved");
     expect(builder.lt).toHaveBeenCalledWith("created_at", "2026-11-17T00:45:00.000Z");
   });
@@ -298,7 +299,7 @@ describe("registerUnregisteredBankAccounts", () => {
     );
     mockRegister.mockResolvedValue({ id: 84, status: "pending", rejection_reason: null });
 
-    const stats = await registerUnregisteredBankAccounts(NOW);
+    const stats = await registerPendingBankAccounts(NOW);
 
     expect(stats).toEqual({
       checked: 2,
@@ -314,9 +315,33 @@ describe("registerUnregisteredBankAccounts", () => {
     );
   });
 
+  it("settles an account CHIP already has from its current verdict", async () => {
+    // A synchronous verdict whose settle failed earlier: the id was saved, the
+    // row is still pending.
+    queue(
+      "organization_bank_accounts",
+      { data: [{ id: BANK_ID }], error: null },
+      { data: { ...pendingRow, chip_bank_account_id: 84 }, error: null },
+      { data: null, error: null },
+    );
+    mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
+    queueNotifyData("verified");
+
+    const stats = await registerPendingBankAccounts(NOW);
+
+    expect(stats.verified).toBe(1);
+    expect(mockRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ reference: BANK_ID }),
+    );
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_bank_account_id: BANK_ID, p_verified: true }),
+    );
+  });
+
   it("returns zero counts when nothing is waiting", async () => {
     queue("organization_bank_accounts", { data: [], error: null });
-    await expect(registerUnregisteredBankAccounts(NOW)).resolves.toEqual({
+    await expect(registerPendingBankAccounts(NOW)).resolves.toEqual({
       checked: 0,
       verified: 0,
       rejected: 0,
@@ -329,8 +354,8 @@ describe("registerUnregisteredBankAccounts", () => {
 
   it("throws when the work list can't be loaded", async () => {
     queue("organization_bank_accounts", { data: null, error: { message: "db down" } });
-    await expect(registerUnregisteredBankAccounts(NOW)).rejects.toThrow(
-      "failed to load unregistered bank accounts",
+    await expect(registerPendingBankAccounts(NOW)).rejects.toThrow(
+      "failed to load pending bank accounts",
     );
   });
 });

@@ -221,7 +221,7 @@ export async function PATCH(
     // After the response, so a slow CHIP doesn't hold up the admin (#555). It
     // never throws: a failure is logged with the bank account id and leaves the
     // account 'pending', and the daily payout run registers it
-    // (registerUnregisteredBankAccounts).
+    // (registerPendingBankAccounts).
     if (action === "approve") {
       afterResponse(() => registerActiveOrganizationBankAccount(id));
     }

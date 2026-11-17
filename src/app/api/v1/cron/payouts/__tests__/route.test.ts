@@ -69,7 +69,7 @@ vi.mock("@/services/payouts/settle", () => ({
   settlePayout: mockSettle,
 }));
 vi.mock("@/services/payouts/bank-account", () => ({
-  registerUnregisteredBankAccounts: mockRegisterBanks,
+  registerPendingBankAccounts: mockRegisterBanks,
 }));
 vi.mock("@/services/chip/send", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services/chip/send")>();
@@ -410,9 +410,9 @@ describe("POST /api/v1/cron/payouts", () => {
     expect(mockExecute.mock.calls.map(([id]) => id)).toEqual(["p-old", "payout-t1"]);
   });
 
-  // ----- unregistered bank accounts ---------------------------------------
+  // ----- pending bank accounts --------------------------------------------
 
-  it("registers bank accounts a request left unregistered, and reports the counts", async () => {
+  it("re-registers bank accounts still waiting on a verdict, and reports the counts", async () => {
     mockRegisterBanks.mockResolvedValue({ ...BANK_ZERO, checked: 2, verified: 1, pending: 1 });
 
     const res = await authed();
@@ -436,7 +436,7 @@ describe("POST /api/v1/cron/payouts", () => {
   });
 
   it("500s when the bank account pass can't load its work, after running the payout passes", async () => {
-    mockRegisterBanks.mockRejectedValue(new Error("failed to load unregistered bank accounts"));
+    mockRegisterBanks.mockRejectedValue(new Error("failed to load pending bank accounts"));
     setRpcs(["t1"]);
 
     const res = await authed();

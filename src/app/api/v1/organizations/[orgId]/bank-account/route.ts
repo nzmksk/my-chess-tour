@@ -233,7 +233,7 @@ export async function PUT(
   // verifies it on the spot; the settings page re-reads it on its next load.
   // It never throws: a failure is logged with the bank account id and leaves
   // the row pending, and the daily payout run registers it
-  // (registerUnregisteredBankAccounts).
+  // (registerPendingBankAccounts).
   if (auth.approved && result.status === "pending") {
     afterResponse(() => registerOrganizationBankAccount(result.id));
   }

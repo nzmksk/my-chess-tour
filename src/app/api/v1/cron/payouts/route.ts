@@ -12,7 +12,7 @@ import {
 } from "@/services/payouts/sweep";
 import {
   type BankRegistrationStats,
-  registerUnregisteredBankAccounts,
+  registerPendingBankAccounts,
 } from "@/services/payouts/bank-account";
 
 // Session-less background job (mirrors the CHIP webhook and the FIDE cron): uses
@@ -49,8 +49,8 @@ async function runPass<T>(
 /**
  * The daily organizer payout run. Triggered by a GitHub Actions schedule (see
  * .github/workflows/organizer-payouts.yml) that POSTs here with the shared
- * CRON_SECRET. Registers bank accounts a request left unregistered with CHIP
- * Send (src/services/payouts/bank-account.ts), reconciles stuck payouts, retries
+ * CRON_SECRET. Re-registers bank accounts still waiting on a CHIP Send verdict
+ * (src/services/payouts/bank-account.ts), reconciles stuck payouts, retries
  * pending ones, then pays every tournament whose automatic payout has fallen due
  * (src/services/payouts/sweep.ts).
  *
@@ -83,8 +83,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // run's sweep, and a payout the sweep parks on budget shouldn't be retried a
   // moment later by the pending pass.
   const stats: RunStats = {
-    bankAccounts: await runPass("unregistered bank account", () =>
-      registerUnregisteredBankAccounts(),
+    bankAccounts: await runPass("pending bank account", () =>
+      registerPendingBankAccounts(),
     ),
     stuck: await runPass("stuck payout", () => reconcileStuckPayouts()),
     retried: await runPass("pending payout", retryPendingPayouts),
