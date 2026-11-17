@@ -379,10 +379,14 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       expect(json.data.approval_status).toBe("approved");
     });
 
-    it("registers the payout bank account with CHIP Send after approving", async () => {
-      await PATCH(makePatchRequest(APP_ID, { action: "approve" }), {
+    it("registers the payout bank account with CHIP Send after the response", async () => {
+      const res = await PATCH(makePatchRequest(APP_ID, { action: "approve" }), {
         params: Promise.resolve({ id: APP_ID }),
       });
+      expect(res.status).toBe(200);
+      // The response didn't wait on CHIP Send.
+      expect(mockRegisterBank).not.toHaveBeenCalled();
+      await runAfterCallbacks();
       expect(mockRegisterBank).toHaveBeenCalledOnce();
       expect(mockRegisterBank).toHaveBeenCalledWith(APP_ID);
       // Only after the review RPC has committed.
@@ -422,6 +426,24 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
 
       expect(sent).toEqual(["application reviewed", "bank verified"]);
     });
+
+    it("registers the bank account only once the approval email has gone", async () => {
+      let releaseEmail!: () => void;
+      mockNotifyReviewed.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (releaseEmail = resolve)),
+      );
+
+      await PATCH(makePatchRequest(APP_ID, { action: "approve" }), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
+      const after = runAfterCallbacks();
+      await vi.waitFor(() => expect(mockNotifyReviewed).toHaveBeenCalled());
+      expect(mockRegisterBank).not.toHaveBeenCalled();
+
+      releaseEmail();
+      await after;
+      expect(mockRegisterBank).toHaveBeenCalledOnce();
+    });
   });
 
   // ── Reject ────────────────────────────────────────────────────────────────
@@ -457,6 +479,7 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
         }),
         { params: Promise.resolve({ id: APP_ID }) },
       );
+      await runAfterCallbacks();
       expect(mockRegisterBank).not.toHaveBeenCalled();
     });
 
