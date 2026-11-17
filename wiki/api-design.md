@@ -142,6 +142,8 @@ Query params: `?cursor=abc123&limit=20` (default limit: 20, max: 100).
 { "error": { "code": "VALIDATION_ERROR", "message": "...", "details": [...] } }
 ```
 
+**Notification emails go out after the response.** A route never waits for Resend: it schedules its `notify*` call with `afterResponse(task)` from `src/lib/http/after-response.ts`, which wraps Next's `after()` so the platform keeps the function alive until the email is sent. This also applies to emails sent from services a route calls (`settlePayout`, `fireRefund`, bank verification). When the reader would notice the order of emails, wrap the work in `inOrderAfterResponse(fn)`: every task `fn` schedules, at any depth, then runs one at a time in scheduling order. Examples are the admin payout review ("approved" before "processed") and cancellation approval (the cancellation notice before "refund completed"). The exceptions are emails whose result goes back to the user: verification codes, password resets, and member invitations (`email_sent`). In tests, the setup file holds `after()` callbacks until `runAfterCallbacks()` from `src/test/after.ts` is called.
+
 ---
 
 ## 4. Endpoints
