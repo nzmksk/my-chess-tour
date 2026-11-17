@@ -1,6 +1,7 @@
 -- =============================================================================
 -- DB regression test for the ops re-fire path for stuck refunds (#497):
---   * refund_fire_due — never fired / fired long enough ago / failed since fired
+--   * refund_fire_due — never fired / fired long enough ago (a failure doesn't
+--     shorten the wait)
 --   * claim_refund_fire — stamps last_fired_at once, refuses a refund that is
 --     settled (processed_at, chip_refund_id or 'approved'), rejected, in flight,
 --     missing, or has no CHIP purchase to refund against
@@ -141,26 +142,30 @@ BEGIN
   END IF;
   RAISE NOTICE 'F4 PASS — the age threshold decides when an unanswered fire is stuck';
 
-  -- ===== F5: a failure reported after the fire makes it due straight away ====
+  -- ===== F5: a reported failure doesn't shorten the wait ====================
+  -- purchase.refund_failure names only the purchase, so a failure landing after
+  -- a fire may belong to an earlier one. It must not let a second claim through
+  -- while the latest fire is still in flight (PR #602 review).
   UPDATE refunds SET last_fired_at = now() - interval '2 minutes' WHERE id = v_refund_a;
   PERFORM settle_refund(v_refund_a, NULL, false, NULL);   -- failed_at := now()
+  IF EXISTS (SELECT 1 FROM list_stuck_refunds(c_age) WHERE refund_id = v_refund_a) THEN
+    RAISE EXCEPTION 'F5 FAIL: a refund that failed 2 minutes after its fire is listed';
+  END IF;
+  v_res := claim_refund_fire(v_refund_a, c_age);
+  IF v_res->>'reason' IS DISTINCT FROM 'in_flight' THEN
+    RAISE EXCEPTION 'F5 FAIL: a failure after the fire bypassed the in-flight guard: %', v_res;
+  END IF;
+
+  -- Once the fire is old enough, the failed refund is stuck like any other.
+  UPDATE refunds SET last_fired_at = now() - interval '20 minutes' WHERE id = v_refund_a;
   IF NOT EXISTS (SELECT 1 FROM list_stuck_refunds(c_age) WHERE refund_id = v_refund_a) THEN
-    RAISE EXCEPTION 'F5 FAIL: a refund that failed after it was fired is not listed';
+    RAISE EXCEPTION 'F5 FAIL: a failed refund fired 20 minutes ago is not listed';
   END IF;
   v_res := claim_refund_fire(v_refund_a, c_age);
   IF NOT (v_res->>'claimed')::boolean THEN
-    RAISE EXCEPTION 'F5 FAIL: claim after a failure returned %', v_res;
+    RAISE EXCEPTION 'F5 FAIL: claim of an aged failed refund returned %', v_res;
   END IF;
-
-  -- failed_at is first-failure-only: an old failure doesn't make a fresh fire due.
-  UPDATE refunds
-    SET failed_at = now() - interval '10 minutes', last_fired_at = now() - interval '1 minute'
-    WHERE id = v_refund_a;
-  v_res := claim_refund_fire(v_refund_a, c_age);
-  IF v_res->>'reason' IS DISTINCT FROM 'in_flight' THEN
-    RAISE EXCEPTION 'F5 FAIL: a failure older than the last fire made it due: %', v_res;
-  END IF;
-  RAISE NOTICE 'F5 PASS — failed since the fire is due now; an earlier failure is not';
+  RAISE NOTICE 'F5 PASS — a failure waits out the age rule like everything else';
 
   -- ===== F6: a settled refund is never re-fired ==============================
   PERFORM settle_refund(v_refund_b, 'refire-refund-pay-b', true, 'visa');

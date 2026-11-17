@@ -3,7 +3,7 @@ import { REFUND_STUCK_AFTER_INTERVAL } from "@/lib/refunds/stuck-after";
 
 /**
  * A refund still owed to a player that nothing is moving: never fired, fired
- * REFUND_STUCK_AFTER_MINUTES ago with no answer, or failed since it was fired.
+ * at least REFUND_STUCK_AFTER_MINUTES ago and failed or got no answer.
  * One row of list_stuck_refunds.
  */
 export interface StuckRefund {

@@ -38,7 +38,8 @@ const REASONS: Record<
   },
 };
 
-// Mirrors refund_fire_due: what made this refund stuck.
+// Why this refund is stuck. Listing is refund_fire_due's call; this only
+// labels it.
 function stuckReason(r: StuckRefund): StuckReason {
   if (!r.original_chip_purchase_id) return "no_purchase";
   if (
@@ -191,8 +192,8 @@ export default function StuckRefundsClient({
         </h1>
         <p className="font-lato text-text-muted mt-1 text-sm">
           Refunds still owed to players that nothing is moving: never sent to
-          CHIP, failed, or sent more than {REFUND_STUCK_AFTER_MINUTES} minutes
-          ago with no answer. Nothing retries these on its own. Retrying checks
+          CHIP, or sent more than {REFUND_STUCK_AFTER_MINUTES} minutes ago and
+          either failed or got no answer. Nothing retries these on its own. Retrying checks
           the purchase at CHIP first, so a player is never refunded twice.
         </p>
       </div>

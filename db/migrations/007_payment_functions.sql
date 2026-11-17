@@ -389,15 +389,18 @@ $$;
 -- webhook looks exactly like one that is stuck. So a refund is due only when:
 --   * it was never fired (the approve path never reached it, or rows that predate
 --     last_fired_at), or
---   * it was fired at least p_min_age ago and nothing has settled it since, or
---   * CHIP reported it failed after it was last fired (failed_at is stamped the
---     first time only, so a second failure falls back on the age rule).
+--   * it was fired at least p_min_age ago and nothing has settled it since.
+-- A reported failure does NOT shorten the wait. purchase.refund_failure is
+-- correlated by the original purchase only, so a late failure from an earlier
+-- fire is indistinguishable from one for the latest fire; letting it make the
+-- refund due would let a second claim through while the latest fire is still
+-- reconciling or POSTing to CHIP. The age rule alone is what the in-flight
+-- guard rests on.
 -- Shared by claim_refund_fire and list_stuck_refunds so the button and the list
 -- can't disagree. Not SECURITY DEFINER: it reads nothing.
 -- =============================================
 CREATE OR REPLACE FUNCTION refund_fire_due(
   p_last_fired_at timestamptz,
-  p_failed_at     timestamptz,
   p_min_age       interval
 )
 RETURNS boolean
@@ -405,8 +408,7 @@ LANGUAGE sql
 STABLE
 AS $$
   SELECT p_last_fired_at IS NULL
-      OR p_last_fired_at <= now() - p_min_age
-      OR (p_failed_at IS NOT NULL AND p_failed_at >= p_last_fired_at);
+      OR p_last_fired_at <= now() - p_min_age;
 $$;
 
 -- =============================================
@@ -460,7 +462,7 @@ BEGIN
     RETURN jsonb_build_object('claimed', false, 'reason', 'rejected');
   END IF;
 
-  IF NOT refund_fire_due(v_refund.last_fired_at, v_refund.failed_at, p_min_age) THEN
+  IF NOT refund_fire_due(v_refund.last_fired_at, p_min_age) THEN
     RETURN jsonb_build_object('claimed', false, 'reason', 'in_flight');
   END IF;
 
@@ -529,7 +531,7 @@ AS $$
   WHERE rf.status = 'pending'
     AND rf.processed_at IS NULL
     AND rf.chip_refund_id IS NULL
-    AND refund_fire_due(rf.last_fired_at, rf.failed_at, p_min_age)
+    AND refund_fire_due(rf.last_fired_at, p_min_age)
   ORDER BY rf.requested_at, rf.id;
 $$;
 
