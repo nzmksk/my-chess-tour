@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { runAfterCallbacks } from "@/test/after";
 
 const { mockRpc, mockGetAuthClaims, mockNotify } = vi.hoisted(() => ({
   mockRpc: vi.fn(),
@@ -52,6 +53,7 @@ describe("POST /api/v1/invitations/:token/accept", () => {
       p_user_id: USER_ID,
     });
     expect((await res.json()).data.organization_id).toBe(ORG_ID);
+    await runAfterCallbacks();
     expect(mockNotify).toHaveBeenCalledWith(INV_ID);
   });
 
@@ -61,6 +63,7 @@ describe("POST /api/v1/invitations/:token/accept", () => {
       error: null,
     });
     await accept(req("accept"), params());
+    await runAfterCallbacks();
     expect(mockNotify).not.toHaveBeenCalled();
   });
 
@@ -94,6 +97,7 @@ describe("POST /api/v1/invitations/:token/accept", () => {
     });
     const res = await accept(req("accept"), params());
     expect(res.status).toBe(410);
+    await runAfterCallbacks();
     expect(mockNotify).not.toHaveBeenCalled();
   });
 });
@@ -107,6 +111,7 @@ describe("POST /api/v1/invitations/:token/decline", () => {
       p_token_hash: hashInvitationToken(TOKEN),
       p_user_id: null,
     });
+    await runAfterCallbacks();
     expect(mockNotify).toHaveBeenCalledWith(INV_ID);
   });
 
@@ -116,6 +121,7 @@ describe("POST /api/v1/invitations/:token/decline", () => {
       error: null,
     });
     await decline(req("decline"), params());
+    await runAfterCallbacks();
     expect(mockNotify).not.toHaveBeenCalled();
   });
 

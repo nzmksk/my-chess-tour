@@ -4,6 +4,7 @@ import { UUID_RE } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { invitationErrorResponse } from "@/app/api/v1/organizations/_lib/invitation-errors";
 import { notifyInvitationResponded } from "@/services/organizations/notify";
 import { NextResponse } from "next/server";
+import { afterResponse } from "@/lib/http/after-response";
 
 /**
  * Accepts or declines one of the signed-in user's own invitations, by id. The
@@ -54,7 +55,7 @@ export async function respondToOwnInvitation(
     already_declined?: boolean;
   };
   if (!(accept ? result.already_accepted : result.already_declined)) {
-    await notifyInvitationResponded(result.invitation_id);
+    afterResponse(() => notifyInvitationResponded(result.invitation_id));
   }
 
   return NextResponse.json({ data }, { status: 200 });
