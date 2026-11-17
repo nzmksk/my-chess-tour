@@ -500,6 +500,79 @@ export async function sendOrganizerApplicationReviewEmail(
   }
 }
 
+export type MemberInvitationRole = "admin" | "member";
+
+// What each assignable role can do, written to finish "you can …". Mirrors the
+// role_permissions seed in 006_seed.sql.
+const MEMBER_ROLE_COPY: Record<
+  MemberInvitationRole,
+  { label: string; summary: string }
+> = {
+  admin: {
+    label: "an admin",
+    summary:
+      "create and edit tournaments, view registrations and payments, handle refunds and invite new members",
+  },
+  member: {
+    label: "a member",
+    summary: "view the organization's tournaments and registrations",
+  },
+};
+
+// Tells someone they have been added to an organization's team. With an
+// `acceptUrl` the recipient has no account yet: the email invites them to accept
+// and set a password (member-invitation.html). Without one they already have an
+// account and are a member as of now, so it links to the dashboard
+// (member-added.html).
+export async function sendMemberInvitationEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    inviterName: string;
+    organizationName: string;
+    orgId: string;
+    role: MemberInvitationRole;
+    acceptUrl?: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const role = MEMBER_ROLE_COPY[params.role];
+
+  let html = loadTemplate(
+    params.acceptUrl ? "member-invitation.html" : "member-added.html",
+  )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{inviterName\}\}/g, escapeHtml(params.inviterName))
+    .replace(/\{\{organizationName\}\}/g, escapeHtml(params.organizationName))
+    .replace(/\{\{roleLabel\}\}/g, role.label)
+    .replace(/\{\{roleSummary\}\}/g, escapeHtml(role.summary))
+    .replace(
+      /\{\{dashboardUrl\}\}/g,
+      `${siteUrl}/my/organizations/${encodeURIComponent(params.orgId)}`,
+    )
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  if (params.acceptUrl) {
+    html = html.replace(/\{\{acceptUrl\}\}/g, escapeHtml(params.acceptUrl));
+  }
+
+  const subject = params.acceptUrl
+    ? `${params.inviterName} invited you to join ${params.organizationName} on MY Chess Tour`
+    : `You've been added to ${params.organizationName} on MY Chess Tour`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send member invitation email:", error);
+    throw new Error(`Failed to send member invitation email: ${error.message}`);
+  }
+}
+
 // Tells a player the outcome of their OKU card review — verified, or rejected
 // with the admin's reason and a link back to settings to upload a new copy. One
 // function with a boolean branch, like sendCancellationReviewEmail.
