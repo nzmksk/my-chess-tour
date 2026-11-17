@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Tournament } from "../types";
-import { formatRm, getMinFeeCents } from "../utils";
+import { formatRm, getStartingFee, listFeeRows } from "../utils";
 import { formatCalendarDateRange, resolveTimeZone } from "@/lib/tournaments/datetime";
 
 function capitalise(s: string): string {
@@ -11,17 +11,24 @@ function capitalise(s: string): string {
 interface Props {
   tournament: Tournament;
   dimmed?: boolean;
+  /** ISO instant from the server, for which fee tiers have ended. */
+  now: string;
 }
 
 export default function TournamentCard({
   tournament: t,
   dimmed = false,
+  now,
 }: Props) {
   const spotsLeft = t.max_participants - t.current_participants;
   const spotsRatio =
     t.max_participants > 0 ? spotsLeft / t.max_participants : 0;
-  const minFee = getMinFeeCents(t.entry_fees);
-  const hasMultipleFees = (t.entry_fees?.additional?.length ?? 0) > 0;
+  // The same price the tournament page leads with: a fee anyone can still
+  // register at, not an ended early bird or an under-12 tier (#258).
+  const nowDate = new Date(now);
+  const startingFee = getStartingFee(t.entry_fees, nowDate);
+  const hasMultipleFees =
+    listFeeRows(t.entry_fees, nowDate).filter((row) => !row.expired).length > 1;
 
   const formatType = t.format?.type ?? "";
   const rounds = t.format?.rounds;
@@ -101,7 +108,7 @@ export default function TournamentCard({
               </small>
             )}
             <span className="font-cinzel text-text-primary text-lg font-bold">
-              {minFee > 0 ? formatRm(minFee) : "Free"}
+              {formatRm(startingFee.amount_cents)}
             </span>
           </div>
 

@@ -168,21 +168,6 @@ export function toTitleCase(s: string): string {
   return s.replace(/[_\s]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// Lowest entry fee across the standard + additional tiers, ignoring missing or
-// non-finite amounts (entry_fees is a jsonb column, so values aren't guaranteed
-// numeric at runtime). Returns 0 when there are no valid amounts — callers render
-// that as "Free". A genuine free tier (amount_cents === 0) is kept.
-export function getMinFeeCents(fees: EntryFees | null | undefined): number {
-  if (!fees) return 0;
-  const amounts: number[] = [];
-  const add = (n: unknown) => {
-    if (typeof n === "number" && Number.isFinite(n)) amounts.push(n);
-  };
-  add(fees.standard?.amount_cents);
-  for (const tier of fees.additional ?? []) add(tier.amount_cents);
-  return amounts.length > 0 ? Math.min(...amounts) : 0;
-}
-
 export type FeeTier = NonNullable<EntryFees["additional"]>[number];
 
 /** One row of a tournament's fee schedule: the standard fee or an additional tier. */

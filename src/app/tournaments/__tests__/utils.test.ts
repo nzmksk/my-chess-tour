@@ -8,7 +8,6 @@ import {
   describeRatingList,
   resolvePlayerRating,
   getTournamentDateState,
-  getMinFeeCents,
   getStartingFee,
   isRestrictedTier,
   listFeeRows,
@@ -47,48 +46,6 @@ describe("getTournamentDateState", () => {
         getTodayInTimeZone("Asia/Yangon", instant),
       ),
     ).toBe("upcoming");
-  });
-});
-
-describe("getMinFeeCents", () => {
-  it("returns the standard amount when there are no additional tiers", () => {
-    expect(getMinFeeCents({ standard: { amount_cents: 5000 } })).toBe(5000);
-  });
-
-  it("returns the cheapest tier across standard and additional", () => {
-    expect(
-      getMinFeeCents({
-        standard: { amount_cents: 5000 },
-        additional: [{ type: "early_bird", amount_cents: 3000 }],
-      }),
-    ).toBe(3000);
-  });
-
-  it("keeps 0 for a genuinely free standard tier", () => {
-    expect(getMinFeeCents({ standard: { amount_cents: 0 } })).toBe(0);
-  });
-
-  it("ignores a missing standard amount instead of treating it as free", () => {
-    const fees = {
-      standard: {},
-      additional: [{ type: "early_bird", amount_cents: 2000 }],
-    } as unknown as EntryFees;
-    expect(getMinFeeCents(fees)).toBe(2000);
-  });
-
-  it("ignores additional tiers with non-finite amounts (no NaN)", () => {
-    const fees = {
-      standard: { amount_cents: 5000 },
-      additional: [{ type: "broken", amount_cents: undefined }],
-    } as unknown as EntryFees;
-    const result = getMinFeeCents(fees);
-    expect(result).toBe(5000);
-    expect(Number.isNaN(result)).toBe(false);
-  });
-
-  it("returns 0 when there are no valid amounts", () => {
-    expect(getMinFeeCents(null)).toBe(0);
-    expect(getMinFeeCents({} as unknown as EntryFees)).toBe(0);
   });
 });
 

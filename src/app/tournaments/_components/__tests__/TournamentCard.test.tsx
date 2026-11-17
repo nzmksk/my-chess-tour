@@ -41,9 +41,11 @@ const base: Tournament = {
   organizer: null,
 };
 
-function render(overrides: Partial<Tournament>) {
+const NOW = "2026-04-01T00:00:00.000Z";
+
+function render(overrides: Partial<Tournament>, now: string = NOW) {
   return renderToStaticMarkup(
-    <TournamentCard tournament={{ ...base, ...overrides }} />,
+    <TournamentCard tournament={{ ...base, ...overrides }} now={now} />,
   );
 }
 
@@ -119,6 +121,44 @@ describe("entry fee", () => {
 
   it("omits 'starting from' label for single fee", () => {
     const html = render({ entry_fees: { standard: { amount_cents: 5000 } } });
+    expect(html).not.toContain("starting from");
+  });
+
+  // The Selangor case from #258.
+  const selangor = {
+    entry_fees: {
+      standard: { amount_cents: 4000 },
+      additional: [
+        { type: "early_bird", amount_cents: 3200, valid_until: "2026-05-01T00:00:00Z" },
+        { type: "age_based", amount_cents: 2400, age_min: 0, age_max: 12 },
+      ],
+    },
+  };
+
+  it("starts from an open early bird, not a restricted tier", () => {
+    const html = render(selangor);
+    expect(html).toContain("RM32.00");
+    expect(html).not.toContain("RM24.00");
+  });
+
+  it("starts from the standard fee once the early bird has ended (#258)", () => {
+    const html = render(selangor, "2026-06-01T00:00:00.000Z");
+    expect(html).toContain("RM40.00");
+    expect(html).not.toContain("RM32.00");
+  });
+
+  it("drops 'starting from' when the only other tier has ended", () => {
+    const html = render(
+      {
+        entry_fees: {
+          standard: { amount_cents: 4000 },
+          additional: [
+            { type: "early_bird", amount_cents: 3200, valid_until: "2026-05-01T00:00:00Z" },
+          ],
+        },
+      },
+      "2026-06-01T00:00:00.000Z",
+    );
     expect(html).not.toContain("starting from");
   });
 });

@@ -187,7 +187,7 @@ export default function TournamentsClient({ tournaments, now }: Props) {
                 <SectionBanner label="Ongoing" />
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
                   {ongoing.map((t) => (
-                    <TournamentCard key={t.id} tournament={t} />
+                    <TournamentCard key={t.id} tournament={t} now={now} />
                   ))}
                 </div>
               </section>
@@ -197,7 +197,7 @@ export default function TournamentsClient({ tournaments, now }: Props) {
                 <SectionBanner label="Upcoming" />
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
                   {upcoming.map((t) => (
-                    <TournamentCard key={t.id} tournament={t} />
+                    <TournamentCard key={t.id} tournament={t} now={now} />
                   ))}
                 </div>
               </section>
@@ -207,7 +207,7 @@ export default function TournamentsClient({ tournaments, now }: Props) {
                 <SectionBanner label="Past Tournaments" />
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
                   {past.map((t) => (
-                    <TournamentCard key={t.id} tournament={t} dimmed />
+                    <TournamentCard key={t.id} tournament={t} now={now} dimmed />
                   ))}
                 </div>
               </section>
