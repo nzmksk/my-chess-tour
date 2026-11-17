@@ -19,6 +19,7 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Needs the Node.js runtime for `crypto` and access to the raw request body.
 export const runtime = "nodejs";
@@ -342,9 +343,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Only the settle that confirmed the registration reports it, so a retried
     // webhook or the success page's reconcile can't email the player twice.
-    // Best-effort: never throws, so CHIP still gets its 200.
+    // Sent after the 200, since settlement has already committed. Never throws.
     if (result.newly_confirmed) {
-      await notifyRegistrationConfirmed(result.registration_id);
+      const registrationId = result.registration_id;
+      afterResponse(() => notifyRegistrationConfirmed(registrationId));
     }
   }
 

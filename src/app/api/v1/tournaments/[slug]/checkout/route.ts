@@ -19,6 +19,7 @@ import {
 } from "@/services/chip/chip";
 import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-response";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 // The seat hold (and the CHIP purchase `due`) lasts PAYMENT_TIMEOUT_MINUTES from
 // registered_at. While live, the pending payment is resumed by reusing its link.
@@ -589,9 +590,9 @@ async function settleFreeRegistration(
   }
 
   // No webhook follows a free registration, so this is where it is confirmed.
-  // Best-effort: never throws.
+  // Emailed after the response; best-effort, never throws.
   if ((settled as { newly_confirmed?: boolean } | null)?.newly_confirmed) {
-    await notifyRegistrationConfirmed(registrationId);
+    afterResponse(() => notifyRegistrationConfirmed(registrationId));
   }
 
   return NextResponse.json(

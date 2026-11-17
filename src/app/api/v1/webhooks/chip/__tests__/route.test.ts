@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 import { NextRequest } from "next/server";
 import crypto from "node:crypto";
 
@@ -426,6 +427,7 @@ describe("registration confirmation email", () => {
     const res = await POST(makeRequest(paidEvent));
 
     expect(res.status).toBe(200);
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).toHaveBeenCalledOnce();
     expect(mockNotifyConfirmed).toHaveBeenCalledWith("reg-1");
   });
@@ -439,6 +441,7 @@ describe("registration confirmation email", () => {
     const res = await POST(makeRequest(paidEvent));
 
     expect(res.status).toBe(200);
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 
@@ -450,6 +453,7 @@ describe("registration confirmation email", () => {
 
     await POST(makeRequest(paidEvent));
 
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 
@@ -461,6 +465,7 @@ describe("registration confirmation email", () => {
 
     await POST(makeRequest({ ...paidEvent, status: "error", event_type: "purchase.payment_failure" }));
 
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 });
