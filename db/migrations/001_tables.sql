@@ -98,9 +98,10 @@ CREATE TABLE player_profiles (
   title                 chess_title,
   mcf_id                integer,
   national_rating       integer,
-  bank_name             varchar(100),
-  bank_account_holder   varchar(255),
-  bank_account_number   varchar(50),
+  -- No bank columns here: a player's prize destination lives in
+  -- player_bank_accounts (below), which supersedes rather than updates so a
+  -- CHIP Send verification can't go stale, and keeps the history a prize award
+  -- needs to name the account it was actually sent to.
   -- OKU verification. The card is uploaded to the private oku-documents bucket
   -- (path in oku_document_path); a platform admin sets oku_status.
   oku_status            oku_status NOT NULL DEFAULT 'none',
@@ -221,6 +222,39 @@ CREATE TABLE organization_bank_accounts (
   CONSTRAINT chk_bank_account_number_digits CHECK (account_number ~ '^[0-9]{5,20}$'),
   CONSTRAINT chk_bank_code_format  CHECK (bank_code ~ '^[A-Z0-9]{8}([A-Z0-9]{3})?$'),
   CONSTRAINT chk_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified')
+);
+
+-- =============================================
+-- PLAYER BANK ACCOUNTS
+-- Where a player's prize money is sent when the platform distributes a prize
+-- pool (#523). The organization table above, for a person: the same columns,
+-- the same supersede-don't-update lifecycle (set_player_bank_account), the same
+-- CHIP Send registration (src/services/payouts/bank-account.ts) and the same
+-- verdict function (settle_bank_account_verification). The CHIP `reference` is
+-- id::text, as there.
+--
+-- Unlike an organization's account, a player's is NOT registered with CHIP when
+-- it is saved: most players never win a platform-distributed prize, and each
+-- registration is a verification CHIP charges for. It is registered once the
+-- player has an approved prize award waiting on it.
+-- =============================================
+CREATE TABLE player_bank_accounts (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id              uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  bank_name            varchar(100) NOT NULL,  -- display name, derived server-side from bank_code
+  bank_code            varchar(11)  NOT NULL,  -- SWIFT/BIC, e.g. MBBEMYKL
+  account_holder       varchar(255) NOT NULL,
+  account_number       varchar(50)  NOT NULL,  -- digits only, normalized on write
+  status               bank_account_status NOT NULL DEFAULT 'pending',
+  chip_bank_account_id bigint,                 -- CHIP /send/bank_accounts id
+  verified_at          timestamptz,
+  rejection_reason     text,
+  is_active            boolean NOT NULL DEFAULT true,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chk_player_bank_account_number_digits CHECK (account_number ~ '^[0-9]{5,20}$'),
+  CONSTRAINT chk_player_bank_code_format  CHECK (bank_code ~ '^[A-Z0-9]{8}([A-Z0-9]{3})?$'),
+  CONSTRAINT chk_player_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified')
 );
 
 -- =============================================
@@ -587,6 +621,7 @@ CREATE TABLE payouts (
   CONSTRAINT chk_payout_auto_shape       CHECK (kind <> 'automatic' OR (approval = 'approved' AND request_seq IS NULL)),
   CONSTRAINT chk_payout_paid_shape       CHECK (status <> 'paid' OR (payment_id IS NOT NULL AND settled_amount_cents IS NOT NULL))
 );
+
 
 -- =============================================
 -- AUDIT LOGS

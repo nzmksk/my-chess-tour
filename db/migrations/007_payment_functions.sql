@@ -699,6 +699,12 @@ $$;
 -- Superseded rows (is_active = false) are still settled — the verdict is history
 -- worth keeping — but `is_active` is returned so the caller can skip telling the
 -- organizer about an account they have already replaced.
+--
+-- Player prize accounts (player_bank_accounts, #523) go through the same CHIP
+-- registration and settle here too. The id is looked up in the organization
+-- table first and the player table second; the ids are uuids, so one can't be
+-- in both. `owner` says which it was: 'organization' (organization_id set) or
+-- 'player' (user_id set).
 -- =============================================
 CREATE OR REPLACE FUNCTION settle_bank_account_verification(
   p_bank_account_id      uuid,
@@ -712,50 +718,86 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_row organization_bank_accounts;
+  c_default_reason CONSTANT text := 'The bank could not verify these account details.';
+  v_owner     text;
+  v_org_id    uuid;
+  v_user_id   uuid;
+  v_status    bank_account_status;
+  v_is_active boolean;
+  v_reason    text := COALESCE(NULLIF(btrim(p_reason), ''), c_default_reason);
 BEGIN
-  SELECT * INTO v_row
+  SELECT 'organization', organization_id, NULL::uuid, status, is_active
+    INTO v_owner, v_org_id, v_user_id, v_status, v_is_active
     FROM organization_bank_accounts
     WHERE id = p_bank_account_id
     FOR UPDATE;
 
   IF NOT FOUND THEN
+    SELECT 'player', NULL::uuid, user_id, status, is_active
+      INTO v_owner, v_org_id, v_user_id, v_status, v_is_active
+      FROM player_bank_accounts
+      WHERE id = p_bank_account_id
+      FOR UPDATE;
+  END IF;
+
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'bank account % not found', p_bank_account_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_row.status <> 'pending' THEN
+  IF v_status <> 'pending' THEN
     RETURN jsonb_build_object(
-      'bank_account_id',   v_row.id,
-      'organization_id',   v_row.organization_id,
+      'bank_account_id',   p_bank_account_id,
+      'owner',             v_owner,
+      'organization_id',   v_org_id,
+      'user_id',           v_user_id,
       'already_processed', true,
-      'verified',          v_row.status = 'verified',
-      'is_active',         v_row.is_active
+      'verified',          v_status = 'verified',
+      'is_active',         v_is_active
     );
   END IF;
 
-  IF p_verified THEN
-    UPDATE organization_bank_accounts
-      SET status               = 'verified',
-          verified_at          = now(),
-          rejection_reason     = NULL,
-          chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
-      WHERE id = p_bank_account_id;
+  IF v_owner = 'organization' THEN
+    IF p_verified THEN
+      UPDATE organization_bank_accounts
+        SET status               = 'verified',
+            verified_at          = now(),
+            rejection_reason     = NULL,
+            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+        WHERE id = p_bank_account_id;
+    ELSE
+      UPDATE organization_bank_accounts
+        SET status               = 'rejected',
+            verified_at          = NULL,
+            rejection_reason     = v_reason,
+            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+        WHERE id = p_bank_account_id;
+    END IF;
   ELSE
-    UPDATE organization_bank_accounts
-      SET status               = 'rejected',
-          verified_at          = NULL,
-          rejection_reason     = COALESCE(NULLIF(btrim(p_reason), ''),
-                                          'The bank could not verify these account details.'),
-          chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
-      WHERE id = p_bank_account_id;
+    IF p_verified THEN
+      UPDATE player_bank_accounts
+        SET status               = 'verified',
+            verified_at          = now(),
+            rejection_reason     = NULL,
+            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+        WHERE id = p_bank_account_id;
+    ELSE
+      UPDATE player_bank_accounts
+        SET status               = 'rejected',
+            verified_at          = NULL,
+            rejection_reason     = v_reason,
+            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+        WHERE id = p_bank_account_id;
+    END IF;
   END IF;
 
   RETURN jsonb_build_object(
-    'bank_account_id',   v_row.id,
-    'organization_id',   v_row.organization_id,
+    'bank_account_id',   p_bank_account_id,
+    'owner',             v_owner,
+    'organization_id',   v_org_id,
+    'user_id',           v_user_id,
     'already_processed', false,
     'verified',          p_verified,
-    'is_active',         v_row.is_active
+    'is_active',         v_is_active
   );
 END;
 $$;

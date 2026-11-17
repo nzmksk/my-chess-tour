@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
-import type { UpdateBankingPayload } from "@/app/profile/types";
+import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
+import { validateBankAccountRequest } from "@/app/api/v1/organizations/[orgId]/bank-account/validators";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 
-// Player banking / payout details. Unlike the other profile fields these are
-// freely editable (bank accounts change) and never set-once. The full account
-// number is written here but never returned by GET /api/v1/profile, which
-// exposes only the last 4 digits. Callers must send a complete set of the three
-// fields; sending all three as null clears the banking details.
+// The player's prize destination (player_bank_accounts, #523). Freely editable
+// (bank accounts change), but never updated in place: set_player_bank_account
+// supersedes the active row, so a change always goes back to `pending` and is
+// re-verified with CHIP Send before a prize is sent to it.
+//
+// Same request shape as the organization payout destination: a SWIFT code
+// chosen from the list (the server derives the bank's display name from it), the
+// holder and the account number. Sending all three as null clears the details.
+//
+// NEVER RETURNS THE FULL ACCOUNT NUMBER: the RPC answers with the last 4 digits.
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
@@ -29,79 +35,62 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const errors: string[] = [];
-
   const clearing =
-    body.bank_name === null &&
-    body.bank_account_holder === null &&
-    body.bank_account_number === null;
+    body !== null &&
+    typeof body === "object" &&
+    body.bank_code === null &&
+    body.account_holder === null &&
+    body.account_number === null;
 
-  const update: UpdateBankingPayload = {
-    bank_name: null,
-    bank_account_holder: null,
-    bank_account_number: null,
+  let details: {
+    bank_code: string | null;
+    bank_name: string | null;
+    account_holder: string | null;
+    account_number: string | null;
   };
 
-  if (!clearing) {
-    // bank_name
-    if (typeof body.bank_name === "string" && body.bank_name.trim()) {
-      const value = body.bank_name.trim();
-      if (value.length > 100) {
-        errors.push("bank_name must be 100 characters or fewer");
-      } else {
-        update.bank_name = value;
-      }
-    } else {
-      errors.push("bank_name must be a non-empty string");
-    }
-
-    // bank_account_holder
-    if (
-      typeof body.bank_account_holder === "string" &&
-      body.bank_account_holder.trim()
-    ) {
-      const value = body.bank_account_holder.trim();
-      if (value.length > 255) {
-        errors.push("bank_account_holder must be 255 characters or fewer");
-      } else {
-        update.bank_account_holder = value;
-      }
-    } else {
-      errors.push("bank_account_holder must be a non-empty string");
-    }
-
-    // bank_account_number — strip spaces/dashes, then digits only, length 5-20.
-    if (typeof body.bank_account_number === "string") {
-      const digits = body.bank_account_number.replace(/[\s-]/g, "");
-      if (/^\d{5,20}$/.test(digits)) {
-        update.bank_account_number = digits;
-      } else {
-        errors.push(
-          "bank_account_number must contain 5 to 20 digits (spaces and dashes allowed)",
-        );
-      }
-    } else {
-      errors.push("bank_account_number must be a string");
-    }
+  if (clearing) {
+    details = {
+      bank_code: null,
+      bank_name: null,
+      account_holder: null,
+      account_number: null,
+    };
+  } else {
+    const validated = validateBankAccountRequest(body);
+    if ("error" in validated) return validated.error;
+    details = {
+      ...validated.data,
+      // The validator only accepts codes on the list, so this always resolves.
+      bank_name: bankNameForSwift(validated.data.bank_code) ?? null,
+    };
   }
 
-  if (errors.length > 0) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: errors.join("; ") } },
-      { status: 400 },
-    );
-  }
-
-  const { error } = await supabaseAdmin
-    .from("player_profiles")
-    .upsert({ user_id: claims.id, ...update }, { onConflict: "user_id" });
+  const { data, error } = await supabaseAdmin.rpc("set_player_bank_account", {
+    p_user_id: claims.id,
+    p_bank_code: details.bank_code,
+    p_bank_name: details.bank_name,
+    p_account_holder: details.account_holder,
+    p_account_number: details.account_number,
+  });
 
   if (error) {
+    if (error.code === "P0002") {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "User not found" } },
+        { status: 404 },
+      );
+    }
     return internalErrorResponse(
-      "PATCH /api/v1/profile/banking: error",
+      "PATCH /api/v1/profile/banking: set_player_bank_account failed",
       error,
     );
   }
 
-  return NextResponse.json({ success: true }, { status: 200 });
+  // Already masked by the RPC. A cleared account comes back with id null.
+  const result = data as { id: string | null } & Record<string, unknown>;
+  return NextResponse.json(
+    { data: result.id === null ? null : result },
+    { status: 200 },
+  );
 }

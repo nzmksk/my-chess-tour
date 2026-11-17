@@ -2,12 +2,36 @@
 
 import { useState } from "react";
 import BankingForm, { type BankingDisplay } from "@/components/BankingForm";
+import type { BankAccountStatus } from "@/app/profile/types";
 
 interface Props {
   bankName: string | null;
+  bankCode: string | null;
   accountHolder: string | null;
   accountNumberLast4: string | null;
+  status: BankAccountStatus | null;
+  rejectionReason: string | null;
 }
+
+// A player's account is checked with their bank only when a prize is to be
+// sent to it, so "pending" is the normal resting state, not a problem.
+const STATUS_COPY: Record<BankAccountStatus, { label: string; note: string; className: string }> = {
+  pending: {
+    label: "Not yet verified",
+    note: "We verify it with your bank when you win a prize paid through MY Chess Tour.",
+    className: "text-text-muted",
+  },
+  verified: {
+    label: "Verified",
+    note: "Prizes paid through MY Chess Tour are sent to this account.",
+    className: "text-success",
+  },
+  rejected: {
+    label: "Could not be verified",
+    note: "Please check the details and save them again, or prizes can't be sent to you.",
+    className: "text-danger",
+  },
+};
 
 // Banking / payout details card. Kept outside the main profile edit form because
 // these fields are freely editable (not set-once) and sensitive: the account
@@ -15,14 +39,23 @@ interface Props {
 // self-contained OkuVerificationCard shape.
 export default function BankingCard({
   bankName: initialBankName,
+  bankCode: initialBankCode,
   accountHolder: initialAccountHolder,
   accountNumberLast4: initialLast4,
+  status: initialStatus,
+  rejectionReason: initialRejectionReason,
 }: Props) {
   const [display, setDisplay] = useState<BankingDisplay>({
     bank_name: initialBankName,
+    bank_code: initialBankCode,
     bank_account_holder: initialAccountHolder,
     bank_account_number_last4: initialLast4,
+    bank_account_status: initialStatus,
+    bank_account_rejection_reason: initialRejectionReason,
   });
+  const statusCopy = display.bank_account_status
+    ? STATUS_COPY[display.bank_account_status]
+    : null;
   const [editing, setEditing] = useState(false);
 
   const hasDetails = Boolean(
@@ -45,8 +78,9 @@ export default function BankingCard({
       {editing ? (
         <>
           <p className="font-lato text-text-muted mb-4 text-sm">
-            Used to pay out prize winnings and process refunds. Only you can see
-            these details.
+            Where prizes paid through MY Chess Tour are sent. Changing these
+            details means they are verified again before the next prize. Only
+            you can see them.
           </p>
           <BankingForm
             initial={display}
@@ -74,7 +108,7 @@ export default function BankingCard({
                 {display.bank_account_holder || "—"}
               </span>
             </div>
-            <div className="flex flex-col gap-0.5 py-3">
+            <div className="border-border flex flex-col gap-0.5 border-b py-3">
               <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
                 Account Number
               </span>
@@ -84,6 +118,22 @@ export default function BankingCard({
                   : "—"}
               </span>
             </div>
+            {statusCopy && (
+              <div className="flex flex-col gap-0.5 py-3">
+                <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
+                  Verification
+                </span>
+                <span className={`font-lato text-sm ${statusCopy.className}`}>
+                  {statusCopy.label}
+                  {display.bank_account_status === "rejected" &&
+                    display.bank_account_rejection_reason &&
+                    ` — ${display.bank_account_rejection_reason}`}
+                </span>
+                <span className="font-lato text-text-muted text-xs">
+                  {statusCopy.note}
+                </span>
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -96,8 +146,8 @@ export default function BankingCard({
       ) : (
         <div className="flex flex-col gap-3">
           <p className="font-lato text-text-muted text-sm">
-            Add your bank details so we can pay out prize winnings and process
-            refunds. Only you can see these details.
+            Add your bank details so we can send you prizes paid through MY
+            Chess Tour. Only you can see these details.
           </p>
           <button
             type="button"

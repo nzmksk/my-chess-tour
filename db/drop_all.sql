@@ -87,6 +87,7 @@ DROP TABLE IF EXISTS public.organization_memberships CASCADE;
 DROP TABLE IF EXISTS public.organization_documents  CASCADE;
 DROP TABLE IF EXISTS public.organization_bank_accounts CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
+DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
 DROP TABLE IF EXISTS public.player_profiles         CASCADE;
 DROP TABLE IF EXISTS public.user_global_roles       CASCADE;
 DROP TABLE IF EXISTS public.users                   CASCADE;

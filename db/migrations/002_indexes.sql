@@ -26,6 +26,15 @@ CREATE UNIQUE INDEX uniq_active_bank_destination
 CREATE INDEX idx_bank_accounts_chip_id ON organization_bank_accounts (chip_bank_account_id)
   WHERE chip_bank_account_id IS NOT NULL;
 
+-- Player bank accounts. One active account per player, as for organizations.
+-- Deliberately NO destination-uniqueness index like uniq_active_bank_destination:
+-- junior players' prizes routinely go to a parent's account, so siblings can
+-- legitimately share one.
+CREATE UNIQUE INDEX uniq_active_bank_account_per_player
+  ON player_bank_accounts (user_id) WHERE is_active;
+CREATE INDEX idx_player_bank_accounts_chip_id ON player_bank_accounts (chip_bank_account_id)
+  WHERE chip_bank_account_id IS NOT NULL;
+
 -- Organization documents (fetched as a set per application/organization)
 CREATE INDEX idx_org_documents_org ON organization_documents (organization_id);
 

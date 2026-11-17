@@ -34,6 +34,9 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournament_cancellation_requests
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON payouts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- =============================================
 -- AUTH SIGNUP TRIGGER
 -- Creates user + player_profile on auth signup.
@@ -302,8 +305,9 @@ $$;
 -- column was covered), so the two cannot drift apart. Tables not listed come
 -- back unchanged. Any new sensitive column belongs here in the same PR that
 -- adds the column.
---   player_profiles.bank_account_number, organization_bank_accounts.
---     account_number: masked to the last 4 digits.
+--   player_profiles.bank_account_number (a column since moved to
+--     player_bank_accounts, kept for rows written before), organization_bank_accounts.
+--     account_number, player_bank_accounts.account_number: masked to the last 4 digits.
 --   player_profiles.oku_document_path, organization_documents.storage_path:
 --     capability-bearing; anyone holding one can be issued a signed URL to a
 --     private-bucket document. Filename rule: only the extension survives.
@@ -321,6 +325,8 @@ AS $$
         redact_jsonb_columns(p_data, ARRAY['bank_account_number']),
         ARRAY['oku_document_path'])
     WHEN 'organization_bank_accounts' THEN
+      redact_jsonb_columns(p_data, ARRAY['account_number'])
+    WHEN 'player_bank_accounts' THEN
       redact_jsonb_columns(p_data, ARRAY['account_number'])
     WHEN 'organization_documents' THEN
       redact_jsonb_filenames(p_data, ARRAY['storage_path', 'original_filename'])
@@ -383,7 +389,7 @@ BEGIN
     FROM registrations r JOIN tournaments t ON t.id = r.tournament_id
     WHERE r.id = (COALESCE(v_new, v_old) ->> 'registration_id')::uuid;
   END IF;
-  -- users, player_profiles, user_global_roles → v_org_id stays NULL
+  -- users, player_profiles, player_bank_accounts, user_global_roles → v_org_id stays NULL
 
   -- changed_by is a FK to users(id), but the JWT carries the AUTH id, so it has
   -- to be resolved through users.auth_user_id. Reading the claim directly would
@@ -448,6 +454,9 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON refunds
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON payouts
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON player_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
 -- Good practice: status transitions
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournaments
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
@@ -469,7 +478,8 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancel
 -- (wiki/account-deletion.md) ends by calling this.
 --
 -- What it does, for one user:
---   1. In that user's own users / player_profiles audit rows, every snapshot key
+--   1. In that user's own users / player_profiles / player_bank_accounts audit
+--      rows, every snapshot key
 --      except an allowlist of ids, flags and timestamps becomes '[anonymised]'.
 --      The rows stay, so the history of WHEN the account changed survives.
 --      An allowlist rather than a list of PII columns: a column added later is
@@ -519,7 +529,13 @@ DECLARE
     'created_at', 'updated_at', 'deleted_at'
   ];
   c_keep_player_profiles constant text[] := ARRAY['user_id', 'created_at', 'updated_at'];
+  -- The account number is already masked to its last 4 on the way in; the
+  -- holder's name and the bank are what is left to strip.
+  c_keep_player_bank     constant text[] := ARRAY[
+    'id', 'user_id', 'status', 'is_active', 'verified_at', 'created_at', 'updated_at'
+  ];
   c_financial            constant text[] := ARRAY['payments', 'refunds', 'payouts', 'registrations'];
+  v_bank_rows            integer;
 BEGIN
   IF p_user_id IS NULL THEN
     RAISE EXCEPTION 'USER_ID_REQUIRED' USING ERRCODE = 'P0001';
@@ -540,6 +556,18 @@ BEGIN
     AND (   a.old_data IS DISTINCT FROM anonymise_jsonb_except(a.old_data, k.keep)
          OR a.new_data IS DISTINCT FROM anonymise_jsonb_except(a.new_data, k.keep));
   GET DIAGNOSTICS snapshots_anonymised = ROW_COUNT;
+
+  -- A player bank account's audit rows are keyed by the account's own id, so
+  -- they are found by the owner recorded inside the snapshot.
+  UPDATE audit_logs a
+  SET old_data = anonymise_jsonb_except(a.old_data, c_keep_player_bank),
+      new_data = anonymise_jsonb_except(a.new_data, c_keep_player_bank)
+  WHERE a.table_name = 'player_bank_accounts'
+    AND COALESCE(a.new_data, a.old_data) ->> 'user_id' = p_user_id::text
+    AND (   a.old_data IS DISTINCT FROM anonymise_jsonb_except(a.old_data, c_keep_player_bank)
+         OR a.new_data IS DISTINCT FROM anonymise_jsonb_except(a.new_data, c_keep_player_bank));
+  GET DIAGNOSTICS v_bank_rows = ROW_COUNT;
+  snapshots_anonymised := snapshots_anonymised + v_bank_rows;
 
   UPDATE audit_logs
   SET changed_by = NULL
@@ -943,6 +971,91 @@ BEGIN
 
   -- Masked, like every other surface that touches this value. The full account
   -- number does not leave the table.
+  RETURN jsonb_build_object(
+    'changed',              v_changed,
+    'id',                   v_row.id,
+    'bank_name',            v_row.bank_name,
+    'bank_code',            v_row.bank_code,
+    'account_holder',       v_row.account_holder,
+    'account_number_last4', right(v_row.account_number, 4),
+    'status',               v_row.status,
+    'rejection_reason',     v_row.rejection_reason,
+    'verified_at',          v_row.verified_at
+  );
+END;
+$$;
+
+-- =============================================
+-- SET PLAYER BANK ACCOUNT
+-- The ONLY write path for player_bank_accounts (004_rls.sql revokes client
+-- writes), and set_organization_bank_account for a person: supersede rather
+-- than update, under a lock on the users row, with the same no-op rule for an
+-- unchanged 'verified' or 'pending' row and the same masked return.
+--
+-- Clearing (all-NULL details) deactivates the active row and inserts nothing,
+-- returning {"changed": true, "id": null}. A prize award that already
+-- snapshotted the old account keeps it; one not yet sent waits for a new one.
+-- =============================================
+CREATE OR REPLACE FUNCTION set_player_bank_account(
+  p_user_id        uuid,
+  p_bank_code      varchar(11),
+  p_bank_name      varchar(100),
+  p_account_holder varchar(255),
+  p_account_number varchar(50)
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_current player_bank_accounts;
+  v_row     player_bank_accounts;
+  v_changed boolean := true;
+  v_clear   boolean := p_bank_code IS NULL AND p_bank_name IS NULL
+                       AND p_account_holder IS NULL AND p_account_number IS NULL;
+BEGIN
+  PERFORM 1 FROM users
+    WHERE id = p_user_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'user % not found', p_user_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_current
+    FROM player_bank_accounts
+    WHERE user_id = p_user_id AND is_active;
+
+  IF v_clear THEN
+    UPDATE player_bank_accounts
+      SET is_active = false
+      WHERE user_id = p_user_id AND is_active;
+    RETURN jsonb_build_object('changed', FOUND, 'id', NULL);
+  END IF;
+
+  IF FOUND
+     AND v_current.bank_code      = p_bank_code
+     AND v_current.bank_name      = p_bank_name
+     AND v_current.account_holder = p_account_holder
+     AND v_current.account_number = p_account_number
+     AND v_current.status <> 'rejected'
+  THEN
+    v_changed := false;
+    v_row     := v_current;
+  ELSE
+    UPDATE player_bank_accounts
+      SET is_active = false
+      WHERE user_id = p_user_id AND is_active;
+
+    INSERT INTO player_bank_accounts (
+      user_id, bank_name, bank_code, account_holder, account_number
+    ) VALUES (
+      p_user_id, p_bank_name, p_bank_code, p_account_holder, p_account_number
+    )
+    RETURNING * INTO v_row;
+  END IF;
+
   RETURN jsonb_build_object(
     'changed',              v_changed,
     'id',                   v_row.id,
@@ -1886,6 +1999,7 @@ $$;
 -- executable by anon or authenticated without being on that list.
 -- =============================================
 REVOKE EXECUTE ON FUNCTION set_organization_bank_account   FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION set_player_bank_account         FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION create_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_tournament_cancellation  FROM PUBLIC, anon, authenticated;
@@ -1905,6 +2019,7 @@ REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, au
 REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
+GRANT EXECUTE ON FUNCTION set_player_bank_account         TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_tournament_cancellation  TO service_role;

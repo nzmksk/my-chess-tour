@@ -53,11 +53,14 @@ BEGIN
     RETURNING id INTO v_a;
   INSERT INTO player_profiles (
     user_id, date_of_birth, gender, nationality, fide_id, fide_verified_name,
-    bank_name, bank_account_holder, oku_status, oku_rejection_reason
+    oku_status, oku_rejection_reason
   ) VALUES (
     v_a, '2010-05-17', 'female', 'Malaysian', 98765432, 'Rahmanova, Aisyah',
-    'Maybank', 'Aisyah Rahmanova', 'rejected', 'Card shows a diagnosis of zzcondition'
+    'rejected', 'Card shows a diagnosis of zzcondition'
   );
+  -- A prize bank account (#523): its audit rows are keyed by the account id,
+  -- not the user id, and must be anonymised all the same.
+  PERFORM set_player_bank_account(v_a, 'MBBEMYKL', 'Maybank', 'Aisyah Rahmanova', '514100009999');
 
   INSERT INTO users (auth_user_id, email, first_name, last_name)
     VALUES (v_auth_b, 'keep-me@test.local', 'Bryan', 'Keepwell')
@@ -119,7 +122,8 @@ BEGIN
   UPDATE users SET deleted_at = now() WHERE id = v_a;
 
   SELECT count(*) INTO v_rows_a FROM audit_logs
-    WHERE table_name IN ('users', 'player_profiles') AND record_id = v_a::text;
+    WHERE (table_name IN ('users', 'player_profiles') AND record_id = v_a::text)
+       OR (table_name = 'player_bank_accounts' AND new_data ->> 'user_id' = v_a::text);
 
   -- Guard against a vacuous pass: the pattern below must match going in.
   IF NOT EXISTS (
@@ -138,14 +142,16 @@ BEGIN
   END IF;
   IF EXISTS (
     SELECT 1 FROM audit_logs a
-    WHERE a.table_name IN ('users', 'player_profiles') AND a.record_id = v_a::text
-      AND concat(a.old_data::text, a.new_data::text) ~* 'anon-me@|aisyah|rahmanova|2010-05-17|98765432|maybank|zzcondition|"female"|"rejected"|malaysian'
+    WHERE ((a.table_name IN ('users', 'player_profiles') AND a.record_id = v_a::text)
+        OR (a.table_name = 'player_bank_accounts' AND COALESCE(a.new_data, a.old_data) ->> 'user_id' = v_a::text))
+      AND concat(a.old_data::text, a.new_data::text) ~* 'anon-me@|aisyah|rahmanova|2010-05-17|98765432|maybank|MBBEMYKL|zzcondition|"female"|"rejected"|malaysian'
   ) THEN
     RAISE EXCEPTION 'X2 FAIL: personal data survives in user A''s audit snapshots';
   END IF;
 
   SELECT count(*) INTO v_count FROM audit_logs
-    WHERE table_name IN ('users', 'player_profiles') AND record_id = v_a::text;
+    WHERE (table_name IN ('users', 'player_profiles') AND record_id = v_a::text)
+       OR (table_name = 'player_bank_accounts' AND new_data ->> 'user_id' = v_a::text);
   IF v_count <> v_rows_a THEN
     RAISE EXCEPTION 'X2 FAIL: % audit rows left of % — anonymising must not delete history', v_count, v_rows_a;
   END IF;

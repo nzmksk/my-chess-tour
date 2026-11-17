@@ -18,6 +18,7 @@ ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_bank_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- =============================================
@@ -396,6 +397,25 @@ USING (has_global_permission(app_user_id(), 'platform.manage'));
 -- write goes through the service-role functions in 007_payment_functions.sql.
 -- db/tests/settle_payout.sql checks this.
 REVOKE UPDATE, INSERT, DELETE ON payouts FROM anon, authenticated;
+
+-- =============================================
+-- PLAYER BANK ACCOUNTS (#523)
+-- The player's own prize destination. Readable by its owner and platform
+-- admins only: unlike player_profiles there is no org-member read, because an
+-- organizer has no business knowing where a player's money lands. As for the
+-- organization table, no client writes: set_player_bank_account supersedes
+-- rather than updates, and a blanket UPDATE policy would let a player mark
+-- their own row verified.
+-- =============================================
+CREATE POLICY "Players can view own bank accounts"
+ON player_bank_accounts FOR SELECT
+USING (can_act_for(user_id));
+
+CREATE POLICY "Platform admins full access to player bank accounts"
+ON player_bank_accounts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON player_bank_accounts FROM anon, authenticated;
 
 -- =============================================
 -- TOURNAMENT CANCELLATION REQUESTS

@@ -142,6 +142,63 @@ function toChipId(id: unknown): number | null {
   return typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
+const BANK_ACCOUNT_TABLES = [
+  "organization_bank_accounts",
+  "player_bank_accounts",
+] as const;
+
+/**
+ * Finds our row for a CHIP bank account in one table: by `reference` (our row
+ * id) first, then by CHIP's integer id. A lookup failure is a 500, so CHIP
+ * redelivers.
+ */
+async function findBankAccount(
+  table: (typeof BANK_ACCOUNT_TABLES)[number],
+  reference: string | null | undefined,
+  chipId: number | null,
+): Promise<{ id: string | null } | { error: NextResponse }> {
+  if (reference && UUID_RE.test(reference)) {
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select("id")
+      .eq("id", reference)
+      .maybeSingle();
+    if (error) {
+      return {
+        error: internalErrorResponse(
+          `CHIP Send webhook: failed to look up bank account ${reference} in ${table}; asking CHIP to redeliver`,
+          error,
+        ),
+      };
+    }
+    const id = (data as { id: string } | null)?.id ?? null;
+    if (id) return { id };
+  }
+
+  if (chipId !== null) {
+    // CHIP may hand back one recipient id for an identical (account, bank)
+    // pair, so several of our rows can share it — take the newest.
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select("id")
+      .eq("chip_bank_account_id", chipId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      return {
+        error: internalErrorResponse(
+          `CHIP Send webhook: failed to look up the bank account for recipient ${chipId} in ${table}; asking CHIP to redeliver`,
+          error,
+        ),
+      };
+    }
+    return { id: (data as { id: string } | null)?.id ?? null };
+  }
+
+  return { id: null };
+}
+
 async function handleBankAccountEvent(
   obj: ChipSendBankAccountObject,
   eventType: string,
@@ -151,42 +208,24 @@ async function handleBankAccountEvent(
 
   const chipId = toChipId(obj.id);
 
-  // Correlate on `reference` (our organization_bank_accounts.id, sent at
-  // registration), falling back to CHIP's integer id.
+  // Correlate on `reference` (the row id we sent at registration), falling back
+  // to CHIP's integer id. An organization's payout account and a player's prize
+  // account (#523) are registered the same way, so both tables are searched.
+  // Every table by reference before any by CHIP id: the same real account can be
+  // registered by an organization and a player, and share CHIP's id.
   let bankAccountId: string | null = null;
 
-  if (obj.reference && UUID_RE.test(obj.reference)) {
-    const { data, error } = await supabaseAdmin
-      .from("organization_bank_accounts")
-      .select("id")
-      .eq("id", obj.reference)
-      .maybeSingle();
-    if (error) {
-      return internalErrorResponse(
-        `CHIP Send webhook: failed to look up bank account ${obj.reference}; asking CHIP to redeliver`,
-        error,
+  search: for (const by of ["reference", "chip_id"] as const) {
+    for (const table of BANK_ACCOUNT_TABLES) {
+      const found = await findBankAccount(
+        table,
+        by === "reference" ? obj.reference : null,
+        by === "chip_id" ? chipId : null,
       );
+      if ("error" in found) return found.error;
+      bankAccountId = found.id;
+      if (bankAccountId) break search;
     }
-    bankAccountId = (data as { id: string } | null)?.id ?? null;
-  }
-
-  if (!bankAccountId && chipId !== null) {
-    // CHIP may hand back one recipient id for an identical (account, bank)
-    // pair, so several of our rows can share it — take the newest.
-    const { data, error } = await supabaseAdmin
-      .from("organization_bank_accounts")
-      .select("id")
-      .eq("chip_bank_account_id", chipId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) {
-      return internalErrorResponse(
-        `CHIP Send webhook: failed to look up the bank account for recipient ${chipId}; asking CHIP to redeliver`,
-        error,
-      );
-    }
-    bankAccountId = (data as { id: string } | null)?.id ?? null;
   }
 
   if (!bankAccountId) {

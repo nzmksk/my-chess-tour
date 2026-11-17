@@ -15,6 +15,11 @@ import { BANK_REGISTRATION_GRACE_MINUTES, PAYOUT_CONCURRENCY } from "./constants
 // unapproved applicant's account wastes a CHIP verification (which carries a
 // fee) and discloses pending applicants to the PSP.
 //
+// A player's prize account (player_bank_accounts, #523) goes through the same
+// registration and the same settle RPC. For the same reason it is registered
+// only once the player has an approved prize award waiting on it, never just
+// because they saved it.
+//
 // Verification then completes on one of two paths, which must agree:
 //   * synchronously, when POST /send/bank_accounts already answers verified or
 //     rejected (registerOrganizationBankAccount below);
@@ -31,9 +36,16 @@ interface MembershipRecipient {
   roles: { name: string } | null;
 }
 
+/** Whose account it is, which decides the table it lives in. */
+export type BankAccountOwner = "organization" | "player";
+
+const BANK_ACCOUNT_TABLE: Record<BankAccountOwner, string> = {
+  organization: "organization_bank_accounts",
+  player: "player_bank_accounts",
+};
+
 interface BankAccountRow {
   id: string;
-  organization_id: string;
   bank_code: string;
   bank_name: string;
   account_holder: string;
@@ -94,7 +106,8 @@ export async function settleBankAccountVerification(
   }
 
   const result = data as {
-    organization_id: string;
+    owner?: BankAccountOwner;
+    organization_id: string | null;
     already_processed: boolean;
     is_active: boolean;
   };
@@ -102,8 +115,9 @@ export async function settleBankAccountVerification(
   if (result.already_processed) return { error: null, settled: false };
 
   // An account the organizer already replaced: record the verdict, stay quiet.
-  // Sent after the response of whichever request settled it.
-  if (result.is_active) {
+  // Sent after the response of whichever request settled it. A player's
+  // account isn't an organization's to hear about.
+  if (result.is_active && result.owner !== "player" && result.organization_id) {
     const organizationId = result.organization_id;
     afterResponse(async () => {
       try {
@@ -222,6 +236,26 @@ export type BankRegistrationOutcome =
   | "error";
 
 /**
+ * Registers an organization's bank account with CHIP Send. See
+ * registerBankAccount. NEVER throws.
+ */
+export function registerOrganizationBankAccount(
+  bankAccountId: string,
+): Promise<BankRegistrationOutcome> {
+  return registerBankAccount("organization", bankAccountId);
+}
+
+/**
+ * Registers a player's prize account with CHIP Send (#523). Same path, same
+ * guarantees, as an organization's. NEVER throws.
+ */
+export function registerPlayerBankAccount(
+  bankAccountId: string,
+): Promise<BankRegistrationOutcome> {
+  return registerBankAccount("player", bankAccountId);
+}
+
+/**
  * Registers a bank account with CHIP Send and records the result:
  *   1. load the row (service role) — skipped unless it is active and pending;
  *   2. POST /send/bank_accounts with `reference` = our row id, so a retry
@@ -233,14 +267,16 @@ export type BankRegistrationOutcome =
  * NEVER throws — it runs after the approval has committed. Failures are logged
  * with the bank account id and the row stays `pending`, so re-running is safe.
  */
-export async function registerOrganizationBankAccount(
+async function registerBankAccount(
+  owner: BankAccountOwner,
   bankAccountId: string,
 ): Promise<BankRegistrationOutcome> {
+  const table = BANK_ACCOUNT_TABLE[owner];
   try {
     const { data, error } = await supabaseAdmin
-      .from("organization_bank_accounts")
+      .from(table)
       .select(
-        "id, organization_id, bank_code, bank_name, account_holder, account_number, status, is_active, chip_bank_account_id",
+        "id, bank_code, bank_name, account_holder, account_number, status, is_active, chip_bank_account_id",
       )
       .eq("id", bankAccountId)
       .maybeSingle();
@@ -282,7 +318,7 @@ export async function registerOrganizationBankAccount(
     }
 
     const { error: updateError } = await supabaseAdmin
-      .from("organization_bank_accounts")
+      .from(table)
       .update({ chip_bank_account_id: chipAccount.id })
       .eq("id", row.id);
     if (updateError) {

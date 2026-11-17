@@ -233,12 +233,30 @@ describe("bank account events", () => {
   });
 
   it("falls back to chip_bank_account_id when reference is unknown", async () => {
-    lookups.push({ data: null, error: null }); // reference miss
+    lookups.push({ data: null, error: null }); // organization reference miss
+    lookups.push({ data: null, error: null }); // player reference miss
     lookups.push({ data: { id: BANK_ID }, error: null }); // chip id hit
     await POST(makeRequest(verifiedEvent));
-    expect(eqCalls[1]).toEqual(["chip_bank_account_id", 84]);
+    expect(eqCalls[2]).toEqual(["chip_bank_account_id", 84]);
     expect(mockSettle).toHaveBeenCalledWith(
       expect.objectContaining({ bankAccountId: BANK_ID }),
+    );
+  });
+
+  it("finds a player's prize account by reference before any chip id (#523)", async () => {
+    lookups.push({ data: null, error: null }); // organization reference miss
+    lookups.push({ data: { id: BANK_ID }, error: null }); // player reference hit
+    await POST(makeRequest(verifiedEvent));
+    expect(mockFrom.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
+      "organization_bank_accounts",
+      "player_bank_accounts",
+    ]);
+    expect(eqCalls).toEqual([
+      ["id", BANK_ID],
+      ["id", BANK_ID],
+    ]);
+    expect(mockSettle).toHaveBeenCalledWith(
+      expect.objectContaining({ bankAccountId: BANK_ID, verified: true }),
     );
   });
 
