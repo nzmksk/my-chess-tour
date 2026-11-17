@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import StepTracker from "./StepTracker";
 import { useSignUpForm } from "./SignUpContext";
+import { takeSignupReturnTo } from "@/lib/auth/signup-storage";
 
 const CODE_LENGTH = 6;
 const CODE_EXPIRY_SECONDS = 15 * 60; // 15 minutes
@@ -90,9 +91,10 @@ export default function VerifyForm() {
         return;
       }
       // Onboarding is done — clear the in-progress signup state and drop the
-      // user into the app. Profile details are completed later in /settings.
+      // user into the app (or back where they started, e.g. an invitation).
+      // Profile details are completed later in /settings.
       clearForm();
-      router.push("/tournaments");
+      router.push(takeSignupReturnTo() ?? "/tournaments");
     } catch {
       setVerifyError("Network error. Please try again.");
     } finally {
