@@ -228,7 +228,7 @@
         <div class="divider"></div>
 
         <p class="message">
-          Hi there,<br /><br />
+          Hi {{recipientName}},<br /><br />
           {{inviterName}} has invited you to join
           <span class="tournament">{{organizationName}}</span> on MY Chess Tour
           as {{roleLabel}}.
@@ -236,23 +236,22 @@
 
         <div class="notice">
           <p>
-            <strong>Getting started:</strong> accept the invitation to set a
-            password for your new account. Once you're in, you can
+            <strong>What you'd do:</strong> as {{roleLabel}}, you'd be able to
             {{roleSummary}}.
           </p>
           <p class="reason">
-            This link works once and expires after a while. If it has expired,
-            choose "Forgot password" on the sign-in page and enter this email
-            address to set your password.
+            Open the invitation to accept or decline it. If you don't have a
+            MY Chess Tour account yet, you can create one with this email
+            address first. The invitation expires in 30 days.
           </p>
         </div>
 
-        <a href="{{acceptUrl}}" class="cta-btn">Accept Invitation</a>
+        <a href="{{invitationUrl}}" class="cta-btn">View Invitation</a>
 
         <p class="fallback">
           If the button above doesn't work, copy and paste<br />
           the link below into your browser:<br />
-          <a href="{{acceptUrl}}">{{acceptUrl}}</a>
+          <a href="{{invitationUrl}}">{{invitationUrl}}</a>
         </p>
       </div>
 

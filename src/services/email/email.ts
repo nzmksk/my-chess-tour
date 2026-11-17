@@ -502,7 +502,7 @@ export async function sendOrganizerApplicationReviewEmail(
 
 export type MemberInvitationRole = "admin" | "member";
 
-// What each assignable role can do, written to finish "you can …". Mirrors the
+// What each assignable role can do, written to finish "you'd be able to …". Mirrors the
 // role_permissions seed in 006_seed.sql.
 const MEMBER_ROLE_COPY: Record<
   MemberInvitationRole,
@@ -519,51 +519,35 @@ const MEMBER_ROLE_COPY: Record<
   },
 };
 
-// Tells someone they have been added to an organization's team. With an
-// `acceptUrl` the recipient has no account yet: the email invites them to accept
-// and set a password (member-invitation.html). Without one they already have an
-// account and are a member as of now, so it links to the dashboard
-// (member-added.html).
+// Invites someone to join an organization's team. Nothing is granted yet: the
+// link opens the invitation, where they accept or decline it (signing up first
+// if they have no account). Expires 30 days after it is sent.
 export async function sendMemberInvitationEmail(
   email: string,
   params: {
     recipientName: string;
     inviterName: string;
     organizationName: string;
-    orgId: string;
     role: MemberInvitationRole;
-    acceptUrl?: string;
+    invitationUrl: string;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const role = MEMBER_ROLE_COPY[params.role];
 
-  let html = loadTemplate(
-    params.acceptUrl ? "member-invitation.html" : "member-added.html",
-  )
+  const html = loadTemplate("member-invitation.html")
     .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{inviterName\}\}/g, escapeHtml(params.inviterName))
     .replace(/\{\{organizationName\}\}/g, escapeHtml(params.organizationName))
     .replace(/\{\{roleLabel\}\}/g, role.label)
     .replace(/\{\{roleSummary\}\}/g, escapeHtml(role.summary))
-    .replace(
-      /\{\{dashboardUrl\}\}/g,
-      `${siteUrl}/my/organizations/${encodeURIComponent(params.orgId)}`,
-    )
+    .replace(/\{\{invitationUrl\}\}/g, escapeHtml(params.invitationUrl))
     .replace(/\{\{siteUrl\}\}/g, siteUrl);
-
-  if (params.acceptUrl) {
-    html = html.replace(/\{\{acceptUrl\}\}/g, escapeHtml(params.acceptUrl));
-  }
-
-  const subject = params.acceptUrl
-    ? `${params.inviterName} invited you to join ${params.organizationName} on MY Chess Tour`
-    : `You've been added to ${params.organizationName} on MY Chess Tour`;
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: email,
-    subject,
+    subject: `${params.inviterName} invited you to join ${params.organizationName} on MY Chess Tour`,
     html,
   });
 

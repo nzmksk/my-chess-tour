@@ -9,6 +9,7 @@ import {
   type EmailRecipient,
   sendToAll,
 } from "@/services/email/recipients";
+import { personName } from "./invitations";
 
 interface ReviewedApplicationRow {
   id: string;
@@ -83,72 +84,61 @@ export async function notifyApplicationReviewed(orgId: string): Promise<void> {
   }
 }
 
-interface MemberInviteUserRow {
-  id: string;
-  email: string | null;
-  first_name: string | null;
-  last_name: string | null;
-}
-
 /**
- * Tells someone they have joined an organization's team. Pass `acceptUrl` when
- * the invite created their account, so the email asks them to accept and set a
- * password; leave it out for an existing user, who is a member already.
+ * Emails an invitation to join an organization. `email` need not belong to an
+ * account yet; when it does, the email greets them by name.
  *
- * Runs after the membership row is written, and never throws: the membership
- * stands either way. Resolves to whether the email went out, so the caller can
- * tell the inviter when a new user's only way in was not delivered.
+ * Runs after the invitation is written, and never throws: the invitation stands
+ * either way and can be resent from the members page. Resolves to whether the
+ * email went out, so the inviter can be told when it didn't.
  */
 export async function notifyMemberInvited(params: {
   orgId: string;
   inviterId: string;
-  memberId: string;
+  email: string;
   role: MemberInvitationRole;
-  acceptUrl?: string;
+  invitationUrl: string;
 }): Promise<boolean> {
-  const { orgId, inviterId, memberId, role, acceptUrl } = params;
+  const { orgId, inviterId, email, role, invitationUrl } = params;
   try {
     const [
       { data: org, error: orgError },
-      { data: users, error: usersError },
+      { data: inviter, error: inviterError },
+      { data: recipient, error: recipientError },
     ] = await Promise.all([
       supabaseAdmin.from("organizations").select("name").eq("id", orgId).single(),
       supabaseAdmin
         .from("users")
-        .select("id, email, first_name, last_name")
-        .in("id", [inviterId, memberId]),
+        .select("first_name, last_name")
+        .eq("id", inviterId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("users")
+        .select("first_name")
+        .eq("email", email)
+        .is("deleted_at", null)
+        .maybeSingle(),
     ]);
-    if (orgError || !org || usersError || !users) {
+    const loadError = orgError ?? inviterError ?? recipientError;
+    if (loadError || !org) {
       console.error(
         `Organization ${orgId}: failed to load member invitation email data`,
-        orgError?.message ?? usersError?.message,
+        loadError?.message,
       );
       return false;
     }
 
-    const rows = users as MemberInviteUserRow[];
-    const member = rows.find((u) => u.id === memberId);
-    const inviter = rows.find((u) => u.id === inviterId);
-    if (!member?.email) {
-      console.error(
-        `Organization ${orgId}: no address to send the member invitation to`,
-      );
-      return false;
-    }
-
-    const inviterName =
-      [inviter?.first_name, inviter?.last_name]
-        .filter((part) => part && part.trim())
-        .join(" ")
-        .trim() || "A teammate";
-
-    await sendMemberInvitationEmail(member.email, {
-      recipientName: member.first_name?.trim() || "there",
-      inviterName,
+    await sendMemberInvitationEmail(email, {
+      recipientName:
+        (recipient as { first_name: string | null } | null)?.first_name?.trim() ||
+        "there",
+      inviterName:
+        personName(
+          inviter as { first_name: string | null; last_name: string | null } | null,
+        ) ?? "A teammate",
       organizationName: (org as { name: string }).name,
-      orgId,
       role,
-      acceptUrl,
+      invitationUrl,
     });
     return true;
   } catch (err) {

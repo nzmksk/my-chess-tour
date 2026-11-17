@@ -59,10 +59,9 @@ describe("email templates", () => {
     ["refund-completed.html", "{{paymentMethod}}"],
     ["refund-failed.html", "{{amount}}"],
     ["refund-failed.html", "{{paymentMethod}}"],
-    ["member-invitation.html", "{{acceptUrl}}"],
+    ["member-invitation.html", "{{invitationUrl}}"],
     ["member-invitation.html", "{{organizationName}}"],
-    ["member-added.html", "{{dashboardUrl}}"],
-    ["member-added.html", "{{organizationName}}"],
+    ["member-invitation.html", "{{recipientName}}"],
   ])("%s renders %s", (name, placeholder) => {
     expect(read(name)).toContain(placeholder);
   });

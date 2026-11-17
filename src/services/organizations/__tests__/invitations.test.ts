@@ -1,0 +1,136 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockFrom, result, builder } = vi.hoisted(() => {
+  const result: { data: unknown; error: unknown } = { data: null, error: null };
+  const builder: Record<string, unknown> = {};
+  for (const m of ["select", "eq", "maybeSingle"]) {
+    builder[m] = vi.fn(() => builder);
+  }
+  builder.then = (
+    onfulfilled: (v: unknown) => unknown,
+    onrejected?: (r: unknown) => unknown,
+  ) => Promise.resolve(result).then(onfulfilled, onrejected);
+  return { mockFrom: vi.fn(() => builder), result, builder };
+});
+
+vi.mock("@/services/supabase/admin", () => ({
+  supabaseAdmin: { from: mockFrom },
+}));
+
+import {
+  generateInvitationToken,
+  getInvitationByToken,
+  hashInvitationToken,
+  INVITATION_TOKEN_RE,
+  invitationState,
+  invitationUrl,
+} from "../invitations";
+
+const TOKEN = "a".repeat(43);
+const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
+const PAST = new Date(Date.now() - 1000).toISOString();
+
+function givenRow(overrides: Record<string, unknown> = {}) {
+  result.data = {
+    id: "inv-1",
+    email: "farid@example.com",
+    status: "pending",
+    expires_at: FUTURE,
+    roles: { name: "admin" },
+    organizations: {
+      id: "org-1",
+      name: "KL Chess Club",
+      approval_status: "approved",
+      deleted_at: null,
+    },
+    inviter: { first_name: "Aisha", last_name: "Rahman" },
+    ...overrides,
+  };
+  result.error = null;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  result.data = null;
+  result.error = null;
+});
+
+describe("invitation tokens", () => {
+  it("generates 43-character url-safe tokens that differ each time", () => {
+    const a = generateInvitationToken();
+    const b = generateInvitationToken();
+    expect(a).toMatch(INVITATION_TOKEN_RE);
+    expect(b).toMatch(INVITATION_TOKEN_RE);
+    expect(a).not.toBe(b);
+  });
+
+  it("hashes to the SHA-256 hex the database stores", () => {
+    // sha256("abc")
+    expect(hashInvitationToken("abc")).toBe(
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    );
+  });
+
+  it("links to the invitation page", () => {
+    expect(invitationUrl(TOKEN)).toMatch(new RegExp(`/invitations/${TOKEN}$`));
+  });
+});
+
+describe("invitationState", () => {
+  it("reads a pending invitation past its expiry as expired", () => {
+    expect(invitationState("pending", PAST)).toBe("expired");
+    expect(invitationState("pending", FUTURE)).toBe("pending");
+  });
+
+  it("keeps a closed invitation's status after expiry", () => {
+    expect(invitationState("accepted", PAST)).toBe("accepted");
+    expect(invitationState("revoked", PAST)).toBe("revoked");
+  });
+});
+
+describe("getInvitationByToken", () => {
+  it("looks the invitation up by the token's hash", async () => {
+    givenRow();
+    const view = await getInvitationByToken(TOKEN);
+
+    expect(builder.eq).toHaveBeenCalledWith("token_hash", hashInvitationToken(TOKEN));
+    expect(view).toEqual({
+      id: "inv-1",
+      email: "farid@example.com",
+      role: "admin",
+      state: "pending",
+      expiresAt: FUTURE,
+      organization: { id: "org-1", name: "KL Chess Club", available: true },
+      inviterName: "Aisha Rahman",
+    });
+  });
+
+  it("never queries for a malformed token", async () => {
+    expect(await getInvitationByToken("not-a-token")).toBeNull();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("returns null when nothing matches", async () => {
+    expect(await getInvitationByToken(TOKEN)).toBeNull();
+  });
+
+  it("marks an expired invitation and an unavailable organization", async () => {
+    givenRow({
+      expires_at: PAST,
+      organizations: {
+        id: "org-1",
+        name: "KL Chess Club",
+        approval_status: "approved",
+        deleted_at: "2026-01-01T00:00:00Z",
+      },
+    });
+    const view = await getInvitationByToken(TOKEN);
+    expect(view?.state).toBe("expired");
+    expect(view?.organization.available).toBe(false);
+  });
+
+  it("throws on a database error", async () => {
+    result.error = { message: "boom" };
+    await expect(getInvitationByToken(TOKEN)).rejects.toThrow(/boom/);
+  });
+});

@@ -1063,19 +1063,18 @@ describe("sendRefundOutcomeEmail", () => {
 });
 
 describe("sendMemberInvitationEmail", () => {
-  const ORG_ID = "22222222-2222-2222-2222-222222222222";
   const base = {
     recipientName: "Farid",
     inviterName: "Aisha Rahman",
     organizationName: "KL Chess Club",
-    orgId: ORG_ID,
     role: "admin" as const,
+    invitationUrl: "https://example.com/invitations/abc_DEF-123",
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "{{recipientName}}|{{inviterName}}|{{organizationName}}|{{roleLabel}}|{{roleSummary}}|{{dashboardUrl}}|{{siteUrl}}|{{acceptUrl}}",
+      "{{recipientName}}|{{inviterName}}|{{organizationName}}|{{roleLabel}}|{{roleSummary}}|{{invitationUrl}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
   });
@@ -1083,46 +1082,27 @@ describe("sendMemberInvitationEmail", () => {
   const sent = () =>
     mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
 
-  it("tells an existing user they were added, linking to the dashboard", async () => {
+  it("links to the invitation, naming the inviter, organization and role", async () => {
     await sendMemberInvitationEmail("f@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("member-added.html"),
-      "utf-8",
-    );
-    expect(sent().to).toBe("f@example.com");
-    expect(sent().subject).toBe(
-      "You've been added to KL Chess Club on MY Chess Tour",
-    );
-    expect(sent().html).toContain(`/my/organizations/${ORG_ID}|`);
-    expect(sent().html).toContain("Farid|Aisha Rahman|KL Chess Club|an admin|");
-  });
-
-  it("invites a new user to accept, carrying the accept link", async () => {
-    await sendMemberInvitationEmail("new@example.com", {
-      ...base,
-      role: "member",
-      acceptUrl: "https://example.com/api/v1/auth/callback?token_hash=abc&type=invite",
-    });
     expect(mockReadFileSync).toHaveBeenCalledWith(
       expect.stringContaining("member-invitation.html"),
       "utf-8",
     );
+    expect(sent().to).toBe("f@example.com");
     expect(sent().subject).toBe(
       "Aisha Rahman invited you to join KL Chess Club on MY Chess Tour",
     );
-    // The link lands in an href, so its query separator is entity-encoded.
     expect(sent().html).toContain(
-      "https://example.com/api/v1/auth/callback?token_hash=abc&amp;type=invite",
+      "Farid|Aisha Rahman|KL Chess Club|an admin|create and edit tournaments",
     );
+    expect(sent().html).toContain("|https://example.com/invitations/abc_DEF-123|");
+  });
+
+  it("describes what a member can do", async () => {
+    await sendMemberInvitationEmail("f@example.com", { ...base, role: "member" });
     expect(sent().html).toContain(
       "|a member|view the organization&#39;s tournaments and registrations|",
     );
-    expect(sent().html).not.toContain("{{acceptUrl}}");
-  });
-
-  it("describes what the role can do", async () => {
-    await sendMemberInvitationEmail("f@example.com", base);
-    expect(sent().html).toContain("create and edit tournaments");
   });
 
   it("escapes organizer-supplied values", async () => {
