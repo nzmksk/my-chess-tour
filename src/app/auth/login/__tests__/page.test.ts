@@ -47,6 +47,16 @@ describe("LoginPage", () => {
     expect(loginFormProps.infoMessage).toBeUndefined();
   });
 
+  it("passes successMessage when message is 'account-ready'", async () => {
+    const result = (await LoginPage({
+      searchParams: Promise.resolve({ message: "account-ready" }),
+    })) as unknown as {
+      props: { children: { props: Record<string, unknown> }[] };
+    };
+    const loginFormProps = result.props.children[1].props;
+    expect(loginFormProps.successMessage).toContain("password is set");
+  });
+
   it("passes infoMessage when message is 'login-required'", async () => {
     const result = (await LoginPage({
       searchParams: Promise.resolve({ message: "login-required" }),

@@ -8,7 +8,11 @@ import {
 import { updatePassword } from "../_actions/updatePassword";
 import { INITIAL_UPDATE_PASSWORD_STATE } from "../types";
 
-export default function UpdatePasswordForm() {
+export default function UpdatePasswordForm({
+  invited = false,
+}: {
+  invited?: boolean;
+}) {
   const [state, formAction, pending] = useActionState(
     updatePassword,
     INITIAL_UPDATE_PASSWORD_STATE,
@@ -27,9 +31,13 @@ export default function UpdatePasswordForm() {
         <div className="auth-card card card--featured">
           <div className="auth-card-header">
             <span className="auth-logo">MY Chess Tour</span>
-            <h1 className="auth-heading">New Password</h1>
+            <h1 className="auth-heading">
+              {invited ? "Set Your Password" : "New Password"}
+            </h1>
             <p className="auth-subheading">
-              Choose a strong password for your account
+              {invited
+                ? "Choose a password to finish setting up your account"
+                : "Choose a strong password for your account"}
             </p>
             <hr className="divider-gold" />
           </div>
@@ -44,6 +52,7 @@ export default function UpdatePasswordForm() {
           )}
 
           <form action={formAction}>
+            {invited && <input type="hidden" name="invited" value="1" />}
             {/* New password */}
             <div className="form-group">
               <div className="label-row">
@@ -176,7 +185,13 @@ export default function UpdatePasswordForm() {
               disabled={pending}
               aria-disabled={pending}
             >
-              {pending ? "Updating\u2026" : "Update Password"}
+              {pending
+                ? invited
+                  ? "Saving\u2026"
+                  : "Updating\u2026"
+                : invited
+                  ? "Set Password"
+                  : "Update Password"}
             </button>
           </form>
         </div>

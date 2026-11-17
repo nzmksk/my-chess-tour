@@ -142,4 +142,21 @@ describe("updatePassword action", () => {
       "/auth/login?message=password-updated",
     );
   });
+
+  it("tells an invited member their account is ready", async () => {
+    const fd = makeFormData({
+      password: "Strong1!",
+      confirmPassword: "Strong1!",
+      invited: "1",
+    });
+
+    await expect(
+      updatePassword(INITIAL_UPDATE_PASSWORD_STATE, fd),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.signOut).toHaveBeenCalled();
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      "/auth/login?message=account-ready",
+    );
+  });
 });

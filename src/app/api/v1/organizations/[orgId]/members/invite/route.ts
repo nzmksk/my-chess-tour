@@ -322,12 +322,12 @@ export async function POST(
 }
 
 // The link in a new member's invitation. The callback verifies the token with
-// verifyOtp, which signs them in, then sends them on to set a password.
+// verifyOtp, which signs them in, then sends them on to set a first password.
 function buildAcceptUrl(hashedToken: string): string {
   const params = new URLSearchParams({
     token_hash: hashedToken,
     type: "invite",
-    next: "/auth/update-password",
+    next: "/auth/update-password?invite=1",
   });
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   return `${siteUrl}/api/v1/auth/callback?${params.toString()}`;
