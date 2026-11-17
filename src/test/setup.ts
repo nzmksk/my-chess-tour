@@ -1,5 +1,19 @@
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
+import { resetAfterCallbacks } from "./after";
 import { appIdFor } from "./identity";
+
+/**
+ * `after` from `next/server` holds its callbacks until the test runs them with
+ * `runAfterCallbacks()` (see ./after). The rest of `next/server` is real.
+ */
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (await import("./after")).after,
+}));
+
+beforeEach(() => {
+  resetAfterCallbacks();
+});
 
 /**
  * Global stub for the auth-id → users.id bridge.
