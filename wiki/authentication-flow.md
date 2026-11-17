@@ -230,7 +230,9 @@ check has passed.
   `/auth/logout` — authenticated users are bounced to `/tournaments`.
 - **Signup step gating:** a `SIGNUP_STEP_COOKIE` (`verify`) prevents reaching the verify step by URL before an account exists; it's cleared once verified.
 - **Password reset:** `/auth/update-password` requires a *recovery* session —
-  checked via the JWT's `amr` containing an `otp` method.
+  checked via the JWT's `amr` containing an `otp` method. An organization
+  invite link is verified the same way (`type=invite`), so a new member reaches
+  the same form, at `?invite=1`, to set a first password.
 
 > Middleware runs on the **Node** runtime here (Next 16 `src/proxy.ts`), not edge.
 

@@ -849,9 +849,9 @@ CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=
 
 **Server-side logic:**
 
-1. Look up user by email. If no account exists, create a pending invitation.
-2. If account exists, add to `organizer_members` directly.
-3. Send invitation email.
+1. Look up user by email. If no account exists, create one with an invite token (`generateLink`) and a membership (`status: "pending"` until they set a password).
+2. If account exists, add the membership directly (`status: "active"`).
+3. Email the member (best-effort): an accept link for a new account, a dashboard link for an existing one. `email_sent` reports whether it went out.
 
 **Response `201`:**
 
@@ -862,7 +862,8 @@ CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=
     "email": "colleague@example.com",
     "role": "admin",
     "status": "pending",
-    "invited_at": "2026-02-22T16:00:00Z"
+    "invited_at": "2026-02-22T16:00:00Z",
+    "email_sent": true
   }
 }
 ```

@@ -28,6 +28,8 @@ Current uses:
 | `src/services/email/email.ts`, `sendTournamentCancellationEmail` | `{{browseUrl}}` → `/tournaments`                                                                                      |
 | `src/services/email/email.ts`, `sendCancellationReviewEmail`     | Dashboard link → `/my/organizations`                                                                                  |
 | `src/app/auth/forgot-password/_actions/forgotPassword.ts`        | Reset link → `/api/v1/auth/callback?token_hash=…&type=recovery&next=/auth/update-password`                            |
+| `src/app/api/v1/organizations/[orgId]/members/invite/route.ts`   | Invite link → `/api/v1/auth/callback?token_hash=…&type=invite&next=/auth/update-password?invite=1`                    |
+| `src/services/email/email.ts`, `sendMemberInvitationEmail`       | Dashboard link → `/my/organizations/{orgId}`                                                                          |
 | `src/app/api/v1/tournaments/[slug]/checkout/route.ts`            | CHIP `success_redirect` / `failure_redirect` / `cancel_redirect` → `/tournaments/{slug}/register[/success\|/failure]` |
 
 Payment _status_ never depends on this value. It arrives through the CHIP account webhook (`/api/v1/webhooks/chip`), which is configured in the CHIP dashboard, not per purchase. See [payment-flow.md](./payment-flow.md) and [chip-webhook.md](./chip-webhook.md).

@@ -233,7 +233,7 @@ In application code, `AuthIdentity.id` is the **`users.id`** and
 |---|---|
 | `platform_admin` | Inserted into `user_global_roles` directly (no self-serve path). The seed grants it to `chip-review@gmail.com`; in production it's a manual grant. |
 | `owner` | Granted **atomically on organizer-application approval**: `review_organization_application()` inserts the applicant's `owner` membership when a platform admin approves the org (see [launch-readiness.md](./launch-readiness.md) O1). |
-| `admin` / `member` | Granted via the org's member-invite flow (`POST .../members/invite`) — needs `org.invite`. Existing users get an active membership directly; new users get a pending membership + Supabase invite. Role changes go through `PATCH .../members/[id]` (needs `org.manage`). |
+| `admin` / `member` | Granted via the org's member-invite flow (`POST .../members/invite`) — needs `org.invite`. Existing users get an active membership directly; new users get a pending membership + an invite link to set a password. Both are emailed (#121). Role changes go through `PATCH .../members/[id]` (needs `org.manage`). |
 
 Constraints worth knowing: you cannot change or remove **yourself**, and `owner`
 is **not assignable** through the members UI (it's set only by the approval RPC).
