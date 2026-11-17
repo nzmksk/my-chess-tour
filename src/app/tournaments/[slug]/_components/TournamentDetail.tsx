@@ -63,6 +63,11 @@ interface Props {
   tournament: TournamentDetailType;
   isAuthenticated: boolean;
   registrationStatus?: string | null;
+  /**
+   * MY Chess Tour distributes this tournament's prizes and the pool isn't fully
+   * funded yet, so registration hasn't opened (#523).
+   */
+  awaitingPrizeFunding?: boolean;
   canViewStartingRank: boolean;
   startingRank: StartingRankPlayer[] | null;
   /**
@@ -76,6 +81,7 @@ export default function TournamentDetail({
   tournament: t,
   isAuthenticated,
   registrationStatus = null,
+  awaitingPrizeFunding = false,
   canViewStartingRank,
   startingRank,
   now,
@@ -274,6 +280,13 @@ export default function TournamentDetail({
                 </li>
               )}
             </ul>
+            {t.prizes?.distribution === "platform" && (
+              <p className="font-lato text-text-muted mt-3 text-xs">
+                {awaitingPrizeFunding
+                  ? "Prizes are paid by MY Chess Tour from a sponsor-funded pool. Registration opens once the full pool has been paid in."
+                  : "Prizes are paid by MY Chess Tour from a fully funded pool, held separately from entry fees."}
+              </p>
+            )}
           </Section>
         )}
 
@@ -427,6 +440,13 @@ export default function TournamentDetail({
               disabled
             >
               Registration Closed
+            </button>
+          ) : awaitingPrizeFunding ? (
+            <button
+              className="btn-primary w-full rounded-md opacity-50"
+              disabled
+            >
+              Opens Once Prizes Are Funded
             </button>
           ) : registrationStatus === "pending_payment" ? (
             <Link

@@ -21,6 +21,19 @@ import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-res
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
 
+function prizePoolNotFundedResponse(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: "PRIZE_POOL_NOT_FUNDED",
+        message:
+          "Registration opens once this tournament's prize pool has been fully funded",
+      },
+    },
+    { status: 422 },
+  );
+}
+
 // The seat hold (and the CHIP purchase `due`) lasts PAYMENT_TIMEOUT_MINUTES from
 // registered_at. While live, the pending payment is resumed by reusing its link.
 function isHoldLive(registeredAt: string): boolean {
@@ -92,7 +105,7 @@ export async function POST(
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
     .select(
-      "id, name, entry_fees, max_participants, registration_deadline, registration_closed_at, start_date, restrictions, format, is_fide_rated, is_mcf_rated",
+      "id, name, entry_fees, prizes, max_participants, registration_deadline, registration_closed_at, start_date, restrictions, format, is_fide_rated, is_mcf_rated",
     )
     .eq("slug", slug)
     .eq("status", "published")
@@ -141,6 +154,24 @@ export async function POST(
       },
       { status: 422 },
     );
+  }
+
+  // A platform-distributed prize pool must be fully funded before anyone can
+  // register (#523): players must not enter an event whose advertised prizes
+  // have no money behind them. create_registration_with_payment and
+  // start_new_payment_attempt refuse too; this answers first, with a clear code.
+  if ((tournament.prizes as { distribution?: string } | null)?.distribution === "platform") {
+    const { data: blocked, error: poolError } = await supabaseAdmin.rpc(
+      "prize_pool_blocks_registration",
+      { p_tournament_id: tournamentId },
+    );
+    if (poolError) {
+      return internalErrorResponse(
+        "POST /api/v1/tournaments/[slug]/checkout: prize pool check failed",
+        poolError,
+      );
+    }
+    if (blocked === true) return prizePoolNotFundedResponse();
   }
 
   // Capacity is enforced authoritatively in Postgres: the create path via the
@@ -348,6 +379,9 @@ export async function POST(
   );
 
   if (insertErr) {
+    if (insertErr.message?.startsWith("PRIZE_POOL_NOT_FUNDED")) {
+      return prizePoolNotFundedResponse();
+    }
     if (
       insertErr.message.includes("Tournament is full") ||
       insertErr.code === "P0001"
@@ -526,6 +560,9 @@ async function resumeRegistration(
   );
 
   if (attemptErr) {
+    if (attemptErr.message?.startsWith("PRIZE_POOL_NOT_FUNDED")) {
+      return prizePoolNotFundedResponse();
+    }
     if (attemptErr.message?.toLowerCase().includes("full")) {
       return NextResponse.json(
         { error: { code: "CAPACITY_FULL", message: "Tournament is full" } },

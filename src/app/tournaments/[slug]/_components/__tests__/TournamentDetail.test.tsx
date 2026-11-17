@@ -724,3 +724,45 @@ describe("starting rank tab integration", () => {
     expect(html).toContain("Starting Rank");
   });
 });
+
+// ── Platform-distributed prize pool (#523) ───────────────────
+
+describe("platform prize pool", () => {
+  const platformPrizes = { ...base.prizes!, distribution: "platform" as const };
+
+  function renderPool(awaitingPrizeFunding: boolean, registrationStatus: string | null = null) {
+    return renderToStaticMarkup(
+      <TournamentDetail
+        tournament={{ ...base, prizes: platformPrizes }}
+        isAuthenticated
+        registrationStatus={registrationStatus}
+        awaitingPrizeFunding={awaitingPrizeFunding}
+        canViewStartingRank={false}
+        startingRank={null}
+        now={NOW}
+      />,
+    );
+  }
+
+  it("keeps registration shut until the pool is funded", () => {
+    const html = renderPool(true);
+    expect(html).toContain("Opens Once Prizes Are Funded");
+    expect(html).not.toContain("Register Now");
+    expect(html).toContain("Registration opens once the full pool has been paid in");
+  });
+
+  it("opens registration once the pool is funded", () => {
+    const html = renderPool(false);
+    expect(html).toContain("Register Now");
+    expect(html).toContain("from a fully funded pool");
+  });
+
+  it("still shows a confirmed player as registered", () => {
+    expect(renderPool(true, "confirmed")).toContain("Registered");
+  });
+
+  it("says nothing about a pool when the organizer pays the winners", () => {
+    const html = render({}, true);
+    expect(html).not.toContain("funded pool");
+  });
+});
