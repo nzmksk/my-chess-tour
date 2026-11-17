@@ -32,7 +32,7 @@ function getClasses(html: string, tag: string, index = 0): string[] {
 
 describe("TournamentCardSkeleton mirrors TournamentCard layout", () => {
   const cardHtml = renderToStaticMarkup(
-    <TournamentCard tournament={mockTournament} />,
+    <TournamentCard tournament={mockTournament} now="2026-04-01T00:00:00.000Z" />,
   );
   const skeletonHtml = renderToStaticMarkup(<TournamentCardSkeleton />);
 

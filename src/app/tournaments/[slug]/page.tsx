@@ -257,6 +257,7 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
       registrationStatus={registrationStatus}
       canViewStartingRank={canViewStartingRank}
       startingRank={startingRank}
+      now={now.toISOString()}
     />
   );
 }
