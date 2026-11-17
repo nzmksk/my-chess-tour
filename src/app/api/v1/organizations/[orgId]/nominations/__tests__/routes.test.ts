@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { runAfterCallbacks } from "@/test/after";
 import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 
 // One file for the three nomination routes: they share a gate and an error mapping.
@@ -188,12 +189,14 @@ describe("PUT .../beneficiary", () => {
 
   it("emails the nominee", async () => {
     await callNominate({ beneficiary_organization_id: NOMINEE });
+    await runAfterCallbacks();
     expect(mockNotifyNominated).toHaveBeenCalledWith(T_ID, NOMINEE);
   });
 
   it("withdraws with null", async () => {
     await callNominate({ beneficiary_organization_id: null });
     expect(mockRpc.mock.calls[0][1].p_beneficiary_org_id).toBeNull();
+    await runAfterCallbacks();
     expect(mockNotifyNominated).not.toHaveBeenCalled();
   });
 
@@ -235,6 +238,7 @@ describe("PUT .../beneficiary", () => {
     expect(res.status).toBe(409);
     expect((await res.json()).error.message).toMatch(expected);
     expect(mockRpc).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyNominated).not.toHaveBeenCalled();
   });
 
@@ -267,6 +271,7 @@ describe("PUT .../beneficiary", () => {
     const res = await callNominate({ beneficiary_organization_id: NOMINEE });
     expect(res.status).toBe(status);
     expect((await res.json()).error.message).toMatch(expected);
+    await runAfterCallbacks();
     expect(mockNotifyNominated).not.toHaveBeenCalled();
   });
 });
@@ -360,6 +365,7 @@ describe.each([
     expect(res.status).toBe(409);
     expect((await res.json()).error.message).toMatch(expected);
     expect(mockRpc).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyResponded).not.toHaveBeenCalled();
   });
 
@@ -383,12 +389,14 @@ describe("POST .../nominations/[tournamentId]", () => {
   it("emails the organizer that the nomination was accepted", async () => {
     mockRpc.mockResolvedValue({ data: { already_accepted: false }, error: null });
     await callAccept();
+    await runAfterCallbacks();
     expect(mockNotifyResponded).toHaveBeenCalledWith(T_ID, ORG_ID, true);
   });
 
   it("emails no one for a repeated accept", async () => {
     mockRpc.mockResolvedValue({ data: { already_accepted: true }, error: null });
     expect((await callAccept()).status).toBe(200);
+    await runAfterCallbacks();
     expect(mockNotifyResponded).not.toHaveBeenCalled();
   });
 
@@ -408,6 +416,7 @@ describe("POST .../nominations/[tournamentId]", () => {
       error: { code: "P0001", message: "these fields are locked: beneficiary_accepted_at" },
     });
     expect((await callAccept()).status).toBe(409);
+    await runAfterCallbacks();
     expect(mockNotifyResponded).not.toHaveBeenCalled();
   });
 });
@@ -421,6 +430,7 @@ describe("DELETE .../nominations/[tournamentId]", () => {
       p_tournament_id: T_ID,
       p_user_id: USER_ID,
     });
+    await runAfterCallbacks();
     expect(mockNotifyResponded).toHaveBeenCalledWith(T_ID, ORG_ID, false);
   });
 
@@ -443,6 +453,7 @@ describe("DELETE .../nominations/[tournamentId]", () => {
     const res = await callDecline();
     expect(res.status).toBe(409);
     expect((await res.json()).error.message).toMatch(/ask the organizer/i);
+    await runAfterCallbacks();
     expect(mockNotifyResponded).not.toHaveBeenCalled();
   });
 

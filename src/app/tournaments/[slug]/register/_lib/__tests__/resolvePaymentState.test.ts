@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -234,6 +235,7 @@ describe("resolvePaymentState", () => {
     });
     expect(result.state).toBe("confirmed");
     // The webhook already confirmed it (no newly_confirmed), so no second email.
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 
@@ -258,6 +260,7 @@ describe("resolvePaymentState", () => {
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
 
     expect(result.state).toBe("confirmed");
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).toHaveBeenCalledOnce();
     expect(mockNotifyConfirmed).toHaveBeenCalledWith("reg-uuid");
   });
@@ -287,6 +290,7 @@ describe("resolvePaymentState", () => {
     const result = await resolvePaymentState(TOURNAMENT_ID, USER_ID);
 
     expect(result.state).toBe("pending");
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 

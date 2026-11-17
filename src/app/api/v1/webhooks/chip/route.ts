@@ -19,6 +19,7 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Needs the Node.js runtime for `crypto` and access to the raw request body.
 export const runtime = "nodejs";
@@ -164,8 +165,11 @@ async function handleRefundEvent(
 
   // Emails the player only if this delivery settled the refund or recorded its
   // first failure; a duplicate or a refund the sync response already settled
-  // sends nothing. Never throws, so a Resend outage can't make CHIP redeliver.
-  await notifyRefundSettlement(refund.id, settled as SettleRefundResult | null);
+  // sends nothing. Sent after the 200, so a Resend outage can't make CHIP
+  // redeliver. Never throws.
+  afterResponse(() =>
+    notifyRefundSettlement(refund.id, settled as SettleRefundResult | null),
+  );
 
   return ack();
 }
@@ -342,9 +346,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Only the settle that confirmed the registration reports it, so a retried
     // webhook or the success page's reconcile can't email the player twice.
-    // Best-effort: never throws, so CHIP still gets its 200.
+    // Sent after the 200, since settlement has already committed. Never throws.
     if (result.newly_confirmed) {
-      await notifyRegistrationConfirmed(result.registration_id);
+      const registrationId = result.registration_id;
+      afterResponse(() => notifyRegistrationConfirmed(registrationId));
     }
   }
 

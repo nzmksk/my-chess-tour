@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -160,6 +161,7 @@ describe("registerOrganizationBankAccount", () => {
       p_verified: true,
       p_reason: null,
     });
+    await runAfterCallbacks();
     expect(mockSendEmail).toHaveBeenCalled();
   });
 
@@ -263,6 +265,7 @@ describe("settleBankAccountVerification", () => {
       verified: true,
     });
     expect(res).toEqual({ error: { code: "XX000", message: "boom" }, settled: false });
+    await runAfterCallbacks();
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
@@ -277,6 +280,7 @@ describe("settleBankAccountVerification", () => {
       verified: true,
     });
     expect(res.settled).toBe(false);
+    await runAfterCallbacks();
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
@@ -291,6 +295,7 @@ describe("settleBankAccountVerification", () => {
       verified: true,
     });
     expect(res.settled).toBe(true);
+    await runAfterCallbacks();
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
@@ -337,6 +342,7 @@ describe("notifyBankVerification", () => {
     queue("organizations", { data: null, error: null });
     queue("organization_bank_accounts", { data: null, error: null });
     await notifyBankVerification(ORG_ID, BANK_ID);
+    await runAfterCallbacks();
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 });

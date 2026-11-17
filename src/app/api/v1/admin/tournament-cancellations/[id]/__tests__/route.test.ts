@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
@@ -346,6 +347,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     expect(body.error.message).toContain("RM 2,500.50 short");
     // Nothing downstream runs for a refused approval.
     expect(mockRefundChipPurchase).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockSendCancellationEmail).not.toHaveBeenCalled();
     expect(mockSendReviewEmail).not.toHaveBeenCalled();
   });
@@ -371,6 +373,9 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),
     });
+    // Nothing is sent until the response has gone out.
+    expect(mockSendCancellationEmail).not.toHaveBeenCalled();
+    await runAfterCallbacks();
 
     expect(mockFrom).toHaveBeenCalledWith("registrations");
     expect(mockRegistrationsBuilder.in).toHaveBeenCalledWith("status", [
@@ -398,6 +403,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       { params: Promise.resolve({ id: REQ_ID }) },
     );
 
+    await runAfterCallbacks();
     expect(mockSendCancellationEmail).not.toHaveBeenCalled();
   });
 
@@ -414,6 +420,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       params: Promise.resolve({ id: REQ_ID }),
     });
 
+    await runAfterCallbacks();
     expect(mockSendCancellationEmail).toHaveBeenCalledTimes(1);
     expect(mockSendCancellationEmail).toHaveBeenCalledWith(
       "ali@example.com",
@@ -438,6 +445,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       params: Promise.resolve({ id: REQ_ID }),
     });
     expect(res.status).toBe(200);
+    await runAfterCallbacks();
     expect(mockSendCancellationEmail).not.toHaveBeenCalled();
   });
 
@@ -447,6 +455,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),
     });
+    await runAfterCallbacks();
 
     expect(mockFrom).toHaveBeenCalledWith("organization_memberships");
     expect(mockMembershipsBuilder.eq).toHaveBeenCalledWith(
@@ -476,6 +485,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),
     });
+    await runAfterCallbacks();
 
     expect(mockFrom).toHaveBeenCalledWith("organizations");
     expect(mockOrganizationsBuilder.eq).toHaveBeenCalledWith("id", ORG_ID);
@@ -499,6 +509,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     });
 
     // owner + admin only — the org email collides with the owner (case-insensitively).
+    await runAfterCallbacks();
     expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
     expect(mockSendReviewEmail).not.toHaveBeenCalledWith(
       "OWNER@example.com",
@@ -515,6 +526,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       params: Promise.resolve({ id: REQ_ID }),
     });
 
+    await runAfterCallbacks();
     expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
   });
 
@@ -528,6 +540,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       { params: Promise.resolve({ id: REQ_ID }) },
     );
 
+    await runAfterCallbacks();
     expect(mockSendReviewEmail).toHaveBeenCalledTimes(3);
     expect(mockSendReviewEmail).toHaveBeenCalledWith(
       "owner@example.com",
@@ -537,6 +550,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
         tournamentName: "KL Open 2026",
       }),
     );
+    await runAfterCallbacks();
     expect(mockSendReviewEmail).toHaveBeenCalledWith(
       "contact@klchess.org",
       expect.objectContaining({
@@ -563,11 +577,13 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     });
 
     // owner (valid member) + org contact email.
+    await runAfterCallbacks();
     expect(mockSendReviewEmail).toHaveBeenCalledTimes(2);
     expect(mockSendReviewEmail).toHaveBeenCalledWith(
       "owner@example.com",
       expect.anything(),
     );
+    await runAfterCallbacks();
     expect(mockSendReviewEmail).toHaveBeenCalledWith(
       "contact@klchess.org",
       expect.anything(),
@@ -591,6 +607,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       params: Promise.resolve({ id: REQ_ID }),
     });
     expect(res.status).toBe(200);
+    await runAfterCallbacks();
     expect(mockSendReviewEmail).not.toHaveBeenCalled();
   });
 
@@ -634,6 +651,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       p_payment_method: null,
     });
     // Each settle's result goes to the notifier, which emails only on a new settle.
+    await runAfterCallbacks();
     expect(mockNotifyRefund).toHaveBeenCalledWith("rf-1", {
       settled: true,
       newly_settled: true,
@@ -653,6 +671,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),
     });
+    await runAfterCallbacks();
 
     const lastNotice = Math.max(...mockSendCancellationEmail.mock.invocationCallOrder);
     const [firstRefund] = mockNotifyRefund.mock.invocationCallOrder;
@@ -686,6 +705,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     });
 
     expect(res.status).toBe(200);
+    await runAfterCallbacks();
     expect(mockNotifyRefund).not.toHaveBeenCalled();
   });
 
@@ -775,6 +795,7 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
     expect(res.status).toBe(200);
     expect(mockRefundsBuilder.update).not.toHaveBeenCalled();
     // The webhook settles it, and emails from there.
+    await runAfterCallbacks();
     expect(mockNotifyRefund).not.toHaveBeenCalled();
     expect(mockAdminRpc).not.toHaveBeenCalledWith(
       "settle_refund",

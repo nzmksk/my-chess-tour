@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterResponse } from "@/lib/http/after-response";
+import { runAfterCallbacks } from "@/test/after";
 import { appIdFor } from "@/test/identity";
 import { NextRequest } from "next/server";
 
@@ -143,12 +145,24 @@ describe("PATCH /api/v1/admin/payouts/[id]", () => {
     expect((await res.json()).data).toMatchObject({ approval: "approved", outcome: "sent" });
   });
 
-  it("emails the organization before sending, so 'approved' lands first", async () => {
+  it("emails the organization after the response, 'approved' ahead of a synchronous send's email", async () => {
+    const sent: string[] = [];
+    mockNotifyReviewed.mockImplementationOnce(async () => {
+      sent.push("approved");
+    });
+    mockExecute.mockImplementationOnce(async () => {
+      afterResponse(async () => {
+        sent.push("processed");
+      });
+      return "paid";
+    });
+
     await patch({ action: "approve" });
+    expect(sent).toEqual([]);
+    await runAfterCallbacks();
+
     expect(mockNotifyReviewed).toHaveBeenCalledWith(PAYOUT_ID);
-    expect(mockNotifyReviewed.mock.invocationCallOrder[0]).toBeLessThan(
-      mockExecute.mock.invocationCallOrder[0],
-    );
+    expect(sent).toEqual(["approved", "processed"]);
   });
 
   it("still succeeds when the send is parked", async () => {
@@ -167,6 +181,7 @@ describe("PATCH /api/v1/admin/payouts/[id]", () => {
       expect.objectContaining({ p_action: "reject", p_rejection_reason: "Send the invoice" }),
     );
     expect(mockExecute).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyReviewed).toHaveBeenCalledWith(PAYOUT_ID);
     expect((await res.json()).data.outcome).toBeUndefined();
   });

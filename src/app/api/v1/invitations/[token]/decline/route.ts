@@ -7,6 +7,7 @@ import {
 } from "@/services/organizations/invitations";
 import { notifyInvitationResponded } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Answering emails the inviter, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -42,7 +43,7 @@ export async function POST(_request: NextRequest, { params }: Params): Promise<N
   // A repeated answer (double-click, retry) changes nothing and tells no one.
   const result = data as { invitation_id: string; already_declined?: boolean };
   if (!result.already_declined) {
-    await notifyInvitationResponded(result.invitation_id);
+    afterResponse(() => notifyInvitationResponded(result.invitation_id));
   }
 
   return NextResponse.json({ data }, { status: 200 });

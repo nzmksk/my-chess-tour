@@ -11,6 +11,7 @@ import {
   type SettleRefundResult,
 } from "@/services/refunds/notify";
 import { REFUND_STUCK_AFTER_INTERVAL } from "@/lib/refunds/stuck-after";
+import { afterResponse } from "@/lib/http/after-response";
 
 /** Why claim_refund_fire refused to let this refund be fired. */
 export type RefundFireRefusal =
@@ -66,8 +67,11 @@ async function settlePaid(
     console.error(`Refund ${refundId}: settle_refund failed`, error);
     return false;
   }
-  // Emails the player only if this call, not the webhook, settled it.
-  await notifyRefundSettlement(refundId, data as SettleRefundResult | null);
+  // Emails the player only if this call, not the webhook, settled it. Sent
+  // after the response of whichever request fired the refund.
+  afterResponse(() =>
+    notifyRefundSettlement(refundId, data as SettleRefundResult | null),
+  );
   return true;
 }
 

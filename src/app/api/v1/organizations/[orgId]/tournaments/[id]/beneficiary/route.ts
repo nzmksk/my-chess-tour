@@ -8,6 +8,7 @@ import {
 import { notifyBeneficiaryNominated } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Nominating emails the nominee, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -95,7 +96,7 @@ export async function PUT(
 
   // The nominee has to accept before anything is redirected, so tell it.
   if (beneficiary) {
-    await notifyBeneficiaryNominated(id, beneficiary);
+    afterResponse(() => notifyBeneficiaryNominated(id, beneficiary));
   }
 
   return NextResponse.json({ data }, { status: 200 });

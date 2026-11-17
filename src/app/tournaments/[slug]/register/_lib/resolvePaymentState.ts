@@ -7,6 +7,7 @@ import {
 } from "@/services/chip/chip";
 import type { RegistrationRow } from "../types";
 import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
+import { afterResponse } from "@/lib/http/after-response";
 
 export type PaymentState = "confirmed" | "pending" | "failed" | "none";
 
@@ -166,9 +167,10 @@ export async function resolvePaymentState(
     }
 
     // This reconcile beat the webhook to the confirmation, so the email is ours
-    // to send (the webhook's settle will then report nothing new). Never throws.
+    // to send (the webhook's settle will then report nothing new). Sent once the
+    // page has rendered, so the player isn't kept waiting for it. Never throws.
     if (result?.newly_confirmed) {
-      await notifyRegistrationConfirmed(reg.id);
+      afterResponse(() => notifyRegistrationConfirmed(reg.id));
     }
 
     return {

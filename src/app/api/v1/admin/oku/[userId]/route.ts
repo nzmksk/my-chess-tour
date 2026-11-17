@@ -4,6 +4,7 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { notifyOkuReviewed } from "@/services/oku/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Reviewing emails the player, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -134,8 +135,8 @@ export async function PATCH(
     );
   }
 
-  // The review is saved. Best-effort: never throws, never fails the review.
-  await notifyOkuReviewed(userId);
+  // The review is saved. Emailed after the response; best-effort, never throws.
+  afterResponse(() => notifyOkuReviewed(userId));
 
   return NextResponse.json({ data }, { status: 200 });
 }

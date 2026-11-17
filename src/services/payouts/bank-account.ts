@@ -5,6 +5,7 @@ import {
   registerChipBankAccount,
 } from "@/services/chip/send";
 import { sendBankVerificationEmail } from "@/services/email/email";
+import { afterResponse } from "@/lib/http/after-response";
 
 // Payout bank account verification (#519).
 //
@@ -100,15 +101,19 @@ export async function settleBankAccountVerification(
   if (result.already_processed) return { error: null, settled: false };
 
   // An account the organizer already replaced: record the verdict, stay quiet.
+  // Sent after the response of whichever request settled it.
   if (result.is_active) {
-    try {
-      await notifyBankVerification(result.organization_id, input.bankAccountId);
-    } catch (err) {
-      console.error(
-        `Bank account ${input.bankAccountId}: verification email failed`,
-        describeError(err),
-      );
-    }
+    const organizationId = result.organization_id;
+    afterResponse(async () => {
+      try {
+        await notifyBankVerification(organizationId, input.bankAccountId);
+      } catch (err) {
+        console.error(
+          `Bank account ${input.bankAccountId}: verification email failed`,
+          describeError(err),
+        );
+      }
+    });
   }
 
   return { error: null, settled: true };

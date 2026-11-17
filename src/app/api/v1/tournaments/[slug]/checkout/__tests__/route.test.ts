@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
 import { NextRequest } from "next/server";
 
 // ---------------------------------------------------------------------------
@@ -615,6 +616,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     });
 
     expect(res.status).toBe(201);
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).toHaveBeenCalledOnce();
     expect(mockNotifyConfirmed).toHaveBeenCalledWith("reg-1");
   });
@@ -627,6 +629,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     });
 
     expect(res.status).toBe(201);
+    await runAfterCallbacks();
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
   });
 

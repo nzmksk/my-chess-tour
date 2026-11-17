@@ -7,6 +7,7 @@ import { notifyPayoutReviewed } from "@/services/payouts/notify";
 import { describeEarlyPayoutProblem } from "@/services/payouts/recipient-problem";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { afterResponse, inOrderAfterResponse } from "@/lib/http/after-response";
 
 // Approving sends the payout and both outcomes email the organization; email
 // templates are read from disk.
@@ -140,12 +141,15 @@ export async function PATCH(
     );
   }
 
-  // Before the send: a transfer CHIP completes synchronously emails "processed"
-  // straight away, and that shouldn't arrive ahead of "approved".
-  await notifyPayoutReviewed(id);
+  // Emails go out after the response, in the order scheduled: "approved" first,
+  // then the "processed" or "failed" email of a transfer CHIP settles
+  // synchronously, or the admins' budget alert.
+  const outcome = await inOrderAfterResponse(async () => {
+    afterResponse(() => notifyPayoutReviewed(id));
 
-  // Never throws; a transient failure leaves the row approved and pending.
-  const outcome = action === "approve" ? await executePayout(id) : undefined;
+    // Never throws; a transient failure leaves the row approved and pending.
+    return action === "approve" ? await executePayout(id) : undefined;
+  });
   console.info(
     `Admin payout review: admin ${user.id} ${action === "approve" ? "approved" : "rejected"} payout ${id}${outcome ? `: ${outcome}` : ""}`,
   );
