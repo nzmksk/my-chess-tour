@@ -3,7 +3,9 @@ import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { getAuthClaims } from "@/services/supabase/permission";
-import MembersClient from "./_components/MembersClient";
+import MembersClient, {
+  type PendingInvitation,
+} from "./_components/MembersClient";
 
 export const metadata: Metadata = {
   title: "Organization Members",
@@ -22,6 +24,7 @@ interface Member {
 
 interface MembersData {
   members: Member[];
+  invitations: PendingInvitation[];
   orgName: string;
 }
 
@@ -36,12 +39,16 @@ async function fetchMembers(
       : "https";
 
   try {
-    const [membersRes, dashboardRes] = await Promise.all([
+    const [membersRes, dashboardRes, invitationsRes] = await Promise.all([
       fetch(`${protocol}://${host}/api/v1/organizations/${orgId}/members`, {
         cache: "no-store",
         headers: { cookie: cookieHeader },
       }),
       fetch(`${protocol}://${host}/api/v1/organizations/${orgId}/dashboard`, {
+        cache: "no-store",
+        headers: { cookie: cookieHeader },
+      }),
+      fetch(`${protocol}://${host}/api/v1/organizations/${orgId}/invitations`, {
         cache: "no-store",
         headers: { cookie: cookieHeader },
       }),
@@ -65,7 +72,14 @@ async function fetchMembers(
       orgName = dashJson.data?.organization?.name ?? orgName;
     }
 
-    return { members, orgName };
+    // Only inviters may list invitations; anyone else just doesn't see them.
+    let invitations: PendingInvitation[] = [];
+    if (invitationsRes.ok) {
+      const invitationsJson = await invitationsRes.json();
+      invitations = invitationsJson.data ?? [];
+    }
+
+    return { members, invitations, orgName };
   } catch {
     return null;
   }
@@ -101,6 +115,7 @@ export default async function OrganizerMembersPage({
         orgId={orgId}
         orgName={data.orgName}
         members={data.members}
+        invitations={data.invitations}
         currentUserId={claims.id}
       />
     </div>

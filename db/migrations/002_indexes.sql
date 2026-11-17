@@ -33,6 +33,13 @@ CREATE INDEX idx_org_documents_org ON organization_documents (organization_id);
 CREATE INDEX idx_org_memberships_user ON organization_memberships (user_id);
 CREATE INDEX idx_org_memberships_role ON organization_memberships (role_id);
 
+-- Organization invitations: one pending invitation per address per organization
+-- (the upsert in create_organization_invitation targets this index), and the
+-- members page lists an organization's pending ones.
+CREATE UNIQUE INDEX uq_org_invitations_pending
+  ON organization_invitations (organization_id, email)
+  WHERE status = 'pending';
+
 -- Tournaments
 CREATE INDEX idx_tournaments_status_start ON tournaments (status, start_date);
 CREATE INDEX idx_tournaments_organizer ON tournaments (organization_id);

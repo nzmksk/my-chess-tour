@@ -1,147 +1,30 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appIdFor } from "@/test/identity";
-import { NextRequest } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockOrgBuilder,
-  mockCallerMembershipBuilder,
-  mockRoleBuilder,
-  mockTargetUserBuilder,
-  mockTargetMembershipBuilder,
-  mockInsertBuilder,
-  mockFrom,
-  mockGetClaims,
-  mockGetAuthClaims,
-  mockHasOrgPermission,
-  mockInviteUserByEmail,
-} = vi.hoisted(() => {
-  function makeBuilder(finalResult: {
-    data?: unknown;
-    count?: unknown;
-    error?: unknown;
-  }) {
-    const b: Record<string, unknown> = {};
-    for (const m of [
-      "select",
-      "eq",
-      "in",
-      "is",
-      "order",
-      "limit",
-      "single",
-      "maybeSingle",
-      "insert",
-    ]) {
-      b[m] = vi.fn(() => b);
-    }
-    b.then = (
-      onfulfilled: (v: unknown) => unknown,
-      onrejected?: (r: unknown) => unknown,
-    ) => Promise.resolve(finalResult).then(onfulfilled, onrejected);
-    return b;
-  }
+const { mockAuthorize, mockRpc, mockNotify } = vi.hoisted(() => ({
+  mockAuthorize: vi.fn(),
+  mockRpc: vi.fn(),
+  mockNotify: vi.fn(),
+}));
 
-  const mockInsertBuilder = makeBuilder({ data: null, error: null });
-  const mockOrgBuilder = makeBuilder({ data: null, error: null });
-  const mockCallerMembershipBuilder = makeBuilder({ count: 0, error: null });
-  const mockRoleBuilder = makeBuilder({ data: null, error: null });
-  const mockTargetUserBuilder = makeBuilder({ data: null, error: null });
-  const mockTargetMembershipBuilder = makeBuilder({ count: 0, error: null });
-
-  // Route insert() on all membership builders to mockInsertBuilder so that
-  // tests for insert failures work regardless of call index (new vs existing user).
-  (mockCallerMembershipBuilder as Record<string, unknown>).insert = vi.fn(
-    () => mockInsertBuilder,
-  );
-  (mockTargetMembershipBuilder as Record<string, unknown>).insert = vi.fn(
-    () => mockInsertBuilder,
-  );
-  // mockInsertBuilder.insert() already returns itself (b[m] = vi.fn(() => b))
-
-  let callIndex = 0;
-  const mockFrom = vi.fn((table: string) => {
-    if (table === "organizations") return mockOrgBuilder;
-    if (table === "roles") return mockRoleBuilder;
-    if (table === "organization_memberships") {
-      const idx = callIndex++;
-      if (idx === 0) return mockCallerMembershipBuilder;
-      if (idx === 1) return mockTargetMembershipBuilder;
-      return mockInsertBuilder;
-    }
-    if (table === "users") return mockTargetUserBuilder;
-    return mockOrgBuilder;
-  });
-
-  (mockFrom as unknown as { _resetIndex: () => void })._resetIndex = () => {
-    callIndex = 0;
-  };
-
-  const mockGetClaims = vi.fn();
-  // Mirrors the real getAuthClaims(): reads claims via getClaims() and maps
-  // claims.sub -> id so setUser()/setNoUser() drive auth through mockGetClaims.
-  const mockGetAuthClaims = vi.fn(async () => {
-    const { data } = await mockGetClaims();
-    const claims = data?.claims;
-    if (!claims) return null;
-    return {
-      id: claims.sub,
-      email: claims.email ?? "",
-      userMetadata: claims.user_metadata ?? {},
-      role: claims.role,
-    };
-  });
-  const mockHasOrgPermission = vi.fn().mockResolvedValue(true);
-  const mockInviteUserByEmail = vi.fn();
-
-  return {
-    mockOrgBuilder,
-    mockCallerMembershipBuilder,
-    mockRoleBuilder,
-    mockTargetUserBuilder,
-    mockTargetMembershipBuilder,
-    mockInsertBuilder,
-    mockFrom,
-    mockGetClaims,
-    mockGetAuthClaims,
-    mockHasOrgPermission,
-    mockInviteUserByEmail,
-  };
-});
+vi.mock("@/app/api/v1/organizations/_lib/authorize-org", () => ({
+  authorizeOrgPermission: mockAuthorize,
+}));
 
 vi.mock("@/services/supabase/admin", () => ({
-  supabaseAdmin: {
-    from: mockFrom,
-    auth: {
-      admin: {
-        inviteUserByEmail: mockInviteUserByEmail,
-      },
-    },
-  },
+  supabaseAdmin: { rpc: mockRpc },
 }));
 
-vi.mock("@/services/supabase/server", () => ({
-  createClient: vi.fn().mockResolvedValue({
-    auth: { getClaims: mockGetClaims },
-  }),
-}));
-
-vi.mock("@/services/supabase/permission", () => ({
-  hasOrgPermission: mockHasOrgPermission,
-  getAuthClaims: mockGetAuthClaims,
-}));
-
-vi.mock("next/headers", () => ({
-  cookies: vi.fn().mockResolvedValue({
-    getAll: vi.fn().mockReturnValue([]),
-    set: vi.fn(),
-  }),
+vi.mock("@/services/organizations/notify", () => ({
+  notifyMemberInvited: mockNotify,
 }));
 
 import { POST } from "../route";
+import { hashInvitationToken, INVITATION_TOKEN_RE } from "@/services/organizations/invitations";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -149,462 +32,185 @@ import { POST } from "../route";
 
 const USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const ORG_ID = "bbbbbbbb-0000-0000-0000-000000000001";
-const TARGET_USER_ID = "cccccccc-0000-0000-0000-000000000001";
-const NEW_USER_ID = "dddddddd-0000-0000-0000-000000000001";
-const ROLE_ID = 2;
+const INVITATION_ID = "eeeeeeee-0000-0000-0000-000000000001";
+const CREATED_AT = "2026-11-17T01:00:00.000Z";
+// 30 days out (less a second, so it rounds to 30 whatever the clock says).
+const EXPIRES_AT = new Date(Date.now() + 30 * 86_400_000 - 1000).toISOString();
 
-const APPROVED_ORG = {
-  id: ORG_ID,
-  approval_status: "approved",
-  created_by: USER_ID,
-};
-
-function makeRequest(
-  orgId: string = ORG_ID,
-  body: unknown = { email: "new@example.com", role: "member" },
-): NextRequest {
+function makeRequest(body: unknown = { email: "new@example.com", role: "member" }) {
   return new NextRequest(
-    `http://localhost/api/v1/organizations/${orgId}/members/invite`,
+    `http://localhost/api/v1/organizations/${ORG_ID}/members/invite`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: typeof body === "string" ? body : JSON.stringify(body),
     },
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const call = (body?: unknown) =>
+  POST(makeRequest(body), { params: Promise.resolve({ orgId: ORG_ID }) });
 
-function setUser(id = USER_ID) {
-  mockGetClaims.mockResolvedValue({ data: { claims: { sub: id } }, error: null });
+function rpcReturns(overrides: Record<string, unknown> = {}) {
+  mockRpc.mockResolvedValue({
+    data: {
+      id: INVITATION_ID,
+      email: "new@example.com",
+      role: "member",
+      created_at: CREATED_AT,
+      expires_at: EXPIRES_AT,
+      resent: false,
+      ...overrides,
+    },
+    error: null,
+  });
 }
 
-function setNoUser() {
-  mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
+function rpcFails(message: string, code = "P0001") {
+  mockRpc.mockResolvedValue({ data: null, error: { code, message } });
 }
 
-function setOrgResult(data: unknown, error: unknown = null) {
-  (mockOrgBuilder as Record<string, unknown>).then = (
-    onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown,
-  ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
-}
-
-function setCallerMembershipResult(
-  count: number | null,
-  error: unknown = null,
-) {
-  (mockCallerMembershipBuilder as Record<string, unknown>).then = (
-    onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown,
-  ) => Promise.resolve({ count, error }).then(onfulfilled, onrejected);
-}
-
-function setRoleResult(data: unknown, error: unknown = null) {
-  (mockRoleBuilder as Record<string, unknown>).then = (
-    onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown,
-  ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
-}
-
-function setTargetUserResult(data: unknown, error: unknown = null) {
-  (mockTargetUserBuilder as Record<string, unknown>).then = (
-    onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown,
-  ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
-}
-
-function setTargetMembershipResult(
-  count: number | null,
-  error: unknown = null,
-) {
-  (mockTargetMembershipBuilder as Record<string, unknown>).then = (
-    onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown,
-  ) => Promise.resolve({ count, error }).then(onfulfilled, onrejected);
-}
-
-function setInsertResult(data: unknown, error: unknown = null) {
-  (mockInsertBuilder as Record<string, unknown>).then = (
-    onfulfilled: (v: unknown) => unknown,
-    onrejected?: (r: unknown) => unknown,
-  ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
-}
-
-function resetCallIndex() {
-  (mockFrom as unknown as { _resetIndex: () => void })._resetIndex();
-}
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockAuthorize.mockResolvedValue({ ok: true, userId: USER_ID });
+  mockNotify.mockResolvedValue(true);
+  rpcReturns();
+});
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe("POST /api/v1/organizations/:orgId/members/invite", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetCallIndex();
-    setUser();
-    setOrgResult(APPROVED_ORG);
-    setCallerMembershipResult(1);
-    setRoleResult({ id: ROLE_ID });
-    setTargetUserResult(null); // no existing user by default
-    setTargetMembershipResult(0);
-    setInsertResult(null);
-    mockHasOrgPermission.mockResolvedValue(true);
-    mockInviteUserByEmail.mockResolvedValue({
-      data: { user: { id: NEW_USER_ID } },
-      error: null,
+  describe("authorization", () => {
+    it("requires org.invite on the organization", async () => {
+      await call();
+      expect(mockAuthorize).toHaveBeenCalledWith(ORG_ID, "org.invite");
+    });
+
+    it("returns the authorization failure as is, inviting no one", async () => {
+      mockAuthorize.mockResolvedValue({
+        ok: false,
+        response: NextResponse.json(
+          { error: { code: "FORBIDDEN", message: "Access denied" } },
+          { status: 403 },
+        ),
+      });
+      const res = await call();
+      expect(res.status).toBe(403);
+      expect(mockRpc).not.toHaveBeenCalled();
+      expect(mockNotify).not.toHaveBeenCalled();
     });
   });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  // -------------------------------------------------------------------------
-  // Validation
-  // -------------------------------------------------------------------------
 
   describe("validation", () => {
-    it("returns 400 for a non-UUID orgId", async () => {
-      const res = await POST(makeRequest("not-a-uuid"), {
-        params: Promise.resolve({ orgId: "not-a-uuid" }),
-      });
+    it("returns 400 when the body is not JSON", async () => {
+      const res = await call("not json");
       expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error.code).toBe("VALIDATION_ERROR");
-      expect(json.error.message).toMatch(/invalid organization id/i);
-    });
-
-    it("returns 400 when body is not JSON", async () => {
-      const req = new NextRequest(
-        `http://localhost/api/v1/organizations/${ORG_ID}/members/invite`,
-        { method: "POST", body: "not-json" },
-      );
-      const res = await POST(req, {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error.code).toBe("VALIDATION_ERROR");
     });
 
     it("returns 400 when email is missing", async () => {
-      const res = await POST(makeRequest(ORG_ID, { role: "member" }), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
+      const res = await call({ role: "member" });
       expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error.code).toBe("VALIDATION_ERROR");
-      expect(json.error.message).toMatch(/email/i);
+      expect(mockRpc).not.toHaveBeenCalled();
     });
 
     it("returns 400 when email is invalid", async () => {
-      const res = await POST(
-        makeRequest(ORG_ID, { email: "not-an-email", role: "member" }),
-        { params: Promise.resolve({ orgId: ORG_ID }) },
-      );
+      const res = await call({ email: "not-an-email", role: "member" });
       expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error.code).toBe("VALIDATION_ERROR");
-      expect(json.error.message).toMatch(/invalid email/i);
-    });
-
-    it("returns 400 when role is missing", async () => {
-      const res = await POST(
-        makeRequest(ORG_ID, { email: "test@example.com" }),
-        { params: Promise.resolve({ orgId: ORG_ID }) },
-      );
-      expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error.code).toBe("VALIDATION_ERROR");
-      expect(json.error.message).toMatch(/role/i);
     });
 
     it("returns 400 when role is 'owner'", async () => {
-      const res = await POST(
-        makeRequest(ORG_ID, { email: "test@example.com", role: "owner" }),
-        { params: Promise.resolve({ orgId: ORG_ID }) },
-      );
+      const res = await call({ email: "a@example.com", role: "owner" });
       expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error.code).toBe("VALIDATION_ERROR");
+      expect(mockRpc).not.toHaveBeenCalled();
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Authentication
-  // -------------------------------------------------------------------------
+  describe("creating the invitation", () => {
+    it("creates it with the normalised email, role, inviter and a token hash", async () => {
+      await call({ email: "NEW@Example.com", role: "admin" });
 
-  describe("authentication", () => {
-    it("returns 401 when user is not authenticated", async () => {
-      setNoUser();
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
+      expect(mockRpc).toHaveBeenCalledWith("create_organization_invitation", {
+        p_org_id: ORG_ID,
+        p_email: "new@example.com",
+        p_role: "admin",
+        p_invited_by: USER_ID,
+        p_token_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
       });
-      expect(res.status).toBe(401);
-      const json = await res.json();
-      expect(json.error.code).toBe("UNAUTHORIZED");
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Authorization
-  // -------------------------------------------------------------------------
-
-  describe("authorization", () => {
-    it("returns 404 when organization does not exist", async () => {
-      setOrgResult(null, { code: "PGRST116", message: "No rows found" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(404);
-      const json = await res.json();
-      expect(json.error.code).toBe("NOT_FOUND");
     });
 
-    it("returns 500 on org query error", async () => {
-      setOrgResult(null, { code: "500", message: "DB error" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
+    it("emails a link whose token hashes to what was stored", async () => {
+      await call({ email: "new@example.com", role: "admin" });
+
+      expect(mockNotify).toHaveBeenCalledOnce();
+      const args = mockNotify.mock.calls[0][0];
+      expect(args).toMatchObject({
+        orgId: ORG_ID,
+        inviterId: USER_ID,
+        email: "new@example.com",
+        role: "admin",
       });
-      expect(res.status).toBe(500);
-      const json = await res.json();
-      expect(json.error.code).toBe("INTERNAL_ERROR");
+      const url = new URL(args.invitationUrl);
+      const token = url.pathname.replace("/invitations/", "");
+      expect(token).toMatch(INVITATION_TOKEN_RE);
+      expect(mockRpc.mock.calls[0][1].p_token_hash).toBe(hashInvitationToken(token));
     });
 
-    it("returns 500 on membership check error", async () => {
-      setCallerMembershipResult(null, { message: "DB error" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(500);
-      const json = await res.json();
-      expect(json.error.code).toBe("INTERNAL_ERROR");
-    });
-
-    it("returns 403 when organization is not approved", async () => {
-      setOrgResult({ ...APPROVED_ORG, approval_status: "pending" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(403);
-      const json = await res.json();
-      expect(json.error.code).toBe("FORBIDDEN");
-    });
-
-    it("returns 403 when user is not a member and not creator", async () => {
-      setOrgResult({ ...APPROVED_ORG, created_by: "other-user-id" });
-      setCallerMembershipResult(0);
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(403);
-      const json = await res.json();
-      expect(json.error.code).toBe("FORBIDDEN");
-      expect(json.error.message).toMatch(/access denied/i);
-    });
-
-    it("returns 403 when member lacks org.invite permission", async () => {
-      setOrgResult({ ...APPROVED_ORG, created_by: "other-user-id" });
-      setCallerMembershipResult(1);
-      mockHasOrgPermission.mockResolvedValue(false);
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(403);
-      const json = await res.json();
-      expect(json.error.code).toBe("FORBIDDEN");
-      expect(json.error.message).toMatch(/insufficient permissions/i);
-    });
-
-    it("allows an owner member with org.invite permission", async () => {
-      setCallerMembershipResult(1);
-      mockHasOrgPermission.mockResolvedValue(true);
-      setInsertResult(null);
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(mockHasOrgPermission).toHaveBeenCalledWith(
-        USER_ID,
-        ORG_ID,
-        "org.invite",
-      );
+    it("returns 201 with the pending invitation", async () => {
+      const res = await call();
       expect(res.status).toBe(201);
+      expect((await res.json()).data).toEqual({
+        id: INVITATION_ID,
+        email: "new@example.com",
+        role: "member",
+        status: "pending",
+        invited_at: CREATED_AT,
+        expires_at: EXPIRES_AT,
+        days_left: 30,
+        resent: false,
+        email_sent: true,
+      });
+    });
+
+    it("reports a refreshed invitation as resent", async () => {
+      rpcReturns({ resent: true });
+      const res = await call();
+      expect((await res.json()).data.resent).toBe(true);
+    });
+
+    it("keeps the invitation and reports email_sent false when the email fails", async () => {
+      mockNotify.mockResolvedValue(false);
+      const res = await call();
+      expect(res.status).toBe(201);
+      expect((await res.json()).data.email_sent).toBe(false);
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Invite new user (no account)
-  // -------------------------------------------------------------------------
-
-  describe("invite new user", () => {
-    it("returns 201 with status pending for a new user", async () => {
-      const res = await POST(
-        makeRequest(ORG_ID, { email: "new@example.com", role: "member" }),
-        { params: Promise.resolve({ orgId: ORG_ID }) },
-      );
-      expect(res.status).toBe(201);
-      const json = await res.json();
-      expect(json.data.status).toBe("pending");
-      expect(json.data.email).toBe("new@example.com");
-      expect(json.data.role).toBe("member");
-      // inviteUserByEmail returns an AUTH id; the membership row and the response
-      // both carry the resolved users.id.
-      expect(json.data.id).toBe(appIdFor(NEW_USER_ID));
-      expect(json.data).toHaveProperty("invited_at");
-    });
-
-    it("calls inviteUserByEmail with the target email", async () => {
-      await POST(
-        makeRequest(ORG_ID, { email: "NEW@Example.com", role: "admin" }),
-        { params: Promise.resolve({ orgId: ORG_ID }) },
-      );
-      expect(mockInviteUserByEmail).toHaveBeenCalledWith("new@example.com");
-    });
-
-    it("returns 500 when inviteUserByEmail fails", async () => {
-      mockInviteUserByEmail.mockResolvedValue({
-        data: { user: null },
-        error: { message: "Invite failed" },
-      });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(500);
-      const json = await res.json();
-      expect(json.error.code).toBe("INTERNAL_ERROR");
-    });
-
-    it("returns 409 ACCOUNT_UNLINKED when auth already holds the email (#565)", async () => {
-      // No live users row matched, but GoTrue rejects the invite because an
-      // auth account exists — the two have drifted apart.
-      mockInviteUserByEmail.mockResolvedValue({
-        data: { user: null },
-        error: {
-          code: "email_exists",
-          message: "A user with this email address has already been registered",
-        },
-      });
-      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(409);
-      const json = await res.json();
-      expect(json.error.code).toBe("ACCOUNT_UNLINKED");
-      expect(json.error.message).not.toMatch(/already been registered/i);
-      expect(mockTargetMembershipBuilder.insert).not.toHaveBeenCalled();
-      errSpy.mockRestore();
-    });
-
-    it("returns 500 without inviting when the users lookup fails", async () => {
-      // A failed lookup must not be read as "no such user" — otherwise an
-      // existing member would be invited, GoTrue would answer email_exists,
-      // and the route would misreport it as ACCOUNT_UNLINKED.
-      setTargetUserResult(null, { message: "DB error" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(500);
-      const json = await res.json();
-      expect(json.error.code).toBe("INTERNAL_ERROR");
-      expect(mockInviteUserByEmail).not.toHaveBeenCalled();
-    });
-
-    it("returns 500 when membership insert fails for new user", async () => {
-      setInsertResult(null, { message: "Insert error" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(500);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Invite existing user
-  // -------------------------------------------------------------------------
-
-  describe("invite existing user", () => {
-    beforeEach(() => {
-      setTargetUserResult({ id: TARGET_USER_ID });
-    });
-
-    it("returns 201 with status active for existing user", async () => {
-      const res = await POST(
-        makeRequest(ORG_ID, { email: "existing@example.com", role: "admin" }),
-        { params: Promise.resolve({ orgId: ORG_ID }) },
-      );
-      expect(res.status).toBe(201);
-      const json = await res.json();
-      expect(json.data.status).toBe("active");
-      expect(json.data.id).toBe(TARGET_USER_ID);
-      expect(json.data.role).toBe("admin");
-    });
-
-    it("does not call inviteUserByEmail for existing user", async () => {
-      await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(mockInviteUserByEmail).not.toHaveBeenCalled();
-    });
-
-    it("returns 409 when user is already a member", async () => {
-      setTargetMembershipResult(1);
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
+  describe("refusals", () => {
+    it("returns 409 when the address already belongs to a member", async () => {
+      rpcFails("INVITATION_ALREADY_MEMBER: new@example.com is already a member", "23505");
+      const res = await call();
       expect(res.status).toBe(409);
       const json = await res.json();
       expect(json.error.code).toBe("CONFLICT");
       expect(json.error.message).toMatch(/already a member/i);
+      expect(mockNotify).not.toHaveBeenCalled();
     });
 
-    it("returns 500 on target membership check error", async () => {
-      setTargetMembershipResult(null, { message: "DB error" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
+    it("returns 403 when the database refuses the inviter", async () => {
+      rpcFails("INVITATION_FORBIDDEN: org.invite is required", "42501");
+      const res = await call();
+      expect(res.status).toBe(403);
+      expect(mockNotify).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 on an unexpected database error", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      rpcFails("connection reset", "08006");
+      const res = await call();
       expect(res.status).toBe(500);
-      const json = await res.json();
-      expect(json.error.code).toBe("INTERNAL_ERROR");
-    });
-
-    it("returns 500 when membership insert fails for existing user", async () => {
-      setInsertResult(null, { message: "Insert error" });
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      expect(res.status).toBe(500);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Response shape
-  // -------------------------------------------------------------------------
-
-  describe("response shape", () => {
-    it("normalises email to lowercase", async () => {
-      const res = await POST(
-        makeRequest(ORG_ID, { email: "UPPER@EXAMPLE.COM", role: "member" }),
-        { params: Promise.resolve({ orgId: ORG_ID }) },
-      );
-      const json = await res.json();
-      expect(json.data.email).toBe("upper@example.com");
-    });
-
-    it("response contains all required fields", async () => {
-      const res = await POST(makeRequest(), {
-        params: Promise.resolve({ orgId: ORG_ID }),
-      });
-      const json = await res.json();
-      expect(json.data).toHaveProperty("id");
-      expect(json.data).toHaveProperty("email");
-      expect(json.data).toHaveProperty("role");
-      expect(json.data).toHaveProperty("status");
-      expect(json.data).toHaveProperty("invited_at");
+      expect(mockNotify).not.toHaveBeenCalled();
     });
   });
 });

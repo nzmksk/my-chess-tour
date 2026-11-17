@@ -59,6 +59,13 @@ describe("email templates", () => {
     ["refund-completed.html", "{{paymentMethod}}"],
     ["refund-failed.html", "{{amount}}"],
     ["refund-failed.html", "{{paymentMethod}}"],
+    ["member-invitation.html", "{{invitationUrl}}"],
+    ["member-invitation.html", "{{organizationName}}"],
+    ["member-invitation.html", "{{recipientName}}"],
+    ["invitation-accepted.html", "{{inviteeName}}"],
+    ["invitation-accepted.html", "{{membersUrl}}"],
+    ["invitation-declined.html", "{{inviteeName}}"],
+    ["invitation-declined.html", "{{membersUrl}}"],
   ])("%s renders %s", (name, placeholder) => {
     expect(read(name)).toContain(placeholder);
   });

@@ -3,7 +3,12 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { getAuthClaims } from "@/services/supabase/permission";
+import {
+  listInvitationsForUser,
+  type InvitationView,
+} from "@/services/organizations/invitations";
 import PlayerDashboardShell from "./_components/PlayerDashboardShell";
+import InvitationsPanel from "./_components/InvitationsPanel";
 import RegistrationsClient from "./tournaments/_components/RegistrationsClient";
 import type { PlayerRegistration } from "./tournaments/types";
 
@@ -34,6 +39,16 @@ async function fetchRegistrations(
   }
 }
 
+// A failure to load invitations only hides the panel; the dashboard still renders.
+async function fetchInvitations(userId: string): Promise<InvitationView[]> {
+  try {
+    return await listInvitationsForUser(userId);
+  } catch (err) {
+    console.error("My dashboard: failed to load invitations", err);
+    return [];
+  }
+}
+
 // Personal-account dashboard home. Defaults to the My Tournaments view; Profile
 // is reachable from the shared sidebar (PlayerDashboardShell).
 export default async function MyDashboardPage() {
@@ -46,12 +61,16 @@ export default async function MyDashboardPage() {
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";
   const cookieHeader = headersList.get("cookie") ?? "";
-  const registrations = await fetchRegistrations(host, cookieHeader);
+  const [registrations, invitations] = await Promise.all([
+    fetchRegistrations(host, cookieHeader),
+    fetchInvitations(claims.id),
+  ]);
 
   return (
     <div className="bg-bg-base min-h-screen">
       <NavBar />
       <PlayerDashboardShell>
+        <InvitationsPanel invitations={invitations} />
         <RegistrationsClient registrations={registrations} />
       </PlayerDashboardShell>
     </div>

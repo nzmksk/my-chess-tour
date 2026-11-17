@@ -78,7 +78,7 @@ export async function getAppUserId(): Promise<string | null> {
 }
 
 // To resolve an auth id that did NOT come from the current session — the id
-// returned by auth.admin.createUser or inviteUserByEmail — import
+// returned by auth.admin.createUser or generateLink — import
 // lookupAppUserId from @/services/supabase/identity directly. Deliberately not
 // re-exported here, so there is exactly one import path for that seam.
 

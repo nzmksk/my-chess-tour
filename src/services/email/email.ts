@@ -500,6 +500,111 @@ export async function sendOrganizerApplicationReviewEmail(
   }
 }
 
+export type MemberInvitationRole = "admin" | "member";
+
+// What each assignable role can do, written to finish "you'd be able to …". Mirrors the
+// role_permissions seed in 006_seed.sql.
+const MEMBER_ROLE_COPY: Record<
+  MemberInvitationRole,
+  { label: string; summary: string }
+> = {
+  admin: {
+    label: "an admin",
+    summary:
+      "create and edit tournaments, view registrations and payments, handle refunds and invite new members",
+  },
+  member: {
+    label: "a member",
+    summary: "view the organization's tournaments and registrations",
+  },
+};
+
+// Invites someone to join an organization's team. Nothing is granted yet: the
+// link opens the invitation, where they accept or decline it (signing up first
+// if they have no account). Expires 30 days after it is sent.
+export async function sendMemberInvitationEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    inviterName: string;
+    organizationName: string;
+    role: MemberInvitationRole;
+    invitationUrl: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const role = MEMBER_ROLE_COPY[params.role];
+
+  const html = loadTemplate("member-invitation.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{inviterName\}\}/g, escapeHtml(params.inviterName))
+    .replace(/\{\{organizationName\}\}/g, escapeHtml(params.organizationName))
+    .replace(/\{\{roleLabel\}\}/g, role.label)
+    .replace(/\{\{roleSummary\}\}/g, escapeHtml(role.summary))
+    .replace(/\{\{invitationUrl\}\}/g, escapeHtml(params.invitationUrl))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${params.inviterName} invited you to join ${params.organizationName} on MY Chess Tour`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send member invitation email:", error);
+    throw new Error(`Failed to send member invitation email: ${error.message}`);
+  }
+}
+
+// Tells the inviter how their invitation was answered. `inviteeName` is the
+// invitee's name when they have one on file, else their address (someone who
+// declines from the link needs no account).
+export async function sendInvitationResponseEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    inviteeName: string;
+    inviteeEmail: string;
+    organizationName: string;
+    orgId: string;
+    role: MemberInvitationRole;
+    accepted: boolean;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate(
+    params.accepted ? "invitation-accepted.html" : "invitation-declined.html",
+  )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{inviteeName\}\}/g, escapeHtml(params.inviteeName))
+    .replace(/\{\{inviteeEmail\}\}/g, escapeHtml(params.inviteeEmail))
+    .replace(/\{\{organizationName\}\}/g, escapeHtml(params.organizationName))
+    .replace(/\{\{roleLabel\}\}/g, MEMBER_ROLE_COPY[params.role].label)
+    .replace(
+      /\{\{membersUrl\}\}/g,
+      `${siteUrl}/my/organizations/${encodeURIComponent(params.orgId)}/members`,
+    )
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const subject = params.accepted
+    ? `${params.inviteeName} joined ${params.organizationName}`
+    : `${params.inviteeName} declined your invitation to ${params.organizationName}`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send invitation response email:", error);
+    throw new Error(`Failed to send invitation response email: ${error.message}`);
+  }
+}
+
 // Tells a player the outcome of their OKU card review — verified, or rejected
 // with the admin's reason and a link back to settings to upload a new copy. One
 // function with a boolean branch, like sendCancellationReviewEmail.

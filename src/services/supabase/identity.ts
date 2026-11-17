@@ -22,7 +22,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
  * answer "who am I" would be circular.
  *
  * @param authUserId a Supabase Auth id (a JWT `sub`, or the id returned by
- *   `auth.admin.createUser` / `inviteUserByEmail`)
+ *   `auth.admin.createUser` / `generateLink`)
  * @returns the linked `public.users.id`, or null when nothing is linked
  */
 export async function lookupAppUserId(

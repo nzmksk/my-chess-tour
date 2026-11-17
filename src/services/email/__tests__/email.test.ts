@@ -25,6 +25,8 @@ import {
   sendBankVerificationEmail,
   sendBeneficiaryNominationEmail,
   sendCancellationReviewEmail,
+  sendInvitationResponseEmail,
+  sendMemberInvitationEmail,
   sendNominationResponseEmail,
   sendOkuReviewEmail,
   sendOrganizerApplicationReviewEmail,
@@ -1057,6 +1059,139 @@ describe("sendRefundOutcomeEmail", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(
       sendRefundOutcomeEmail("p@example.com", { ...base, completed: true }),
+    ).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendMemberInvitationEmail", () => {
+  const base = {
+    recipientName: "Farid",
+    inviterName: "Aisha Rahman",
+    organizationName: "KL Chess Club",
+    role: "admin" as const,
+    invitationUrl: "https://example.com/invitations/abc_DEF-123",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{inviterName}}|{{organizationName}}|{{roleLabel}}|{{roleSummary}}|{{invitationUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () =>
+    mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("links to the invitation, naming the inviter, organization and role", async () => {
+    await sendMemberInvitationEmail("f@example.com", base);
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("member-invitation.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("f@example.com");
+    expect(sent().subject).toBe(
+      "Aisha Rahman invited you to join KL Chess Club on MY Chess Tour",
+    );
+    expect(sent().html).toContain(
+      "Farid|Aisha Rahman|KL Chess Club|an admin|create and edit tournaments",
+    );
+    expect(sent().html).toContain("|https://example.com/invitations/abc_DEF-123|");
+  });
+
+  it("describes what a member can do", async () => {
+    await sendMemberInvitationEmail("f@example.com", { ...base, role: "member" });
+    expect(sent().html).toContain(
+      "|a member|view the organization&#39;s tournaments and registrations|",
+    );
+  });
+
+  it("escapes organizer-supplied values", async () => {
+    await sendMemberInvitationEmail("f@example.com", {
+      ...base,
+      inviterName: "<i>Aisha</i>",
+      organizationName: "A & B <Club>",
+    });
+    expect(sent().html).toContain("&lt;i&gt;Aisha&lt;/i&gt;");
+    expect(sent().html).toContain("A &amp; B &lt;Club&gt;");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(sendMemberInvitationEmail("f@example.com", base)).rejects.toThrow(
+      /nope/,
+    );
+  });
+});
+
+describe("sendInvitationResponseEmail", () => {
+  const ORG_ID = "22222222-2222-2222-2222-222222222222";
+  const base = {
+    recipientName: "Aisha",
+    inviteeName: "Farid Ali",
+    inviteeEmail: "farid@example.com",
+    organizationName: "KL Chess Club",
+    orgId: ORG_ID,
+    role: "admin" as const,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{inviteeName}}|{{inviteeEmail}}|{{organizationName}}|{{roleLabel}}|{{membersUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () =>
+    mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("tells the inviter the invitation was accepted", async () => {
+    await sendInvitationResponseEmail("aisha@example.com", { ...base, accepted: true });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("invitation-accepted.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("aisha@example.com");
+    expect(sent().subject).toBe("Farid Ali joined KL Chess Club");
+    expect(sent().html).toContain(
+      `Aisha|Farid Ali|farid@example.com|KL Chess Club|an admin|`,
+    );
+    expect(sent().html).toContain(`/my/organizations/${ORG_ID}/members|`);
+  });
+
+  it("tells the inviter the invitation was declined", async () => {
+    await sendInvitationResponseEmail("aisha@example.com", {
+      ...base,
+      inviteeName: "farid@example.com",
+      accepted: false,
+    });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("invitation-declined.html"),
+      "utf-8",
+    );
+    expect(sent().subject).toBe(
+      "farid@example.com declined your invitation to KL Chess Club",
+    );
+  });
+
+  it("escapes user-supplied values", async () => {
+    await sendInvitationResponseEmail("aisha@example.com", {
+      ...base,
+      inviteeName: "<b>Farid</b>",
+      organizationName: "A & B",
+      accepted: true,
+    });
+    expect(sent().html).toContain("&lt;b&gt;Farid&lt;/b&gt;");
+    expect(sent().html).toContain("A &amp; B");
+  });
+
+  it("throws when the send fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "nope" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendInvitationResponseEmail("aisha@example.com", { ...base, accepted: true }),
     ).rejects.toThrow(/nope/);
   });
 });

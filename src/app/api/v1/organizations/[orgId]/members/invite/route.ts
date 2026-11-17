@@ -1,33 +1,43 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { authorizeOrgPermission } from "@/app/api/v1/organizations/_lib/authorize-org";
+import { invitationErrorResponse } from "@/app/api/v1/organizations/_lib/invitation-errors";
+import { notifyMemberInvited } from "@/services/organizations/notify";
 import {
-  hasOrgPermission,
-  getAuthClaims,
-} from "@/services/supabase/permission";
-import { lookupAppUserId } from "@/services/supabase/identity";
+  daysUntil,
+  generateInvitationToken,
+  hashInvitationToken,
+  invitationUrl,
+} from "@/services/organizations/invitations";
 import { NextRequest, NextResponse } from "next/server";
 import { validateInviteRequest } from "./validators";
-import { internalErrorResponse } from "@/lib/http/internal-error";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Inviting emails the invitee, and email templates are read from disk.
+export const runtime = "nodejs";
 
+interface CreatedInvitation {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+  resent: boolean;
+}
+
+/**
+ * Invites an email address to join the organization. Nothing is granted here:
+ * the invitee accepts or declines from the emailed link (POST
+ * /api/v1/invitations/[token]/accept or /decline), and the invitation expires
+ * after 30 days. Inviting an address that already has a pending invitation
+ * refreshes it with a new link, role and expiry — that is also how one is resent.
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<NextResponse> {
   const { orgId } = await params;
 
-  if (!UUID_RE.test(orgId)) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Invalid organization ID",
-        },
-      },
-      { status: 400 },
-    );
-  }
+  const auth = await authorizeOrgPermission(orgId, "org.invite");
+  if (!auth.ok) return auth.response;
 
   let body: unknown;
   try {
@@ -45,240 +55,47 @@ export async function POST(
   }
   const { email, role } = validation.data;
 
-  const claims = await getAuthClaims();
+  // The token only ever travels in the email; the database keeps its hash.
+  const token = generateInvitationToken();
+  const { data, error } = await supabaseAdmin.rpc(
+    "create_organization_invitation",
+    {
+      p_org_id: orgId,
+      p_email: email,
+      p_role: role,
+      p_invited_by: auth.userId,
+      p_token_hash: hashInvitationToken(token),
+    },
+  );
 
-  if (!claims) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
-      { status: 401 },
-    );
+  if (error) {
+    return invitationErrorResponse(error, `inviting to organization ${orgId}`);
   }
 
-  const [
-    { data: org, error: orgError },
-    { count: memberCount, error: memberError },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from("organizations")
-      .select("id, approval_status")
-      .eq("id", orgId)
-      .is("deleted_at", null)
-      .single(),
-    supabaseAdmin
-      .from("organization_memberships")
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", orgId)
-      .eq("user_id", claims.id),
-  ]);
+  const invitation = data as CreatedInvitation;
 
-  if (orgError) {
-    if (orgError.code === "PGRST116") {
-      return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "Organization not found" } },
-        { status: 404 },
-      );
-    }
-    return internalErrorResponse(
-      "POST /api/v1/organizations/[orgId]/members/invite: orgError",
-      orgError,
-    );
-  }
-
-  if (memberError) {
-    return internalErrorResponse(
-      "POST /api/v1/organizations/[orgId]/members/invite: memberError",
-      memberError,
-    );
-  }
-
-  if (org.approval_status !== "approved") {
-    return NextResponse.json(
-      {
-        error: {
-          code: "FORBIDDEN",
-          message: "Organization is not approved",
-        },
-      },
-      { status: 403 },
-    );
-  }
-
-  if (!memberCount) {
-    return NextResponse.json(
-      { error: { code: "FORBIDDEN", message: "Access denied" } },
-      { status: 403 },
-    );
-  }
-
-  const allowed = await hasOrgPermission(claims.id, orgId, "org.invite");
-  if (!allowed) {
-    return NextResponse.json(
-      { error: { code: "FORBIDDEN", message: "Insufficient permissions" } },
-      { status: 403 },
-    );
-  }
-
-  const { data: roleData, error: roleError } = await supabaseAdmin
-    .from("roles")
-    .select("id")
-    .eq("name", role)
-    .single();
-
-  if (roleError || !roleData) {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "Role not found" } },
-      { status: 500 },
-    );
-  }
-
-  const { data: existingUser, error: existingUserError } = await supabaseAdmin
-    .from("users")
-    .select("id")
-    .eq("email", email)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  // A failed lookup must not read as "no such user": falling through to the
-  // invite would send an existing member down the new-account path, and the
-  // email_exists that GoTrue then returns would be misreported as drift below.
-  if (existingUserError) {
-    return internalErrorResponse(
-      "POST /api/v1/organizations/[orgId]/members/invite: existingUserError",
-      existingUserError,
-    );
-  }
-
-  const invitedAt = new Date().toISOString();
-
-  if (existingUser) {
-    const { count: existingCount, error: existingCountError } =
-      await supabaseAdmin
-        .from("organization_memberships")
-        .select("*", { count: "exact", head: true })
-        .eq("organization_id", orgId)
-        .eq("user_id", existingUser.id);
-
-    if (existingCountError) {
-      return internalErrorResponse(
-        "POST /api/v1/organizations/[orgId]/members/invite: existingCountError",
-        existingCountError,
-      );
-    }
-
-    if (existingCount && existingCount > 0) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "CONFLICT",
-            message: "User is already a member of this organization",
-          },
-        },
-        { status: 409 },
-      );
-    }
-
-    const { error: insertError } = await supabaseAdmin
-      .from("organization_memberships")
-      .insert({
-        organization_id: orgId,
-        user_id: existingUser.id,
-        role_id: roleData.id,
-      });
-
-    if (insertError) {
-      return internalErrorResponse(
-        "POST /api/v1/organizations/[orgId]/members/invite: insertError",
-        insertError,
-      );
-    }
-
-    return NextResponse.json(
-      {
-        data: {
-          id: existingUser.id,
-          email,
-          role,
-          status: "active",
-          invited_at: invitedAt,
-        },
-      },
-      { status: 201 },
-    );
-  }
-
-  const { data: inviteData, error: inviteError } =
-    await supabaseAdmin.auth.admin.inviteUserByEmail(email);
-
-  if (inviteError) {
-    // The lookup above succeeded and found no live users record, yet Auth
-    // already holds an account for this email: the account and the users table
-    // have drifted apart (e.g. a schema reset that kept auth.users). There is
-    // no users.id to attach a membership to, and GoTrue's own wording ("already
-    // been registered") reads to the inviter as if the invite should have
-    // worked — so say what is actually wrong instead of surfacing it as a 500.
-    if (inviteError.code === "email_exists") {
-      console.error(
-        "Invite target has an auth account but no linked users record",
-        inviteError,
-      );
-      return NextResponse.json(
-        {
-          error: {
-            code: "ACCOUNT_UNLINKED",
-            message:
-              "This email belongs to an account that is missing its profile, so it can't be added yet. Please contact support.",
-          },
-        },
-        { status: 409 },
-      );
-    }
-    return internalErrorResponse(
-      "POST /api/v1/organizations/[orgId]/members/invite: inviteError",
-      inviteError,
-    );
-  }
-
-  // inviteUserByEmail returns an AUTH id. organization_memberships.user_id is a
-  // public.users.id, so it has to be resolved through the link. The record is
-  // created synchronously by the on_auth_user_created trigger, so it exists by
-  // the time the invite call returns.
-  const newUserId = await lookupAppUserId(inviteData.user.id);
-
-  if (!newUserId) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "INTERNAL_ERROR",
-          message: "Invited account was created without a user record",
-        },
-      },
-      { status: 500 },
-    );
-  }
-
-  const { error: insertError } = await supabaseAdmin
-    .from("organization_memberships")
-    .insert({
-      organization_id: orgId,
-      user_id: newUserId,
-      role_id: roleData.id,
-    });
-
-  if (insertError) {
-    return internalErrorResponse(
-      "POST /api/v1/organizations/[orgId]/members/invite: insertError",
-      insertError,
-    );
-  }
+  // The invitation stands whether or not the email goes out; email_sent lets
+  // the members page say so, and the inviter can resend.
+  const emailSent = await notifyMemberInvited({
+    orgId,
+    inviterId: auth.userId,
+    email,
+    role,
+    invitationUrl: invitationUrl(token),
+  });
 
   return NextResponse.json(
     {
       data: {
-        id: newUserId,
+        id: invitation.id,
         email,
         role,
         status: "pending",
-        invited_at: invitedAt,
+        invited_at: invitation.created_at,
+        expires_at: invitation.expires_at,
+        days_left: daysUntil(invitation.expires_at),
+        resent: invitation.resent,
+        email_sent: emailSent,
       },
     },
     { status: 201 },

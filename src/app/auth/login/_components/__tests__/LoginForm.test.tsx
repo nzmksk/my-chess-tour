@@ -150,6 +150,17 @@ describe("LoginForm", () => {
     expect(parsed).not.toHaveProperty("password");
   });
 
+  it("carries redirectTo through the verify step", async () => {
+    sessionStorage.clear();
+    mockState.needsVerification = true;
+
+    await act(async () => {
+      render(<LoginForm redirectTo="/invitations/abc" />);
+    });
+
+    expect(sessionStorage.getItem("signup_return_to")).toBe("/invitations/abc");
+  });
+
   // --- Error state (2B) -------------------------------------------------------
 
   it("shows error banner when state has error", () => {

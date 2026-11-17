@@ -5,7 +5,10 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "../_actions/login";
 import { INITIAL_LOGIN_STATE } from "../types";
-import { SIGNUP_FORM_STORAGE_KEY } from "@/lib/auth/signup-storage";
+import {
+  rememberSignupReturnTo,
+  SIGNUP_FORM_STORAGE_KEY,
+} from "@/lib/auth/signup-storage";
 
 export default function LoginForm({
   successMessage,
@@ -41,8 +44,10 @@ export default function LoginForm({
     } catch {
       // Ignore unavailable storage; the verify page can still resend.
     }
+    // Verifying ends the detour, so carry where login was headed through it.
+    if (redirectTo) rememberSignupReturnTo(redirectTo);
     router.push("/auth/signup/verify");
-  }, [state, router, emailValue]);
+  }, [state, router, emailValue, redirectTo]);
 
   // Screen 2C — Account Locked
   if (state.locked) {
