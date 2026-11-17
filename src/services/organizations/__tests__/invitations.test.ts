@@ -18,6 +18,7 @@ vi.mock("@/services/supabase/admin", () => ({
 }));
 
 import {
+  daysUntil,
   generateInvitationToken,
   getInvitationByToken,
   hashInvitationToken,
@@ -88,6 +89,19 @@ describe("invitationState", () => {
   });
 });
 
+describe("daysUntil", () => {
+  const now = new Date("2026-11-17T00:00:00Z");
+
+  it("rounds part of a day up", () => {
+    expect(daysUntil("2026-12-17T00:00:00Z", now)).toBe(30);
+    expect(daysUntil("2026-11-17T01:00:00Z", now)).toBe(1);
+  });
+
+  it("is 0 once expired", () => {
+    expect(daysUntil("2026-11-16T00:00:00Z", now)).toBe(0);
+  });
+});
+
 describe("getInvitationByToken", () => {
   it("looks the invitation up by the token's hash", async () => {
     givenRow();
@@ -100,6 +114,7 @@ describe("getInvitationByToken", () => {
       role: "admin",
       state: "pending",
       expiresAt: FUTURE,
+      daysLeft: 1,
       organization: { id: "org-1", name: "KL Chess Club", available: true },
       inviterName: "Aisha Rahman",
     });

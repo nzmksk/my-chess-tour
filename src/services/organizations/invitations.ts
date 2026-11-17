@@ -41,6 +41,8 @@ export interface InvitationView {
   role: MemberInvitationRole;
   state: InvitationState;
   expiresAt: string;
+  /** Whole days until expiry, rounded up; 0 once expired. */
+  daysLeft: number;
   organization: { id: string; name: string; available: boolean };
   inviterName: string | null;
 }
@@ -67,6 +69,12 @@ export function invitationState(
 ): InvitationState {
   if (status === "pending" && new Date(expiresAt) <= now) return "expired";
   return status;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function daysUntil(expiresAt: string, now: Date = new Date()): number {
+  return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / DAY_MS));
 }
 
 export function personName(
@@ -114,6 +122,7 @@ export async function getInvitationByToken(
     role: row.roles.name as MemberInvitationRole,
     state: invitationState(row.status, row.expires_at),
     expiresAt: row.expires_at,
+    daysLeft: daysUntil(row.expires_at),
     organization: {
       id: row.organizations.id,
       name: row.organizations.name,
