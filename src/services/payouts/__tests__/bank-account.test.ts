@@ -132,7 +132,7 @@ describe("registerOrganizationBankAccount", () => {
     queue("organization_bank_accounts", { data: null, error: null }); // update
     mockRegister.mockResolvedValue({ id: 84, status: "pending", rejection_reason: null });
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("pending");
 
     expect(mockRegister).toHaveBeenCalledWith({
       account_number: "157380112229",
@@ -153,7 +153,7 @@ describe("registerOrganizationBankAccount", () => {
     mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
     queueNotifyData("verified");
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("verified");
 
     expect(mockRpc).toHaveBeenCalledWith("settle_bank_account_verification", {
       p_bank_account_id: BANK_ID,
@@ -175,7 +175,7 @@ describe("registerOrganizationBankAccount", () => {
     });
     queueNotifyData("rejected", "Invalid account");
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("rejected");
 
     expect(mockRpc).toHaveBeenCalledWith(
       "settle_bank_account_verification",
@@ -188,8 +188,18 @@ describe("registerOrganizationBankAccount", () => {
     queue("organization_bank_accounts", { data: null, error: null });
     mockRegister.mockResolvedValue({ id: 84, status: "unverified", rejection_reason: null });
 
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("pending");
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("reports an error, leaving the row pending, when the verdict can't be recorded", async () => {
+    queue("organization_bank_accounts", { data: pendingRow, error: null });
+    queue("organization_bank_accounts", { data: null, error: null });
+    mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
+    mockRpc.mockResolvedValue({ data: null, error: { message: "db down" } });
+
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).toContain(BANK_ID);
   });
 
   it.each([
@@ -199,7 +209,7 @@ describe("registerOrganizationBankAccount", () => {
     ["missing", null],
   ])("skips a %s row without calling CHIP", async (_label, row) => {
     queue("organization_bank_accounts", { data: row, error: null });
-    await registerOrganizationBankAccount(BANK_ID);
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("skipped");
     expect(mockRegister).not.toHaveBeenCalled();
   });
 
@@ -209,9 +219,10 @@ describe("registerOrganizationBankAccount", () => {
       new ChipSendError(400, '{"account_number":"157380112229 is invalid"}'),
     );
 
-    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBeUndefined();
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
 
     const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logged).toContain(BANK_ID);
     expect(logged).toContain("400");
     expect(logged).not.toContain("157380112229");
     expect(updates).toHaveLength(0);
@@ -220,7 +231,7 @@ describe("registerOrganizationBankAccount", () => {
 
   it("never throws when the row load fails", async () => {
     queue("organization_bank_accounts", { data: null, error: { message: "db down" } });
-    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBeUndefined();
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
     expect(mockRegister).not.toHaveBeenCalled();
   });
 
@@ -228,7 +239,7 @@ describe("registerOrganizationBankAccount", () => {
     mockFrom.mockImplementationOnce(() => {
       throw new Error("kaboom");
     });
-    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBeUndefined();
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("error");
   });
 });
 

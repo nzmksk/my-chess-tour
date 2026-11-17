@@ -205,6 +205,22 @@ export async function notifyBankVerification(
 }
 
 /**
+ * What a registration attempt came to:
+ * - `verified` / `rejected`: CHIP answered synchronously and the verdict is
+ *   recorded (or already was).
+ * - `pending`: CHIP has the account; its verdict comes by webhook.
+ * - `skipped`: the row is missing, superseded or no longer pending.
+ * - `error`: the row couldn't be loaded, CHIP failed, or the verdict couldn't
+ *   be recorded. The row stays `pending`, so a re-run will retry it.
+ */
+export type BankRegistrationOutcome =
+  | "verified"
+  | "rejected"
+  | "pending"
+  | "skipped"
+  | "error";
+
+/**
  * Registers a bank account with CHIP Send and records the result:
  *   1. load the row (service role) — skipped unless it is active and pending;
  *   2. POST /send/bank_accounts with `reference` = our row id, so a retry
@@ -213,13 +229,12 @@ export async function notifyBankVerification(
  *   4. a synchronous `verified`/`rejected` is settled now; anything else is
  *      left `pending` for the webhook.
  *
- * NEVER throws — it runs after the approval has committed, exactly like
- * processCancellationRefund. Failures are logged and the row stays `pending`,
- * so re-running is safe.
+ * NEVER throws — it runs after the approval has committed. Failures are logged
+ * with the bank account id and the row stays `pending`, so re-running is safe.
  */
 export async function registerOrganizationBankAccount(
   bankAccountId: string,
-): Promise<void> {
+): Promise<BankRegistrationOutcome> {
   try {
     const { data, error } = await supabaseAdmin
       .from("organization_bank_accounts")
@@ -234,19 +249,19 @@ export async function registerOrganizationBankAccount(
         `Bank account ${bankAccountId}: failed to load for CHIP registration`,
         error.message,
       );
-      return;
+      return "error";
     }
 
     const row = data as BankAccountRow | null;
     if (!row) {
       console.warn(`Bank account ${bankAccountId}: not found; not registered`);
-      return;
+      return "skipped";
     }
     if (!row.is_active || row.status !== "pending") {
       console.info(
         `Bank account ${bankAccountId}: ${row.is_active ? row.status : "superseded"}; not registered`,
       );
-      return;
+      return "skipped";
     }
 
     let chipAccount;
@@ -262,7 +277,7 @@ export async function registerOrganizationBankAccount(
         `Bank account ${bankAccountId}: CHIP registration failed; left pending`,
         describeError(err),
       );
-      return;
+      return "error";
     }
 
     const { error: updateError } = await supabaseAdmin
@@ -283,7 +298,7 @@ export async function registerOrganizationBankAccount(
       console.info(
         `Bank account ${bankAccountId}: CHIP returned ${chipAccount.status}; awaiting webhook`,
       );
-      return;
+      return "pending";
     }
 
     const { error: settleError } = await settleBankAccountVerification({
@@ -297,12 +312,15 @@ export async function registerOrganizationBankAccount(
         `Bank account ${bankAccountId}: settle_bank_account_verification failed`,
         settleError.message,
       );
+      return "error";
     }
+    return outcome;
   } catch (err) {
     console.error(
       `Bank account ${bankAccountId}: unexpected error during CHIP registration`,
       describeError(err),
     );
+    return "error";
   }
 }
 
