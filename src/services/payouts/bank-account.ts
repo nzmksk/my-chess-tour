@@ -6,6 +6,7 @@ import {
 } from "@/services/chip/send";
 import { sendBankVerificationEmail } from "@/services/email/email";
 import { afterResponse } from "@/lib/http/after-response";
+import { BANK_REGISTRATION_GRACE_MINUTES, PAYOUT_CONCURRENCY } from "./constants";
 
 // Payout bank account verification (#519).
 //
@@ -352,4 +353,62 @@ export async function registerActiveOrganizationBankAccount(
   }
 
   await registerOrganizationBankAccount((data as { id: string }).id);
+}
+
+export interface BankRegistrationStats extends Record<BankRegistrationOutcome, number> {
+  /** Rows the pass looked at. */
+  checked: number;
+}
+
+/**
+ * Registers every bank account a request meant to register but didn't get to:
+ * the active, `pending` account of an APPROVED organization that CHIP has never
+ * given an id. Approval and the organizer's save both register from an
+ * after-response task, so a CHIP outage, a crash or a timed-out function leaves
+ * exactly this behind. Run daily by POST /api/v1/cron/payouts.
+ *
+ * A row created inside BANK_REGISTRATION_GRACE_MINUTES is left to the request
+ * still registering it. Re-registering is safe either way: CHIP returns its
+ * existing record for our `reference` (the row id), and the settle RPC keeps
+ * the first verdict.
+ *
+ * Throws only when the work list can't be loaded. Each registration never
+ * throws and logs its own failure with the bank account id.
+ */
+export async function registerUnregisteredBankAccounts(
+  now: Date = new Date(),
+): Promise<BankRegistrationStats> {
+  const cutoff = new Date(now.getTime() - BANK_REGISTRATION_GRACE_MINUTES * 60_000);
+  const { data, error } = await supabaseAdmin
+    .from("organization_bank_accounts")
+    .select("id, organizations!inner(approval_status)")
+    .eq("is_active", true)
+    .eq("status", "pending")
+    .is("chip_bank_account_id", null)
+    .eq("organizations.approval_status", "approved")
+    .lt("created_at", cutoff.toISOString())
+    .order("created_at", { ascending: true });
+  if (error) {
+    throw new Error(`failed to load unregistered bank accounts: ${error.message}`, {
+      cause: error,
+    });
+  }
+
+  const rows = (data ?? []) as { id: string }[];
+  const stats: BankRegistrationStats = {
+    checked: rows.length,
+    verified: 0,
+    rejected: 0,
+    pending: 0,
+    skipped: 0,
+    error: 0,
+  };
+  for (let i = 0; i < rows.length; i += PAYOUT_CONCURRENCY) {
+    const batch = rows.slice(i, i + PAYOUT_CONCURRENCY);
+    const outcomes = await Promise.all(
+      batch.map((row) => registerOrganizationBankAccount(row.id)),
+    );
+    for (const outcome of outcomes) stats[outcome]++;
+  }
+  return stats;
 }
