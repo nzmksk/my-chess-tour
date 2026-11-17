@@ -11,6 +11,7 @@ ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_bank_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournament_cancellation_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
@@ -214,6 +215,14 @@ USING (has_org_permission(app_user_id(), organization_id, 'org.invite'));
 CREATE POLICY "Platform admins full access to memberships"
 ON organization_memberships FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+-- =============================================
+-- ORGANIZATION INVITATIONS
+-- Server-only. No policies, and no client privileges at all: a row carries the
+-- invitee's address and the hash of a live token, and every read and write goes
+-- through the API (service role) and the functions in 003.
+-- =============================================
+REVOKE ALL ON organization_invitations FROM anon, authenticated;
 
 -- =============================================
 -- TOURNAMENTS

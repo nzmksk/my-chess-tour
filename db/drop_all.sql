@@ -82,6 +82,7 @@ DROP TABLE IF EXISTS public.refunds                 CASCADE;
 DROP TABLE IF EXISTS public.payments                CASCADE;
 DROP TABLE IF EXISTS public.registrations           CASCADE;
 DROP TABLE IF EXISTS public.tournaments             CASCADE;
+DROP TABLE IF EXISTS public.organization_invitations CASCADE;
 DROP TABLE IF EXISTS public.organization_memberships CASCADE;
 DROP TABLE IF EXISTS public.organization_documents  CASCADE;
 DROP TABLE IF EXISTS public.organization_bank_accounts CASCADE;
@@ -133,6 +134,7 @@ DROP TYPE IF EXISTS public.payment_status       CASCADE;
 DROP TYPE IF EXISTS public.refund_status        CASCADE;
 DROP TYPE IF EXISTS public.payout_kind          CASCADE;
 DROP TYPE IF EXISTS public.payout_status        CASCADE;
+DROP TYPE IF EXISTS public.invitation_status    CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
@@ -155,7 +157,7 @@ FROM information_schema.tables
 WHERE table_schema = 'public'
   AND table_name IN (
     'roles','permissions','role_permissions','users','user_global_roles',
-    'player_profiles','organizations','organization_memberships',
+    'player_profiles','organizations','organization_memberships','organization_invitations',
     'organization_bank_accounts','organization_documents','tournaments',
     'registrations','payments','refunds','payouts','tournament_cancellation_requests',
     'audit_logs','waitlist'
@@ -169,7 +171,7 @@ WHERE n.nspname = 'public'
     'role_scope','gender','chess_title','oku_status','approval_status',
     'org_entity_type','org_document_type','bank_account_status',
     'tournament_status','registration_status','payment_type','payment_status',
-    'refund_status','payout_kind','payout_status'
+    'refund_status','payout_kind','payout_status','invitation_status'
   );
 
 SELECT 'public_functions' AS check, count(*)

@@ -260,6 +260,42 @@ CREATE TABLE organization_memberships (
 );
 
 -- =============================================
+-- ORGANIZATION INVITATIONS
+-- An offer of a membership, made to an email address. Nothing is granted until
+-- the person signed in with that address accepts (accept_organization_invitation),
+-- which inserts the organization_memberships row. They may decline instead, and
+-- an inviter may revoke it while it is pending.
+--
+-- Expiry is not a stored status: a pending invitation whose expires_at has
+-- passed is expired, and every function refuses it from that instant, so no job
+-- has to run for it to take effect. Inviting the same address again while one
+-- is pending (expired or not) refreshes that row: a new token, a new role and a
+-- new expires_at. At most one pending invitation per organization and address
+-- (uq_org_invitations_pending in 002).
+--
+-- The token itself is only ever in the email; token_hash is its SHA-256 (hex).
+-- =============================================
+CREATE TYPE invitation_status AS ENUM ('pending', 'accepted', 'declined', 'revoked');
+
+CREATE TABLE organization_invitations (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  email           varchar(255) NOT NULL,
+  role_id         integer NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
+  token_hash      char(64) NOT NULL UNIQUE,
+  status          invitation_status NOT NULL DEFAULT 'pending',
+  invited_by      uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  expires_at      timestamptz NOT NULL,
+  responded_at    timestamptz,
+  responded_by    uuid REFERENCES users(id) ON DELETE SET NULL,
+  -- Compared against users.email, which is stored lowercased.
+  CONSTRAINT chk_invitation_email_lower CHECK (email = lower(email)),
+  -- Pending exactly while nobody has answered it.
+  CONSTRAINT chk_invitation_responded CHECK ((status = 'pending') = (responded_at IS NULL))
+);
+
+-- =============================================
 -- TOURNAMENTS
 -- The main event, created by approved organizers.
 -- =============================================
