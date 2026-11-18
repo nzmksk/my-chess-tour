@@ -6,35 +6,40 @@ vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
 }));
 
-vi.mock("@/lib/github", () => ({
-  getIssueProgress: vi.fn().mockResolvedValue(50),
+vi.mock("next/headers", () => ({
+  headers: vi.fn().mockResolvedValue({ get: () => "localhost:3000" }),
 }));
 
-vi.mock("@/components/WaitlistForm", () => ({
+// Keep the server-only auth/DB chain out of this smoke test.
+vi.mock("@/services/supabase/permission", () => ({
+  getAuthClaims: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@/services/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
+
+vi.mock("@/components/NavBar", () => ({
   default: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("@/components/BuildProgress", () => ({
-  default: vi.fn().mockReturnValue(null),
-}));
+import HomePage, { metadata } from "../page";
 
-vi.mock("@/components/ProgressSkeleton", () => ({
-  default: vi.fn().mockReturnValue(null),
-}));
-
-import LandingPage from "../page";
-
-describe("RootPage (landing at /)", () => {
+describe("HomePage (tournament list at /)", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("does not redirect", () => {
-    LandingPage();
+    HomePage();
     expect(mockRedirect).not.toHaveBeenCalled();
   });
 
   it("returns a non-null React element", () => {
-    const result = LandingPage();
+    const result = HomePage();
     expect(result).not.toBeNull();
     expect(result).toBeDefined();
+  });
+
+  it("uses the tournament list metadata", () => {
+    expect(metadata.title).toBe("Upcoming Chess Tournaments in Malaysia");
   });
 });
