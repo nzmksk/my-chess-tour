@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SIGNUP_STEP_COOKIE } from "@/lib/auth/signup-cookie";
 import { SESSION_ONLY_COOKIE, stripPersistence } from "@/lib/auth/session-cookie";
+import { enforceApiBaseline } from "@/services/rate-limit/limiter";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -39,6 +40,11 @@ export async function proxy(request: NextRequest) {
   // IMPORTANT: do not remove this — it is what keeps the session fresh.
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims ?? null;
+
+  // Baseline API rate limit for signed-in users (#613); routes with costly
+  // side effects add their own, tighter rules.
+  const limited = await enforceApiBaseline(request, user?.sub ?? null);
+  if (limited) return limited;
 
   // Prevent sign-up step-skipping: the verify step is only reachable once an
   // account has been created (the create-account / re-verify paths set the

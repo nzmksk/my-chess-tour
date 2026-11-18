@@ -103,6 +103,34 @@ export function rateLimitedResponse(
   );
 }
 
+// Server-to-server routes, authenticated on their own: CHIP calls the webhooks
+// and the scheduler calls cron with CRON_SECRET.
+const UNLIMITED_API_PREFIXES = ["/api/v1/webhooks/", "/api/v1/cron/"];
+
+/** Whether the proxy's baseline limit applies to this path. */
+export function isBaselineLimitedPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/api/") &&
+    !UNLIMITED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  );
+}
+
+/**
+ * The baseline every API route gets, applied in the proxy so a new route is
+ * covered without opting in. `authUserId` is the session's JWT subject (the
+ * proxy has no users.id), or null when signed out, in which case nothing is
+ * counted here.
+ */
+export async function enforceApiBaseline(
+  request: NextRequest,
+  authUserId: string | null,
+): Promise<NextResponse | null> {
+  if (!authUserId || !isBaselineLimitedPath(request.nextUrl.pathname)) {
+    return null;
+  }
+  return enforceRateLimit("api", request, authUserId);
+}
+
 /**
  * Apply the named rule to a route request. Returns the response to send when
  * the request is refused (429, or 500 when a fail-closed rule can't be

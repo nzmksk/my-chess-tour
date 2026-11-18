@@ -13,7 +13,9 @@ vi.mock("@/lib/http/request-ip", () => ({ getClientIp: mockGetClientIp }));
 import {
   checkRateLimit,
   describeWait,
+  enforceApiBaseline,
   enforceRateLimit,
+  isBaselineLimitedPath,
   rateLimitedResponse,
   RateLimitUnavailableError,
 } from "../limiter";
@@ -162,5 +164,63 @@ describe("enforceRateLimit", () => {
     const res = await enforceRateLimit("signup", request, null);
     expect(res?.status).toBe(500);
     expect((await res?.json()).error.code).toBe("INTERNAL_ERROR");
+  });
+});
+
+describe("isBaselineLimitedPath", () => {
+  it.each([
+    ["/api/v1/tournaments", true],
+    ["/api/v1/organizations/x/members/invite", true],
+    ["/api/v1/webhooks/chip", false],
+    ["/api/v1/webhooks/chip/send", false],
+    ["/api/v1/cron/refunds", false],
+    ["/tournaments/merdeka-open", false],
+  ])("%s → %s", (pathname, limited) => {
+    expect(isBaselineLimitedPath(pathname)).toBe(limited);
+  });
+});
+
+describe("enforceApiBaseline", () => {
+  const apiRequest = (path: string) =>
+    new NextRequest(`http://localhost${path}`, { method: "POST" });
+
+  beforeEach(() => {
+    mockGetClientIp.mockReturnValue("1.2.3.4");
+  });
+
+  it("counts a signed-in API request against the user's baseline only", async () => {
+    expect(
+      await enforceApiBaseline(apiRequest("/api/v1/profile"), "auth-1"),
+    ).toBeNull();
+    expect(keysHit()).toEqual(["ratelimit:api:user:auth-1"]);
+    expect(mockHitWindow).toHaveBeenCalledWith(
+      "ratelimit:api:user:auth-1",
+      RATE_LIMITS.api.perUser,
+      RATE_LIMITS.api.windowSeconds,
+    );
+  });
+
+  it("429s once the user is over the baseline", async () => {
+    waitsByKey({ "ratelimit:api:user:auth-1": 30 });
+    const res = await enforceApiBaseline(
+      apiRequest("/api/v1/profile"),
+      "auth-1",
+    );
+    expect(res?.status).toBe(429);
+    expect(res?.headers.get("Retry-After")).toBe("30");
+  });
+
+  it("counts nothing for signed-out requests, webhooks, cron or pages", async () => {
+    expect(
+      await enforceApiBaseline(apiRequest("/api/v1/tournaments"), null),
+    ).toBeNull();
+    expect(
+      await enforceApiBaseline(apiRequest("/api/v1/webhooks/chip"), "auth-1"),
+    ).toBeNull();
+    expect(
+      await enforceApiBaseline(apiRequest("/api/v1/cron/payouts"), "auth-1"),
+    ).toBeNull();
+    expect(await enforceApiBaseline(apiRequest("/my"), "auth-1")).toBeNull();
+    expect(mockHitWindow).not.toHaveBeenCalled();
   });
 });

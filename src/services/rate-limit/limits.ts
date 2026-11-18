@@ -31,6 +31,18 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 export const RATE_LIMITS = {
+  // ── Baseline ──────────────────────────────────────────────────────────────
+  // Every /api request from a signed-in user, counted in the proxy on top of
+  // any route's own rule (see enforceApiBaseline). Keyed by the session's auth
+  // id. No IP bucket: server components fetch this app's own API without the
+  // visitor's IP (src/app/page.tsx), so an IP limit would throttle every
+  // signed-out visitor together.
+  api: {
+    windowSeconds: MINUTE,
+    perUser: 120,
+    message: "You're making requests too quickly.",
+  },
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   // Signup and verification-code requests, per IP: generous enough for bulk
   // signups behind one shared IP, low enough to make probing which emails are
