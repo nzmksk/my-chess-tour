@@ -7,35 +7,10 @@ import type { TournamentFormat, TimeControl } from "@/app/tournaments/types";
 import { formatRinggit } from "@/services/payouts/format";
 import { formatInstantDate } from "@/lib/tournaments/datetime";
 import { SUPPORT_EMAIL } from "@/lib/reference/contact";
-
-type Tab = "upcoming" | "past" | "cancelled";
+import { classifyRegistration, type RegistrationTab as Tab } from "../classify";
 
 interface Props {
   registrations: PlayerRegistration[];
-}
-
-function classifyRegistration(
-  reg: PlayerRegistration,
-  today: Date,
-): Tab | null {
-  // A cancelled tournament leaves the registration itself `confirmed` (the
-  // refund ledger, not the registration, records the money going back), so
-  // without this it would sit under Upcoming looking like a live entry.
-  if (reg.tournament.status === "cancelled") return "cancelled";
-
-  const startDate = new Date(reg.tournament.start_date + "T00:00:00");
-  const isActive =
-    reg.status === "confirmed" || reg.status === "pending_payment";
-  const isCancelled =
-    reg.status === "cancelled_payment" || reg.status === "failed_payment";
-  const isCompleted = reg.status === "confirmed" || reg.status === "forfeited";
-
-  if (isCancelled) return "cancelled";
-  if (isActive && startDate >= today) return "upcoming";
-  if (isCompleted && startDate < today) return "past";
-  // pending_payment for past tournament — treat as past
-  if (startDate < today) return "past";
-  return "upcoming";
 }
 
 function formatTimeControl(tc: TimeControl): string {
@@ -161,7 +136,7 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
 
       {/* Tournament info */}
       <div className="flex-1 min-w-0">
-        <h4 className="font-lato text-sm font-semibold text-text-primary truncate">
+        <h4 className="font-lato text-text-primary truncate text-sm font-semibold">
           {tournament.name}
         </h4>
         <p className="font-lato text-xs text-text-muted mt-0.5">
@@ -189,6 +164,7 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
 
 function EmptyState({ tab }: { tab: Tab }) {
   const messages: Record<Tab, string> = {
+    ongoing: "No tournaments in progress right now.",
     upcoming:
       "No upcoming tournaments. Browse available tournaments to register.",
     past: "No past tournaments yet.",
@@ -214,35 +190,46 @@ function EmptyState({ tab }: { tab: Tab }) {
 }
 
 export default function RegistrationsClient({ registrations }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("upcoming");
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-
   const categorised = useMemo(() => {
+    const ongoing: PlayerRegistration[] = [];
     const upcoming: PlayerRegistration[] = [];
     const past: PlayerRegistration[] = [];
     const cancelled: PlayerRegistration[] = [];
 
+    const now = new Date();
     for (const reg of registrations) {
-      const tab = classifyRegistration(reg, today);
-      if (tab === "upcoming") upcoming.push(reg);
+      const tab = classifyRegistration(reg, now);
+      if (tab === "ongoing") ongoing.push(reg);
+      else if (tab === "upcoming") upcoming.push(reg);
       else if (tab === "past") past.push(reg);
-      else if (tab === "cancelled") cancelled.push(reg);
+      else cancelled.push(reg);
     }
 
-    // Upcoming arrives from the API already sorted by nearest start date first.
-    // Past reads best most-recent-first, i.e. the reverse chronological order.
+    // Ongoing: finishing soonest first. Upcoming: nearest start first. Past:
+    // most recently finished first, by end_date, since a long event can end
+    // after a later-starting short one. All stable, so ties keep the API's
+    // most-recently-registered order.
+    ongoing.sort((a, b) =>
+      a.tournament.end_date.localeCompare(b.tournament.end_date),
+    );
+    upcoming.sort((a, b) =>
+      a.tournament.start_date.localeCompare(b.tournament.start_date),
+    );
     past.sort((a, b) =>
-      b.tournament.start_date.localeCompare(a.tournament.start_date),
+      b.tournament.end_date.localeCompare(a.tournament.end_date),
     );
 
-    return { upcoming, past, cancelled };
-  }, [registrations, today]);
+    return { ongoing, upcoming, past, cancelled };
+  }, [registrations]);
+
+  // A player in the middle of a tournament lands on it; everyone else on
+  // Upcoming.
+  const [activeTab, setActiveTab] = useState<Tab>(() =>
+    categorised.ongoing.length > 0 ? "ongoing" : "upcoming",
+  );
 
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
+    { key: "ongoing", label: "Ongoing", count: categorised.ongoing.length },
     { key: "upcoming", label: "Upcoming", count: categorised.upcoming.length },
     { key: "past", label: "Past", count: categorised.past.length },
     {

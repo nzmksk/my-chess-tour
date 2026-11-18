@@ -20,6 +20,8 @@ function registration(
       slug: "kl-open",
       name: "KL Open",
       start_date: "2099-03-15",
+      end_date: "2099-03-15",
+      timezone: "Asia/Kuala_Lumpur",
       venue_name: "KLCC",
       venue_state: "Kuala Lumpur",
       format: { type: "rapid", system: "swiss", rounds: 7 } as PlayerRegistration["tournament"]["format"],
@@ -118,5 +120,63 @@ describe("RegistrationsClient", () => {
     expect(screen.getByText(/could not be completed/).textContent).toContain(
       "support@mychesstour.com",
     );
+  });
+
+  it("lists Past by most recent end_date, not start_date", () => {
+    const pastEvent = (
+      id: string,
+      name: string,
+      start: string,
+      end: string,
+    ) => {
+      const reg = registration({ id });
+      const tournament = { ...reg.tournament, name, start_date: start };
+      return { ...reg, tournament: { ...tournament, end_date: end } };
+    };
+    render(
+      <RegistrationsClient
+        registrations={[
+          pastEvent("r1", "Weekend Blitz", "2020-01-05", "2020-01-05"),
+          pastEvent("r2", "Ten-Day Classical", "2020-01-01", "2020-01-10"),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Past/ }));
+
+    const names = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((h) => h.textContent);
+    expect(names).toEqual(["Ten-Day Classical", "Weekend Blitz"]);
+  });
+
+  it("files an event being played today under Ongoing, finishing soonest first", () => {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+    }).format(new Date());
+    const running = (id: string, name: string, end: string) => {
+      const reg = registration({ id });
+      const tournament = { ...reg.tournament, name, start_date: "2020-01-01" };
+      return { ...reg, tournament: { ...tournament, end_date: end } };
+    };
+    render(
+      <RegistrationsClient
+        registrations={[
+          running("r1", "Long Classical", "2099-12-31"),
+          running("r2", "Final Day Rapid", today),
+          registration({ id: "r3" }),
+        ]}
+      />,
+    );
+    // Opens on Ongoing without a click, since the player has one running.
+    const names = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((h) => h.textContent);
+    expect(names).toEqual(["Final Day Rapid", "Long Classical"]);
+  });
+
+  it("opens on Upcoming when nothing is running", () => {
+    render(<RegistrationsClient registrations={[registration()]} />);
+
+    expect(screen.getByText("KL Open")).toBeTruthy();
   });
 });

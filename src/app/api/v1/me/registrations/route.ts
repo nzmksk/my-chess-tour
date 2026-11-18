@@ -5,6 +5,7 @@ import type { EntryFees } from "@/app/tournaments/types";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { liveRefund, refundState } from "@/lib/refunds/state";
+import { resolveTimeZone } from "@/lib/tournaments/datetime";
 
 const VALID_STATUSES = new Set([
   "pending_payment",
@@ -21,6 +22,8 @@ type TournamentRow = {
   slug: string;
   name: string;
   start_date: string;
+  end_date: string;
+  timezone: string;
   venue_name: string;
   venue_state: string;
   format: unknown;
@@ -124,7 +127,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .select(
       `id, fee_tier, status, registered_at, confirmed_at,
       tournaments!inner (
-        id, slug, name, start_date, venue_name, venue_state, format, time_control, entry_fees, status
+        id, slug, name, start_date, end_date, timezone, venue_name, venue_state, format, time_control, entry_fees, status
       ),
       refunds (status, refund_amount_cents, requested_at, processed_at, failed_at)`,
     )
@@ -173,6 +176,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         slug: row.tournaments.slug,
         name: row.tournaments.name,
         start_date: row.tournaments.start_date,
+        end_date: row.tournaments.end_date,
+        // The venue's zone, which the player's Upcoming / Past split is judged
+        // in (#619). Resolved here so the client never hands Intl a bad zone.
+        timezone: resolveTimeZone(row.tournaments.timezone),
         venue_name: row.tournaments.venue_name,
         venue_state: row.tournaments.venue_state,
         format: row.tournaments.format,
