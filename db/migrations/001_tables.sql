@@ -788,6 +788,36 @@ CREATE TABLE waitlist (
 );
 
 -- =============================================
+-- BUG REPORTS
+-- In-app bug reports (#616). Each one is filed as a GitHub issue on the
+-- PUBLIC repo, so the issue never carries who sent it. This row is the private
+-- half: the reporter (so support can follow up) and the report itself, saved
+-- BEFORE GitHub is called so a failed filing loses nothing.
+--
+-- github_issue_number is NULL until the issue exists. A row still without one
+-- and with filing_error set is a report support files by hand.
+-- user_id is NULL for a signed-out reporter, and after account deletion.
+-- context holds the technical details sent with the report (route, browser,
+-- viewport, app version, Sentry event id). Never an IP address.
+--
+-- Written only by the server (POST /api/v1/feedback, service role).
+-- =============================================
+CREATE TABLE bug_reports (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             uuid REFERENCES users(id) ON DELETE SET NULL,
+  description         text NOT NULL,
+  details             text,
+  context             jsonb NOT NULL DEFAULT '{}'::jsonb,
+  github_issue_number integer,
+  filed_at            timestamptz,
+  filing_error        text,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_bug_report_description CHECK (description ~ '[^[:space:]]'),
+  CONSTRAINT chk_bug_report_filed CHECK ((github_issue_number IS NULL) = (filed_at IS NULL))
+);
+
+-- =============================================
 -- TOURNAMENT PAYOUT SUMMARY
 -- Computed on demand from the payments ledger.
 -- Every amount is read straight from the per-payment ledger columns

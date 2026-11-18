@@ -23,6 +23,7 @@ ALTER TABLE prize_fundings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_funder_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_awards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bug_reports ENABLE ROW LEVEL SECURITY;
 
 -- =============================================
 -- RBAC REFERENCE TABLES (read-only for all authenticated)
@@ -506,6 +507,18 @@ USING (
 CREATE POLICY "Platform admins full access to cancellation requests"
 ON tournament_cancellation_requests FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+-- =============================================
+-- BUG REPORTS
+-- Who sent a report is private: only platform admins see these rows, and
+-- only the server writes them (service role). Reporters are not given read
+-- access to their own rows; the success screen shows them a reference.
+-- =============================================
+CREATE POLICY "Platform admins full access to bug reports"
+ON bug_reports FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON bug_reports FROM anon, authenticated;
 
 -- =============================================
 -- AUDIT LOGS

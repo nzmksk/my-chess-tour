@@ -166,3 +166,8 @@ CREATE INDEX idx_prize_awards_tournament     ON prize_awards (tournament_id, ent
 CREATE INDEX idx_prize_awards_user           ON prize_awards (user_id);
 CREATE INDEX idx_prize_awards_pending_review ON prize_awards (entered_at) WHERE approval = 'pending';
 CREATE INDEX idx_prize_awards_in_flight      ON prize_awards (status, updated_at) WHERE status = 'processing';
+
+-- Bug reports
+CREATE INDEX idx_bug_reports_user ON bug_reports (user_id) WHERE user_id IS NOT NULL;
+-- Reports GitHub never accepted, for support to file by hand.
+CREATE INDEX idx_bug_reports_unfiled ON bug_reports (created_at) WHERE github_issue_number IS NULL;
