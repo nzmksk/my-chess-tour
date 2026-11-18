@@ -41,6 +41,8 @@ import {
   recordSignupAttempt,
   MAX_VERIFY_ATTEMPTS,
   MAX_SIGNUP_ATTEMPTS_PER_IP,
+  recordBugReportAttempt,
+  BUG_REPORT_LIMITS,
 } from "../redis";
 
 // ---------------------------------------------------------------------------
@@ -207,6 +209,59 @@ describe("recordSignupAttempt", () => {
     const count = await recordSignupAttempt("1.2.3.4");
     expect(count).toBe(7);
     expect(mockExpire).not.toHaveBeenCalled();
+  });
+});
+
+describe("recordBugReportAttempt", () => {
+  // Answer incr per key so each window can be put at its own count.
+  function countsByKey(counts: Record<string, number>) {
+    mockIncr.mockImplementation(async (key: string) => counts[key] ?? 1);
+  }
+
+  it("counts a signed-in report per IP and per user, and lets it through", async () => {
+    countsByKey({});
+    expect(await recordBugReportAttempt("1.2.3.4", "user-1")).toBe(0);
+    expect(mockIncr).toHaveBeenCalledWith("bug-report:ip:1.2.3.4");
+    expect(mockIncr).toHaveBeenCalledWith("bug-report:user:user-1");
+    expect(mockIncr).not.toHaveBeenCalledWith(
+      "bug-report:signed-out-ip:1.2.3.4",
+    );
+    expect(mockExpire).toHaveBeenCalledWith("bug-report:ip:1.2.3.4", 3600);
+    expect(mockExpire).toHaveBeenCalledWith("bug-report:user:user-1", 3600);
+  });
+
+  it("counts a signed-out report against the tighter signed-out IP budget", async () => {
+    countsByKey({});
+    expect(await recordBugReportAttempt("1.2.3.4", null)).toBe(0);
+    expect(mockIncr).toHaveBeenCalledWith("bug-report:ip:1.2.3.4");
+    expect(mockIncr).toHaveBeenCalledWith("bug-report:signed-out-ip:1.2.3.4");
+  });
+
+  it("returns the window's remaining seconds once the user limit is passed", async () => {
+    countsByKey({ "bug-report:user:user-1": BUG_REPORT_LIMITS.perUser + 1 });
+    mockTtl.mockResolvedValue(1200);
+    expect(await recordBugReportAttempt("1.2.3.4", "user-1")).toBe(1200);
+    expect(mockTtl).toHaveBeenCalledWith("bug-report:user:user-1");
+  });
+
+  it("limits a signed-out reporter after the signed-out budget", async () => {
+    countsByKey({
+      "bug-report:signed-out-ip:1.2.3.4": BUG_REPORT_LIMITS.perIpSignedOut + 1,
+    });
+    mockTtl.mockResolvedValue(600);
+    expect(await recordBugReportAttempt("1.2.3.4", null)).toBe(600);
+  });
+
+  it("limits by IP however many accounts share it", async () => {
+    countsByKey({ "bug-report:ip:1.2.3.4": BUG_REPORT_LIMITS.perIp + 1 });
+    mockTtl.mockResolvedValue(30);
+    expect(await recordBugReportAttempt("1.2.3.4", "user-2")).toBe(30);
+  });
+
+  it("falls back to the full window when the key has no TTL", async () => {
+    countsByKey({ "bug-report:user:user-1": BUG_REPORT_LIMITS.perUser + 1 });
+    mockTtl.mockResolvedValue(-1);
+    expect(await recordBugReportAttempt("1.2.3.4", "user-1")).toBe(3600);
   });
 });
 
