@@ -4,6 +4,7 @@ import { Cinzel, Lato } from "next/font/google";
 import "@/styles/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthProvider";
+import { BugReport } from "@/components/BugReport";
 import { getNavUser } from "@/services/supabase/permission";
 import { toAuthUser } from "@/lib/auth/auth-user";
 
@@ -95,6 +96,7 @@ export default async function RootLayout({
             initialOrganizations={initialOrganizations}
           >
             {children}
+            <BugReport />
           </AuthProvider>
         </ThemeProvider>
       </body>
