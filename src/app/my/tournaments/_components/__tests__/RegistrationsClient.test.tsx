@@ -149,27 +149,29 @@ describe("RegistrationsClient", () => {
     expect(names).toEqual(["Ten-Day Classical", "Weekend Blitz"]);
   });
 
-  it("marks an event being played today as In progress", () => {
+  it("files an event being played today under Ongoing, finishing soonest first", () => {
     const today = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Kuala_Lumpur",
     }).format(new Date());
-    const running = registration();
+    const running = (id: string, name: string, end: string) => {
+      const reg = registration({ id });
+      const tournament = { ...reg.tournament, name, start_date: "2020-01-01" };
+      return { ...reg, tournament: { ...tournament, end_date: end } };
+    };
     render(
       <RegistrationsClient
         registrations={[
-          {
-            ...running,
-            tournament: {
-              ...running.tournament,
-              start_date: "2020-01-01",
-              end_date: today,
-            },
-          },
-          registration({ id: "reg-2" }),
+          running("r1", "Long Classical", "2099-12-31"),
+          running("r2", "Final Day Rapid", today),
+          registration({ id: "r3" }),
         ]}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Ongoing/ }));
 
-    expect(screen.getAllByText("In progress")).toHaveLength(1);
+    const names = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((h) => h.textContent);
+    expect(names).toEqual(["Final Day Rapid", "Long Classical"]);
   });
 });

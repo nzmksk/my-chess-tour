@@ -5,7 +5,7 @@ import {
 } from "@/lib/tournaments/datetime";
 import type { PlayerRegistration } from "./types";
 
-export type RegistrationTab = "upcoming" | "past" | "cancelled";
+export type RegistrationTab = "ongoing" | "upcoming" | "past" | "cancelled";
 
 type RegistrationTournament = PlayerRegistration["tournament"];
 
@@ -19,8 +19,9 @@ function venueToday(tournament: RegistrationTournament, now: Date): string {
 /**
  * Which /my tab a registration belongs in.
  *
- * A tournament stays under Upcoming until its last day has passed at the
- * venue, so a player on day 2 of a 3-day event still finds it there (#619).
+ * Ongoing runs from the first day through the last day at the venue, so a
+ * player on day 2 of a 3-day event finds it there, not under Past (#619).
+ * The split matches discovery's Ongoing / Upcoming / Past sections.
  */
 export function classifyRegistration(
   reg: PlayerRegistration,
@@ -34,21 +35,12 @@ export function classifyRegistration(
     return "cancelled";
   }
 
-  return reg.tournament.end_date >= venueToday(reg.tournament, now)
-    ? "upcoming"
-    : "past";
-}
-
-/** Whether the tournament is being played today, at its venue. */
-export function isTournamentInProgress(
-  tournament: RegistrationTournament,
-  now: Date = new Date(),
-): boolean {
-  return (
-    getTournamentDateState(
-      tournament.start_date,
-      tournament.end_date,
-      venueToday(tournament, now),
-    ) === "ongoing"
+  const { start_date, end_date } = reg.tournament;
+  const state = getTournamentDateState(
+    start_date,
+    end_date,
+    venueToday(reg.tournament, now),
   );
+  if (state === "ongoing") return "ongoing";
+  return state === "upcoming" ? "upcoming" : "past";
 }

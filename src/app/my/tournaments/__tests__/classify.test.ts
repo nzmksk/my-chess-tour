@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { classifyRegistration, isTournamentInProgress } from "../classify";
+import { classifyRegistration } from "../classify";
 import type { PlayerRegistration } from "../types";
 
 function registration(
@@ -46,9 +46,9 @@ describe("classifyRegistration", () => {
     const reg = registration();
 
     it.each(["2026-03-15", "2026-03-16", "2026-03-17"])(
-      "is Upcoming on %s while it is being played",
+      "is Ongoing on %s while it is being played",
       (date) => {
-        expect(classifyRegistration(reg, klNoon(date))).toBe("upcoming");
+        expect(classifyRegistration(reg, klNoon(date))).toBe("ongoing");
       },
     );
 
@@ -67,8 +67,12 @@ describe("classifyRegistration", () => {
       end_date: "2026-03-15",
     });
 
-    it("is Upcoming on the day", () => {
-      expect(classifyRegistration(reg, klNoon("2026-03-15"))).toBe("upcoming");
+    it("is Upcoming the day before", () => {
+      expect(classifyRegistration(reg, klNoon("2026-03-14"))).toBe("upcoming");
+    });
+
+    it("is Ongoing on the day", () => {
+      expect(classifyRegistration(reg, klNoon("2026-03-15"))).toBe("ongoing");
     });
 
     it("is Past the next venue day", () => {
@@ -88,6 +92,10 @@ describe("classifyRegistration", () => {
     // 15:30 UTC on the 17th is 23:30 on the 17th in Kuala Lumpur: still the
     // last day at the venue though a UTC+8 reader is about to roll over.
     const lastHourOfEnd = new Date("2026-03-17T15:30:00Z");
+    // The same pair of edges around the first day: 23:30 on the 14th and
+    // 00:30 on the 15th in Kuala Lumpur.
+    const lastHourBeforeStart = new Date("2026-03-14T15:30:00Z");
+    const firstHourOfStart = new Date("2026-03-14T16:30:00Z");
 
     it.each(["UTC", "Asia/Kuala_Lumpur", "America/Los_Angeles"])(
       "classifies the same with the device clock in %s",
@@ -95,7 +103,9 @@ describe("classifyRegistration", () => {
         process.env.TZ = tz;
         const reg = registration();
         expect(classifyRegistration(reg, justAfterEnd)).toBe("past");
-        expect(classifyRegistration(reg, lastHourOfEnd)).toBe("upcoming");
+        expect(classifyRegistration(reg, lastHourOfEnd)).toBe("ongoing");
+        expect(classifyRegistration(reg, lastHourBeforeStart)).toBe("upcoming");
+        expect(classifyRegistration(reg, firstHourOfStart)).toBe("ongoing");
       },
     );
 
@@ -104,7 +114,7 @@ describe("classifyRegistration", () => {
       const now = new Date("2026-03-17T16:30:00Z");
       expect(
         classifyRegistration(registration({ timezone: "Asia/Jakarta" }), now),
-      ).toBe("upcoming");
+      ).toBe("ongoing");
       expect(
         classifyRegistration(registration({ timezone: "Asia/Manila" }), now),
       ).toBe("past");
@@ -133,26 +143,9 @@ describe("classifyRegistration", () => {
 
     it("files an unpaid entry by date like any other", () => {
       const reg = registration({}, "pending_payment");
-      expect(classifyRegistration(reg, duringEvent)).toBe("upcoming");
+      expect(classifyRegistration(reg, klNoon("2026-03-10"))).toBe("upcoming");
+      expect(classifyRegistration(reg, duringEvent)).toBe("ongoing");
       expect(classifyRegistration(reg, klNoon("2026-04-01"))).toBe("past");
     });
-  });
-});
-
-describe("isTournamentInProgress", () => {
-  const { tournament } = registration();
-
-  it("is true from start_date through end_date at the venue", () => {
-    expect(isTournamentInProgress(tournament, klNoon("2026-03-15"))).toBe(true);
-    expect(isTournamentInProgress(tournament, klNoon("2026-03-17"))).toBe(true);
-  });
-
-  it("is false before it starts and after it ends", () => {
-    expect(isTournamentInProgress(tournament, klNoon("2026-03-14"))).toBe(
-      false,
-    );
-    expect(isTournamentInProgress(tournament, klNoon("2026-03-18"))).toBe(
-      false,
-    );
   });
 });

@@ -7,11 +7,7 @@ import type { TournamentFormat, TimeControl } from "@/app/tournaments/types";
 import { formatRinggit } from "@/services/payouts/format";
 import { formatInstantDate } from "@/lib/tournaments/datetime";
 import { SUPPORT_EMAIL } from "@/lib/reference/contact";
-import {
-  classifyRegistration,
-  isTournamentInProgress,
-  type RegistrationTab as Tab,
-} from "../classify";
+import { classifyRegistration, type RegistrationTab as Tab } from "../classify";
 
 interface Props {
   registrations: PlayerRegistration[];
@@ -111,15 +107,9 @@ function RefundLine({
 interface RegistrationCardProps {
   registration: PlayerRegistration;
   dimmed?: boolean;
-  /** Being played today at the venue (#619). */
-  inProgress?: boolean;
 }
 
-function RegistrationCard({
-  registration,
-  dimmed,
-  inProgress,
-}: RegistrationCardProps) {
+function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
   const { tournament, status } = registration;
   const startDate = new Date(tournament.start_date + "T00:00:00");
   const month = startDate
@@ -146,16 +136,9 @@ function RegistrationCard({
 
       {/* Tournament info */}
       <div className="flex-1 min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <h4 className="font-lato text-text-primary truncate text-sm font-semibold">
-            {tournament.name}
-          </h4>
-          {inProgress && (
-            <span className="font-cinzel bg-gold-ghost border-gold-dim text-gold-bright shrink-0 rounded-md border px-2 py-0.5 text-[0.625rem] font-bold tracking-widest whitespace-nowrap uppercase">
-              In progress
-            </span>
-          )}
-        </div>
+        <h4 className="font-lato text-text-primary truncate text-sm font-semibold">
+          {tournament.name}
+        </h4>
         <p className="font-lato text-xs text-text-muted mt-0.5">
           {tournament.venue_name}
           {format && tc && (
@@ -181,6 +164,7 @@ function RegistrationCard({
 
 function EmptyState({ tab }: { tab: Tab }) {
   const messages: Record<Tab, string> = {
+    ongoing: "No tournaments in progress right now.",
     upcoming:
       "No upcoming tournaments. Browse available tournaments to register.",
     past: "No past tournaments yet.",
@@ -209,6 +193,7 @@ export default function RegistrationsClient({ registrations }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("upcoming");
 
   const categorised = useMemo(() => {
+    const ongoing: PlayerRegistration[] = [];
     const upcoming: PlayerRegistration[] = [];
     const past: PlayerRegistration[] = [];
     const cancelled: PlayerRegistration[] = [];
@@ -216,14 +201,19 @@ export default function RegistrationsClient({ registrations }: Props) {
     const now = new Date();
     for (const reg of registrations) {
       const tab = classifyRegistration(reg, now);
-      if (tab === "upcoming") upcoming.push(reg);
+      if (tab === "ongoing") ongoing.push(reg);
+      else if (tab === "upcoming") upcoming.push(reg);
       else if (tab === "past") past.push(reg);
       else cancelled.push(reg);
     }
 
-    // Upcoming: nearest start first. Past: most recently finished first, by
-    // end_date, since a long event can end after a later-starting short one.
-    // Both are stable, so ties keep the API's most-recently-registered order.
+    // Ongoing: finishing soonest first. Upcoming: nearest start first. Past:
+    // most recently finished first, by end_date, since a long event can end
+    // after a later-starting short one. All stable, so ties keep the API's
+    // most-recently-registered order.
+    ongoing.sort((a, b) =>
+      a.tournament.end_date.localeCompare(b.tournament.end_date),
+    );
     upcoming.sort((a, b) =>
       a.tournament.start_date.localeCompare(b.tournament.start_date),
     );
@@ -231,10 +221,11 @@ export default function RegistrationsClient({ registrations }: Props) {
       b.tournament.end_date.localeCompare(a.tournament.end_date),
     );
 
-    return { upcoming, past, cancelled };
+    return { ongoing, upcoming, past, cancelled };
   }, [registrations]);
 
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
+    { key: "ongoing", label: "Ongoing", count: categorised.ongoing.length },
     { key: "upcoming", label: "Upcoming", count: categorised.upcoming.length },
     { key: "past", label: "Past", count: categorised.past.length },
     {
@@ -293,10 +284,6 @@ export default function RegistrationsClient({ registrations }: Props) {
               key={reg.id}
               registration={reg}
               dimmed={activeTab === "past"}
-              inProgress={
-                activeTab === "upcoming" &&
-                isTournamentInProgress(reg.tournament)
-              }
             />
           ))}
         </div>
