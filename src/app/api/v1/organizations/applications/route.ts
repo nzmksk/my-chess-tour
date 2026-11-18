@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { assertUploadedObject } from "@/services/supabase/storage";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApplyRequest } from "./validators";
@@ -57,6 +58,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 401 },
     );
   }
+
+  const limited = await enforceRateLimit(
+    "organizerApplication",
+    request,
+    claims.id,
+  );
+  if (limited) return limited;
 
   let rawBody: unknown;
   try {

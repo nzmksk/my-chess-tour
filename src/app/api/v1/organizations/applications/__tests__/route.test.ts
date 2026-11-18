@@ -65,6 +65,7 @@ vi.mock("next/headers", () => ({
 
 import { GET, POST } from "../route";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
+import { hitWindow } from "@/services/rate-limit/window";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -288,6 +289,25 @@ describe("POST /api/v1/organizations/applications", () => {
       expect(res.status).toBe(401);
       const json = await res.json();
       expect(json.error.code).toBe("UNAUTHORIZED");
+    });
+  });
+
+  describe("rate limiting", () => {
+    it("returns 429 once the user is over the limit, creating nothing", async () => {
+      vi.mocked(hitWindow).mockResolvedValueOnce(43200);
+      const res = await POST(makePostRequest());
+
+      expect(hitWindow).toHaveBeenCalledWith(
+        `ratelimit:organizerApplication:user:${appIdFor(USER_ID)}`,
+        5,
+        86400,
+      );
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("43200");
+      expect((await res.json()).error.message).toMatch(
+        /Please try again in 12 hours\.$/,
+      );
+      expect(mockRpc).not.toHaveBeenCalled();
     });
   });
 
