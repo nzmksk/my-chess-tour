@@ -71,6 +71,7 @@ vi.mock("@/services/prizes/pool", async (importOriginal) => ({
 }));
 
 import { GET, POST } from "../route";
+import { hitWindow } from "@/services/rate-limit/window";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -178,6 +179,16 @@ describe("POST prize-funding (retry)", () => {
       missing_contacts: ["Ministry"],
       released: false,
     });
+  });
+
+  it("429s a retry once over the payment-link limit, sending nothing", async () => {
+    vi.mocked(hitWindow).mockResolvedValueOnce(600);
+    const res = await post();
+
+    expect(hitWindow).toHaveBeenCalledWith(`ratelimit:funderLinks:user:${USER_ID}`, 30, 3600);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("600");
+    expect(mockSync).not.toHaveBeenCalled();
   });
 
   it("answers 503 when a link still couldn't be created", async () => {

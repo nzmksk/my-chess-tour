@@ -76,6 +76,7 @@ vi.mock("@/services/payouts/notify", () => ({
 import { GET as listNominations } from "../route";
 import { DELETE as declineNomination, POST as acceptNomination } from "../[tournamentId]/route";
 import { PUT as nominate } from "../../tournaments/[id]/beneficiary/route";
+import { hitWindow } from "@/services/rate-limit/window";
 import { GET as searchOrgs } from "../../../search/route";
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,20 @@ describe("PUT .../beneficiary", () => {
       p_beneficiary_org_id: NOMINEE,
       p_user_id: USER_ID,
     });
+  });
+
+  it("429s once the nominator is over the limit, nominating no one", async () => {
+    vi.mocked(hitWindow).mockResolvedValueOnce(900);
+    const res = await callNominate({ beneficiary_organization_id: NOMINEE });
+
+    expect(hitWindow).toHaveBeenCalledWith(
+      `ratelimit:payoutNomination:user:${USER_ID}`,
+      20,
+      3600,
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("900");
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
   it("emails the nominee", async () => {

@@ -5,6 +5,7 @@ import {
 } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { loadPrizePoolPosition } from "@/services/prizes/pool";
 import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import {
   declaredFunders,
   funderKey,
@@ -134,13 +135,18 @@ export async function GET(
  * (payout.request): it asks for money.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
   const { orgId, id } = await params;
 
   const auth = await authorizeOrgPermission(orgId, "payout.request");
   if (!auth.ok) return auth.response;
+
+  // Retrying emails each funder whose link is new; shares a budget with
+  // saving funder contacts.
+  const limited = await enforceRateLimit("funderLinks", request, auth.userId);
+  if (limited) return limited;
 
   const loaded = await loadTournament(orgId, id);
   if ("response" in loaded) return loaded.response;

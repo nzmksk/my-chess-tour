@@ -6,6 +6,7 @@ import {
   beneficiaryLockResponse,
 } from "@/app/api/v1/organizations/_lib/beneficiary-lock";
 import { notifyBeneficiaryNominated } from "@/services/payouts/notify";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
@@ -26,6 +27,14 @@ export async function PUT(
 
   const auth = await authorizeOrgPermission(orgId, "payout.request");
   if (!auth.ok) return auth.response;
+
+  // A nomination emails the nominee organization's owners.
+  const limited = await enforceRateLimit(
+    "payoutNomination",
+    request,
+    auth.userId,
+  );
+  if (limited) return limited;
 
   if (!UUID_RE.test(id)) {
     return NextResponse.json(

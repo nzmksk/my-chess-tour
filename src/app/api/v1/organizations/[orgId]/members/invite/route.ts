@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { authorizeOrgPermission } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { invitationErrorResponse } from "@/app/api/v1/organizations/_lib/invitation-errors";
 import { notifyMemberInvited } from "@/services/organizations/notify";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import {
   daysUntil,
   generateInvitationToken,
@@ -38,6 +39,10 @@ export async function POST(
 
   const auth = await authorizeOrgPermission(orgId, "org.invite");
   if (!auth.ok) return auth.response;
+
+  // Every invitation emails an address the inviter typed in.
+  const limited = await enforceRateLimit("memberInvite", request, auth.userId);
+  if (limited) return limited;
 
   let body: unknown;
   try {

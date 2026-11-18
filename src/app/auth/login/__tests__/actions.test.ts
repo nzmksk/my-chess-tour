@@ -5,12 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => ({
-  exists: vi.fn(),
-  ttl: vi.fn(),
-  incr: vi.fn(),
-  expire: vi.fn(),
-  set: vi.fn(),
-  del: vi.fn(),
+  getLoginLock: vi.fn(),
+  recordLoginFailure: vi.fn(),
+  clearLoginAttempts: vi.fn(),
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
   redirect: vi.fn(),
@@ -21,15 +18,11 @@ const mocks = vi.hoisted(() => ({
   sendSignupVerificationCode: vi.fn(),
 }));
 
-vi.mock("@/services/redis/redis", () => ({
-  redis: {
-    exists: mocks.exists,
-    ttl: mocks.ttl,
-    incr: mocks.incr,
-    expire: mocks.expire,
-    set: mocks.set,
-    del: mocks.del,
-  },
+vi.mock("@/services/rate-limit/auth", () => ({
+  getLoginLock: mocks.getLoginLock,
+  recordLoginFailure: mocks.recordLoginFailure,
+  clearLoginAttempts: mocks.clearLoginAttempts,
+  LOGIN_LOCK_SECONDS: 900,
 }));
 
 vi.mock("@/services/auth/verification-code", () => ({
@@ -85,7 +78,7 @@ const VALID = {
 beforeEach(() => {
   vi.clearAllMocks();
   // Default: account not locked, user is verified
-  mocks.exists.mockResolvedValue(0);
+  mocks.getLoginLock.mockResolvedValue(0);
   mocks.maybeSingle.mockResolvedValue({ data: { is_verified: true } });
   mocks.createClient.mockResolvedValue({
     auth: {
@@ -117,14 +110,14 @@ describe("login action", () => {
     const fd = makeFormData({ email: "", password: "pw", keepSignedIn: "on" });
     const result = await login(INITIAL_LOGIN_STATE, fd);
     expect(result.error).toMatch(/email/i);
-    expect(mocks.exists).not.toHaveBeenCalled();
+    expect(mocks.getLoginLock).not.toHaveBeenCalled();
   });
 
   it("returns error when password is empty", async () => {
     const fd = makeFormData({ email: "user@example.com", password: "" });
     const result = await login(INITIAL_LOGIN_STATE, fd);
     expect(result.error).toMatch(/password/i);
-    expect(mocks.exists).not.toHaveBeenCalled();
+    expect(mocks.getLoginLock).not.toHaveBeenCalled();
   });
 
   it("returns error when email is invalid", async () => {
@@ -137,8 +130,7 @@ describe("login action", () => {
   // --- Account already locked -----------------------------------------------
 
   it("returns locked state when account is already locked", async () => {
-    mocks.exists.mockResolvedValue(1);
-    mocks.ttl.mockResolvedValue(840);
+    mocks.getLoginLock.mockResolvedValue(840);
 
     const fd = makeFormData(VALID);
     const result = await login(INITIAL_LOGIN_STATE, fd);
@@ -156,7 +148,7 @@ describe("login action", () => {
       data: { user: null, session: null },
       error: { message: "Invalid login credentials" },
     });
-    mocks.incr.mockResolvedValue(1);
+    mocks.recordLoginFailure.mockResolvedValue(4);
 
     const fd = makeFormData(VALID);
     const result = await login(INITIAL_LOGIN_STATE, fd);
@@ -171,7 +163,7 @@ describe("login action", () => {
       data: { user: null, session: null },
       error: { message: "Invalid login credentials" },
     });
-    mocks.incr.mockResolvedValue(3);
+    mocks.recordLoginFailure.mockResolvedValue(2);
 
     const fd = makeFormData(VALID);
     const result = await login(INITIAL_LOGIN_STATE, fd);
@@ -185,7 +177,7 @@ describe("login action", () => {
       data: { user: null, session: null },
       error: { message: "Invalid login credentials" },
     });
-    mocks.incr.mockResolvedValue(5);
+    mocks.recordLoginFailure.mockResolvedValue(0);
 
     const fd = makeFormData(VALID);
     const result = await login(INITIAL_LOGIN_STATE, fd);
@@ -193,21 +185,19 @@ describe("login action", () => {
     expect(result.locked).toBe(true);
     expect(result.lockedSeconds).toBe(900);
     expect(result.attemptsRemaining).toBe(0);
-    expect(mocks.set).toHaveBeenCalled();
-    expect(mocks.del).toHaveBeenCalled();
   });
 
-  it("sets expire on attempts key after a failed attempt", async () => {
+  it("counts the failure against the email", async () => {
     mocks.signInWithPassword.mockResolvedValue({
       data: { user: null, session: null },
       error: { message: "Invalid login credentials" },
     });
-    mocks.incr.mockResolvedValue(1);
+    mocks.recordLoginFailure.mockResolvedValue(4);
 
     const fd = makeFormData(VALID);
     await login(INITIAL_LOGIN_STATE, fd);
 
-    expect(mocks.expire).toHaveBeenCalled();
+    expect(mocks.recordLoginFailure).toHaveBeenCalledWith("user@example.com");
   });
 
   // --- Unverified account (correct password) --------------------------------
@@ -248,8 +238,8 @@ describe("login action", () => {
     await login(INITIAL_LOGIN_STATE, makeFormData(VALID));
 
     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
-    // attempts + lock keys cleared even though we don't redirect
-    expect(mocks.del).toHaveBeenCalledTimes(2);
+    // attempts + lock cleared even though we don't redirect
+    expect(mocks.clearLoginAttempts).toHaveBeenCalledWith("user@example.com");
   });
 
   it("still proceeds to needsVerification if sending the code throws", async () => {
@@ -277,7 +267,7 @@ describe("login action", () => {
     const fd = makeFormData(VALID);
     await login(INITIAL_LOGIN_STATE, fd);
 
-    expect(mocks.del).toHaveBeenCalledTimes(2);
+    expect(mocks.clearLoginAttempts).toHaveBeenCalledWith("user@example.com");
     expect(mocks.redirect).toHaveBeenCalledWith("/");
   });
 
@@ -289,7 +279,10 @@ describe("login action", () => {
       error: null,
     });
 
-    await login(INITIAL_LOGIN_STATE, makeFormData({ ...VALID, keepSignedIn: "on" }));
+    await login(
+      INITIAL_LOGIN_STATE,
+      makeFormData({ ...VALID, keepSignedIn: "on" }),
+    );
 
     expect(mocks.createClient).toHaveBeenCalledWith({ sessionOnly: false });
     expect(mocks.cookieDelete).toHaveBeenCalledWith("mct_session_only");
@@ -340,7 +333,7 @@ describe("login action", () => {
     fd.append("password", "anypassword");
     const result = await login(INITIAL_LOGIN_STATE, fd);
     expect(result.error).toMatch(/email/i);
-    expect(mocks.exists).not.toHaveBeenCalled();
+    expect(mocks.getLoginLock).not.toHaveBeenCalled();
   });
 
   it("handles missing password key in FormData (passes empty string)", async () => {
@@ -348,7 +341,7 @@ describe("login action", () => {
     fd.append("email", "user@example.com");
     const result = await login(INITIAL_LOGIN_STATE, fd);
     expect(result.error).toMatch(/password/i);
-    expect(mocks.exists).not.toHaveBeenCalled();
+    expect(mocks.getLoginLock).not.toHaveBeenCalled();
   });
 
   it("trims whitespace from email before using it", async () => {

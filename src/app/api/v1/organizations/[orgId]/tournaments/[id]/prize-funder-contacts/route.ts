@@ -9,6 +9,7 @@ import {
   type FunderContact,
 } from "@/lib/tournaments/prize-funding";
 import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 
@@ -130,6 +131,15 @@ export async function PUT(
     return errorResponse("TOURNAMENT_CANCELLED", "This tournament has been cancelled", 409);
   }
 
+  // Only a tournament already asking for money emails the funders on save;
+  // a draft saves contacts on every wizard step and sends nothing.
+  const sendsLinks =
+    tournament.status === "pending_funding" || tournament.status === "published";
+  if (sendsLinks) {
+    const limited = await enforceRateLimit("funderLinks", request, auth.userId);
+    if (limited) return limited;
+  }
+
   const { error } = await supabaseAdmin.rpc("set_prize_funder_contacts", {
     p_tournament_id: id,
     p_contacts: contacts,
@@ -141,7 +151,7 @@ export async function PUT(
     return internalErrorResponse(`Funder contacts: failed to save for tournament ${id}`, error);
   }
 
-  if (tournament.status === "pending_funding" || tournament.status === "published") {
+  if (sendsLinks) {
     const funding = await syncPrizeFundingRequests(id, auth.userId);
     if (funding.error) {
       // The contacts are saved; the next sync (manage page, daily run) sends

@@ -4,16 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks — use vi.hoisted so references are available inside vi.mock factory
 // ---------------------------------------------------------------------------
 
-const { mockSet, mockGet, mockDel, mockTtl, mockIncr, mockExpire } = vi.hoisted(
-  () => ({
-    mockSet: vi.fn(),
-    mockGet: vi.fn(),
-    mockDel: vi.fn(),
-    mockTtl: vi.fn(),
-    mockIncr: vi.fn(),
-    mockExpire: vi.fn(),
-  }),
-);
+const { mockSet, mockGet, mockDel } = vi.hoisted(() => ({
+  mockSet: vi.fn(),
+  mockGet: vi.fn(),
+  mockDel: vi.fn(),
+}));
 
 vi.mock("@upstash/redis", () => ({
   Redis: function (this: unknown) {
@@ -21,9 +16,6 @@ vi.mock("@upstash/redis", () => ({
       set: mockSet,
       get: mockGet,
       del: mockDel,
-      ttl: mockTtl,
-      incr: mockIncr,
-      expire: mockExpire,
     };
   },
 }));
@@ -33,16 +25,6 @@ import {
   storeVerificationCode,
   verifyKey,
   deleteVerificationCode,
-  startResendCooldown,
-  clearResendCooldown,
-  recordVerifyAttempt,
-  getVerifyAttempts,
-  resetVerifyAttempts,
-  recordSignupAttempt,
-  MAX_VERIFY_ATTEMPTS,
-  MAX_SIGNUP_ATTEMPTS_PER_IP,
-  recordBugReportAttempt,
-  BUG_REPORT_LIMITS,
 } from "../redis";
 
 // ---------------------------------------------------------------------------
@@ -114,161 +96,6 @@ describe("deleteVerificationCode", () => {
   it("deletes the verify key", async () => {
     await deleteVerificationCode("Test@Example.com");
     expect(mockDel).toHaveBeenCalledWith("verify:test@example.com");
-  });
-});
-
-describe("startResendCooldown", () => {
-  it("returns 0 when the cooldown is freshly set (SET NX succeeds)", async () => {
-    mockSet.mockResolvedValue("OK");
-    const remaining = await startResendCooldown("user@example.com");
-    expect(remaining).toBe(0);
-    expect(mockSet).toHaveBeenCalledWith(
-      "resend-cooldown:user@example.com",
-      "1",
-      {
-        ex: 900,
-        nx: true,
-      },
-    );
-    expect(mockTtl).not.toHaveBeenCalled();
-  });
-
-  it("returns the remaining TTL when already on cooldown", async () => {
-    mockSet.mockResolvedValue(null);
-    mockTtl.mockResolvedValue(600);
-    const remaining = await startResendCooldown("user@example.com");
-    expect(remaining).toBe(600);
-    expect(mockTtl).toHaveBeenCalledWith("resend-cooldown:user@example.com");
-  });
-
-  it("falls back to the full window when TTL is unavailable", async () => {
-    mockSet.mockResolvedValue(null);
-    mockTtl.mockResolvedValue(-1);
-    const remaining = await startResendCooldown("user@example.com");
-    expect(remaining).toBe(900);
-  });
-});
-
-describe("clearResendCooldown", () => {
-  it("deletes the cooldown key", async () => {
-    await clearResendCooldown("user@example.com");
-    expect(mockDel).toHaveBeenCalledWith("resend-cooldown:user@example.com");
-  });
-});
-
-describe("recordVerifyAttempt", () => {
-  it("sets the expiry on the first attempt and returns the count", async () => {
-    mockIncr.mockResolvedValue(1);
-    const count = await recordVerifyAttempt("user@example.com");
-    expect(count).toBe(1);
-    expect(mockIncr).toHaveBeenCalledWith("verify-attempts:user@example.com");
-    expect(mockExpire).toHaveBeenCalledWith(
-      "verify-attempts:user@example.com",
-      900,
-    );
-  });
-
-  it("does not re-set the expiry on subsequent attempts", async () => {
-    mockIncr.mockResolvedValue(3);
-    const count = await recordVerifyAttempt("user@example.com");
-    expect(count).toBe(3);
-    expect(mockExpire).not.toHaveBeenCalled();
-  });
-});
-
-describe("getVerifyAttempts", () => {
-  it("returns the stored count", async () => {
-    mockGet.mockResolvedValue(2);
-    expect(await getVerifyAttempts("user@example.com")).toBe(2);
-  });
-
-  it("returns 0 when no counter exists", async () => {
-    mockGet.mockResolvedValue(null);
-    expect(await getVerifyAttempts("user@example.com")).toBe(0);
-  });
-});
-
-describe("resetVerifyAttempts", () => {
-  it("deletes the attempts key", async () => {
-    await resetVerifyAttempts("user@example.com");
-    expect(mockDel).toHaveBeenCalledWith("verify-attempts:user@example.com");
-  });
-});
-
-describe("recordSignupAttempt", () => {
-  it("sets the window expiry on the first attempt", async () => {
-    mockIncr.mockResolvedValue(1);
-    const count = await recordSignupAttempt("1.2.3.4");
-    expect(count).toBe(1);
-    expect(mockIncr).toHaveBeenCalledWith("signup-ip:1.2.3.4");
-    expect(mockExpire).toHaveBeenCalledWith("signup-ip:1.2.3.4", 600);
-  });
-
-  it("does not re-set the expiry on subsequent attempts", async () => {
-    mockIncr.mockResolvedValue(7);
-    const count = await recordSignupAttempt("1.2.3.4");
-    expect(count).toBe(7);
-    expect(mockExpire).not.toHaveBeenCalled();
-  });
-});
-
-describe("recordBugReportAttempt", () => {
-  // Answer incr per key so each window can be put at its own count.
-  function countsByKey(counts: Record<string, number>) {
-    mockIncr.mockImplementation(async (key: string) => counts[key] ?? 1);
-  }
-
-  it("counts a signed-in report per IP and per user, and lets it through", async () => {
-    countsByKey({});
-    expect(await recordBugReportAttempt("1.2.3.4", "user-1")).toBe(0);
-    expect(mockIncr).toHaveBeenCalledWith("bug-report:ip:1.2.3.4");
-    expect(mockIncr).toHaveBeenCalledWith("bug-report:user:user-1");
-    expect(mockIncr).not.toHaveBeenCalledWith(
-      "bug-report:signed-out-ip:1.2.3.4",
-    );
-    expect(mockExpire).toHaveBeenCalledWith("bug-report:ip:1.2.3.4", 3600);
-    expect(mockExpire).toHaveBeenCalledWith("bug-report:user:user-1", 3600);
-  });
-
-  it("counts a signed-out report against the tighter signed-out IP budget", async () => {
-    countsByKey({});
-    expect(await recordBugReportAttempt("1.2.3.4", null)).toBe(0);
-    expect(mockIncr).toHaveBeenCalledWith("bug-report:ip:1.2.3.4");
-    expect(mockIncr).toHaveBeenCalledWith("bug-report:signed-out-ip:1.2.3.4");
-  });
-
-  it("returns the window's remaining seconds once the user limit is passed", async () => {
-    countsByKey({ "bug-report:user:user-1": BUG_REPORT_LIMITS.perUser + 1 });
-    mockTtl.mockResolvedValue(1200);
-    expect(await recordBugReportAttempt("1.2.3.4", "user-1")).toBe(1200);
-    expect(mockTtl).toHaveBeenCalledWith("bug-report:user:user-1");
-  });
-
-  it("limits a signed-out reporter after the signed-out budget", async () => {
-    countsByKey({
-      "bug-report:signed-out-ip:1.2.3.4": BUG_REPORT_LIMITS.perIpSignedOut + 1,
-    });
-    mockTtl.mockResolvedValue(600);
-    expect(await recordBugReportAttempt("1.2.3.4", null)).toBe(600);
-  });
-
-  it("limits by IP however many accounts share it", async () => {
-    countsByKey({ "bug-report:ip:1.2.3.4": BUG_REPORT_LIMITS.perIp + 1 });
-    mockTtl.mockResolvedValue(30);
-    expect(await recordBugReportAttempt("1.2.3.4", "user-2")).toBe(30);
-  });
-
-  it("falls back to the full window when the key has no TTL", async () => {
-    countsByKey({ "bug-report:user:user-1": BUG_REPORT_LIMITS.perUser + 1 });
-    mockTtl.mockResolvedValue(-1);
-    expect(await recordBugReportAttempt("1.2.3.4", "user-1")).toBe(3600);
-  });
-});
-
-describe("rate-limit constants", () => {
-  it("exposes the expected limits", () => {
-    expect(MAX_VERIFY_ATTEMPTS).toBe(5);
-    expect(MAX_SIGNUP_ATTEMPTS_PER_IP).toBe(30);
   });
 });
 

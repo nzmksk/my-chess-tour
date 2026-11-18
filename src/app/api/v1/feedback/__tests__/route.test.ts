@@ -14,7 +14,7 @@ const {
   mockUpdate,
   mockUpdateEq,
   mockFrom,
-  mockRecordBugReportAttempt,
+  mockHitWindow,
   mockCreateBugReportIssue,
 } = vi.hoisted(() => {
   const mockInsertSingle = vi.fn();
@@ -31,7 +31,7 @@ const {
     mockUpdate,
     mockUpdateEq,
     mockFrom,
-    mockRecordBugReportAttempt: vi.fn(),
+    mockHitWindow: vi.fn(),
     mockCreateBugReportIssue: vi.fn(),
   };
 });
@@ -46,8 +46,8 @@ vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom },
 }));
 
-vi.mock("@/services/redis/redis", () => ({
-  recordBugReportAttempt: mockRecordBugReportAttempt,
+vi.mock("@/services/rate-limit/window", () => ({
+  hitWindow: mockHitWindow,
 }));
 
 vi.mock("@/services/bug-reports/github", () => ({
@@ -70,7 +70,7 @@ function makeRequest(body: unknown, raw = false): NextRequest {
     headers: {
       "Content-Type": "application/json",
       "user-agent": "Mozilla/5.0 (Test)",
-      "x-forwarded-for": "203.0.113.7",
+      "x-nf-client-connection-ip": "203.0.113.7",
     },
     body: raw ? (body as string) : JSON.stringify(body),
   });
@@ -94,6 +94,11 @@ function signedOut() {
   mockGetClaims.mockResolvedValue({ data: { claims: null } });
 }
 
+// The rate-limit buckets the report was counted against.
+function keysHit(): string[] {
+  return mockHitWindow.mock.calls.map(([key]) => key as string);
+}
+
 // The issue title and body handed to GitHub.
 function filedIssue(): { title: string; body: string } {
   const [title, body] = mockCreateBugReportIssue.mock.calls[0];
@@ -108,7 +113,7 @@ describe("POST /api/v1/feedback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     signedIn();
-    mockRecordBugReportAttempt.mockResolvedValue(0);
+    mockHitWindow.mockResolvedValue(0);
     mockInsertSingle.mockResolvedValue({
       data: { id: REPORT_ID, created_at: "2026-11-18T10:00:00+00:00" },
       error: null,
@@ -185,9 +190,14 @@ describe("POST /api/v1/feedback", () => {
       const res = await POST(makeRequest(validBody));
 
       expect(res.status).toBe(201);
-      expect(mockRecordBugReportAttempt).toHaveBeenCalledWith(
-        "203.0.113.7",
-        null,
+      expect(keysHit()).toEqual([
+        "ratelimit:feedback:ip:203.0.113.7",
+        "ratelimit:feedback:signed-out-ip:203.0.113.7",
+      ]);
+      expect(mockHitWindow).toHaveBeenCalledWith(
+        "ratelimit:feedback:signed-out-ip:203.0.113.7",
+        3,
+        3600,
       );
       expect(mockInsert).toHaveBeenCalledWith(
         expect.objectContaining({ user_id: null }),
@@ -197,9 +207,19 @@ describe("POST /api/v1/feedback", () => {
 
     it("rate limits a signed-in report by IP and account", async () => {
       await POST(makeRequest(validBody));
-      expect(mockRecordBugReportAttempt).toHaveBeenCalledWith(
-        "203.0.113.7",
-        appIdFor(AUTH_USER_ID),
+      expect(keysHit()).toEqual([
+        `ratelimit:feedback:user:${appIdFor(AUTH_USER_ID)}`,
+        "ratelimit:feedback:ip:203.0.113.7",
+      ]);
+      expect(mockHitWindow).toHaveBeenCalledWith(
+        `ratelimit:feedback:user:${appIdFor(AUTH_USER_ID)}`,
+        5,
+        3600,
+      );
+      expect(mockHitWindow).toHaveBeenCalledWith(
+        "ratelimit:feedback:ip:203.0.113.7",
+        10,
+        3600,
       );
     });
 
@@ -284,7 +304,7 @@ describe("POST /api/v1/feedback", () => {
 
   describe("rate limiting", () => {
     it("returns 429 with Retry-After and saves nothing", async () => {
-      mockRecordBugReportAttempt.mockResolvedValue(1200);
+      mockHitWindow.mockResolvedValue(1200);
       const res = await POST(makeRequest(validBody));
 
       expect(res.status).toBe(429);
@@ -295,7 +315,7 @@ describe("POST /api/v1/feedback", () => {
     });
 
     it("fails closed when the limiter is unreachable", async () => {
-      mockRecordBugReportAttempt.mockRejectedValue(new Error("redis down"));
+      mockHitWindow.mockRejectedValue(new Error("redis down"));
       const res = await POST(makeRequest(validBody));
 
       expect(res.status).toBe(500);

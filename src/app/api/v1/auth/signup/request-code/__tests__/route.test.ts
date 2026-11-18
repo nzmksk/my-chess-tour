@@ -14,7 +14,7 @@ const {
   mockStartResendCooldown,
   mockClearResendCooldown,
   mockSendVerificationEmail,
-  mockRecordSignupAttempt,
+  mockHitWindow,
 } = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn();
   const mockEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
@@ -24,7 +24,7 @@ const {
   const mockStartResendCooldown = vi.fn();
   const mockClearResendCooldown = vi.fn();
   const mockSendVerificationEmail = vi.fn();
-  const mockRecordSignupAttempt = vi.fn();
+  const mockHitWindow = vi.fn();
   return {
     mockMaybeSingle,
     mockEq,
@@ -34,7 +34,7 @@ const {
     mockStartResendCooldown,
     mockClearResendCooldown,
     mockSendVerificationEmail,
-    mockRecordSignupAttempt,
+    mockHitWindow,
   };
 });
 
@@ -44,10 +44,15 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/redis/redis", () => ({
   storeVerificationCode: mockStoreVerificationCode,
+}));
+
+vi.mock("@/services/rate-limit/auth", () => ({
   startResendCooldown: mockStartResendCooldown,
   clearResendCooldown: mockClearResendCooldown,
-  recordSignupAttempt: mockRecordSignupAttempt,
-  MAX_SIGNUP_ATTEMPTS_PER_IP: 30,
+}));
+
+vi.mock("@/services/rate-limit/window", () => ({
+  hitWindow: mockHitWindow,
 }));
 
 vi.mock("@/services/email/email", () => ({
@@ -63,7 +68,10 @@ import { POST } from "../route";
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/v1/auth/signup/request-code", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-nf-client-connection-ip": "203.0.113.7",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -88,7 +96,7 @@ describe("POST /api/v1/auth/signup/request-code", () => {
     mockStartResendCooldown.mockResolvedValue(0); // not on cooldown
     mockClearResendCooldown.mockResolvedValue(undefined);
     mockSendVerificationEmail.mockResolvedValue(undefined);
-    mockRecordSignupAttempt.mockResolvedValue(1); // under the per-IP limit
+    mockHitWindow.mockResolvedValue(0); // under the per-IP limit
   });
 
   // --- Success --------------------------------------------------------------
@@ -170,12 +178,18 @@ describe("POST /api/v1/auth/signup/request-code", () => {
   // --- Per-IP rate limiting -------------------------------------------------
 
   it("returns 429 once the per-IP attempt limit is exceeded", async () => {
-    mockRecordSignupAttempt.mockResolvedValue(31); // over the limit of 30
+    mockHitWindow.mockResolvedValue(480); // over the limit, 8 minutes left
 
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
 
+    expect(mockHitWindow).toHaveBeenCalledWith(
+      "ratelimit:signup:ip:203.0.113.7",
+      30,
+      600,
+    );
     expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("480");
     expect(json.error.code).toBe("RATE_LIMITED");
     // Throttled before any account lookup or send
     expect(mockFrom).not.toHaveBeenCalled();

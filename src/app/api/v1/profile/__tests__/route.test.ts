@@ -47,6 +47,8 @@ vi.mock("@/services/fide/fide", async (importOriginal) => {
 });
 
 import { PATCH } from "../route";
+import { hitWindow } from "@/services/rate-limit/window";
+import { appIdFor } from "@/test/identity";
 
 const USER = "bbbbbbbb-0000-0000-0000-000000000001";
 
@@ -148,5 +150,44 @@ describe("PATCH /api/v1/profile — FIDE sync", () => {
     const res = await PATCH(makeReq({ fide_id: 1503014 }));
     expect(res.status).toBe(200);
     expect(mockFetchFidePlayer).not.toHaveBeenCalled();
+  });
+
+  it("429s a save once the user is over the profile-save limit, saving nothing", async () => {
+    vi.mocked(hitWindow).mockResolvedValueOnce(300);
+    const res = await PATCH(makeReq({ nationality: "Malaysia" }));
+
+    expect(hitWindow).toHaveBeenCalledWith(
+      `ratelimit:profileSave:user:${appIdFor(USER)}`,
+      30,
+      600,
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("300");
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("counts only new FIDE IDs against the lookup limit", async () => {
+    await PATCH(makeReq({ nationality: "Malaysia" }));
+    expect(hitWindow).not.toHaveBeenCalledWith(
+      expect.stringContaining("ratelimit:fideLookup:"),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("429s a new FIDE ID once over the lookup limit, without calling FIDE", async () => {
+    // The profile-save bucket passes; the FIDE lookup bucket is over.
+    vi.mocked(hitWindow).mockResolvedValueOnce(0).mockResolvedValueOnce(1800);
+    const res = await PATCH(makeReq({ fide_id: 1503014 }));
+
+    expect(hitWindow).toHaveBeenCalledWith(
+      `ratelimit:fideLookup:user:${appIdFor(USER)}`,
+      10,
+      3600,
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("1800");
+    expect(mockFetchFidePlayer).not.toHaveBeenCalled();
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 });

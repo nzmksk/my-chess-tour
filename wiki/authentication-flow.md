@@ -263,7 +263,7 @@ state in a Zustand store:
 `src/app/auth/login/_actions/login.ts`:
 
 - Validates input, then rate-limits with Redis: **5 attempts**, **15-minute
-  lockout** per email.
+  lockout** per email (`src/services/rate-limit/auth.ts`).
 - Calls `supabase.auth.signInWithPassword({ email, password })`.
 - Blocks unverified accounts (`users.is_verified`): signs out locally, re-sends a
   verification code, and routes into the verify step.

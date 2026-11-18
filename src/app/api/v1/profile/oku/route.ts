@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { assertUploadedObject } from "@/services/supabase/storage";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 
 // Must match the uploader in OkuVerificationCard.
 const OKU_MAX_BYTES = 5 * 1024 * 1024;
@@ -28,6 +29,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 401 },
     );
   }
+
+  // Each submission puts a document in front of an admin for review.
+  const limited = await enforceRateLimit("okuDocument", request, claims.id);
+  if (limited) return limited;
 
   let body: { document_path?: unknown };
   try {

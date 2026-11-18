@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { NextRequest, NextResponse } from "next/server";
 import type { Gender, UpdateProfilePayload } from "@/app/profile/types";
 import {
@@ -98,6 +99,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       { status: 401 },
     );
   }
+
+  const limited = await enforceRateLimit("profileSave", request, claims.id);
+  if (limited) return limited;
 
   let body: Record<string, unknown>;
   try {
@@ -309,6 +313,14 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   // unreachable we still save the ID and let the monthly sync backfill ratings.
   let fideFields: Partial<ReturnType<typeof buildFideProfileUpdate>> = {};
   if (update.fide_id != null && update.fide_id !== existing?.fide_id) {
+    // Each new FIDE ID is a scrape of fide.com; a not-found one can be retried.
+    const fideLimited = await enforceRateLimit(
+      "fideLookup",
+      request,
+      claims.id,
+    );
+    if (fideLimited) return fideLimited;
+
     let player: FidePlayer | null = null;
     let reachable = true;
     try {

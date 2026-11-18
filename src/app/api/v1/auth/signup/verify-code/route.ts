@@ -4,11 +4,13 @@ import { createClient } from "@/services/supabase/server";
 import {
   getVerificationCode,
   deleteVerificationCode,
+} from "@/services/redis/redis";
+import {
   getVerifyAttempts,
   recordVerifyAttempt,
   resetVerifyAttempts,
   MAX_VERIFY_ATTEMPTS,
-} from "@/services/redis/redis";
+} from "@/services/rate-limit/auth";
 import { SIGNUP_STEP_COOKIE } from "@/lib/auth/signup-cookie";
 
 export async function POST(request: NextRequest) {

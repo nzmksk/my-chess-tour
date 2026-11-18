@@ -44,3 +44,23 @@ beforeEach(() => {
 vi.mock("@/services/supabase/identity", () => ({
   lookupAppUserId: vi.fn(async (authUserId: string) => appIdFor(authUserId)),
 }));
+
+/**
+ * Global stub for the rate limiter's Redis counters (#613).
+ *
+ * Many routes call enforceRateLimit, and the real counter talks to Upstash,
+ * which in a test would mean slow retries against a dummy URL. By default every
+ * request is within its limits; a test checking a 429 makes `hitWindow`
+ * return the seconds to wait:
+ *
+ *   vi.mocked(hitWindow).mockResolvedValueOnce(600);
+ *
+ * The real counter is exercised in
+ * `src/services/rate-limit/__tests__/window.test.ts`, which unmocks this.
+ */
+vi.mock("@/services/rate-limit/window", () => ({
+  hitWindow: vi.fn(async () => 0),
+  countHit: vi.fn(async () => ({ count: 1, ttl: 60 })),
+  peekCount: vi.fn(async () => 0),
+  resetCount: vi.fn(async () => undefined),
+}));
