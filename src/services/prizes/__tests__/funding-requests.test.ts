@@ -75,6 +75,7 @@ import {
   createMissingFundingLinks,
   onTournamentListed,
   prizesFundedBy,
+  sweepPrizeFundingRequests,
   syncPrizeFundingRequests,
 } from "../funding-requests";
 
@@ -292,5 +293,33 @@ describe("onTournamentListed", () => {
       tournamentUrl: expect.stringContaining("/tournaments/merdeka-open"),
       fundedCents: 52000,
     });
+  });
+});
+
+describe("sweepPrizeFundingRequests", () => {
+  it("reconciles every pending tournament, then links anything left over", async () => {
+    mockRpc
+      .mockResolvedValueOnce({
+        data: { created: [], cancelled: [], missing_contacts: [], released: true },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: null, error: { message: "locked" } });
+    results.push(
+      { data: [{ id: "t-1" }, { id: "t-2" }], error: null }, // pending tournaments
+      { data: [], error: null }, // t-1: nothing unlinked
+      { data: { slug: "t-one" }, error: null }, // t-1 listed: slug for the page
+      { data: [], error: null }, // the leftover pass
+    );
+
+    const stats = await sweepPrizeFundingRequests();
+
+    expect(calls[0]).toMatchObject({ table: "tournaments", filters: { "eq:status": "pending_funding" } });
+    expect(mockRpc).toHaveBeenCalledTimes(2);
+    expect(stats).toEqual({ tournaments: 1, linked: 0, unlinked: 0, released: 1 });
+  });
+
+  it("throws when it can't list its work", async () => {
+    results.push({ data: null, error: { message: "down" } });
+    await expect(sweepPrizeFundingRequests()).rejects.toThrow(/pending funding/);
   });
 });
