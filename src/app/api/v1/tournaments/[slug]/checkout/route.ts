@@ -20,6 +20,7 @@ import {
 import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-response";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 
 function prizePoolNotFundedResponse(): NextResponse {
   return NextResponse.json(
@@ -83,6 +84,10 @@ export async function POST(
       { status: 401 },
     );
   }
+
+  // Every checkout can create a CHIP purchase and hold a seat.
+  const limited = await enforceRateLimit("checkout", request, userId);
+  if (limited) return limited;
 
   let body: RegistrationRequest;
   try {

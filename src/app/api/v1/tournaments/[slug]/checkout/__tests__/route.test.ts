@@ -132,6 +132,7 @@ vi.mock("@/services/chip/chip", () => ({
 import { POST } from "../route";
 import { lookupAppUserId } from "@/services/supabase/identity";
 import { appIdFor } from "@/test/identity";
+import { hitWindow } from "@/services/rate-limit/window";
 
 // Stubbed globally in src/test/setup.ts to return appIdFor(sub), so the auth and
 // app identifier spaces differ throughout this file. Overridden per case below
@@ -788,6 +789,26 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
 // relying on the global stub, and cover the unlinked-session path that the
 // stub cannot express.
 // ---------------------------------------------------------------------------
+
+describe("POST /api/v1/tournaments/:slug/checkout — rate limit (#613)", () => {
+  it("429s once the player is over the limit, before any registration or CHIP call", async () => {
+    vi.mocked(hitWindow).mockResolvedValueOnce(420);
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(hitWindow).toHaveBeenCalledWith(
+      `ratelimit:checkout:user:${appIdFor(USER_ID)}`,
+      10,
+      600,
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("420");
+    expect((await res.json()).error.code).toBe("RATE_LIMITED");
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+});
 
 describe("POST /api/v1/tournaments/:slug/checkout — identity indirection", () => {
   const AUTH_ID = "ffffffff-0000-0000-0000-0000000000ff";
