@@ -3,7 +3,7 @@ import { Octokit } from "@octokit/rest";
 const REPO = { owner: "nzmksk", repo: "my-chess-tour" } as const;
 
 /** `user-reported` must exist on the repo; `bug` is GitHub's default label. */
-export const BUG_REPORT_LABELS = ["bug", "user-reported"];
+const BUG_REPORT_LABELS = ["bug", "user-reported"];
 
 // Short enough that a slow GitHub can't hold the request until the function
 // itself times out, so the route still answers and records the failure.
