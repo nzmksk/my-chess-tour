@@ -31,6 +31,7 @@ vi.mock("@/services/supabase/permission", () => ({
 vi.mock("@/services/prizes/funding-requests", () => ({ syncPrizeFundingRequests: mockSync }));
 
 import { GET, PUT } from "../route";
+import { hitWindow } from "@/services/rate-limit/window";
 
 const USER_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const ORG_ID = "bbbbbbbb-0000-4000-8000-000000000001";
@@ -106,6 +107,23 @@ describe("PUT prize-funder-contacts", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error.message).toBe(message);
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("doesn't count a draft's saves against the payment-link limit", async () => {
+    await put({ contacts: [{ funder_name: "Acme", funder_email: "pay@acme.test" }] });
+    expect(hitWindow).not.toHaveBeenCalled();
+  });
+
+  it("429s a save that would send links once over the limit, saving nothing", async () => {
+    tables.tournaments = [{ data: { status: "published" }, error: null }];
+    vi.mocked(hitWindow).mockResolvedValueOnce(1200);
+    const res = await put({ contacts: [{ funder_name: "Acme", funder_email: "pay@acme.test" }] });
+
+    expect(hitWindow).toHaveBeenCalledWith(`ratelimit:funderLinks:user:${USER_ID}`, 30, 3600);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("1200");
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockSync).not.toHaveBeenCalled();
   });
 
   it("refuses a cancelled tournament", async () => {

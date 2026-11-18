@@ -24,6 +24,7 @@ vi.mock("@/services/organizations/notify", () => ({
 }));
 
 import { POST } from "../route";
+import { hitWindow } from "@/services/rate-limit/window";
 import { hashInvitationToken, INVITATION_TOKEN_RE } from "@/services/organizations/invitations";
 
 // ---------------------------------------------------------------------------
@@ -184,6 +185,24 @@ describe("POST /api/v1/organizations/:orgId/members/invite", () => {
       const res = await call();
       expect(res.status).toBe(201);
       expect((await res.json()).data.email_sent).toBe(false);
+    });
+  });
+
+  describe("rate limiting", () => {
+    it("returns 429 with Retry-After once the inviter is over the limit, inviting no one", async () => {
+      vi.mocked(hitWindow).mockResolvedValueOnce(1800);
+      const res = await call();
+
+      expect(hitWindow).toHaveBeenCalledWith(
+        `ratelimit:memberInvite:user:${USER_ID}`,
+        30,
+        3600,
+      );
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("1800");
+      expect((await res.json()).error.code).toBe("RATE_LIMITED");
+      expect(mockRpc).not.toHaveBeenCalled();
+      expect(mockNotify).not.toHaveBeenCalled();
     });
   });
 
