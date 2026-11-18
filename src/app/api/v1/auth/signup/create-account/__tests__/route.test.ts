@@ -85,7 +85,7 @@ function makeRequest(body: unknown): NextRequest {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-forwarded-for": "203.0.113.7",
+      "x-nf-client-connection-ip": "203.0.113.7",
     },
     body: JSON.stringify(body),
   });

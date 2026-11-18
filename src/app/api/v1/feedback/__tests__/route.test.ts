@@ -70,7 +70,7 @@ function makeRequest(body: unknown, raw = false): NextRequest {
     headers: {
       "Content-Type": "application/json",
       "user-agent": "Mozilla/5.0 (Test)",
-      "x-forwarded-for": "203.0.113.7",
+      "x-nf-client-connection-ip": "203.0.113.7",
     },
     body: raw ? (body as string) : JSON.stringify(body),
   });
