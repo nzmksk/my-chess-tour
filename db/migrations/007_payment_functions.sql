@@ -2079,11 +2079,14 @@ AS $$
   )::integer;
 $$;
 
--- THE REGISTRATION GATE. A platform-distributed tournament may publish before
--- its pool is funded, but no player may register (or pay) until it is fully
--- funded: otherwise players enter an event whose advertised prizes have no
--- money behind them. Checked by the checkout route and, as the last line of
--- defence, by create_registration_with_payment and start_new_payment_attempt.
+-- THE REGISTRATION GATE. No player may register (or pay) for a
+-- platform-distributed tournament until its pool is fully funded: otherwise
+-- players enter an event whose advertised prizes have no money behind them.
+-- An unfunded tournament isn't listed at all (it waits in 'pending_funding'),
+-- so this is the backstop for the one case left: a listed tournament whose
+-- prizes were raised before anyone paid, which reopens the gap until the
+-- top-up is paid. Checked by the checkout route and by
+-- create_registration_with_payment and start_new_payment_attempt.
 CREATE OR REPLACE FUNCTION prize_pool_blocks_registration(p_tournament_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -2092,6 +2095,287 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT COALESCE((SELECT NOT p.fully_funded FROM prize_pool_position(p_tournament_id) p), false);
+$$;
+
+-- Each funder's share of a prizes document: what the prizes naming them add up
+-- to. A funder is matched on its name, ignoring case and surrounding spaces, so
+-- "ACME Sdn Bhd" on one category and "acme sdn bhd " on another are one sponsor
+-- with one payment link. funder_name is the spelling of its first appearance.
+-- Prizes with no money, or no named funder (publish validation refuses those
+-- when money is attached), are left out.
+CREATE OR REPLACE FUNCTION declared_prize_funders(p_prizes jsonb)
+RETURNS TABLE (funder_key text, funder_name text, amount_cents integer)
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  WITH items AS (
+    SELECT btrim(c->'funding'->>'funder_name') AS name,
+           (e->>'amount_cents')::numeric        AS amount,
+           ci * 100000 + ei                     AS ord
+    FROM jsonb_array_elements(
+           CASE WHEN jsonb_typeof(p_prizes->'categories') = 'array'
+                THEN p_prizes->'categories' ELSE '[]'::jsonb END) WITH ORDINALITY AS cc(c, ci),
+         jsonb_array_elements(
+           CASE WHEN jsonb_typeof(c->'entries') = 'array'
+                THEN c->'entries' ELSE '[]'::jsonb END) WITH ORDINALITY AS ee(e, ei)
+    WHERE jsonb_typeof(e->'amount_cents') = 'number'
+    UNION ALL
+    SELECT btrim(s->'funding'->>'funder_name'),
+           (s->>'amount_cents')::numeric,
+           1000000000 + si
+    FROM jsonb_array_elements(
+           CASE WHEN jsonb_typeof(p_prizes->'special') = 'array'
+                THEN p_prizes->'special' ELSE '[]'::jsonb END) WITH ORDINALITY AS ss(s, si)
+    WHERE jsonb_typeof(s->'amount_cents') = 'number'
+  )
+  SELECT lower(name), (array_agg(name ORDER BY ord))[1], SUM(amount)::integer
+  FROM items
+  WHERE COALESCE(name, '') <> ''
+  GROUP BY lower(name)
+  HAVING SUM(amount) > 0;
+$$;
+
+-- =============================================
+-- SET PRIZE FUNDER CONTACTS
+-- Replaces a tournament's funder contacts with p_contacts, an array of
+-- {funder_name, funder_email}: names not in it are removed, the rest are
+-- upserted. Names match case- and space-insensitively, as in
+-- declared_prize_funders. Emails are stored trimmed and lower-cased. Raises
+-- PRIZE_FUNDER_CONTACT_INVALID on a blank name, a malformed address or the
+-- same funder twice. Takes the tournament lock, so it can't interleave with
+-- reconcile_prize_funding_requests reading the contacts.
+-- =============================================
+CREATE OR REPLACE FUNCTION set_prize_funder_contacts(
+  p_tournament_id uuid,
+  p_contacts      jsonb
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_contacts jsonb := COALESCE(p_contacts, '[]'::jsonb);
+  v_count    integer;
+BEGIN
+  PERFORM 1 FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+  IF jsonb_typeof(v_contacts) <> 'array' THEN
+    RAISE EXCEPTION 'PRIZE_FUNDER_CONTACT_INVALID: not a list' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_contacts) x
+    WHERE COALESCE(btrim(x->>'funder_name'), '') = ''
+       OR length(btrim(x->>'funder_name')) > 255
+  ) THEN
+    RAISE EXCEPTION 'PRIZE_FUNDER_CONTACT_INVALID: funder name required' USING ERRCODE = 'P0001';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_contacts) x
+    WHERE x->>'funder_email' IS NULL
+       OR length(btrim(x->>'funder_email')) > 255
+       OR btrim(x->>'funder_email') !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+  ) THEN
+    RAISE EXCEPTION 'PRIZE_FUNDER_CONTACT_INVALID: invalid email' USING ERRCODE = 'P0001';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_contacts) x
+    GROUP BY lower(btrim(x->>'funder_name')) HAVING count(*) > 1
+  ) THEN
+    RAISE EXCEPTION 'PRIZE_FUNDER_CONTACT_INVALID: duplicate funder' USING ERRCODE = 'P0001';
+  END IF;
+
+  DELETE FROM prize_funder_contacts c
+  WHERE c.tournament_id = p_tournament_id
+    AND lower(btrim(c.funder_name)) NOT IN (
+      SELECT lower(btrim(x->>'funder_name')) FROM jsonb_array_elements(v_contacts) x
+    );
+
+  INSERT INTO prize_funder_contacts (tournament_id, funder_name, funder_email)
+  SELECT p_tournament_id, btrim(x->>'funder_name'), lower(btrim(x->>'funder_email'))
+  FROM jsonb_array_elements(v_contacts) x
+  ON CONFLICT (tournament_id, lower(btrim(funder_name)))
+  DO UPDATE SET funder_name  = EXCLUDED.funder_name,
+                funder_email = EXCLUDED.funder_email
+  WHERE prize_funder_contacts.funder_name  IS DISTINCT FROM EXCLUDED.funder_name
+     OR prize_funder_contacts.funder_email IS DISTINCT FROM EXCLUDED.funder_email;
+
+  v_count := jsonb_array_length(v_contacts);
+  RETURN v_count;
+END;
+$$;
+
+-- =============================================
+-- RELEASE FUNDED TOURNAMENT
+-- Lists a 'pending_funding' tournament (status → 'published') once its prize
+-- pool is fully funded, or once it no longer needs funding at all (the
+-- organizer switched to paying the winners themselves, or dropped the prize
+-- money). Returns whether this call listed it. Takes the tournament lock;
+-- callers that already hold it (settle_prize_funding,
+-- reconcile_prize_funding_requests) simply re-take it.
+--
+-- published_at was stamped when the organizer published, and stays: that is
+-- when they committed to the event, and chk_published_at (before the deadline
+-- and the start) held then.
+-- =============================================
+CREATE OR REPLACE FUNCTION release_funded_tournament(p_tournament_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_status tournament_status;
+BEGIN
+  SELECT status INTO v_status FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+  IF NOT FOUND OR v_status <> 'pending_funding' THEN
+    RETURN false;
+  END IF;
+  IF NOT COALESCE((SELECT p.fully_funded FROM prize_pool_position(p_tournament_id) p), false) THEN
+    RETURN false;
+  END IF;
+
+  UPDATE tournaments SET status = 'published' WHERE id = p_tournament_id;
+  RETURN true;
+END;
+$$;
+
+-- =============================================
+-- RECONCILE PRIZE FUNDING REQUESTS
+-- Makes a tournament's open funding requests match what its prizes ask of each
+-- funder. Run when the tournament is published, whenever its prizes or funder
+-- contacts change, when it is cancelled, and by the daily run. For each funder
+-- (declared_prize_funders, plus any funder asked before):
+--
+--   need = the funder's declared share - what they have already paid
+--
+--   need <= 0                 every open request is cancelled
+--   an open request asks for exactly `need` at the current address
+--                             it is kept, and every other one is cancelled
+--   otherwise                 every open request is cancelled and a new one
+--                             asks for `need` (no address yet: reported in
+--                             missing_contacts and nothing is created)
+--
+-- "Open" is pending and not cancelled. A failed request (the funder's payment
+-- failed) is closed, so the next run asks again with a fresh link. When the
+-- tournament isn't asking for money (not platform-distributed, a draft,
+-- cancelled), every open request is cancelled.
+--
+-- Rows only: creating each new request's CHIP purchase, cancelling each
+-- cancelled one's, and emailing the funder happen in the app afterwards
+-- (src/services/prizes/funding-requests.ts), outside this transaction. Ends by
+-- releasing the tournament if the pool is now funded.
+--
+-- Returns { created: [id], cancelled: [{id, chip_transaction_id}],
+--           missing_contacts: [funder_name], released: bool }.
+-- =============================================
+CREATE OR REPLACE FUNCTION reconcile_prize_funding_requests(
+  p_tournament_id uuid,
+  p_actor         uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+  v_asking     boolean;
+  r            record;
+  v_need       integer;
+  v_keep       uuid;
+  v_new_id     uuid;
+  v_created    jsonb := '[]'::jsonb;
+  v_cancelled  jsonb := '[]'::jsonb;
+  v_missing    jsonb := '[]'::jsonb;
+  v_batch      jsonb;
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  v_asking := COALESCE(v_tournament.prizes->>'distribution', 'organizer') = 'platform'
+              AND v_tournament.status IN ('pending_funding', 'published');
+
+  FOR r IN
+    WITH declared AS (
+      SELECT d.* FROM declared_prize_funders(v_tournament.prizes) d WHERE v_asking
+    ),
+    asked AS (
+      SELECT DISTINCT lower(btrim(f.funder_name)) AS funder_key
+      FROM prize_fundings f WHERE f.tournament_id = p_tournament_id
+    ),
+    keys AS (
+      SELECT declared.funder_key FROM declared UNION SELECT asked.funder_key FROM asked
+    )
+    SELECT k.funder_key,
+           d.funder_name,
+           COALESCE(d.amount_cents, 0) AS target_cents,
+           c.funder_email,
+           COALESCE((
+             SELECT SUM(f.amount_cents) FROM prize_fundings f
+             WHERE f.tournament_id = p_tournament_id
+               AND lower(btrim(f.funder_name)) = k.funder_key
+               AND f.status = 'paid'
+           ), 0)::integer AS paid_cents
+    FROM keys k
+    LEFT JOIN declared d ON d.funder_key = k.funder_key
+    LEFT JOIN prize_funder_contacts c
+      ON c.tournament_id = p_tournament_id
+     AND lower(btrim(c.funder_name)) = k.funder_key
+    ORDER BY k.funder_key
+  LOOP
+    v_need := r.target_cents - r.paid_cents;
+    v_keep := NULL;
+
+    IF v_need > 0 AND r.funder_email IS NOT NULL THEN
+      SELECT f.id INTO v_keep
+      FROM prize_fundings f
+      WHERE f.tournament_id = p_tournament_id
+        AND lower(btrim(f.funder_name)) = r.funder_key
+        AND f.status = 'pending' AND f.cancelled_at IS NULL
+        AND f.amount_cents = v_need
+        AND lower(f.funder_email) = lower(r.funder_email)
+      ORDER BY f.created_at DESC
+      LIMIT 1;
+    END IF;
+
+    WITH c AS (
+      UPDATE prize_fundings f
+        SET cancelled_at = now()
+      WHERE f.tournament_id = p_tournament_id
+        AND lower(btrim(f.funder_name)) = r.funder_key
+        AND f.status = 'pending' AND f.cancelled_at IS NULL
+        AND f.id IS DISTINCT FROM v_keep
+      RETURNING f.id, f.chip_transaction_id
+    )
+    SELECT COALESCE(jsonb_agg(jsonb_build_object('id', c.id, 'chip_transaction_id', c.chip_transaction_id)), '[]'::jsonb)
+      INTO v_batch FROM c;
+    v_cancelled := v_cancelled || v_batch;
+
+    IF v_need > 0 AND v_keep IS NULL THEN
+      IF r.funder_email IS NULL THEN
+        v_missing := v_missing || to_jsonb(r.funder_name);
+      ELSE
+        INSERT INTO prize_fundings (tournament_id, funder_name, funder_email, amount_cents, created_by)
+        VALUES (p_tournament_id, r.funder_name, lower(r.funder_email), v_need, p_actor)
+        RETURNING id INTO v_new_id;
+        v_created := v_created || to_jsonb(v_new_id);
+      END IF;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'created',          v_created,
+    'cancelled',        v_cancelled,
+    'missing_contacts', v_missing,
+    'released',         release_funded_tournament(p_tournament_id)
+  );
+END;
 $$;
 
 -- =============================================
@@ -2105,6 +2389,9 @@ $$;
 --           left as-is and reported back for manual reconciliation.
 --   !paid → only a still-pending row becomes failed; a paid one is never undone.
 --   already paid → no-op, reported back.
+-- A payment that completes the pool of a 'pending_funding' tournament lists it
+-- (release_funded_tournament), reported back as went_live so the caller can
+-- refresh the public pages and tell the organizer.
 --
 -- The ledger row carries the ORGANIZING org, like every payments row, so it
 -- groups with the tournament's other money in the summary view; it moves
@@ -2123,16 +2410,23 @@ SET search_path = public
 AS $$
 DECLARE
   v_funding         prize_fundings;
+  v_tournament_id   uuid;
   v_org_id          uuid;
   v_payment_id      uuid;
   v_amount_mismatch boolean := false;
   v_newly_paid      boolean := false;
+  v_went_live       boolean := false;
 BEGIN
-  SELECT * INTO v_funding FROM prize_fundings WHERE id = p_funding_id FOR UPDATE;
-
+  -- Tournament lock first, then the row, as everywhere else:
+  -- reconcile_prize_funding_requests locks in that order, and this may release
+  -- the tournament.
+  SELECT tournament_id INTO v_tournament_id FROM prize_fundings WHERE id = p_funding_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'prize funding % not found', p_funding_id USING ERRCODE = 'P0002';
   END IF;
+  PERFORM 1 FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
+
+  SELECT * INTO v_funding FROM prize_fundings WHERE id = p_funding_id FOR UPDATE;
 
   IF p_paid THEN
     IF v_funding.status <> 'paid' THEN
@@ -2162,6 +2456,8 @@ BEGIN
           WHERE id = p_funding_id;
 
         v_newly_paid := true;
+        -- The payment that completes the pool lists the tournament.
+        v_went_live := release_funded_tournament(v_funding.tournament_id);
       END IF;
     END IF;
   ELSIF v_funding.status = 'pending' THEN
@@ -2173,7 +2469,8 @@ BEGIN
     'tournament_id',     v_funding.tournament_id,
     'already_processed', v_funding.status = 'paid',
     'amount_mismatch',   v_amount_mismatch,
-    'newly_paid',        v_newly_paid
+    'newly_paid',        v_newly_paid,
+    'went_live',         v_went_live
   );
 END;
 $$;
@@ -2631,6 +2928,9 @@ REVOKE EXECUTE ON FUNCTION prize_pool_position               FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION available_prize_pool_cents        FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION prize_pool_blocks_registration    FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_prize_funding              FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION set_prize_funder_contacts         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION release_funded_tournament         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION reconcile_prize_funding_requests  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION enter_prize_award                 FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_prize_award                FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION claim_prize_award_send            FROM PUBLIC, anon, authenticated;
@@ -2662,6 +2962,9 @@ GRANT EXECUTE ON FUNCTION prize_pool_position               TO service_role;
 GRANT EXECUTE ON FUNCTION available_prize_pool_cents        TO service_role;
 GRANT EXECUTE ON FUNCTION prize_pool_blocks_registration    TO service_role;
 GRANT EXECUTE ON FUNCTION settle_prize_funding              TO service_role;
+GRANT EXECUTE ON FUNCTION set_prize_funder_contacts         TO service_role;
+GRANT EXECUTE ON FUNCTION release_funded_tournament         TO service_role;
+GRANT EXECUTE ON FUNCTION reconcile_prize_funding_requests  TO service_role;
 GRANT EXECUTE ON FUNCTION enter_prize_award                 TO service_role;
 GRANT EXECUTE ON FUNCTION review_prize_award                TO service_role;
 GRANT EXECUTE ON FUNCTION claim_prize_award_send            TO service_role;

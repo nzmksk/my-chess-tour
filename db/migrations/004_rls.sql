@@ -20,6 +20,7 @@ ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_bank_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_fundings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prize_funder_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_awards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
@@ -443,6 +444,24 @@ ON prize_fundings FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
 
 REVOKE UPDATE, INSERT, DELETE ON prize_fundings FROM anon, authenticated;
+
+-- A sponsor's address is seen by the organizer who entered it and by platform
+-- admins, never by the public. Written only by set_prize_funder_contacts.
+CREATE POLICY "Org members can view prize funder contacts"
+ON prize_funder_contacts FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM tournaments t
+    WHERE t.id = prize_funder_contacts.tournament_id
+      AND has_org_permission(app_user_id(), t.organization_id, 'tournament.view')
+  )
+);
+
+CREATE POLICY "Platform admins full access to prize funder contacts"
+ON prize_funder_contacts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON prize_funder_contacts FROM anon, authenticated;
 
 CREATE POLICY "Org payout viewers can view prize awards"
 ON prize_awards FOR SELECT

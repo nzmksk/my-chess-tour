@@ -40,6 +40,9 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_bank_accounts
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_fundings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_funder_contacts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_awards
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

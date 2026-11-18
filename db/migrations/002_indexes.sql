@@ -141,6 +141,16 @@ CREATE INDEX idx_payouts_in_flight        ON payouts (status, updated_at) WHERE 
 CREATE UNIQUE INDEX uniq_prize_fundings_chip_transaction
   ON prize_fundings (chip_transaction_id) WHERE chip_transaction_id IS NOT NULL;
 CREATE INDEX idx_prize_fundings_tournament ON prize_fundings (tournament_id, created_at);
+-- Open requests still waiting for their CHIP purchase (a gateway failure at
+-- publish), which the daily run retries.
+CREATE INDEX idx_prize_fundings_unlinked
+  ON prize_fundings (created_at)
+  WHERE status = 'pending' AND cancelled_at IS NULL AND checkout_url IS NULL;
+
+-- Prize funder contacts: one per funder name per tournament, matched the way
+-- reconcile_prize_funding_requests matches the prizes document.
+CREATE UNIQUE INDEX uniq_prize_funder_contact
+  ON prize_funder_contacts (tournament_id, lower(btrim(funder_name)));
 
 -- Prize awards
 CREATE UNIQUE INDEX uniq_prize_awards_chip_send_instruction

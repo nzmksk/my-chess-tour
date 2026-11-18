@@ -79,6 +79,7 @@ DROP TABLE IF EXISTS public.audit_logs              CASCADE;
 DROP TABLE IF EXISTS public.tournament_cancellation_requests CASCADE;
 DROP TABLE IF EXISTS public.prize_awards            CASCADE;
 DROP TABLE IF EXISTS public.prize_fundings          CASCADE;
+DROP TABLE IF EXISTS public.prize_funder_contacts   CASCADE;
 DROP TABLE IF EXISTS public.payouts                 CASCADE;
 DROP TABLE IF EXISTS public.refunds                 CASCADE;
 DROP TABLE IF EXISTS public.payments                CASCADE;

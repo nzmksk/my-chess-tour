@@ -333,7 +333,14 @@ CREATE TABLE organization_invitations (
 -- TOURNAMENTS
 -- The main event, created by approved organizers.
 -- =============================================
-CREATE TYPE tournament_status AS ENUM ('draft', 'published', 'cancelled');
+-- pending_funding (#523): a tournament whose prizes the platform distributes
+-- (prizes.distribution = 'platform') is published into this state, NOT into
+-- 'published'. It has its slug and its sponsors have their payment links, but
+-- it is invisible to the public and nobody can register until the prize pool
+-- is fully funded; release_funded_tournament (007) then moves it to
+-- 'published'. A tournament whose organizer pays the winners goes straight to
+-- 'published'.
+CREATE TYPE tournament_status AS ENUM ('draft', 'pending_funding', 'published', 'cancelled');
 
 CREATE TABLE tournaments (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -623,11 +630,41 @@ CREATE TABLE payouts (
 );
 
 -- =============================================
+-- PRIZE FUNDER CONTACTS
+-- Where each funder's payment link is sent (#523). One row per funder a
+-- platform-distributed tournament's prizes name, matched on the funder name
+-- (case- and space-insensitive). Written whole by set_prize_funder_contacts.
+--
+-- Deliberately NOT inside tournaments.prizes: that document is readable by
+-- anyone once the tournament is listed (the "Public can view published
+-- tournaments" policy), and a sponsor's email address is not public.
+-- =============================================
+CREATE TABLE prize_funder_contacts (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id uuid NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  funder_name   varchar(255) NOT NULL,
+  funder_email  varchar(255) NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_prize_funder_contact_name CHECK (btrim(funder_name) <> ''),
+  CONSTRAINT chk_prize_funder_contact_email CHECK (funder_email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$')
+);
+
+-- =============================================
 -- PRIZE FUNDINGS
 -- Money IN for a platform-distributed prize pool (#523), only for tournaments
 -- whose prizes.distribution is "platform". One row per contribution: a pool may
 -- have several sponsors, each paying through their own CHIP Collect purchase.
--- The organizer creates the row and forwards its checkout link to the funder.
+-- Rows are created automatically, one open request per funder named in the
+-- prizes, by reconcile_prize_funding_requests (007) when the tournament is
+-- published and whenever its prizes change; the app then creates each CHIP
+-- purchase and emails the funder the link.
+--
+-- cancelled_at marks a request that was superseded (the funder's share
+-- changed, or the funder was dropped) or withdrawn (the tournament was
+-- cancelled). Its CHIP purchase is cancelled too, but if it is paid anyway the
+-- money is still booked: real money wins, and any surplus is residual.
 --
 -- The CHIP purchase `reference` is id::text. The paid contribution itself is
 -- the type='prize_funding' ledger row in payments (payment_id), booked by
@@ -650,6 +687,7 @@ CREATE TABLE prize_fundings (
   payment_method      varchar(50),
   payment_id          uuid REFERENCES payments(id) ON DELETE RESTRICT,
   paid_at             timestamptz,
+  cancelled_at        timestamptz,
   created_by          uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now(),
