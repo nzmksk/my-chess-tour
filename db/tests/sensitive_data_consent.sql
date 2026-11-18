@@ -29,6 +29,9 @@
 --   B3  clearing the details records the withdrawal in the same call
 --   B4  after withdrawing, saving is refused again until consent is re-granted
 --   B5  clearing when there was nothing to clear still leaves consent withdrawn
+--   H1  the oku-documents upload policy refuses a card from a user without
+--       health consent, even into their own folder
+--   H2  with health consent the same upload is allowed
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it builds
@@ -264,6 +267,30 @@ BEGIN
     RAISE EXCEPTION 'B5 FAIL: clearing nothing must still withdraw: %', v_res;
   END IF;
   RAISE NOTICE 'B5 PASS — clearing with no active details still withdraws consent';
+
+  -- ===== H1 ===============================================================
+  -- v_a withdrew health consent in C7.
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_a_auth, 'role', 'authenticated')::text, true);
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    INSERT INTO storage.objects (bucket_id, name)
+      VALUES ('oku-documents', 'users/' || v_a::text || '/oku/1.png');
+    RAISE EXCEPTION 'H1 FAIL: OKU card uploaded without health consent';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  RESET ROLE;
+  RAISE NOTICE 'H1 PASS — no OKU upload without health consent';
+
+  -- ===== H2 ===============================================================
+  PERFORM record_sensitive_data_consent(v_a, 'health', true, '2026-11-19');
+  SET LOCAL ROLE authenticated;
+  INSERT INTO storage.objects (bucket_id, name)
+    VALUES ('oku-documents', 'users/' || v_a::text || '/oku/2.png');
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims', '{}', true);
+  RAISE NOTICE 'H2 PASS — OKU upload allowed once health consent is granted';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END;

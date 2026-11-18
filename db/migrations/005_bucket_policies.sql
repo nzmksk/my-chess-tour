@@ -75,7 +75,12 @@ ON CONFLICT (id) DO UPDATE
   SET file_size_limit    = EXCLUDED.file_size_limit,
       allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- Owner can upload their own OKU document.
+-- Owner can upload their own OKU document, and only once they have given
+-- separate consent to the processing of their health data (#451). The card is
+-- health data the moment it lands in this bucket, before any API route sees
+-- it, so the consent check has to sit here rather than in POST
+-- /api/v1/profile/oku alone. has_sensitive_data_consent runs as the uploader,
+-- who can read their own consent rows (004_rls.sql).
 CREATE POLICY "Users can upload own OKU document"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -83,6 +88,7 @@ WITH CHECK (
   bucket_id = 'oku-documents'
   AND (storage.foldername(name))[1] = 'users'
   AND (storage.foldername(name))[2] = app_user_id()::text
+  AND has_sensitive_data_consent(app_user_id(), 'health')
 );
 
 -- No DELETE (or UPDATE) policy, deliberately. With INSERT alone an object
