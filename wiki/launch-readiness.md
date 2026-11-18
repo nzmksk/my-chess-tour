@@ -196,8 +196,8 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 - **Gaps:** amount-mismatch and `chip_transaction_id`-persist failures are **logged for manual ops** with no alerting 🟡 (ties to S6). Expiry has **no scheduled backstop** — lazy-on-read only 🟢 (see S2). Each payment attempt now records the fee tier it was charged under (`payments.fee_tier`, #502), so a tier change between attempts shows in the ledger.
 
 ### P11. My Tournaments — ✅ Built
-- **Entry:** `/my/tournaments` → `GET /api/v1/me/registrations` (runs a lazy expiry sweep on read). Upcoming/past/cancelled with status badges.
-- **Bucketing (#619):** a registration stays under Upcoming until its `end_date` has passed *at the venue* (`getTodayInTimeZone(tournament.timezone)`, compared as date strings like discovery), with an "In progress" badge from `start_date` to `end_date`. Past is ordered by most recent `end_date`. Logic in `src/app/my/tournaments/classify.ts`.
+- **Entry:** `/my/tournaments` → `GET /api/v1/me/registrations` (runs a lazy expiry sweep on read). Ongoing/upcoming/past/cancelled with status badges.
+- **Bucketing (#619):** Ongoing | Upcoming | Past | Cancelled, matching discovery's sections. A registration is Ongoing from `start_date` through `end_date` *at the venue* (`getTodayInTimeZone(tournament.timezone)`, compared as date strings), and Past once `end_date` has passed there. The page opens on Ongoing when it has entries, else Upcoming. Ongoing sorts by soonest `end_date`, Upcoming by nearest `start_date`, Past by most recent `end_date`. Logic in `src/app/my/tournaments/classify.ts`.
 - **Gaps:** ❌ no "Payment History / download receipt" screen (MVP Flow 5) — CHIP emails the receipt instead 🟢.
 
 ### P12. Registration cancellation (player-initiated) — ❌ Not built
