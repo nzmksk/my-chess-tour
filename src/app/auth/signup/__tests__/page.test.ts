@@ -21,10 +21,10 @@ describe("RegisterPage", () => {
     expect(result).toBeDefined();
   });
 
-  it("has a min-h-screen container", async () => {
+  it("fills the space above the footer", async () => {
     const result = (await RegisterPage()) as unknown as Record<string, unknown>;
     const props = result.props as Record<string, unknown>;
-    expect(props.className).toContain("min-h-screen");
+    expect(props.className).toContain("flex-1");
   });
 
   it("exports metadata with title 'Create Account'", async () => {

@@ -19,7 +19,7 @@ export default function SignedOutPage() {
   }, [seconds, router]);
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <div className="auth-page">
         <div className="centered-col">

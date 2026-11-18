@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <main className="mx-auto max-w-3xl px-6 py-16">
         <div className="card card--featured p-8">

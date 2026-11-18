@@ -11,7 +11,7 @@ export const metadata = {
 
 export default async function SignUpPage() {
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <Suspense fallback={<AuthCardSkeleton rows={4} />}>
         <SignUpForm />

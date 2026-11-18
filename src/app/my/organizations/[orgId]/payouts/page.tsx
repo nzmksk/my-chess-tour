@@ -33,7 +33,7 @@ export default async function OrganizationPayoutsPage({
   const json = (await res.json()) as { data: PayoutsData };
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <PayoutsClient orgId={orgId} data={json.data} />
     </div>

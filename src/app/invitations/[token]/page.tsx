@@ -37,7 +37,7 @@ export default async function InvitationPage({
   const claims = await getAuthClaims();
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <InvitationClient
         token={token}

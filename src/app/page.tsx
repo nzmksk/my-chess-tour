@@ -91,7 +91,7 @@ async function ProfileNudgeSlot() {
 
 export default function HomePage() {
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <div className="mx-auto w-full max-w-6xl px-4">
         <Suspense fallback={null}>

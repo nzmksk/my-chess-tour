@@ -50,7 +50,7 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <ProfileClient profile={profile} />
     </div>

@@ -30,7 +30,7 @@ export default async function MyOrganizationsPage() {
   const applications: OrgApplication[] = data ?? [];
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <ApplicationsClient applications={applications} />
     </div>

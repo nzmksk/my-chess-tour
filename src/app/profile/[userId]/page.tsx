@@ -43,7 +43,7 @@ export default async function PlayerProfilePage({
   const isOwner = claims?.id === userId;
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <PublicProfile profile={profile} isOwner={isOwner} />
     </div>

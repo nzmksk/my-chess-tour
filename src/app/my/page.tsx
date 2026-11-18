@@ -67,7 +67,7 @@ export default async function MyDashboardPage() {
   ]);
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <PlayerDashboardShell>
         <InvitationsPanel invitations={invitations} />

@@ -103,7 +103,7 @@ export default async function OrganizerLandingPage() {
     : "/auth/login?redirectTo=/organizations/apply&message=login-required";
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
 
       <main>

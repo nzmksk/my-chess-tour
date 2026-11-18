@@ -51,7 +51,7 @@ export default async function CreateTournamentPage({
   const orgName = data!.organization.name;
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <TournamentWizardProvider orgId={orgId} canNominate={canNominate}>
         <WizardShell orgId={orgId} orgName={orgName} />

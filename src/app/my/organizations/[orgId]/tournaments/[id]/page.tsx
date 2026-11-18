@@ -38,7 +38,7 @@ export default async function TournamentManagePage({
     result.data;
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <TournamentManageClient
         orgId={orgId}

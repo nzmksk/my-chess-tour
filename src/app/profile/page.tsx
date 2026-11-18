@@ -25,7 +25,7 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <PlayerDashboardShell>
         <PublicProfile profile={profile} isOwner={true} />

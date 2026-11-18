@@ -130,7 +130,7 @@ export default async function OrganizationSettingsPage({
     : null;
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <OrgSettingsClient
         organization={org as unknown as OrgProfile}

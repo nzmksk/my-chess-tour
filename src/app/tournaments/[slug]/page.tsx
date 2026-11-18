@@ -290,7 +290,7 @@ export default async function TournamentDetailPage({
   const { slug } = await params;
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <Suspense fallback={<DetailSkeleton />}>
         <TournamentDetailData slug={slug} />

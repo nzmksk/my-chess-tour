@@ -20,7 +20,7 @@ export default async function ForgotPasswordPage({
   const initialError = error ? (ERROR_MESSAGES[error] ?? null) : null;
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <ForgotPasswordForm initialError={initialError} />
     </div>
