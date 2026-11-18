@@ -65,8 +65,12 @@ Taking distribution away from the platform is refused once any sponsor has paid 
 Once listed, a tournament can still have its prizes **raised** until the first paid registration freezes them. That reopens the gap. The reconcile asks the funders for the top-up, and registration is paused until it is paid. Three places enforce this:
 
 - the checkout route asks `prize_pool_blocks_registration` first and answers `422 PRIZE_POOL_NOT_FUNDED`;
-- `create_registration_with_payment` and `start_new_payment_attempt` refuse the same way, as the backstop;
+- `create_registration_with_payment` and `start_new_payment_attempt` refuse the same way, as the backstop. They check under the tournament row lock, so a checkout and a prize edit happening together always see each other (`db/tests/prize_pool_checkout_race.sql`);
 - the public page reads the gate live (outside the tournament cache) and shows "Opens Once Prizes Are Funded".
+
+**A player already paying is protected too.** The gate runs when a checkout starts, but `settle_registration_payment` doesn't run it again, since it can't refuse money already taken. Without a further rule, a player holding a live CHIP link could pay after the prizes were raised and be confirmed against a pool that no longer covers them. So while any checkout hold is live (the 10-minute window, after which CHIP's `due_strict` makes the link unpayable), `guard_tournament_prizes_in_checkout` (003) refuses a prize change that would leave the pool short. The edit route answers `409` and asks the organizer to try again in 10 minutes. A change the money already paid in still covers is allowed, and organizer-paid tournaments are never held.
+
+One case is left uncovered. A payment made just before its link lapsed may have its webhook arrive after a raise that was saved once the window had passed. That player paid while the pool still covered the prizes. The raise still asks the funders for the top-up and pauses further registration.
 
 ## Money out: awards
 
