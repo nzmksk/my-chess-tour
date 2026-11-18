@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { storeVerificationCode } from "@/services/redis/redis";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import {
-  storeVerificationCode,
   startResendCooldown,
   clearResendCooldown,
-} from "@/services/redis/redis";
-import { enforceRateLimit } from "@/services/rate-limit/limiter";
+} from "@/services/rate-limit/auth";
 import { sendVerificationEmail } from "@/services/email/email";
 import { validateEmail } from "@/services/auth/auth-validation";
 import { generateCode } from "@/services/auth/verification-code";

@@ -1,8 +1,8 @@
+import { storeVerificationCode } from "@/services/redis/redis";
 import {
-  storeVerificationCode,
   startResendCooldown,
   clearResendCooldown,
-} from "@/services/redis/redis";
+} from "@/services/rate-limit/auth";
 import { sendVerificationEmail } from "@/services/email/email";
 
 export function generateCode(): string {

@@ -44,6 +44,9 @@ vi.mock("@/services/supabase/admin", () => ({
 
 vi.mock("@/services/redis/redis", () => ({
   storeVerificationCode: mockStoreVerificationCode,
+}));
+
+vi.mock("@/services/rate-limit/auth", () => ({
   startResendCooldown: mockStartResendCooldown,
   clearResendCooldown: mockClearResendCooldown,
 }));

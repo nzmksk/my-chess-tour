@@ -5,14 +5,19 @@ import { cookies } from "next/headers";
 import { validateLoginForm } from "@/services/auth/auth-validation";
 import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { redis } from "@/services/redis/redis";
+import {
+  clearLoginAttempts,
+  getLoginLock,
+  LOGIN_LOCK_SECONDS,
+  recordLoginFailure,
+} from "@/services/rate-limit/auth";
 import { sendSignupVerificationCode } from "@/services/auth/verification-code";
-import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/auth/signup-cookie";
+import {
+  SIGNUP_STEP_COOKIE,
+  SIGNUP_STEP_MAX_AGE,
+} from "@/lib/auth/signup-cookie";
 import { SESSION_ONLY_COOKIE } from "@/lib/auth/session-cookie";
 import type { LoginState } from "../types";
-
-const MAX_ATTEMPTS = 5;
-const LOCK_DURATION_SECONDS = 15 * 60; // 15 minutes
 
 export async function login(
   _prevState: LoginState,
@@ -44,17 +49,13 @@ export async function login(
     };
   }
 
-  const lockKey = `login:lock:${email.toLowerCase()}`;
-  const attemptsKey = `login:attempts:${email.toLowerCase()}`;
-
-  const isLocked = await redis.exists(lockKey);
-  if (isLocked) {
-    const ttl = await redis.ttl(lockKey);
+  const lockedSeconds = await getLoginLock(email);
+  if (lockedSeconds > 0) {
     return {
       error: null,
       attemptsRemaining: 0,
       locked: true,
-      lockedSeconds: ttl,
+      lockedSeconds,
     };
   }
 
@@ -67,19 +68,13 @@ export async function login(
   });
 
   if (authError) {
-    const attempts = await redis.incr(attemptsKey);
-    await redis.expire(attemptsKey, LOCK_DURATION_SECONDS);
-
-    const remaining = Math.max(0, MAX_ATTEMPTS - attempts);
-
+    const remaining = await recordLoginFailure(email);
     if (remaining === 0) {
-      await redis.set(lockKey, 1, { ex: LOCK_DURATION_SECONDS });
-      await redis.del(attemptsKey);
       return {
         error: null,
         attemptsRemaining: 0,
         locked: true,
-        lockedSeconds: LOCK_DURATION_SECONDS,
+        lockedSeconds: LOGIN_LOCK_SECONDS,
       };
     }
 
@@ -100,8 +95,7 @@ export async function login(
 
   if (!userRecord?.is_verified) {
     // Correct password — drop any failed-attempt tracking before routing on.
-    await redis.del(attemptsKey);
-    await redis.del(lockKey);
+    await clearLoginAttempts(email);
 
     // Don't dead-end on an error message. Sign them out (this device only),
     // send a fresh code, and signal the client to carry them into the
@@ -133,8 +127,7 @@ export async function login(
   }
 
   // Success — clear any failed-attempt tracking
-  await redis.del(attemptsKey);
-  await redis.del(lockKey);
+  await clearLoginAttempts(email);
 
   // Record the persistence choice so middleware keeps the session session-only
   // on subsequent token refreshes. The marker is itself a session cookie.

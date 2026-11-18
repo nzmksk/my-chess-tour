@@ -17,8 +17,11 @@ const {
 }));
 
 vi.mock("@/services/redis/redis", () => ({
-  startResendCooldown: mockStartResendCooldown,
   storeVerificationCode: mockStoreVerificationCode,
+}));
+
+vi.mock("@/services/rate-limit/auth", () => ({
+  startResendCooldown: mockStartResendCooldown,
   clearResendCooldown: mockClearResendCooldown,
 }));
 

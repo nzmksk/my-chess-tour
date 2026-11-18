@@ -44,6 +44,9 @@ const {
 vi.mock("@/services/redis/redis", () => ({
   getVerificationCode: mockGetVerificationCode,
   deleteVerificationCode: mockDeleteVerificationCode,
+}));
+
+vi.mock("@/services/rate-limit/auth", () => ({
   getVerifyAttempts: mockGetVerifyAttempts,
   recordVerifyAttempt: mockRecordVerifyAttempt,
   resetVerifyAttempts: mockResetVerifyAttempts,
