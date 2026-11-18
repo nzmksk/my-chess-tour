@@ -10,11 +10,16 @@ import {
   getTodayInTimeZone,
   resolveTimeZone,
 } from "@/lib/tournaments/datetime";
-import type { PrizesJson } from "@/lib/tournaments/prize-funding";
+import {
+  needsPrizeFunding,
+  type FunderContact,
+  type PrizesJson,
+} from "@/lib/tournaments/prize-funding";
 import { validatePublishable } from "@/lib/tournaments/publish-validation";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -173,11 +178,31 @@ export async function POST(
     );
   }
 
+  // A platform-distributed pool is collected from its funders, so publishing
+  // one needs every funder's address. Prize money the organizer pays out
+  // themselves needs none.
+  const awaitsFunding = needsPrizeFunding(t.prizes);
+  let funderContacts: FunderContact[] | undefined;
+  if (awaitsFunding) {
+    const { data: contacts, error: contactsError } = await supabaseAdmin
+      .from("prize_funder_contacts")
+      .select("funder_name, funder_email")
+      .eq("tournament_id", id);
+    if (contactsError) {
+      return internalErrorResponse(
+        "POST /api/v1/organizations/[orgId]/tournaments/[id]/publish: contactsError",
+        contactsError,
+      );
+    }
+    funderContacts = (contacts ?? []) as FunderContact[];
+  }
+
   // A start date is a calendar date at the venue, so "still in the future" is
   // judged against the venue's today rather than the server's.
   const validationErrors = validatePublishable(t, {
     today: getTodayInTimeZone(resolveTimeZone(t.timezone)),
     now: new Date().toISOString(),
+    funderContacts,
   });
 
   if (validationErrors.length > 0) {
@@ -212,7 +237,10 @@ export async function POST(
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("tournaments")
     .update({
-      status: "published",
+      // A platform-distributed pool must be paid in before anyone can see the
+      // tournament, let alone register: it waits, unlisted, until the payment
+      // that completes the pool releases it (release_funded_tournament).
+      status: awaitsFunding ? "pending_funding" : "published",
       published_by: claims.id,
       published_at: publishedAt,
       slug,
@@ -229,6 +257,35 @@ export async function POST(
     return internalErrorResponse(
       "POST /api/v1/organizations/[orgId]/tournaments/[id]/publish: updateError",
       updateError,
+    );
+  }
+
+  if (awaitsFunding) {
+    // Every funder is sent a payment link for their share now. The tournament
+    // is published as far as the organizer is concerned even if CHIP is
+    // briefly down: a request left without a link is retried from the manage
+    // page and by the daily run.
+    const funding = await syncPrizeFundingRequests(id, claims.id);
+    if (funding.error) {
+      console.error(
+        `Publish: tournament ${id} is pending funding, but its funding requests failed to reconcile`,
+        funding.error.message,
+      );
+    }
+    return NextResponse.json(
+      {
+        data: {
+          ...updated,
+          // Already funded (an edge: nothing left to collect) means listed.
+          status: funding.released ? "published" : updated.status,
+          funding: {
+            linked: funding.linked,
+            unlinked: funding.unlinked,
+            missing_contacts: funding.missingContacts,
+          },
+        },
+      },
+      { status: 200 },
     );
   }
 

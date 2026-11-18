@@ -33,6 +33,13 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { hasPaidRegistration } from "@/services/payments/paid-registration";
+import { loadPrizePoolPosition } from "@/services/prizes/pool";
+import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
+import type { PrizesJson } from "@/lib/tournaments/prize-funding";
+
+/** Live to the organizer: published, or published and waiting for its prize pool. */
+const isOutOfDraft = (status: string) =>
+  status === "published" || status === "pending_funding";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -319,7 +326,7 @@ function checkStillPublishable(
   patch: Record<string, unknown>,
   changed: EditableField[],
 ): NextResponse | null {
-  if (existing.status !== "published") return null;
+  if (!isOutOfDraft(existing.status)) return null;
 
   const merged = { ...existing, ...patch } as ExistingTournament;
   const options = {
@@ -345,6 +352,47 @@ function checkStillPublishable(
       },
     },
     { status: 422 },
+  );
+}
+
+/**
+ * Refuses taking prize distribution away from the platform once sponsors have
+ * paid into the pool: that money is held for the winners, and handing the
+ * payout back to the organizer would strand it. Before anything is paid in, the
+ * switch is allowed (and lists a pending tournament, which no longer needs
+ * funding).
+ *
+ * Returns a 409 response when refused, else null.
+ */
+async function checkDistributionSwitch(
+  tournamentId: string,
+  existing: ExistingTournament,
+  patch: Record<string, unknown>,
+  changed: EditableField[],
+): Promise<NextResponse | null> {
+  if (!changed.includes("prizes")) return null;
+  const before = (existing.prizes as PrizesJson | null)?.distribution;
+  const after = (patch.prizes as PrizesJson | null)?.distribution;
+  if (before !== "platform" || after === "platform") return null;
+
+  const pool = await loadPrizePoolPosition(tournamentId);
+  if (!pool.ok) {
+    return internalErrorResponse(
+      "PATCH /api/v1/organizations/[orgId]/tournaments/[id]: prize pool",
+      pool.error,
+    );
+  }
+  if (pool.position.funded_cents <= 0) return null;
+
+  return NextResponse.json(
+    {
+      error: {
+        code: "CONFLICT",
+        message:
+          "Sponsors have already paid prize money to MY Chess Tour, so the platform has to distribute the prizes. Contact us if this needs to change.",
+      },
+    },
+    { status: 409 },
   );
 }
 
@@ -573,7 +621,7 @@ export async function PATCH(
     // so leave it. Drafts (closed_at IS NULL) get their default at publish.
     if (
       newDeadline &&
-      existing.status === "published" &&
+      isOutOfDraft(existing.status) &&
       existing.registration_closed_at != null &&
       new Date(existing.registration_closed_at).getTime() ===
         new Date(existing.registration_deadline).getTime()
@@ -643,6 +691,9 @@ export async function PATCH(
   const publishableError = checkStillPublishable(tournament, patch, changed);
   if (publishableError) return publishableError;
 
+  const distributionError = await checkDistributionSwitch(id, tournament, patch, changed);
+  if (distributionError) return distributionError;
+
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("tournaments")
     .update(patch)
@@ -669,11 +720,27 @@ export async function PATCH(
     );
   }
 
+  // Each funder is asked for their share of the prizes, so a prize edit on a
+  // tournament already asking for money changes what is asked: a superseded
+  // link is cancelled and a fresh one sent. An edit that leaves nothing to
+  // collect lists a pending tournament.
+  let status = updated.status as string;
+  if (changed.includes("prizes") && isOutOfDraft(tournament.status)) {
+    const funding = await syncPrizeFundingRequests(id, claims.id);
+    if (funding.error) {
+      console.error(
+        `PATCH tournament ${id}: saved, but its funding requests failed to reconcile`,
+        funding.error.message,
+      );
+    }
+    if (funding.released) status = "published";
+  }
+
   // Edited details are visible on the detail page and the list (name, venue,
   // dates); bust both so changes show immediately. A draft has no slug yet, so
   // only the detail tag is skippable when slug is null.
   revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
   if (updated.slug) revalidateTag(tournamentTag(updated.slug), PURGE_PROFILE);
 
-  return NextResponse.json({ data: updated }, { status: 200 });
+  return NextResponse.json({ data: { ...updated, status } }, { status: 200 });
 }

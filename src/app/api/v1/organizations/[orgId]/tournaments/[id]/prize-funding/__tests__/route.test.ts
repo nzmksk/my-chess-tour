@@ -9,7 +9,7 @@ const {
   mockFrom,
   mockGetClaims,
   mockHasPermission,
-  mockCreatePurchase,
+  mockSync,
   mockLoadPool,
   tables,
   inserts,
@@ -50,7 +50,7 @@ const {
     mockFrom: vi.fn((table: string) => makeBuilder(table)),
     mockGetClaims: vi.fn(),
     mockHasPermission: vi.fn(),
-    mockCreatePurchase: vi.fn(),
+    mockSync: vi.fn(),
     mockLoadPool: vi.fn(),
   };
 });
@@ -62,8 +62,8 @@ vi.mock("@/services/supabase/permission", () => ({
   getAuthClaims: mockGetClaims,
   hasOrgPermission: mockHasPermission,
 }));
-vi.mock("@/services/chip/chip", () => ({
-  createChipPurchase: mockCreatePurchase,
+vi.mock("@/services/prizes/funding-requests", () => ({
+  syncPrizeFundingRequests: mockSync,
 }));
 vi.mock("@/services/prizes/pool", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/prizes/pool")>()),
@@ -83,12 +83,10 @@ const FUNDING_ID = "dddddddd-0000-4000-8000-000000000001";
 
 const params = { params: Promise.resolve({ orgId: ORG_ID, id: T_ID }) };
 
-const post = (body: unknown) =>
+const post = () =>
   POST(
     new NextRequest(`http://localhost/api/v1/organizations/${ORG_ID}/tournaments/${T_ID}/prize-funding`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
     }),
     params,
   );
@@ -102,8 +100,20 @@ const get = () =>
 const platformTournament = {
   id: T_ID,
   name: "Merdeka Open",
-  status: "published",
-  prizes: { distribution: "platform" },
+  status: "pending_funding",
+  prizes: {
+    categories: [
+      {
+        name: "Open",
+        funding: { source: "sponsor", funder_name: "Acme" },
+        entries: [{ place: "1st", amount_cents: 45000 }],
+      },
+    ],
+    special: [
+      { name: "Best Junior", funding: { source: "grant", funder_name: "Ministry" }, amount_cents: 5000 },
+    ],
+    distribution: "platform",
+  },
 };
 
 const position = (funded: number) => ({
@@ -118,7 +128,6 @@ const position = (funded: number) => ({
   fully_funded: funded >= 50000,
 });
 
-const VALID = { funder_name: "Acme Sdn Bhd", funder_email: "Sponsor@Acme.test" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -129,11 +138,13 @@ beforeEach(() => {
   mockHasPermission.mockResolvedValue(true);
   tables.organizations = [{ data: { id: ORG_ID, approval_status: "approved" }, error: null }];
   tables.tournaments = [{ data: platformTournament, error: null }];
-  tables.prize_fundings = [{ data: { id: FUNDING_ID }, error: null }];
   mockLoadPool.mockResolvedValue({ ok: true, position: position(20000) });
-  mockCreatePurchase.mockResolvedValue({
-    id: "chip-purchase-1",
-    checkout_url: "https://gate.chip-in.asia/p/1",
+  mockSync.mockResolvedValue({
+    error: null,
+    released: false,
+    linked: 1,
+    unlinked: 0,
+    missingContacts: [],
   });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -142,110 +153,86 @@ beforeEach(() => {
 // POST
 // ---------------------------------------------------------------------------
 
-describe("POST prize-funding", () => {
+describe("POST prize-funding (retry)", () => {
   it("needs payout.request", async () => {
     mockHasPermission.mockResolvedValue(false);
-    const res = await post(VALID);
+    const res = await post();
     expect(res.status).toBe(403);
     expect(mockHasPermission).toHaveBeenCalledWith(USER_ID, ORG_ID, "payout.request");
-    expect(mockCreatePurchase).not.toHaveBeenCalled();
+    expect(mockSync).not.toHaveBeenCalled();
   });
 
-  it("asks for what the pool still needs when no amount is given", async () => {
-    const res = await post(VALID);
-    expect(res.status).toBe(201);
-    expect(inserts).toEqual([
-      {
-        table: "prize_fundings",
-        row: {
-          tournament_id: T_ID,
-          funder_name: "Acme Sdn Bhd",
-          funder_email: "sponsor@acme.test",
-          amount_cents: 30000,
-          created_by: USER_ID,
-        },
-      },
-    ]);
-    const json = await res.json();
-    expect(json.data).toEqual({
-      id: FUNDING_ID,
-      amount_cents: 30000,
-      checkout_url: "https://gate.chip-in.asia/p/1",
+  it("re-runs the funding requests and reports what was sent", async () => {
+    mockSync.mockResolvedValue({
+      error: null,
+      released: false,
+      linked: 1,
+      unlinked: 0,
+      missingContacts: ["Ministry"],
+    });
+    const res = await post();
+    expect(res.status).toBe(200);
+    expect(mockSync).toHaveBeenCalledWith(T_ID, USER_ID);
+    expect((await res.json()).data).toEqual({
+      linked: 1,
+      missing_contacts: ["Ministry"],
+      released: false,
     });
   });
 
-  it("creates a CHIP purchase referencing the funding, with no expiry", async () => {
-    await post({ ...VALID, amount_cents: 10000 });
-    const request = mockCreatePurchase.mock.calls[0][0];
-    expect(request.reference).toBe(FUNDING_ID);
-    expect(request.client).toEqual({ email: "sponsor@acme.test", full_name: "Acme Sdn Bhd" });
-    expect(request.purchase.products).toEqual([
-      { name: "Prize fund — Merdeka Open", price: 10000, quantity: "1" },
-    ]);
-    expect(request.due).toBeUndefined();
-    expect(request.purchase.due_strict).toBeUndefined();
-    expect(updates).toContainEqual({
-      table: "prize_fundings",
-      patch: {
-        chip_transaction_id: "chip-purchase-1",
-        checkout_url: "https://gate.chip-in.asia/p/1",
-      },
+  it("answers 503 when a link still couldn't be created", async () => {
+    mockSync.mockResolvedValue({
+      error: null,
+      released: false,
+      linked: 0,
+      unlinked: 2,
+      missingContacts: [],
     });
+    const res = await post();
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe("PAYMENT_GATEWAY_ERROR");
   });
 
-  it("refuses more than the pool still needs", async () => {
-    const res = await post({ ...VALID, amount_cents: 30001 });
-    expect(res.status).toBe(409);
-    expect((await res.json()).error.code).toBe("EXCEEDS_REMAINING");
-    expect(inserts).toEqual([]);
-  });
-
-  it("refuses a pool that is already funded", async () => {
-    mockLoadPool.mockResolvedValue({ ok: true, position: position(50000) });
-    const res = await post(VALID);
-    expect(res.status).toBe(409);
-    expect((await res.json()).error.code).toBe("POOL_ALREADY_FUNDED");
+  it("500s when the reconcile fails", async () => {
+    mockSync.mockResolvedValue({
+      error: { message: "db down" },
+      released: false,
+      linked: 0,
+      unlinked: 0,
+      missingContacts: [],
+    });
+    const res = await post();
+    expect(res.status).toBe(500);
   });
 
   it("refuses a tournament whose organizer pays its own winners", async () => {
     tables.tournaments = [
       { data: { ...platformTournament, prizes: { distribution: "organizer" } }, error: null },
     ];
-    const res = await post(VALID);
+    const res = await post();
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("NOT_PLATFORM_DISTRIBUTED");
-    expect(mockLoadPool).not.toHaveBeenCalled();
+    expect(mockSync).not.toHaveBeenCalled();
+  });
+
+  it("refuses a draft, whose links go out when it is published", async () => {
+    tables.tournaments = [{ data: { ...platformTournament, status: "draft" }, error: null }];
+    const res = await post();
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("NOT_PUBLISHED");
   });
 
   it("refuses a cancelled tournament", async () => {
     tables.tournaments = [{ data: { ...platformTournament, status: "cancelled" }, error: null }];
-    const res = await post(VALID);
+    const res = await post();
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("TOURNAMENT_CANCELLED");
   });
 
   it("404s a tournament of another organization", async () => {
     tables.tournaments = [{ data: null, error: null }];
-    const res = await post(VALID);
+    const res = await post();
     expect(res.status).toBe(404);
-  });
-
-  it.each<[Record<string, unknown>, string]>([
-    [{ funder_email: "a@b.test" }, "missing name"],
-    [{ funder_name: "Acme", funder_email: "not-an-email" }, "bad email"],
-    [{ ...VALID, amount_cents: 0 }, "zero amount"],
-    [{ ...VALID, amount_cents: 12.5 }, "fractional amount"],
-  ])("400 on %o (%s)", async (body: Record<string, unknown>) => {
-    const res = await post(body);
-    expect(res.status).toBe(400);
-    expect(inserts).toEqual([]);
-  });
-
-  it("marks the funding failed and answers 503 when CHIP is down", async () => {
-    mockCreatePurchase.mockRejectedValue(new Error("CHIP API error 502"));
-    const res = await post(VALID);
-    expect(res.status).toBe(503);
-    expect(updates).toContainEqual({ table: "prize_fundings", patch: { status: "failed" } });
   });
 });
 
@@ -254,15 +241,21 @@ describe("POST prize-funding", () => {
 // ---------------------------------------------------------------------------
 
 describe("GET prize-funding", () => {
-  it("returns the pool and its contributions to payout viewers", async () => {
+  it("returns the pool, the contributions and the funders with no address", async () => {
     const fundings = [
-      { id: FUNDING_ID, funder_name: "Acme", amount_cents: 20000, status: "paid" },
+      { id: FUNDING_ID, funder_name: "Acme", amount_cents: 45000, status: "pending", cancelled_at: null },
     ];
     tables.prize_fundings = [{ data: fundings, error: null }];
+    tables.prize_funder_contacts = [{ data: [{ funder_name: " acme " }], error: null }];
     const res = await get();
     expect(res.status).toBe(200);
     expect(mockHasPermission).toHaveBeenCalledWith(USER_ID, ORG_ID, "payout.view");
-    expect((await res.json()).data).toEqual({ pool: position(20000), fundings });
+    expect((await res.json()).data).toEqual({
+      pool: position(20000),
+      status: "pending_funding",
+      fundings,
+      missing_contacts: ["Ministry"],
+    });
   });
 
   it("500s when the pool can't be read", async () => {
