@@ -21,6 +21,10 @@ const lato = Lato({
   variable: "--font-lato",
 });
 
+const SITE_NAME = "MY Chess Tour";
+const SITE_DESCRIPTION =
+  "Find and register for chess tournaments across Malaysia. Pay online with FPX, DuitNow QR, or e-wallet.";
+
 export async function generateMetadata(): Promise<Metadata> {
   const headersList = await headers();
   const host = headersList.get("host") || "";
@@ -29,12 +33,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: {
-      default: "MY Chess Tour — Coming Soon",
+      default: SITE_NAME,
       template: "%s | MY Chess Tour",
     },
-    applicationName: "MY Chess Tour",
-    description:
-      "Malaysia's premier competitive chess circuit. Join the waitlist.",
+    applicationName: SITE_NAME,
+    description: SITE_DESCRIPTION,
     robots: noindex
       ? { index: false, follow: false }
       : { index: true, follow: true },
@@ -42,17 +45,15 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: "/mct-logo-square.svg",
     },
     openGraph: {
-      title: "MY Chess Tour — Coming Soon",
-      description:
-        "Malaysia's premier competitive chess circuit. Join the waitlist.",
+      title: SITE_NAME,
+      description: SITE_DESCRIPTION,
       type: "website",
-      siteName: "MY Chess Tour",
+      siteName: SITE_NAME,
     },
     twitter: {
       card: "summary",
-      title: "MY Chess Tour — Coming Soon",
-      description:
-        "Malaysia's premier competitive chess circuit. Join the waitlist.",
+      title: SITE_NAME,
+      description: SITE_DESCRIPTION,
     },
   };
 }
