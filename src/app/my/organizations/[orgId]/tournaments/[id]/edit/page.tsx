@@ -276,7 +276,7 @@ export default async function EditTournamentPage({
   const initialData = buildInitialData(tournament, funderContacts);
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <TournamentWizardProvider
         orgId={orgId}

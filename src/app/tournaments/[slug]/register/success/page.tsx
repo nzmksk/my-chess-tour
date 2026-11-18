@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <main className="mx-auto max-w-2xl px-6 py-10 md:px-10">{children}</main>
     </div>

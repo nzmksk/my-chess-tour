@@ -1,6 +1,6 @@
 export default function DetailSkeleton() {
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="bg-bg-base">
       <main className="max-w-300 mx-auto px-6 md:px-10 py-8">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_340px] gap-8 items-start animate-pulse">
           {/* Left column skeleton */}

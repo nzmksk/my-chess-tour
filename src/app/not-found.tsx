@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
   return (
-    <main className="bg-bg-base flex h-screen flex-col items-center justify-center gap-8 px-6 text-center">
+    <main className="bg-bg-base flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center">
       {/* Decorative chess piece */}
       <span className="text-gold-bright text-6xl select-none" aria-hidden>
         ♞

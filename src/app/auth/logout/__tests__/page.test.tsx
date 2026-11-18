@@ -32,10 +32,10 @@ describe("SignedOutPage", () => {
     expect(container.firstChild).not.toBeNull();
   });
 
-  it("has a min-h-screen container", () => {
+  it("fills the space above the footer", () => {
     const { container } = render(<SignedOutPage />);
     const root = container.firstChild as HTMLElement;
-    expect(root.className).toContain("min-h-screen");
+    expect(root.className).toContain("flex-1");
   });
 
   it("displays the initial countdown at 10 seconds", () => {

@@ -19,7 +19,7 @@ export default async function PrizeFundingThankYouPage({
   const failed = status === "failed";
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <main className="mx-auto max-w-2xl px-6 py-10 md:px-10">
         <div className="mx-auto max-w-lg">

@@ -20,7 +20,7 @@ export default async function OrganizerApplyPage() {
   }
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <main className="mx-auto max-w-2xl px-6 py-10 md:px-10">
         <ApplyForm />

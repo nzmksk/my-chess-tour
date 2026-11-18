@@ -100,7 +100,7 @@ export default async function OrganizerDashboardPage({
   }
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base flex-1">
       <NavBar />
       <DashboardClient data={data} pendingNominations={pendingNominations} />
     </div>
