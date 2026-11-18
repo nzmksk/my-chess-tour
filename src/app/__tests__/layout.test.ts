@@ -51,7 +51,7 @@ describe("generateMetadata", () => {
     mockGet.mockReturnValue("example.com");
     const meta = await generateMetadata();
     expect(meta.title).toEqual({
-      default: "MY Chess Tour — Coming Soon",
+      default: "MY Chess Tour",
       template: "%s | MY Chess Tour",
     });
   });
@@ -60,8 +60,14 @@ describe("generateMetadata", () => {
     mockGet.mockReturnValue("example.com");
     const meta = await generateMetadata();
     expect(meta.description).toBe(
-      "Malaysia's premier competitive chess circuit. Join the waitlist.",
+      "Find and register for chess tournaments across Malaysia. Pay online with FPX, DuitNow QR, or e-wallet.",
     );
+  });
+
+  it("has no Coming Soon or waitlist copy", async () => {
+    mockGet.mockReturnValue("example.com");
+    const meta = JSON.stringify(await generateMetadata());
+    expect(meta).not.toMatch(/coming soon|waitlist/i);
   });
 
   it("includes the svg icon path", async () => {

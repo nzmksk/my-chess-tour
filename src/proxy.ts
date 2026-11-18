@@ -64,7 +64,7 @@ export async function proxy(request: NextRequest) {
       (e) => (typeof e === "string" ? e : e.method) === "otp",
     );
     if (!isRecovery) {
-      return NextResponse.redirect(new URL("/tournaments", request.url));
+      return NextResponse.redirect(new URL("/", request.url));
     }
   }
 
@@ -76,7 +76,7 @@ export async function proxy(request: NextRequest) {
     "/auth/signup",
   ];
   if (user && guestOnlyPaths.some((p) => pathname.startsWith(p))) {
-    return NextResponse.redirect(new URL("/tournaments", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   // Protect routes that require auth. Note the trailing slash on

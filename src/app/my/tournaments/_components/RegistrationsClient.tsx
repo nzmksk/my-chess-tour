@@ -202,7 +202,7 @@ function EmptyState({ tab }: { tab: Tab }) {
       </p>
       {tab === "upcoming" && (
         <Link
-          href="/tournaments"
+          href="/"
           className="btn-secondary mt-4 inline-block px-5 py-2 text-xs"
         >
           Browse Tournaments

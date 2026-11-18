@@ -278,7 +278,7 @@ describe("login action", () => {
     await login(INITIAL_LOGIN_STATE, fd);
 
     expect(mocks.del).toHaveBeenCalledTimes(2);
-    expect(mocks.redirect).toHaveBeenCalledWith("/tournaments");
+    expect(mocks.redirect).toHaveBeenCalledWith("/");
   });
 
   // --- "Keep me signed in" -------------------------------------------------

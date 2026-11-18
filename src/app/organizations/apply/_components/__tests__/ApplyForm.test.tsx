@@ -260,7 +260,7 @@ describe("ApplyForm", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "Back to Tournaments" }),
       );
-      expect(mockPush).toHaveBeenCalledWith("/tournaments");
+      expect(mockPush).toHaveBeenCalledWith("/");
     });
 
     it("auto-redirects to /my/organizations/applications after 5 seconds", async () => {

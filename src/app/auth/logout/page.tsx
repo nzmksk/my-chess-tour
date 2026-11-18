@@ -11,7 +11,7 @@ export default function SignedOutPage() {
 
   useEffect(() => {
     if (seconds === 0) {
-      router.push("/tournaments");
+      router.push("/");
       return;
     }
     const timer = setTimeout(() => setSeconds((s) => s - 1), 1000);
@@ -54,7 +54,7 @@ export default function SignedOutPage() {
               <Link href="/auth/login" className="btn-primary">
                 Sign Back In
               </Link>
-              <Link href="/tournaments" className="btn-secondary">
+              <Link href="/" className="btn-secondary">
                 Browse Tournaments
               </Link>
             </div>

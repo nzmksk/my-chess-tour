@@ -1,90 +1,106 @@
 import { Suspense } from "react";
-import WaitlistForm from "@/components/WaitlistForm";
-import BuildProgress from "@/components/BuildProgress";
-import ProgressSkeleton from "@/components/ProgressSkeleton";
-import { BrowseIcon, PayIcon, TrophyIcon } from "@/app/components/Icons";
+import { headers } from "next/headers";
+import type { Metadata } from "next";
+import NavBar from "@/components/NavBar";
+import TournamentsClient from "./tournaments/_components/TournamentsClient";
+import TournamentsGridSkeleton from "./tournaments/_components/TournamentsGridSkeleton";
+import ProfileNudge from "./tournaments/_components/ProfileNudge";
+import type { Tournament } from "./tournaments/types";
+import { ONE_DAY_SECONDS, TOURNAMENTS_LIST_TAG } from "@/lib/tournaments/cache-tags";
+import { getAuthClaims } from "@/services/supabase/permission";
+import { createClient } from "@/services/supabase/server";
 
-export default function LandingPage() {
+// Must be a literal — Next statically analyzes this export. Mirrors ONE_DAY_SECONDS (86400).
+export const revalidate = 86400;
+
+export const metadata: Metadata = {
+  // The layout's "%s | MY Chess Tour" template only applies to child
+  // segments, not this root page, so the brand suffix is written out here.
+  title: { absolute: "Upcoming Chess Tournaments in Malaysia | MY Chess Tour" },
+  description:
+    "See all upcoming open chess tournaments in Malaysia. Filter by state, format, and rating. Register online and pay securely with FPX, DuitNow QR, or e-wallet.",
+  openGraph: {
+    title: "Upcoming Chess Tournaments in Malaysia | MY Chess Tour",
+    description:
+      "See all upcoming open chess tournaments in Malaysia. Filter by state, format, and rating. Register online and pay securely with FPX, DuitNow QR, or e-wallet.",
+    type: "website",
+    siteName: "MY Chess Tour",
+  },
+  twitter: {
+    card: "summary",
+    title: "Upcoming Chess Tournaments in Malaysia | MY Chess Tour",
+    description:
+      "See all upcoming open chess tournaments in Malaysia. Filter by state, format, and rating. Register online and pay securely with FPX, DuitNow QR, or e-wallet.",
+  },
+};
+
+async function TournamentsData() {
+  const headersList = await headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const protocol =
+    host.startsWith("localhost") || host.startsWith("127.0.0.1")
+      ? "http"
+      : "https";
+
+  let tournaments: Tournament[] = [];
+
+  try {
+    const res = await fetch(`${protocol}://${host}/api/v1/tournaments`, {
+      next: { revalidate: ONE_DAY_SECONDS, tags: [TOURNAMENTS_LIST_TAG] },
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      tournaments = json.data ?? [];
+    }
+  } catch {
+    // Network error — render page with empty list rather than crashing
+  }
+
+  // The instant the page rendered, from which the client derives each
+  // tournament's own "today" in its venue's timezone. Sent as an instant rather
+  // than one shared date so SSR and hydration agree on it, and so venues in
+  // different zones can bucket differently at the same moment.
+  const now = new Date().toISOString();
+  return <TournamentsClient tournaments={tournaments} now={now} />;
+}
+
+// Signed-in players with a half-empty profile get a dismissible nudge above the
+// list. "Incomplete" = missing gender, date of birth, or nationality (the
+// broadly-needed fields); FIDE/MCF IDs are situational and handled at registration.
+async function ProfileNudgeSlot() {
+  const claims = await getAuthClaims();
+  if (!claims) return null;
+
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("player_profiles")
+    .select("gender, date_of_birth, nationality")
+    .eq("user_id", claims.id)
+    .maybeSingle();
+
+  const incomplete =
+    !profile ||
+    profile.gender == null ||
+    profile.date_of_birth == null ||
+    profile.nationality == null;
+  if (!incomplete) return null;
+
+  return <ProfileNudge />;
+}
+
+export default function HomePage() {
   return (
-    <main className="bg-bg-base">
-      {/* Decorative top bar */}
-      <div className="mx-auto flex max-w-2xl gap-2 px-6 py-8">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={i}
-            className={`h-2 flex-1 ${i % 2 === 0 ? "bg-gold-bright" : "bg-bg-raised"}`}
-          />
-        ))}
-      </div>
-
-      <div className="mx-auto max-w-2xl px-6 pb-8">
-        {/* Eyebrow */}
-        <p className="text--eyebrow">♟ Coming Soon 2026</p>
-        {/* Headline */}
-        <h1 className="my-2">
-          Malaysia&apos;s tournament circuit, finally online.
-        </h1>
-        {/* Body copy */}
-        <p className="text--body mb-2">
-          MY Chess Tour is a dedicated platform for discovering, registering,
-          and managing chess tournaments across Malaysia — built for players and
-          organizers alike.
-        </p>
-        <p className="text--body">
-          Join the waitlist to be first in line when we launch.
-        </p>
-        {/* Feature cards */}
-        <div className="my-6 grid gap-4 sm:grid-cols-3">
-          <div className="card flex flex-col p-4">
-            <span className="icon--landing-page">
-              <BrowseIcon />
-            </span>
-            <p className="text--ui-label text-gold-bright mb-2 grow">
-              Browse Tournaments
-            </p>
-            <p className="text--small">
-              All upcoming events in one place, filterable by state, format, and
-              rating.
-            </p>
-          </div>
-          <div className="card flex flex-col p-4">
-            <span className="icon--landing-page">
-              <PayIcon />
-            </span>
-            <p className="text--ui-label text-gold-bright mb-2 grow">
-              Register &amp; Pay Online
-            </p>
-            <p className="text--small">
-              FPX, DuitNow QR, e-wallets. No bank transfer receipts. No Google
-              Forms.
-            </p>
-          </div>
-          <div className="card flex flex-col p-4">
-            <span className="icon--landing-page">
-              <TrophyIcon />
-            </span>
-            <p className="text--ui-label text-gold-bright mb-2 grow">
-              For Organizers
-            </p>
-            <p className="text--small">
-              Publish tournaments, manage registrations, and track payouts from
-              one dashboard.
-            </p>
-          </div>
-        </div>
-        {/* Waitlist form */}
-        <WaitlistForm />
-        
-      </div>
-      {/* Build progress — second section */}
-      <section
-        id="progress"
-        className="border-border mx-auto max-w-2xl border-t px-6 py-8"
-      >
-        <Suspense fallback={<ProgressSkeleton />}>
-          <BuildProgress />
+    <div className="bg-bg-base min-h-screen">
+      <NavBar />
+      <div className="mx-auto w-full max-w-6xl px-4">
+        <Suspense fallback={null}>
+          <ProfileNudgeSlot />
         </Suspense>
-      </section>
-    </main>
+      </div>
+      <Suspense fallback={<TournamentsGridSkeleton />}>
+        <TournamentsData />
+      </Suspense>
+    </div>
   );
 }
