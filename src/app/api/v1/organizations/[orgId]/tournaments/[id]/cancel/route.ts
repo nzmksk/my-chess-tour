@@ -70,7 +70,10 @@ export async function POST(
     );
   }
 
-  if (tournament.status !== "published") {
+  // A tournament waiting for its prize pool (pending_funding) is published as
+  // far as the organizer is concerned, and may need cancelling just the same:
+  // a sponsor who never pays is the usual reason.
+  if (tournament.status !== "published" && tournament.status !== "pending_funding") {
     return NextResponse.json(
       {
         error: {

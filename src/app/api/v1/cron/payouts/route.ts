@@ -18,6 +18,10 @@ import {
   reconcileStuckPrizeAwards,
   retryPendingPrizeAwards,
 } from "@/services/prizes/sweep";
+import {
+  type FundingSweepStats,
+  sweepPrizeFundingRequests,
+} from "@/services/prizes/funding-requests";
 
 // Session-less background job (mirrors the CHIP webhook and the FIDE cron): uses
 // supabaseAdmin only, and needs the Node runtime for CHIP Send's HMAC signing and
@@ -34,6 +38,7 @@ interface RunStats {
   sweep: SweepStats | null;
   stuckPrizes: PassStats | null;
   retriedPrizes: PassStats | null;
+  prizeFunding: FundingSweepStats | null;
 }
 
 /**
@@ -99,6 +104,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // retry as payouts. The retry also registers a winner's pending account.
     stuckPrizes: await runPass("stuck prize award", () => reconcileStuckPrizeAwards()),
     retriedPrizes: await runPass("pending prize award", retryPendingPrizeAwards),
+    // Sponsors of pools still being collected: re-ask after a failed payment,
+    // and retry any payment link CHIP refused at publish.
+    prizeFunding: await runPass("prize funding", sweepPrizeFundingRequests),
   };
 
   console.info(`Payout cron: ${JSON.stringify(stats)}`);
@@ -109,7 +117,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     !stats.retried ||
     !stats.sweep ||
     !stats.stuckPrizes ||
-    !stats.retriedPrizes
+    !stats.retriedPrizes ||
+    !stats.prizeFunding
   ) {
     return NextResponse.json(
       {

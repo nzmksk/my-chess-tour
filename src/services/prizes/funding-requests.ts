@@ -332,3 +332,44 @@ async function notifyTournamentListed(tournamentId: string): Promise<void> {
     );
   }
 }
+
+export interface FundingSweepStats {
+  /** Tournaments waiting for their pool that were reconciled. */
+  tournaments: number;
+  linked: number;
+  unlinked: number;
+  /** Tournaments listed by this run. */
+  released: number;
+}
+
+/**
+ * The daily run's funding pass: reconciles every tournament still waiting for
+ * its pool, which re-asks a funder whose payment failed and retries any link
+ * CHIP refused, then creates any link still missing elsewhere (a top-up on a
+ * listed tournament). Throws when it can't load its work list.
+ */
+export async function sweepPrizeFundingRequests(): Promise<FundingSweepStats> {
+  const { data, error } = await supabaseAdmin
+    .from("tournaments")
+    .select("id")
+    .eq("status", "pending_funding");
+  if (error) throw new Error(`failed to list tournaments pending funding: ${error.message}`);
+
+  const stats: FundingSweepStats = { tournaments: 0, linked: 0, unlinked: 0, released: 0 };
+  for (const { id } of (data ?? []) as { id: string }[]) {
+    const result = await syncPrizeFundingRequests(id, null);
+    if (result.error) {
+      console.error(`Funding sweep: tournament ${id} failed to reconcile`, result.error.message);
+      continue;
+    }
+    stats.tournaments++;
+    stats.linked += result.linked;
+    stats.unlinked += result.unlinked;
+    if (result.released) stats.released++;
+  }
+
+  const rest = await createMissingFundingLinks();
+  stats.linked += rest.linked;
+  stats.unlinked += rest.failed;
+  return stats;
+}
