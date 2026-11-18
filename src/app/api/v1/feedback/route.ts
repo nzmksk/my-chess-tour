@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { recordBugReportAttempt } from "@/services/redis/redis";
-import { getClientIp } from "@/lib/http/request-ip";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import {
   internalErrorResponse,
   logInternalError,
@@ -141,26 +140,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
   const userId = claims?.id ?? null;
 
-  let retryAfter: number;
-  try {
-    retryAfter = await recordBugReportAttempt(getClientIp(request), userId);
-  } catch (err) {
-    // Fail closed: every report is a public artifact on our repo, so an
-    // unlimited endpoint is worse than a briefly unavailable form.
-    return internalErrorResponse("Feedback: rate limit check failed", err);
-  }
-  if (retryAfter > 0) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "RATE_LIMITED",
-          message:
-            "You've sent several reports in a short time. Please try again later.",
-        },
-      },
-      { status: 429, headers: { "Retry-After": String(retryAfter) } },
-    );
-  }
+  // Fails closed (see RATE_LIMITS.feedback): every report is a public
+  // artifact on our repo.
+  const limited = await enforceRateLimit("feedback", request, userId);
+  if (limited) return limited;
 
   // A bot that filled the hidden field is told it worked and nothing is kept.
   // Checked after the rate limit so it costs the bot its budget too.

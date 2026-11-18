@@ -4,12 +4,10 @@ import {
   storeVerificationCode,
   startResendCooldown,
   clearResendCooldown,
-  recordSignupAttempt,
-  MAX_SIGNUP_ATTEMPTS_PER_IP,
 } from "@/services/redis/redis";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { sendVerificationEmail } from "@/services/email/email";
 import { validateEmail } from "@/services/auth/auth-validation";
-import { getClientIp } from "@/lib/http/request-ip";
 import { generateCode } from "@/services/auth/verification-code";
 
 // A single response shared by every account-state outcome (missing account,
@@ -27,18 +25,8 @@ function genericOk() {
 export async function POST(request: NextRequest) {
   // Per-IP rate limit (consistent with the other signup endpoints) to cap
   // cross-email probing.
-  const ip = getClientIp(request);
-  if ((await recordSignupAttempt(ip)) > MAX_SIGNUP_ATTEMPTS_PER_IP) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "RATE_LIMITED",
-          message: "Too many attempts. Please try again later.",
-        },
-      },
-      { status: 429 },
-    );
-  }
+  const limited = await enforceRateLimit("signup", request, null);
+  if (limited) return limited;
 
   let body: unknown;
 

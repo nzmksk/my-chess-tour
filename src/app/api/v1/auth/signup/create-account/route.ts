@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import {
-  storeVerificationCode,
-  recordSignupAttempt,
-  MAX_SIGNUP_ATTEMPTS_PER_IP,
-} from "@/services/redis/redis";
+import { storeVerificationCode } from "@/services/redis/redis";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { sendVerificationEmail } from "@/services/email/email";
 import {
   validateEmail,
   checkPasswordRequirements,
 } from "@/services/auth/auth-validation";
-import { SIGNUP_STEP_COOKIE, SIGNUP_STEP_MAX_AGE } from "@/lib/auth/signup-cookie";
+import {
+  SIGNUP_STEP_COOKIE,
+  SIGNUP_STEP_MAX_AGE,
+} from "@/lib/auth/signup-cookie";
 import { TERMS_VERSION } from "@/lib/reference/legal";
-import { getClientIp } from "@/lib/http/request-ip";
 import { generateCode } from "@/services/auth/verification-code";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 
@@ -53,18 +52,8 @@ async function rollbackAccount(authUserId: string): Promise<void> {
 export async function POST(request: NextRequest) {
   // Per-IP rate limit so the email-existence response can't be used to probe
   // which addresses are registered at scale.
-  const ip = getClientIp(request);
-  if ((await recordSignupAttempt(ip)) > MAX_SIGNUP_ATTEMPTS_PER_IP) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "RATE_LIMITED",
-          message: "Too many attempts. Please try again later.",
-        },
-      },
-      { status: 429 },
-    );
-  }
+  const limited = await enforceRateLimit("signup", request, null);
+  if (limited) return limited;
 
   let body: unknown;
 
