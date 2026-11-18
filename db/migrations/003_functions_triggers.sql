@@ -1076,6 +1076,112 @@ END;
 $$;
 
 -- =============================================
+-- SENSITIVE DATA CONSENT (#451)
+-- has_sensitive_data_consent answers "may we hold this kind of data for this
+-- user right now?": true only when their newest row for the category is a
+-- grant. Deliberately NOT SECURITY DEFINER, so it sees only what the caller's
+-- RLS allows: the storage policy on oku-documents calls it as the uploading
+-- user, who can read their own rows (004), and the service-role functions
+-- bypass RLS. As a definer function anyone could ask it about anyone, and
+-- whether a stranger has agreed to share health data is itself health data.
+--
+-- record_sensitive_data_consent is the only write path for the log. It locks
+-- the users row (as set_player_bank_account does, so a save and a withdrawal
+-- cannot interleave) and writes a row only when the position changes:
+-- re-granting the same wording, or withdrawing what was never granted, is a
+-- no-op that returns false. A grant of NEWER wording is written, so the log
+-- shows the user agreed to it. p_version must come from legal.ts on the
+-- server, never the request.
+-- =============================================
+CREATE OR REPLACE FUNCTION has_sensitive_data_consent(
+  p_user_id  uuid,
+  p_category sensitive_data_category
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT COALESCE((
+    SELECT granted
+      FROM sensitive_data_consents
+      WHERE user_id = p_user_id AND category = p_category
+      ORDER BY id DESC
+      LIMIT 1
+  ), false);
+$$;
+
+CREATE OR REPLACE FUNCTION record_sensitive_data_consent(
+  p_user_id  uuid,
+  p_category sensitive_data_category,
+  p_granted  boolean,
+  p_version  varchar(20) DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_latest sensitive_data_consents;
+BEGIN
+  IF p_granted IS NULL THEN
+    RAISE EXCEPTION 'p_granted is required' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_granted AND p_version IS NULL THEN
+    RAISE EXCEPTION 'a consent grant must name the version agreed to'
+      USING ERRCODE = '22023';
+  END IF;
+
+  PERFORM 1 FROM users
+    WHERE id = p_user_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'user % not found', p_user_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_latest
+    FROM sensitive_data_consents
+    WHERE user_id = p_user_id AND category = p_category
+    ORDER BY id DESC
+    LIMIT 1;
+
+  IF p_granted THEN
+    IF FOUND AND v_latest.granted AND v_latest.version = p_version THEN
+      RETURN false;
+    END IF;
+  ELSIF NOT FOUND OR NOT v_latest.granted THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO sensitive_data_consents (user_id, category, granted, version)
+    VALUES (p_user_id, p_category, p_granted,
+            CASE WHEN p_granted THEN p_version END);
+
+  RETURN true;
+END;
+$$;
+
+-- A consent row is evidence. Correcting one would rewrite what the user agreed
+-- to; a change of mind is a new row. ON DELETE CASCADE from users still works:
+-- this guards UPDATE only.
+CREATE OR REPLACE FUNCTION guard_consent_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'sensitive_data_consents rows are immutable; record a new grant or withdrawal instead'
+    USING ERRCODE = '55000';
+END;
+$$;
+
+CREATE TRIGGER guard_consent_immutable
+  BEFORE UPDATE ON sensitive_data_consents
+  FOR EACH ROW EXECUTE FUNCTION guard_consent_immutable();
+
+-- =============================================
 -- SET PLAYER BANK ACCOUNT
 -- The ONLY write path for player_bank_accounts (004_rls.sql revokes client
 -- writes), and set_organization_bank_account for a person: supersede rather
@@ -2090,6 +2196,7 @@ $$;
 -- =============================================
 REVOKE EXECUTE ON FUNCTION set_organization_bank_account   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION set_player_bank_account         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION record_sensitive_data_consent   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION create_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_organization_application FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION review_tournament_cancellation  FROM PUBLIC, anon, authenticated;
@@ -2110,6 +2217,7 @@ REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, au
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
 GRANT EXECUTE ON FUNCTION set_player_bank_account         TO service_role;
+GRANT EXECUTE ON FUNCTION record_sensitive_data_consent   TO service_role;
 GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_organization_application TO service_role;
 GRANT EXECUTE ON FUNCTION review_tournament_cancellation  TO service_role;

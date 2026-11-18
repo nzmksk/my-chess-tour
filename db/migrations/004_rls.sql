@@ -19,6 +19,7 @@ ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_bank_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sensitive_data_consents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_fundings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_funder_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_awards ENABLE ROW LEVEL SECURITY;
@@ -420,6 +421,25 @@ ON player_bank_accounts FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
 
 REVOKE UPDATE, INSERT, DELETE ON player_bank_accounts FROM anon, authenticated;
+
+-- =============================================
+-- SENSITIVE DATA CONSENTS (#451)
+-- A user can read their own consent history (and has_sensitive_data_consent,
+-- run as the uploading user by the oku-documents storage policy, depends on
+-- that). Platform admins can read everyone's, to answer a PDPA access request
+-- or a complaint. No one writes from a client: record_sensitive_data_consent
+-- is the only write path, and a client-inserted grant would be consent the
+-- user never gave.
+-- =============================================
+CREATE POLICY "Users can view own sensitive data consents"
+ON sensitive_data_consents FOR SELECT
+USING (can_act_for(user_id));
+
+CREATE POLICY "Platform admins can view sensitive data consents"
+ON sensitive_data_consents FOR SELECT
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON sensitive_data_consents FROM anon, authenticated;
 
 -- =============================================
 -- PRIZE FUNDINGS / PRIZE AWARDS (#523)
