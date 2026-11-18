@@ -1213,6 +1213,7 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 | 400  | `VALIDATION_ERROR` | Request body fails validation                                     |
 | 401  | `UNAUTHORIZED`     | Missing or invalid auth token                                     |
 | 403  | `FORBIDDEN`        | User lacks required permission                                    |
+| 403  | `FORBIDDEN_ORIGIN` | Write or preflight from an origin the API doesn't allow           |
 | 404  | `NOT_FOUND`        | Resource does not exist                                           |
 | 409  | `CONFLICT`         | Duplicate registration, application already exists, etc.          |
 | 422  | `UNPROCESSABLE`    | Business logic violation (tournament full, deadline passed, etc.) |
@@ -1279,6 +1280,37 @@ The message is written for the user and the UI shows it as is.
 - **Client IP** comes only from `x-nf-client-connection-ip`, which Netlify sets (`src/lib/http/request-ip.ts`). `cf-connecting-ip` and `x-forwarded-for` are client-supplied on Netlify and ignored. Without the header, per-IP buckets are skipped, never shared.
 - **No signed-out baseline:** server components fetch the app's own API from the server's address (e.g. the home page's tournament list), so an IP-keyed baseline would throttle every visitor together.
 - The per-email auth counters (login lockout, verify-code attempts, resend cooldown) use the same primitive, in `src/services/rate-limit/auth.ts`, but answer with their own UX rather than this 429.
+
+### CORS and origin policy
+
+Every `/api` route authenticates with the Supabase session cookies, which the browser attaches wherever the calling page came from. The proxy (`src/proxy.ts`, policy in `src/lib/http/origin-policy.ts`, #614) runs this check before any session work:
+
+| Request                             | From an allowed origin                                                               | From any other origin                                  |
+| ----------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `POST` / `PUT` / `PATCH` / `DELETE` | Goes to the route                                                                    | `403 FORBIDDEN_ORIGIN`                                 |
+| `OPTIONS` preflight                 | `204` with the exact origin, credentials, methods and `Content-Type`; 10 min cache   | `403`, no CORS headers                                 |
+| `GET` / `HEAD`                      | Goes to the route; on another host, gets `Access-Control-Allow-Origin` + credentials | Goes to the route; the browser can't read the response |
+
+**Allowed origins:**
+
+- **The origin serving the request**: scheme, host and port, as `resolveRequestOrigin` reads them (`x-forwarded-host`, else `host`; `x-forwarded-proto`, else `http` for loopback and `https` otherwise). This is plain same-origin traffic, and it is what makes deploy previews, branch deploys and a dev server on any port work. `http://` on our own hostname is a different origin and is refused, so a page injected over plain HTTP can't pass as us.
+- **`NEXT_PUBLIC_SITE_URL`** and its **admin subdomain**: `www.mychesstour.com` → `admin.mychesstour.com`, `staging.mychesstour.com` → `admin.staging.mychesstour.com`.
+
+Deploy previews are not trusted to call _another_ deployment's API. The repo is public and previews build pull-request code.
+
+**How the origin is read:** `Origin`, else the origin of `Referer`. `Origin: null` (sandboxed frames, some cross-site redirects) and an unparseable `Referer` are refused. A write with neither header isn't from a browser, so there is no session for a page to ride, and it goes through to the route's own auth.
+
+`Access-Control-Allow-Origin` is never `*`. Every API response carries `Vary: Origin`.
+
+**Exempt:** `/api/v1/webhooks/*` (CHIP RSA signature) and `/api/v1/cron/*` (`CRON_SECRET`). Servers call them, with no browser origin. Pages are not covered here either: server actions get Next's own origin check.
+
+**How this fits with `SameSite`:** the Supabase auth cookies use the `@supabase/ssr` default, `SameSite=Lax` (the app never overrides it; the session-only marker and signup cookies are `Lax` too). Lax already keeps the cookies off cross-_site_ subrequests, including a form POST from another registrable domain, so most cross-site writes would arrive signed out. The origin check covers what Lax doesn't:
+
+- **Same-site, cross-origin** pages: another subdomain of `mychesstour.com` counts as the same site, so Lax sends the cookies.
+- **Top-level `GET` navigations**, which Lax allows. The API must not change state on `GET`; that is a convention the routes follow, not something this check enforces.
+- Browsers with older or no `SameSite` support.
+
+The two layers are independent; neither is relied on alone.
 
 ---
 
