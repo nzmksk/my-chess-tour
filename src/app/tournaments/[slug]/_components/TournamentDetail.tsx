@@ -510,7 +510,7 @@ export default function TournamentDetail({
   );
 
   return (
-    <div className="bg-bg-base min-h-screen">
+    <div className="bg-bg-base">
       <main className="mx-auto max-w-300 px-6 py-8 md:px-10">
         {/* Header — always visible above tabs */}
         <div className="mb-6">
