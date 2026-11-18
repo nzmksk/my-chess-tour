@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientIp } from "@/lib/http/request-ip";
+import { isBrowserApiPath } from "@/lib/http/server-to-server";
 import {
   internalErrorResponse,
   logInternalError,
@@ -103,16 +104,12 @@ export function rateLimitedResponse(
   );
 }
 
-// Server-to-server routes, authenticated on their own: CHIP calls the webhooks
-// and the scheduler calls cron with CRON_SECRET.
-const UNLIMITED_API_PREFIXES = ["/api/v1/webhooks/", "/api/v1/cron/"];
-
-/** Whether the proxy's baseline limit applies to this path. */
+/**
+ * Whether the proxy's baseline limit applies to this path: every API route
+ * except the server-to-server ones (webhooks, cron).
+ */
 export function isBaselineLimitedPath(pathname: string): boolean {
-  return (
-    pathname.startsWith("/api/") &&
-    !UNLIMITED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
-  );
+  return isBrowserApiPath(pathname);
 }
 
 /**
