@@ -2,9 +2,19 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SIGNUP_STEP_COOKIE } from "@/lib/auth/signup-cookie";
 import { SESSION_ONLY_COOKIE, stripPersistence } from "@/lib/auth/session-cookie";
+import { applyCorsHeaders, enforceApiOrigin } from "@/lib/http/origin-policy";
 import { enforceApiBaseline } from "@/services/rate-limit/limiter";
 
 export async function proxy(request: NextRequest) {
+  // CORS and origin policy for the API (#614): answer preflights and refuse
+  // writes from other origins before any session work, then add the CORS
+  // headers to whatever response comes back.
+  const refused = enforceApiOrigin(request);
+  if (refused) return refused;
+  return applyCorsHeaders(request, await handleRequest(request));
+}
+
+async function handleRequest(request: NextRequest): Promise<NextResponse> {
   let supabaseResponse = NextResponse.next({ request });
 
   // Honor the user's "Keep me signed in" choice on token refresh: when the
