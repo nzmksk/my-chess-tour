@@ -56,7 +56,7 @@ export interface LegalVersion {
  */
 export const TERMS_HISTORY: readonly LegalVersion[] = [
   {
-    version: "2026-11-16",
+    version: "2026-11-19",
     changes: [
       "You must be at least 13 years old, or have a parent's consent, and your name must match your MyKad or passport — it is used for official tournament records and FIDE/MCF registration.",
       "Tournaments follow the FIDE Laws of Chess. You agree to abide by the arbiter's decisions, to compete without computer assistance, and to accept results as final unless you appeal within the time the arbiter sets.",
@@ -68,6 +68,7 @@ export const TERMS_HISTORY: readonly LegalVersion[] = [
       "A code of conduct covering respect, harassment, cheating and rating manipulation, enforced by suspension, disqualification, or reporting to the MCF and FIDE.",
       "Platform content is ours or licensed to us, liability is limited as far as Malaysian law permits, and disputes are governed by Malaysian law in the courts of Kuala Lumpur.",
       "Privacy Policy: what we collect (account, player profile, financial, business verification and tournament data), how long we keep it, and your rights under the PDPA.",
+      "Privacy Policy: your OKU card (health data) and your bank details (financial data) are each collected only with their own explicit consent, a separate checkbox shown when you give us that data and never part of accepting these terms. You can withdraw either at any time in Settings, which deletes the OKU card or removes the bank details.",
       "Privacy Policy: how your data is protected. It is transmitted over HTTPS, held on encrypted storage with row-level access control, and bank numbers are masked in our change logs — but individual fields are not separately encrypted, and we would rather say so plainly than overstate it.",
       "Privacy Policy: who your data is shared with — FIDE and the MCF for rating and registration, the organisers of tournaments you enter (your name, title, FIDE/MCF IDs and ratings, gender, date of birth, nationality and whether you are verified OKU — never your OKU card or contact details) for pairing, categories and special prizes, CHIP as our payment processor, and Sentry for error monitoring (servers in the United States; reports deleted after 30 days). Business verification documents are not shared with third parties.",
     ],
