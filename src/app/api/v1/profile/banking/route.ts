@@ -16,6 +16,12 @@ import { sendAwardsAwaitingBank } from "@/services/prizes/execute";
 // chosen from the list (the server derives the bank's display name from it), the
 // holder and the account number. Sending all three as null clears the details.
 //
+// Bank details are held only with the player's separate financial-data consent
+// (#451). The client records it first (POST /api/v1/profile/consents, from the
+// checkbox on the form) and set_player_bank_account refuses a save without it,
+// which comes back here as 409 CONSENT_REQUIRED. Clearing the details is how a
+// player withdraws that consent; the RPC records the withdrawal itself.
+//
 // NEVER RETURNS THE FULL ACCOUNT NUMBER: the RPC answers with the last 4 digits.
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
@@ -81,6 +87,18 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "User not found" } },
         { status: 404 },
+      );
+    }
+    if (error.code === "P0001" && error.message?.startsWith("CONSENT_REQUIRED")) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CONSENT_REQUIRED",
+            message:
+              "Please consent to us storing your bank details before saving them",
+          },
+        },
+        { status: 409 },
       );
     }
     return internalErrorResponse(
