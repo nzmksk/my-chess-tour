@@ -14,7 +14,9 @@ import { createClient } from "@/services/supabase/server";
 export const revalidate = 86400;
 
 export const metadata: Metadata = {
-  title: "Upcoming Chess Tournaments in Malaysia",
+  // The layout's "%s | MY Chess Tour" template only applies to child
+  // segments, not this root page, so the brand suffix is written out here.
+  title: { absolute: "Upcoming Chess Tournaments in Malaysia | MY Chess Tour" },
   description:
     "See all upcoming open chess tournaments in Malaysia. Filter by state, format, and rating. Register online and pay securely with FPX, DuitNow QR, or e-wallet.",
   openGraph: {

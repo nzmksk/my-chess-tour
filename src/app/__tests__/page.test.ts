@@ -40,6 +40,8 @@ describe("HomePage (tournament list at /)", () => {
   });
 
   it("uses the tournament list metadata", () => {
-    expect(metadata.title).toBe("Upcoming Chess Tournaments in Malaysia");
+    expect(metadata.title).toEqual({
+      absolute: "Upcoming Chess Tournaments in Malaysia | MY Chess Tour",
+    });
   });
 });
