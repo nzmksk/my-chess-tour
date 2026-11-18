@@ -263,4 +263,29 @@ describe("GET prize-funding", () => {
     const res = await get();
     expect(res.status).toBe(500);
   });
+
+  it.each(["prize_fundings", "prize_funder_contacts"])(
+    "500s when %s can't be listed",
+    async (table) => {
+      tables.prize_fundings = [{ data: [], error: null }];
+      tables.prize_funder_contacts = [{ data: [], error: null }];
+      tables[table] = [{ data: null, error: { message: "down" } }];
+      const res = await get();
+      expect(res.status).toBe(500);
+    },
+  );
+
+  it("400s an invalid tournament id", async () => {
+    const res = await GET(
+      new NextRequest(`http://localhost/api/v1/organizations/${ORG_ID}/tournaments/nope/prize-funding`),
+      { params: Promise.resolve({ orgId: ORG_ID, id: "nope" }) },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("500s when the tournament can't be loaded", async () => {
+    tables.tournaments = [{ data: null, error: { message: "timeout" } }];
+    const res = await get();
+    expect(res.status).toBe(500);
+  });
 });

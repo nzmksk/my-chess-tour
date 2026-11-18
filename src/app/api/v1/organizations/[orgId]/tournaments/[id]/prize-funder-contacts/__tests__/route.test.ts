@@ -133,9 +133,94 @@ describe("PUT prize-funder-contacts", () => {
     const res = await put({ contacts: [{ funder_name: "Acme", funder_email: "pay@acme.test" }] });
     expect(res.status).toBe(200);
   });
+
+  it.each([
+    [{ contacts: [{ funder_email: "a@b.test" }] }, "Every funder needs a name"],
+    [{ contacts: [null] }, "Every funder needs a name"],
+    [{ contacts: [{ funder_name: "Acme", funder_email: 42 }] }, "Acme: enter a valid email address"],
+    [
+      { contacts: Array.from({ length: 51 }, (_, i) => ({ funder_name: `F${i}`, funder_email: `f${i}@x.test` })) },
+      "At most 50 funders",
+    ],
+  ])("400s malformed contacts %#", async (body, message) => {
+    const res = await put(body);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.message).toBe(message);
+  });
+
+  it("400s a body that isn't JSON", async () => {
+    const res = await PUT(new NextRequest(URL, { method: "PUT", body: "{" }), params);
+    expect(res.status).toBe(400);
+  });
+
+  it("400s an invalid tournament id", async () => {
+    const res = await PUT(
+      new NextRequest(URL, { method: "PUT", body: JSON.stringify({ contacts: [] }) }),
+      { params: Promise.resolve({ orgId: ORG_ID, id: "nope" }) },
+    );
+    expect(res.status).toBe(400);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("500s when the tournament can't be loaded", async () => {
+    tables.tournaments = [{ data: null, error: { message: "timeout" } }];
+    const res = await put({ contacts: [] });
+    expect(res.status).toBe(500);
+  });
+
+  it("maps the database's validation refusal to a 400", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "PRIZE_FUNDER_CONTACT_INVALID: bad address" },
+    });
+    const res = await put({ contacts: [{ funder_name: "Acme", funder_email: "pay@acme.test" }] });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.message).toMatch(/names and email addresses/);
+  });
+
+  it.each([
+    [{ code: "P0001", message: "something else" }],
+    [{ code: "XX000", message: "PRIZE_FUNDER_CONTACT_INVALID" }],
+  ])("500s any other save failure %#", async (error) => {
+    mockRpc.mockResolvedValue({ data: null, error });
+    const res = await put({ contacts: [{ funder_name: "Acme", funder_email: "pay@acme.test" }] });
+    expect(res.status).toBe(500);
+    expect(mockSync).not.toHaveBeenCalled();
+  });
+
+  it("re-asks the funders of a listed tournament too", async () => {
+    tables.tournaments = [{ data: { status: "published" }, error: null }];
+    const res = await put({ contacts: [{ funder_name: "Acme", funder_email: "pay@acme.test" }] });
+    expect(res.status).toBe(200);
+    expect(mockSync).toHaveBeenCalledWith(T_ID, USER_ID);
+  });
 });
 
 describe("GET prize-funder-contacts", () => {
+  it("needs tournament.view", async () => {
+    mockHasPermission.mockResolvedValue(false);
+    const res = await GET(new NextRequest(URL), params);
+    expect(res.status).toBe(403);
+  });
+
+  it("404s a tournament of another organization", async () => {
+    tables.tournaments = [{ data: null, error: null }];
+    const res = await GET(new NextRequest(URL), params);
+    expect(res.status).toBe(404);
+  });
+
+  it("500s when the contacts can't be listed", async () => {
+    tables.prize_funder_contacts = [{ data: null, error: { message: "down" } }];
+    const res = await GET(new NextRequest(URL), params);
+    expect(res.status).toBe(500);
+  });
+
+  it("answers an empty list when there are none", async () => {
+    tables.prize_funder_contacts = [{ data: null, error: null }];
+    const res = await GET(new NextRequest(URL), params);
+    expect((await res.json()).data).toEqual([]);
+  });
+
   it("lists the contacts to anyone who can view the tournament", async () => {
     const contacts = [{ funder_name: "Acme", funder_email: "pay@acme.test" }];
     tables.prize_funder_contacts = [{ data: contacts, error: null }];

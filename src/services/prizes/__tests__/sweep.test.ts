@@ -86,6 +86,49 @@ describe("reconcileStuckPrizeAwards", () => {
     results.push({ data: null, error: { message: "down" } });
     await expect(reconcileStuckPrizeAwards()).rejects.toBeInstanceOf(PayoutPassError);
   });
+
+  it("settles a failed instruction as failed, with CHIP's state as the reason", async () => {
+    results.push({ data: [{ id: "a1", chip_send_instruction_id: 7001 }], error: null });
+    mockGetInstruction.mockResolvedValue({ id: 7001, state: "REJECTED", amount: "300.00", receipt_url: "r" });
+
+    const stats = await reconcileStuckPrizeAwards();
+
+    expect(mockSettle).toHaveBeenCalledWith({
+      awardId: "a1",
+      chipSendInstructionId: 7001,
+      paid: false,
+      amountCents: null,
+      receiptUrl: null,
+      failureReason: "send_instruction_rejected",
+    });
+    expect(stats.failed).toBe(1);
+  });
+
+  it("leaves the award processing when CHIP can't be read", async () => {
+    results.push({ data: [{ id: "a1", chip_send_instruction_id: 7001 }], error: null });
+    mockGetInstruction.mockRejectedValue(new Error("timeout"));
+    const stats = await reconcileStuckPrizeAwards();
+    expect(mockSettle).not.toHaveBeenCalled();
+    expect(stats.error).toBe(1);
+  });
+
+  it("counts a failed settle as an error, and a repeat settle as skipped", async () => {
+    results.push({
+      data: [
+        { id: "a1", chip_send_instruction_id: 7001 },
+        { id: "a2", chip_send_instruction_id: 7002 },
+      ],
+      error: null,
+    });
+    mockGetInstruction.mockResolvedValue({ state: "completed", amount: "300.00", receipt_url: null });
+    mockSettle
+      .mockResolvedValueOnce({ error: { message: "db down" }, settled: false })
+      .mockResolvedValueOnce({ error: null, settled: false });
+
+    const stats = await reconcileStuckPrizeAwards();
+
+    expect(stats).toMatchObject({ error: 1, skipped: 1 });
+  });
 });
 
 describe("retryPendingPrizeAwards", () => {
