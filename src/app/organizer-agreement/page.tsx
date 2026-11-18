@@ -1,4 +1,5 @@
 import NavBar from "@/components/NavBar";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 import { ORGANIZER_AGREEMENT_VERSION, formatLegalVersion } from "@/lib/reference/legal";
 
 export const metadata = {
@@ -393,7 +394,7 @@ export default function OrganizerAgreementPage() {
                 This Agreement is governed by the laws of Malaysia, and the
                 courts of Kuala Lumpur have exclusive jurisdiction over any
                 dispute arising from it. For questions about this Agreement,
-                contact us at <strong>support@mychesstour.com</strong>.
+                contact us at <strong>{SUPPORT_EMAIL}</strong>.
               </p>
             </section>
           </div>

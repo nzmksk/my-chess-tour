@@ -1,4 +1,5 @@
 import NavBar from "@/components/NavBar";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 import { TERMS_VERSION, formatLegalVersion } from "@/lib/reference/legal";
 
 export const metadata = {
@@ -244,7 +245,7 @@ export default function TermsPage() {
               </h2>
               <p className="text-text-secondary">
                 For questions about these Terms, please contact us at{" "}
-                <strong>support@mychesstour.com</strong>.
+                <strong>{SUPPORT_EMAIL}</strong>.
               </p>
             </section>
           </div>
