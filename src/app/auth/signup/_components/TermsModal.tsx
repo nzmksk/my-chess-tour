@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 import { TERMS_VERSION, formatLegalVersion } from "@/lib/reference/legal";
 
 interface TermsModalProps {
@@ -219,7 +220,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
           <h3 className="modal-section-title">11. Contact Us</h3>
           <p className="modal-paragraph">
             For questions about these Terms, please contact us at{" "}
-            <strong>support@mychesstour.com</strong>.
+            <strong>{SUPPORT_EMAIL}</strong>.
           </p>
         </div>
 

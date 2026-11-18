@@ -103,7 +103,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Player-initiated registration cancellation | P12 | ❌ | 🟡 | Player forfeits; support handles case-by-case. |
 | Admin tournaments / transactions / users pages | A4, A5, A6 | ❌ | 🟡 | Use the Supabase dashboard directly. |
 | Self-serve correction of set-once fields / account changes | P5 | ❌ | 🟡 | Support-routed; monitor support load. |
-| Support-email inconsistency | V1 | ⚠️ | 🟡 | One-line fix (`mychesstour@gmail.com` → `support@mychesstour.com`). |
+| Support-email inconsistency | V1 | ✅ | — | One shared `SUPPORT_EMAIL` in `src/lib/reference/contact.ts`; the email templates hard-code it and a test fails if one names anything else (#618). |
 | Member-invite acceptance / resend / expiry | O3 | ✅ | — | Shipped in #121: accept/decline page, 30-day expiry, resend and revoke on the members page. |
 | Payment-expiry scheduled backstop | S2 | ⚠️ lazy-on-read | 🟢 | Lazy sweep + CHIP `due` suffice; add `pg_cron` later (shared prerequisite with #507). |
 | Dependent accounts (register on behalf of others) | P15 | ❌ | 🟢 | Each player needs their own account (#504). |
@@ -369,7 +369,7 @@ on the pre-launch list despite being invisible to users. Neither changes behavio
 5. **Communications — 🟡.** Registration confirmation, application/OKU results, member invite, cancellation and payout emails exist (S4). Still missing: reminders.
 6. **Organizer event-running tooling — ✅.** Participant CSV/Excel export ships (O8, #90), so rosters can seed pairing software.
 7. **Admin tooling — 🟡.** No admin tournaments/transactions/users pages (A4–A6); `/admin/cancellations` is the one operational admin screen beyond applications/OKU. *Interim:* Supabase dashboard.
-8. **Support-load risks — 🟡.** Set-once profile fields with no self-serve correction, and no self-serve email/name change or account deletion (P5); support-email inconsistency (V1, a trivial fix). These convert small user mistakes into support tickets. Deletion is support-run through [account-deletion.md](./account-deletion.md) until a self-serve flow exists, and P16 would make the missing correction path more visible.
+8. **Support-load risks — 🟡.** Set-once profile fields with no self-serve correction, and no self-serve email/name change or account deletion (P5). These convert small user mistakes into support tickets. Deletion is support-run through [account-deletion.md](./account-deletion.md) until a self-serve flow exists, and P16 would make the missing correction path more visible.
 9. **Auth niceties — 🟢.** No OAuth/magic-link (email+password is fine); no logout-everywhere.
 10. **Deferred platform capabilities — 🟢.** Dependent accounts (P15, #504), account claiming (P16, #505), and multi-participant checkout (P17, #506). Sequenced and costed; unstarted on purpose. *Interim:* one account and one checkout per player — ship it that way and let real demand decide.
 
@@ -400,7 +400,7 @@ Flow IDs in brackets point back to the detail above.
 - [ ] **[P15–P17]** Confirm the team is happy deferring dependents, claiming, and carts — and that one-checkout-per-player is acceptable for the first events. 🟢
 
 **Visitor**
-- [ ] **[V1]** Fix the support-email inconsistency (`mychesstour@gmail.com` → `support@mychesstour.com`).
+- [x] **[V1]** Fix the support-email inconsistency (`mychesstour@gmail.com` → `support@mychesstour.com`) (#618).
 - [ ] **[V1]** Decide whether the waitlist needs a confirmation email.
 - [ ] **[V2/V3]** Verify browse, filters, full-badge, and detail render for a published tournament.
 
