@@ -5,6 +5,8 @@ import "@/styles/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthProvider";
 import { BugReport } from "@/components/BugReport";
+import Footer from "@/components/Footer";
+import { HideOnAdmin } from "@/components/HideOnAdmin";
 import { getNavUser } from "@/services/supabase/permission";
 import { toAuthUser } from "@/lib/auth/auth-user";
 
@@ -88,14 +90,19 @@ export default async function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>
+      {/* A column at least the viewport tall, with the page taking the slack,
+          so the footer sits at the bottom of a short page instead of mid-screen. */}
+      <body className="flex flex-col">
         <ThemeProvider>
           <AuthProvider
             initialUser={initialUser}
             initialAvatar={initialAvatar}
             initialOrganizations={initialOrganizations}
           >
-            {children}
+            <div className="flex flex-1 flex-col">{children}</div>
+            <HideOnAdmin>
+              <Footer />
+            </HideOnAdmin>
             <BugReport />
           </AuthProvider>
         </ThemeProvider>
