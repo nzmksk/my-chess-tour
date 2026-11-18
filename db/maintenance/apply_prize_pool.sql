@@ -1,8 +1,9 @@
 -- =============================================================================
 -- ONE-OFF: bring an existing database up to #523 (platform-managed prize pool)
 --
--- #523 edits the base migrations in place: player_bank_accounts, prize_fundings
--- and prize_awards in 001 (and the bank columns leave player_profiles), their
+-- #523 edits the base migrations in place: the 'pending_funding' tournament
+-- status, player_bank_accounts, prize_fundings, prize_funder_contacts and
+-- prize_awards in 001 (and the bank columns leave player_profiles), their
 -- indexes in 002, triggers, audit redaction/anonymisation, set_player_bank_account
 -- and the agreement version in 003, RLS in 004, and the money functions in 007. A
 -- fresh build gets all of it. 003 can't simply be re-run on a long-lived database
@@ -18,6 +19,10 @@
 --      player branch.
 --   3. Deploy the app. Before step 2 the checkout route's prize_pool_blocks_
 --      registration call fails, so deploy only after it.
+--
+-- 'pending_funding' is added with ALTER TYPE ... ADD VALUE, which Postgres 12+
+-- allows inside a transaction as long as nothing in that transaction uses the
+-- new value. Nothing below does; only the functions re-created by step 2 do.
 --
 -- Two things change for existing users:
 --   * player_profiles.bank_name / bank_account_holder / bank_account_number are
@@ -35,6 +40,8 @@
 BEGIN;
 
 -- 001 -------------------------------------------------------------------------
+ALTER TYPE tournament_status ADD VALUE IF NOT EXISTS 'pending_funding' BEFORE 'published';
+
 ALTER TABLE player_profiles
   DROP COLUMN bank_name,
   DROP COLUMN bank_account_holder,
@@ -59,6 +66,18 @@ CREATE TABLE player_bank_accounts (
   CONSTRAINT chk_player_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified')
 );
 
+CREATE TABLE prize_funder_contacts (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id uuid NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  funder_name   varchar(255) NOT NULL,
+  funder_email  varchar(255) NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_prize_funder_contact_name CHECK (btrim(funder_name) <> ''),
+  CONSTRAINT chk_prize_funder_contact_email CHECK (funder_email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$')
+);
+
 CREATE TABLE prize_fundings (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id       uuid NOT NULL REFERENCES tournaments(id) ON DELETE RESTRICT,
@@ -71,6 +90,7 @@ CREATE TABLE prize_fundings (
   payment_method      varchar(50),
   payment_id          uuid REFERENCES payments(id) ON DELETE RESTRICT,
   paid_at             timestamptz,
+  cancelled_at        timestamptz,
   created_by          uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now(),
@@ -131,6 +151,16 @@ CREATE INDEX idx_player_bank_accounts_chip_id ON player_bank_accounts (chip_bank
 CREATE UNIQUE INDEX uniq_prize_fundings_chip_transaction
   ON prize_fundings (chip_transaction_id) WHERE chip_transaction_id IS NOT NULL;
 CREATE INDEX idx_prize_fundings_tournament ON prize_fundings (tournament_id, created_at);
+-- Open requests still waiting for their CHIP purchase (a gateway failure at
+-- publish), which the daily run retries.
+CREATE INDEX idx_prize_fundings_unlinked
+  ON prize_fundings (created_at)
+  WHERE status = 'pending' AND cancelled_at IS NULL AND checkout_url IS NULL;
+
+-- Prize funder contacts: one per funder name per tournament, matched the way
+-- reconcile_prize_funding_requests matches the prizes document.
+CREATE UNIQUE INDEX uniq_prize_funder_contact
+  ON prize_funder_contacts (tournament_id, lower(btrim(funder_name)));
 
 -- Prize awards
 CREATE UNIQUE INDEX uniq_prize_awards_chip_send_instruction
@@ -152,6 +182,9 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_bank_accounts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_fundings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_funder_contacts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_awards
@@ -418,6 +451,7 @@ GRANT EXECUTE ON FUNCTION set_player_bank_account TO service_role;
 -- 004 -------------------------------------------------------------------------
 ALTER TABLE player_bank_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_fundings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prize_funder_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_awards ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Players can view own bank accounts"
@@ -445,6 +479,24 @@ ON prize_fundings FOR ALL
 USING (has_global_permission(app_user_id(), 'platform.manage'));
 
 REVOKE UPDATE, INSERT, DELETE ON prize_fundings FROM anon, authenticated;
+
+-- A sponsor's address is seen by the organizer who entered it and by platform
+-- admins, never by the public. Written only by set_prize_funder_contacts.
+CREATE POLICY "Org members can view prize funder contacts"
+ON prize_funder_contacts FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM tournaments t
+    WHERE t.id = prize_funder_contacts.tournament_id
+      AND has_org_permission(app_user_id(), t.organization_id, 'tournament.view')
+  )
+);
+
+CREATE POLICY "Platform admins full access to prize funder contacts"
+ON prize_funder_contacts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON prize_funder_contacts FROM anon, authenticated;
 
 CREATE POLICY "Org payout viewers can view prize awards"
 ON prize_awards FOR SELECT
