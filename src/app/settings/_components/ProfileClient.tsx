@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 import { nameToAlpha3 } from "@/lib/reference/countries";
 import { createClient } from "@/services/supabase/client";
 import OkuVerificationCard from "./OkuVerificationCard";
@@ -61,7 +62,7 @@ function LockedField({ label, value }: LockedFieldProps) {
       </p>
       <p className="font-lato text-text-secondary text-sm">{value || "—"}</p>
       <p className="font-lato text-text-muted mt-1 text-xs">
-        Contact support@mychesstour.com to change.
+        Contact {SUPPORT_EMAIL} to change.
       </p>
     </div>
   );
@@ -458,7 +459,7 @@ export default function ProfileClient({ profile }: Props) {
                 {fullName} · {current.email}
               </p>
               <p className="font-lato text-text-muted mt-1 text-xs">
-                Contact support@mychesstour.com to change your name or email.
+                Contact {SUPPORT_EMAIL} to change your name or email.
               </p>
             </div>
 

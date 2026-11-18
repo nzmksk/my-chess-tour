@@ -6,6 +6,7 @@ import type { PlayerRegistration, RegistrationStatus } from "../types";
 import type { TournamentFormat, TimeControl } from "@/app/tournaments/types";
 import { formatRinggit } from "@/services/payouts/format";
 import { formatInstantDate } from "@/lib/tournaments/datetime";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 
 type Tab = "upcoming" | "past" | "cancelled";
 
@@ -115,8 +116,8 @@ function RefundLine({
   if (refund.state === "failed") {
     return (
       <p className="font-lato text-xs text-danger mt-1">
-        Refund of {amount} could not be completed. Contact
-        support@mychesstour.com and we will arrange it.
+        Refund of {amount} could not be completed. Contact {SUPPORT_EMAIL} and
+        we will arrange it.
       </p>
     );
   }
