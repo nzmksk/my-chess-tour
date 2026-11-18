@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs/config";
+import packageJson from "./package.json";
 
 const nextConfig: NextConfig = {
+  // Which build a bug report came from (#616). Inlined at build time: Netlify
+  // sets COMMIT_REF during the build, but not in the functions at runtime.
+  env: {
+    APP_VERSION: packageJson.version,
+    APP_COMMIT: process.env.COMMIT_REF?.slice(0, 7) ?? "",
+  },
   async redirects() {
     return [
       // The tournament list moved from /tournaments to / (#615). The source has

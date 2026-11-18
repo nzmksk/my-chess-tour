@@ -97,6 +97,7 @@ DROP TABLE IF EXISTS public.users                   CASCADE;
 DROP TABLE IF EXISTS public.role_permissions        CASCADE;
 DROP TABLE IF EXISTS public.permissions             CASCADE;
 DROP TABLE IF EXISTS public.roles                   CASCADE;
+DROP TABLE IF EXISTS public.bug_reports             CASCADE;
 DROP TABLE IF EXISTS public.waitlist                CASCADE;
 
 -- -----------------------------------------------------------------------------
@@ -164,7 +165,7 @@ WHERE table_schema = 'public'
     'player_profiles','organizations','organization_memberships','organization_invitations',
     'organization_bank_accounts','organization_documents','tournaments',
     'registrations','payments','refunds','payouts','tournament_cancellation_requests',
-    'audit_logs','waitlist'
+    'audit_logs','waitlist','bug_reports'
   );
 
 SELECT 'app_enums' AS check, count(*)
