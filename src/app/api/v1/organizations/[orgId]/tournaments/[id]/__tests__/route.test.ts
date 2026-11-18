@@ -1261,6 +1261,36 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
     });
   });
 
+  describe("prizes raised during a live checkout", () => {
+    it("returns 409 when the trigger refuses a raise the pool doesn't cover", async () => {
+      setUser();
+      setTournamentUpdateResult(null, {
+        code: "P0001",
+        message: `PRIZES_IN_CHECKOUT: 1 checkouts are live; tournament ${TOUR_ID} cannot raise its prizes beyond the funded pool`,
+      });
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { name: "Renamed" }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.code).toBe("CONFLICT");
+      expect(body.error.details).toEqual(["prizes"]);
+      expect(body.error.message).toMatch(/paying for this tournament right now/);
+    });
+
+    it("needs the trigger's SQLSTATE, not just its wording", async () => {
+      setUser();
+      setTournamentUpdateResult(null, {
+        code: "XX000",
+        message: "PRIZES_IN_CHECKOUT: 1 checkouts are live",
+      });
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { name: "Renamed" }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(500);
+    });
+  });
+
   describe("database errors", () => {
     it("returns 500 when the update fails", async () => {
       setUser();

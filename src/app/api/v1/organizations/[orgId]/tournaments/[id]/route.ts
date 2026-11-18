@@ -416,6 +416,19 @@ function seatsTakenFrom(error: {
   return match ? Number(match[1]) : null;
 }
 
+const PRIZES_IN_CHECKOUT = /^PRIZES_IN_CHECKOUT: /;
+
+/**
+ * True when the update was refused for raising a platform-distributed pool's
+ * prizes beyond what the funders have paid in while a player is mid-checkout
+ * (guard_tournament_prizes_in_checkout, 003_functions_triggers.sql). Like the
+ * capacity floor, only the trigger can answer this: it counts the live holds
+ * under the tournament row lock.
+ */
+function isPrizesInCheckout(error: { code?: string; message: string }): boolean {
+  return error.code === "P0001" && PRIZES_IN_CHECKOUT.test(error.message);
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
@@ -712,6 +725,19 @@ export async function PATCH(
           },
         },
         { status: 422 },
+      );
+    }
+    if (isPrizesInCheckout(updateError)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "CONFLICT",
+            message:
+              "A player is paying for this tournament right now, and these prizes are more than the sponsors have paid in. Try again in 10 minutes, once their checkout has finished.",
+            details: ["prizes"],
+          },
+        },
+        { status: 409 },
       );
     }
     return internalErrorResponse(
