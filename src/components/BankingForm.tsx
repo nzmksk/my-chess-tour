@@ -8,6 +8,9 @@ import BankAccountFields, {
 } from "@/components/BankAccountFields";
 import { MALAYSIAN_BANKS } from "@/lib/reference/malaysian-banks";
 import type { BankAccountStatus } from "@/app/profile/types";
+import SensitiveDataConsent, {
+  recordSensitiveDataConsent,
+} from "@/components/SensitiveDataConsent";
 
 // Masked view of a player's banking details — what the API returns and what the
 // UI renders. The full account number is never held here.
@@ -46,6 +49,10 @@ interface Props {
 // organization payout destination. The bank is chosen from the same list,
 // because a platform-distributed prize is sent to this account through CHIP
 // Send (#523), which only knows banks by SWIFT code.
+//
+// Bank details need the player's separate financial-data consent (#451): the
+// checkbox must be ticked on every save, and the grant is recorded before the
+// details are sent, because set_player_bank_account refuses them without it.
 export default function BankingForm({
   initial,
   onSaved,
@@ -60,6 +67,7 @@ export default function BankingForm({
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [consented, setConsented] = useState(false);
 
   function update(patch: Partial<BankAccountValues>) {
     setValues((prev) => ({ ...prev, ...patch }));
@@ -74,10 +82,20 @@ export default function BankingForm({
       setError(validationError);
       return;
     }
+    if (!consented) {
+      setError("Please tick the consent box to save your bank details.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const digits = normalizeAccountNumber(values.accountNumber);
     try {
+      const consentError = await recordSensitiveDataConsent("financial");
+      if (consentError) {
+        setError(consentError);
+        return;
+      }
+
       const res = await fetch("/api/v1/profile/banking", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -120,6 +138,16 @@ export default function BankingForm({
         disabled={submitting}
       />
 
+      <SensitiveDataConsent
+        category="financial"
+        checked={consented}
+        disabled={submitting}
+        onChange={(checked) => {
+          setConsented(checked);
+          setError(null);
+        }}
+      />
+
       {error && <p className="font-lato text-sm text-red-400">{error}</p>}
 
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -137,8 +165,8 @@ export default function BankingForm({
           type="button"
           className="btn-primary w-full"
           onClick={handleSubmit}
-          disabled={submitting}
-          aria-disabled={submitting}
+          disabled={submitting || !consented}
+          aria-disabled={submitting || !consented}
         >
           {submitting ? "Saving…" : submitLabel}
         </button>
