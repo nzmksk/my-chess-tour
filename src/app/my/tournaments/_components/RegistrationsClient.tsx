@@ -7,35 +7,10 @@ import type { TournamentFormat, TimeControl } from "@/app/tournaments/types";
 import { formatRinggit } from "@/services/payouts/format";
 import { formatInstantDate } from "@/lib/tournaments/datetime";
 import { SUPPORT_EMAIL } from "@/lib/reference/contact";
-
-type Tab = "upcoming" | "past" | "cancelled";
+import { classifyRegistration, type RegistrationTab as Tab } from "../classify";
 
 interface Props {
   registrations: PlayerRegistration[];
-}
-
-function classifyRegistration(
-  reg: PlayerRegistration,
-  today: Date,
-): Tab | null {
-  // A cancelled tournament leaves the registration itself `confirmed` (the
-  // refund ledger, not the registration, records the money going back), so
-  // without this it would sit under Upcoming looking like a live entry.
-  if (reg.tournament.status === "cancelled") return "cancelled";
-
-  const startDate = new Date(reg.tournament.start_date + "T00:00:00");
-  const isActive =
-    reg.status === "confirmed" || reg.status === "pending_payment";
-  const isCancelled =
-    reg.status === "cancelled_payment" || reg.status === "failed_payment";
-  const isCompleted = reg.status === "confirmed" || reg.status === "forfeited";
-
-  if (isCancelled) return "cancelled";
-  if (isActive && startDate >= today) return "upcoming";
-  if (isCompleted && startDate < today) return "past";
-  // pending_payment for past tournament — treat as past
-  if (startDate < today) return "past";
-  return "upcoming";
 }
 
 function formatTimeControl(tc: TimeControl): string {
@@ -215,22 +190,18 @@ function EmptyState({ tab }: { tab: Tab }) {
 
 export default function RegistrationsClient({ registrations }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("upcoming");
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
 
   const categorised = useMemo(() => {
     const upcoming: PlayerRegistration[] = [];
     const past: PlayerRegistration[] = [];
     const cancelled: PlayerRegistration[] = [];
 
+    const now = new Date();
     for (const reg of registrations) {
-      const tab = classifyRegistration(reg, today);
+      const tab = classifyRegistration(reg, now);
       if (tab === "upcoming") upcoming.push(reg);
       else if (tab === "past") past.push(reg);
-      else if (tab === "cancelled") cancelled.push(reg);
+      else cancelled.push(reg);
     }
 
     // Upcoming arrives from the API already sorted by nearest start date first.
@@ -240,7 +211,7 @@ export default function RegistrationsClient({ registrations }: Props) {
     );
 
     return { upcoming, past, cancelled };
-  }, [registrations, today]);
+  }, [registrations]);
 
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
     { key: "upcoming", label: "Upcoming", count: categorised.upcoming.length },
