@@ -85,6 +85,11 @@ vi.mock("@/services/refunds/notify", () => ({
 
 vi.mock("next/cache", () => ({ revalidateTag: vi.fn() }));
 
+const { mockOnTournamentListed } = vi.hoisted(() => ({ mockOnTournamentListed: vi.fn() }));
+vi.mock("@/services/prizes/funding-requests", () => ({
+  onTournamentListed: mockOnTournamentListed,
+}));
+
 import { POST } from "../route";
 
 // ---------------------------------------------------------------------------
@@ -579,6 +584,39 @@ describe("POST /api/v1/webhooks/chip — prize funding", () => {
     // The registration payments table is never consulted.
     expect(mockFrom).not.toHaveBeenCalledWith("payments");
     expect(mockNotifyConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("lists the tournament when this payment completes its pool", async () => {
+    setFundingResult({ data: { id: FUNDING_ID }, error: null });
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        tournament_id: "t-1",
+        newly_paid: true,
+        amount_mismatch: false,
+        already_processed: false,
+        went_live: true,
+      },
+      error: null,
+    });
+
+    const res = await POST(
+      makeRequest({ id: "chip-fund-9", reference: FUNDING_ID, status: "paid", purchase: { total: 50000 } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockOnTournamentListed).toHaveBeenCalledWith("t-1");
+  });
+
+  it("leaves the tournament alone when the pool is still short", async () => {
+    setFundingResult({ data: { id: FUNDING_ID }, error: null });
+    mockRpc.mockResolvedValueOnce({
+      data: { tournament_id: "t-1", newly_paid: true, amount_mismatch: false, already_processed: false, went_live: false },
+      error: null,
+    });
+
+    await POST(makeRequest({ id: "chip-fund-10", reference: FUNDING_ID, status: "paid" }));
+
+    expect(mockOnTournamentListed).not.toHaveBeenCalled();
   });
 
   it("finds the funding by reference when the purchase id wasn't recorded", async () => {

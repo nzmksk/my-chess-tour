@@ -60,6 +60,9 @@ export interface SettlePrizeFundingResult {
   /** This call booked the contribution (false for a repeat or a failure). */
   newlyPaid: boolean;
   amountMismatch: boolean;
+  /** This payment completed the pool and listed the tournament. */
+  wentLive: boolean;
+  tournamentId: string | null;
 }
 
 /**
@@ -82,6 +85,8 @@ export async function settlePrizeFunding(
       error: { code: error.code, message: error.message },
       newlyPaid: false,
       amountMismatch: false,
+      wentLive: false,
+      tournamentId: null,
     };
   }
 
@@ -90,6 +95,7 @@ export async function settlePrizeFunding(
     newly_paid: boolean;
     amount_mismatch: boolean;
     already_processed: boolean;
+    went_live?: boolean;
   };
 
   if (result.amount_mismatch) {
@@ -104,9 +110,17 @@ export async function settlePrizeFunding(
     console.warn(`Prize funding ${input.fundingId}: the funder's payment failed`);
   }
 
+  if (result.went_live) {
+    console.info(
+      `Prize funding ${input.fundingId}: the pool is complete, so tournament ${result.tournament_id} is now listed`,
+    );
+  }
+
   return {
     error: null,
     newlyPaid: result.newly_paid,
     amountMismatch: result.amount_mismatch,
+    wentLive: result.went_live === true,
+    tournamentId: result.tournament_id ?? null,
   };
 }

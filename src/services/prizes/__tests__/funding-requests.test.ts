@@ -1,0 +1,296 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runAfterCallbacks } from "@/test/after";
+
+const {
+  results,
+  calls,
+  mockFrom,
+  mockRpc,
+  mockCreatePurchase,
+  mockCancelPurchase,
+  mockSendRequest,
+  mockSendListed,
+  mockRevalidate,
+  mockRecipients,
+  mockPool,
+} = vi.hoisted(() => {
+  // One queued result per awaited query, in order; each builder records the
+  // table, filters and update payload it was given.
+  const results: Array<{ data: unknown; error: unknown }> = [];
+  const calls: Array<{ table: string; update?: unknown; filters: Record<string, unknown> }> = [];
+  function makeBuilder(table: string) {
+    const call: { table: string; update?: unknown; filters: Record<string, unknown> } = {
+      table,
+      filters: {},
+    };
+    calls.push(call);
+    const b: Record<string, unknown> = {};
+    for (const m of ["select", "order", "maybeSingle"]) b[m] = vi.fn(() => b);
+    b.update = vi.fn((payload: unknown) => {
+      call.update = payload;
+      return b;
+    });
+    for (const m of ["eq", "is"]) {
+      b[m] = vi.fn((col: string, val: unknown) => {
+        call.filters[`${m}:${col}`] = val;
+        return b;
+      });
+    }
+    b.then = (onfulfilled: (v: unknown) => unknown, onrejected?: (r: unknown) => unknown) =>
+      Promise.resolve(results.shift() ?? { data: null, error: null }).then(onfulfilled, onrejected);
+    return b;
+  }
+  return {
+    results,
+    calls,
+    mockFrom: vi.fn((table: string) => makeBuilder(table)),
+    mockRpc: vi.fn(),
+    mockCreatePurchase: vi.fn(),
+    mockCancelPurchase: vi.fn(),
+    mockSendRequest: vi.fn(),
+    mockSendListed: vi.fn(),
+    mockRevalidate: vi.fn(),
+    mockRecipients: vi.fn(),
+    mockPool: vi.fn(),
+  };
+});
+
+vi.mock("@/services/supabase/admin", () => ({ supabaseAdmin: { from: mockFrom, rpc: mockRpc } }));
+vi.mock("@/services/chip/chip", () => ({
+  createChipPurchase: mockCreatePurchase,
+  cancelChipPurchase: mockCancelPurchase,
+}));
+vi.mock("@/services/email/email", () => ({
+  sendPrizeFundingRequestEmail: mockSendRequest,
+  sendTournamentListedEmail: mockSendListed,
+}));
+vi.mock("@/services/payouts/recipients", () => ({ loadOrganizationRecipients: mockRecipients }));
+vi.mock("../pool", () => ({ loadPrizePoolPosition: mockPool }));
+vi.mock("../notify", () => ({
+  prizeLabel: (category: string, place: string | null) => (place ? `${category} — ${place}` : category),
+}));
+vi.mock("next/cache", () => ({ revalidateTag: mockRevalidate }));
+
+import {
+  createMissingFundingLinks,
+  onTournamentListed,
+  prizesFundedBy,
+  syncPrizeFundingRequests,
+} from "../funding-requests";
+
+const PRIZES = {
+  categories: [
+    {
+      name: "Open",
+      funding: { source: "sponsor" as const, funder_name: "ACME" },
+      entries: [
+        { place: "1st", amount_cents: 30000 },
+        { place: "2nd", amount_cents: 15000 },
+        { place: "3rd", amount_cents: 0 },
+      ],
+    },
+  ],
+  special: [
+    { name: "Best Junior", funding: { source: "sponsor" as const, funder_name: " acme " }, amount_cents: 5000 },
+    { name: "Best Female", funding: { source: "grant" as const, funder_name: "Ministry" }, amount_cents: 2000 },
+  ],
+  distribution: "platform" as const,
+};
+
+const ROW = {
+  id: "f-1",
+  tournament_id: "t-1",
+  funder_name: "ACME",
+  funder_email: "pay@acme.test",
+  amount_cents: 50000,
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  results.length = 0;
+  calls.length = 0;
+  mockCreatePurchase.mockResolvedValue({ id: "purchase-1", checkout_url: "https://gate.test/p/1" });
+  mockCancelPurchase.mockResolvedValue(undefined);
+  mockSendRequest.mockResolvedValue(undefined);
+  mockSendListed.mockResolvedValue(undefined);
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
+describe("prizesFundedBy", () => {
+  it("lists the prizes with money that a funder pays for", () => {
+    expect(prizesFundedBy(PRIZES, "Acme")).toBe("Open — 1st, Open — 2nd, Best Junior");
+    expect(prizesFundedBy(PRIZES, "ministry")).toBe("Best Female");
+    expect(prizesFundedBy(null, "Acme")).toBe("");
+  });
+});
+
+describe("createMissingFundingLinks", () => {
+  it("creates the purchase, records it on the open request, and emails the funder after", async () => {
+    results.push(
+      { data: [ROW], error: null }, // unlinked requests
+      { data: { name: "Merdeka Open", prizes: PRIZES, organization: { name: "KL Chess" } }, error: null },
+      { data: [{ id: "f-1" }], error: null }, // the guarded update
+    );
+
+    const out = await createMissingFundingLinks({ tournamentId: "t-1" });
+
+    expect(out).toEqual({ linked: 1, failed: 0 });
+    expect(calls[0].filters).toMatchObject({
+      "eq:status": "pending",
+      "is:cancelled_at": null,
+      "is:checkout_url": null,
+      "eq:tournament_id": "t-1",
+    });
+    expect(mockCreatePurchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reference: "f-1",
+        client: { email: "pay@acme.test", full_name: "ACME" },
+        purchase: expect.objectContaining({
+          products: [expect.objectContaining({ price: 50000 })],
+        }),
+      }),
+    );
+    expect(calls[2].update).toEqual({
+      chip_transaction_id: "purchase-1",
+      checkout_url: "https://gate.test/p/1",
+    });
+    expect(calls[2].filters).toMatchObject({ "is:cancelled_at": null, "is:checkout_url": null });
+
+    expect(mockSendRequest).not.toHaveBeenCalled();
+    await runAfterCallbacks();
+    expect(mockSendRequest).toHaveBeenCalledWith("pay@acme.test", {
+      funderName: "ACME",
+      organizerName: "KL Chess",
+      tournamentName: "Merdeka Open",
+      amountCents: 50000,
+      prizeList: "Open — 1st, Open — 2nd, Best Junior",
+      checkoutUrl: "https://gate.test/p/1",
+    });
+  });
+
+  it("leaves the request open for a retry when CHIP fails", async () => {
+    results.push(
+      { data: [ROW], error: null },
+      { data: { name: "Merdeka Open", prizes: PRIZES, organization: null }, error: null },
+    );
+    mockCreatePurchase.mockRejectedValue(new Error("CHIP 503"));
+
+    const out = await createMissingFundingLinks();
+
+    expect(out).toEqual({ linked: 0, failed: 1 });
+    expect(calls.some((c) => c.update)).toBe(false);
+    await runAfterCallbacks();
+    expect(mockSendRequest).not.toHaveBeenCalled();
+  });
+
+  it("cancels the purchase when the request was linked or cancelled meanwhile", async () => {
+    results.push(
+      { data: [ROW], error: null },
+      { data: { name: "Merdeka Open", prizes: PRIZES, organization: null }, error: null },
+      { data: [], error: null }, // the guarded update matched nothing
+    );
+
+    const out = await createMissingFundingLinks();
+
+    expect(out).toEqual({ linked: 0, failed: 1 });
+    expect(mockCancelPurchase).toHaveBeenCalledWith("purchase-1");
+    await runAfterCallbacks();
+    expect(mockSendRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("syncPrizeFundingRequests", () => {
+  it("cancels superseded purchases, links new requests, and reports missing contacts", async () => {
+    mockRpc.mockResolvedValue({
+      data: {
+        created: ["f-2"],
+        cancelled: [
+          { id: "f-1", chip_transaction_id: "purchase-old" },
+          { id: "f-0", chip_transaction_id: null },
+        ],
+        missing_contacts: ["Ministry"],
+        released: false,
+      },
+      error: null,
+    });
+    results.push(
+      { data: [{ ...ROW, id: "f-2" }], error: null },
+      { data: { name: "Merdeka Open", prizes: PRIZES, organization: null }, error: null },
+      { data: [{ id: "f-2" }], error: null },
+    );
+
+    const out = await syncPrizeFundingRequests("t-1", "u-1");
+
+    expect(mockRpc).toHaveBeenCalledWith("reconcile_prize_funding_requests", {
+      p_tournament_id: "t-1",
+      p_actor: "u-1",
+    });
+    expect(mockCancelPurchase).toHaveBeenCalledTimes(1);
+    expect(mockCancelPurchase).toHaveBeenCalledWith("purchase-old");
+    expect(out).toEqual({
+      error: null,
+      released: false,
+      linked: 1,
+      unlinked: 0,
+      missingContacts: ["Ministry"],
+    });
+    expect(mockRevalidate).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the public pages when the reconcile listed the tournament", async () => {
+    mockRpc.mockResolvedValue({
+      data: { created: [], cancelled: [], missing_contacts: [], released: true },
+      error: null,
+    });
+    results.push(
+      { data: [], error: null }, // nothing unlinked
+      { data: { slug: "merdeka-open" }, error: null },
+    );
+
+    const out = await syncPrizeFundingRequests("t-1", null);
+
+    expect(out.released).toBe(true);
+    expect(mockRevalidate).toHaveBeenCalledWith("tournaments", expect.anything());
+    expect(mockRevalidate).toHaveBeenCalledWith(expect.stringContaining("merdeka-open"), expect.anything());
+  });
+
+  it("returns the database error without touching CHIP", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { code: "P0002", message: "not found" } });
+    const out = await syncPrizeFundingRequests("t-1", null);
+    expect(out.error).toEqual({ code: "P0002", message: "not found" });
+    expect(mockCreatePurchase).not.toHaveBeenCalled();
+  });
+});
+
+describe("onTournamentListed", () => {
+  it("emails the organization's owners and admins after the response", async () => {
+    results.push(
+      { data: { slug: "merdeka-open" }, error: null },
+      {
+        data: {
+          name: "Merdeka Open",
+          slug: "merdeka-open",
+          organization_id: "org-1",
+          organization: { name: "KL Chess" },
+        },
+        error: null,
+      },
+    );
+    mockPool.mockResolvedValue({ ok: true, position: { funded_cents: 52000 } });
+    mockRecipients.mockResolvedValue(new Map([["o@kl.test", { email: "o@kl.test", name: "Hafiz" }]]));
+
+    await onTournamentListed("t-1");
+    expect(mockSendListed).not.toHaveBeenCalled();
+    await runAfterCallbacks();
+
+    expect(mockRecipients).toHaveBeenCalledWith(["org-1"]);
+    expect(mockSendListed).toHaveBeenCalledWith("o@kl.test", {
+      recipientName: "Hafiz",
+      orgName: "KL Chess",
+      tournamentName: "Merdeka Open",
+      tournamentUrl: expect.stringContaining("/tournaments/merdeka-open"),
+      fundedCents: 52000,
+    });
+  });
+});

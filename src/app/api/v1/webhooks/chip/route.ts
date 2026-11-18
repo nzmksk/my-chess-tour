@@ -19,6 +19,7 @@ import {
   findPrizeFundingForPurchase,
   settlePrizeFunding,
 } from "@/services/prizes/funding";
+import { onTournamentListed } from "@/services/prizes/funding-requests";
 import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -264,7 +265,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
   if (funding.id) {
-    const { error: fundingError } = await settlePrizeFunding({
+    const {
+      error: fundingError,
+      wentLive,
+      tournamentId,
+    } = await settlePrizeFunding({
       fundingId: funding.id,
       paid,
       amountCents: payload.purchase?.total ?? null,
@@ -276,6 +281,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         fundingError,
       );
     }
+    // The payment that completed the pool listed the tournament: show it now
+    // and tell the organizer.
+    if (wentLive && tournamentId) await onTournamentListed(tournamentId);
     return ack();
   }
 
