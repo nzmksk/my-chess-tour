@@ -190,7 +190,7 @@ Password must be ≥8 chars and include uppercase, lowercase, a number, and a sy
 
 - `400` — `{ "error": { "code": "VALIDATION_ERROR", "message": "..." } }` (missing/invalid email, weak password, invalid name)
 - `409` — `{ "error": { "code": "EMAIL_EXISTS", "message": "An account with this email already exists" } }`
-- `429` — `{ "error": { "code": "RATE_LIMITED", "message": "Too many attempts. Please try again later." } }` (per-IP)
+- `429` — `RATE_LIMITED` with `Retry-After`, per IP (see [Rate limiting](#rate-limiting))
 - `500` — Failed to create the account / store / send the code
 
 #### `POST /auth/signup/verify-code`
@@ -242,7 +242,7 @@ Requests (resends) a verification code. The response is intentionally generic fo
 **Error responses:**
 
 - `400` — Email missing or invalid format
-- `429` — `{ "error": { "code": "RATE_LIMITED", "message": "Too many attempts. Please try again later." } }` (per-IP)
+- `429` — `RATE_LIMITED` with `Retry-After`, per IP (see [Rate limiting](#rate-limiting))
 - `500` — Failed to store or send the code
 
 #### `POST /auth/login`
@@ -1237,6 +1237,48 @@ CHIP sends payment status updates via webhooks to a public endpoint on our serve
 ```
 
 **Validation library:** Zod for all request body and query parameter validation. Schemas are defined adjacent to route handlers and reused between client and server via a shared `types/` package.
+
+### Rate limiting
+
+Every limit lives in `src/services/rate-limit/limits.ts` (#613). A rule counts each request in a fixed window (Upstash Redis) against every bucket that applies: per user, per client IP, and/or per IP only when signed out. A request over any bucket gets:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 480
+```
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "You've tried to register several times in a short time. Please try again in 8 minutes.",
+    "retry_after": 480
+  }
+}
+```
+
+The message is written for the user and the UI shows it as is.
+
+| Rule                   | Routes                                                                                  | Window | Per user | Per IP              |
+| ---------------------- | --------------------------------------------------------------------------------------- | ------ | -------- | ------------------- |
+| `api` (baseline)       | every `/api` route, in `src/proxy.ts`, signed-in only                                   | 1 min  | 120      | —                   |
+| `signup`               | `POST /auth/signup/create-account`, `/request-code`                                     | 10 min | —        | 30                  |
+| `memberInvite`         | `POST /organizations/:orgId/members/invite`                                             | 1 h    | 30       | 60                  |
+| `funderLinks`          | `PUT .../prize-funder-contacts` (only when it sends links), `POST .../prize-funding`    | 1 h    | 30       | 60                  |
+| `payoutNomination`     | `PUT .../tournaments/:id/beneficiary`                                                   | 1 h    | 20       | 40                  |
+| `checkout`             | `POST /tournaments/:slug/checkout`                                                      | 10 min | 10       | 30                  |
+| `fideLookup`           | `PATCH /profile` with a new `fide_id`                                                   | 1 h    | 10       | —                   |
+| `profileSave`          | `PATCH /profile`                                                                        | 10 min | 30       | —                   |
+| `organizationSave`     | `PATCH /organizations/:orgId`                                                           | 10 min | 30       | —                   |
+| `okuDocument`          | `POST /profile/oku`                                                                     | 1 day  | 5        | —                   |
+| `organizerApplication` | `POST /organizations/applications`                                                      | 1 day  | 5        | 10                  |
+| `feedback`             | `POST /feedback`                                                                        | 1 h    | 5        | 10 (3 signed out)   |
+
+- **Exempt:** `/api/v1/webhooks/*` (CHIP) and `/api/v1/cron/*` (`CRON_SECRET`).
+- **Redis down:** requests go through and the failure is logged to Sentry, except `signup` and `feedback`, which fail closed with a 500.
+- **Client IP** comes only from `x-nf-client-connection-ip`, which Netlify sets (`src/lib/http/request-ip.ts`). `cf-connecting-ip` and `x-forwarded-for` are client-supplied on Netlify and ignored. Without the header, per-IP buckets are skipped, never shared.
+- **No signed-out baseline:** server components fetch the app's own API from the server's address (e.g. the home page's tournament list), so an IP-keyed baseline would throttle every visitor together.
+- The per-email auth counters (login lockout, verify-code attempts, resend cooldown) use the same primitive, in `src/services/rate-limit/auth.ts`, but answer with their own UX rather than this 429.
 
 ---
 
