@@ -190,8 +190,6 @@ function EmptyState({ tab }: { tab: Tab }) {
 }
 
 export default function RegistrationsClient({ registrations }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("upcoming");
-
   const categorised = useMemo(() => {
     const ongoing: PlayerRegistration[] = [];
     const upcoming: PlayerRegistration[] = [];
@@ -223,6 +221,12 @@ export default function RegistrationsClient({ registrations }: Props) {
 
     return { ongoing, upcoming, past, cancelled };
   }, [registrations]);
+
+  // A player in the middle of a tournament lands on it; everyone else on
+  // Upcoming.
+  const [activeTab, setActiveTab] = useState<Tab>(() =>
+    categorised.ongoing.length > 0 ? "ongoing" : "upcoming",
+  );
 
   const tabs: Array<{ key: Tab; label: string; count: number }> = [
     { key: "ongoing", label: "Ongoing", count: categorised.ongoing.length },

@@ -167,11 +167,16 @@ describe("RegistrationsClient", () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Ongoing/ }));
-
+    // Opens on Ongoing without a click, since the player has one running.
     const names = screen
       .getAllByRole("heading", { level: 4 })
       .map((h) => h.textContent);
     expect(names).toEqual(["Final Day Rapid", "Long Classical"]);
+  });
+
+  it("opens on Upcoming when nothing is running", () => {
+    render(<RegistrationsClient registrations={[registration()]} />);
+
+    expect(screen.getByText("KL Open")).toBeTruthy();
   });
 });
