@@ -4,7 +4,9 @@
 // A tournament moves through stages, and each stage locks more of it:
 //
 //   draft      Everything is editable. Nobody can see it, nobody has paid.
-//   published  Everything is still editable, but the listing has to stay
+//   published  (and pending_funding, a platform-distributed tournament
+//              waiting for its prize pool, which is held to the same rules)
+//              Everything is still editable, but the listing has to stay
 //              publishable: required fields can't be blanked and dates can't
 //              move into the past. Players can see it, but nobody has paid,
 //              so there's no deal to protect yet.

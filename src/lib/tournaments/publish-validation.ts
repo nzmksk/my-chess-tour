@@ -7,8 +7,10 @@
 // tournament and then blank its venue or move its start date into the past.
 
 import {
+  validateFunderContacts,
   validatePrizeFunding,
   validatePrizeStructure,
+  type FunderContact,
   type PrizesJson,
 } from "@/lib/tournaments/prize-funding";
 
@@ -47,6 +49,13 @@ interface PublishValidationOptions {
    */
   requireFutureStartDate?: boolean;
   requireFutureDeadline?: boolean;
+  /**
+   * The tournament's funder contacts (prize_funder_contacts). When given, a
+   * platform-distributed tournament also needs an address for every funder,
+   * because publishing sends each of them a payment link. Omitted, the check
+   * is skipped.
+   */
+  funderContacts?: readonly FunderContact[];
 }
 
 /** Every reason `t` can't be published, or an empty array when it can. */
@@ -57,6 +66,7 @@ export function validatePublishable(
     now,
     requireFutureStartDate = true,
     requireFutureDeadline = true,
+    funderContacts,
   }: PublishValidationOptions,
 ): string[] {
   const errors: string[] = [];
@@ -121,6 +131,10 @@ export function validatePublishable(
   errors.push(...validatePrizeFunding(t.prizes));
   // Special prizes attach to a placed result, so they cannot stand alone.
   errors.push(...validatePrizeStructure(t.prizes));
+  // A platform-distributed pool is collected from its funders, by email.
+  if (funderContacts) {
+    errors.push(...validateFunderContacts(t.prizes, funderContacts));
+  }
 
   return errors;
 }

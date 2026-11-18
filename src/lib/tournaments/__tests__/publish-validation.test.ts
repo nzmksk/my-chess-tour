@@ -30,6 +30,32 @@ describe("validatePublishable", () => {
     expect(validatePublishable(COMPLETE, opts)).toEqual([]);
   });
 
+  it("needs every funder's address for a platform pool, when contacts are given", () => {
+    const platform: PublishableTournament = {
+      ...COMPLETE,
+      prizes: {
+        categories: [
+          {
+            name: "Open",
+            funding: { source: "sponsor", funder_name: "ACME" },
+            entries: [{ place: "1st", amount_cents: 10000 }],
+          },
+        ],
+        distribution: "platform",
+      },
+    };
+    expect(validatePublishable(platform, opts)).toEqual([]);
+    expect(validatePublishable(platform, { ...opts, funderContacts: [] })).toEqual([
+      "ACME: add the email address their payment link is sent to",
+    ]);
+    expect(
+      validatePublishable(platform, {
+        ...opts,
+        funderContacts: [{ funder_name: "ACME", funder_email: "pay@acme.test" }],
+      }),
+    ).toEqual([]);
+  });
+
   it("reports blanked required fields", () => {
     expect(
       validatePublishable({ ...COMPLETE, venue_address: "  " }, opts),

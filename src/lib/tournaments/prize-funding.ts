@@ -180,3 +180,85 @@ export function validatePrizeFunding(
 
   return errors;
 }
+
+// ── Platform-distributed pools: who is asked for what ──────────────────────
+//
+// A platform-distributed tournament is not listed until its pool is funded
+// (#523). Publishing it moves it to 'pending_funding', and every funder named
+// in its prizes is sent a CHIP payment link for their share. The sponsor's
+// address is private, so it is NOT in this document (which anyone can read
+// once the tournament is listed): it lives in prize_funder_contacts, one row
+// per funder name.
+
+/** Where one funder's payment link is sent. */
+export interface FunderContact {
+  funder_name: string;
+  funder_email: string;
+}
+
+export const FUNDER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** How a funder is identified across prizes and contacts: name, ignoring case and outer spaces. */
+export function funderKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+export interface DeclaredFunder {
+  key: string;
+  /** Spelled as it first appears in the prizes. */
+  name: string;
+  amount_cents: number;
+}
+
+/**
+ * Each funder's share: what the prizes naming them add up to, in the order
+ * they first appear. The twin of declared_prize_funders
+ * (007_payment_functions.sql), which decides what each funder is asked for;
+ * prizes with no money or no named funder are left out, as there.
+ */
+export function declaredFunders(
+  prizes: PrizesJson | null | undefined,
+): DeclaredFunder[] {
+  if (!prizes) return [];
+  const byKey = new Map<string, DeclaredFunder>();
+  const add = (funding: PrizeFunding | null | undefined, cents: number) => {
+    const name = funding?.funder_name?.trim();
+    if (!name || cents <= 0) return;
+    const key = funderKey(name);
+    const found = byKey.get(key);
+    if (found) found.amount_cents += cents;
+    else byKey.set(key, { key, name, amount_cents: cents });
+  };
+  for (const cat of prizes.categories ?? []) add(cat.funding, categoryTotal(cat));
+  for (const sp of prizes.special ?? []) {
+    add(sp.funding, typeof sp.amount_cents === "number" ? sp.amount_cents : 0);
+  }
+  return [...byKey.values()].filter((f) => f.amount_cents > 0);
+}
+
+/**
+ * Whether publishing waits for the prize pool: the platform distributes the
+ * prizes and there is money to collect. Otherwise a tournament is listed the
+ * moment it is published.
+ */
+export function needsPrizeFunding(prizes: PrizesJson | null | undefined): boolean {
+  return prizes?.distribution === "platform" && totalDeclaredPrizeCents(prizes) > 0;
+}
+
+/**
+ * Funders of a platform-distributed pool with no usable address to send their
+ * payment link to, as publish-validation messages. Empty for a tournament the
+ * organizer pays out themselves.
+ */
+export function validateFunderContacts(
+  prizes: PrizesJson | null | undefined,
+  contacts: readonly FunderContact[],
+): string[] {
+  if (prizes?.distribution !== "platform") return [];
+  const emails = new Map(
+    contacts.map((c) => [funderKey(c.funder_name), c.funder_email.trim()]),
+  );
+  return declaredFunders(prizes)
+    .filter((f) => !FUNDER_EMAIL_RE.test(emails.get(f.key) ?? ""))
+    .map((f) => `${f.name}: add the email address their payment link is sent to`);
+}
