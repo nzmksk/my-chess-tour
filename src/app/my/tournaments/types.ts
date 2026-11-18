@@ -14,7 +14,11 @@ export interface PlayerRegistration {
     id: string;
     slug: string;
     name: string;
+    /** Calendar dates ("YYYY-MM-DD"), the venue's local days. */
     start_date: string;
+    end_date: string;
+    /** IANA zone of the venue; the dates above are read in it. */
+    timezone: string;
     venue_name: string;
     venue_state: string;
     format: TournamentFormat;

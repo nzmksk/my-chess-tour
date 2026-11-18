@@ -65,6 +65,8 @@ function makeRegistration(overrides: Record<string, unknown> = {}) {
       id: "tournament-1",
       name: "KL Open Rapid 2026",
       start_date: "2026-03-15",
+      end_date: "2026-03-16",
+      timezone: "Asia/Singapore",
       venue_name: "Kuala Lumpur Convention Centre",
       venue_state: "Kuala Lumpur",
       format: { type: "rapid", system: "swiss", rounds: 7 },
@@ -168,6 +170,8 @@ describe("GET /api/v1/me/registrations", () => {
         id: "tournament-1",
         name: "KL Open Rapid 2026",
         start_date: "2026-03-15",
+        end_date: "2026-03-16",
+        timezone: "Asia/Singapore",
         venue_name: "Kuala Lumpur Convention Centre",
         venue_state: "Kuala Lumpur",
         format: { type: "rapid", system: "swiss", rounds: 7 },
@@ -178,6 +182,22 @@ describe("GET /api/v1/me/registrations", () => {
         },
         status: "published",
       });
+    });
+
+    it("falls back to the platform timezone when the venue's is unsupported", async () => {
+      setQueryResult([
+        makeRegistration({
+          tournaments: {
+            ...makeRegistration().tournaments,
+            timezone: "Mars/Olympus_Mons",
+          },
+        }),
+      ]);
+
+      const res = await GET(makeRequest());
+      const json = await res.json();
+
+      expect(json.data[0].tournament.timezone).toBe("Asia/Kuala_Lumpur");
     });
 
     it("computes entry_fee_cents from standard fee tier", async () => {

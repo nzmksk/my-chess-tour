@@ -20,6 +20,8 @@ function registration(
       slug: "kl-open",
       name: "KL Open",
       start_date: "2099-03-15",
+      end_date: "2099-03-15",
+      timezone: "Asia/Kuala_Lumpur",
       venue_name: "KLCC",
       venue_state: "Kuala Lumpur",
       format: { type: "rapid", system: "swiss", rounds: 7 } as PlayerRegistration["tournament"]["format"],
