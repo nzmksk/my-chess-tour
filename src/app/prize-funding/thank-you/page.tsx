@@ -44,7 +44,7 @@ export default async function PrizeFundingThankYouPage({
                 </p>
               </>
             )}
-            <Link href="/tournaments" className="btn-primary mt-2 rounded-md text-center">
+            <Link href="/" className="btn-primary mt-2 rounded-md text-center">
               Browse Tournaments
             </Link>
           </div>

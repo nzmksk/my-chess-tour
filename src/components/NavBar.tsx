@@ -63,7 +63,7 @@ export default function NavBar() {
       <nav className="bg-bg-sunken border-border sticky top-0 z-50 border-b">
         <div className="mx-auto flex h-16 max-w-300 items-center justify-between px-10">
           {/* Brand logo */}
-          <Link href="/tournaments" className="flex shrink-0 items-center">
+          <Link href="/" className="flex shrink-0 items-center">
             <Image
               src="/mct-logo-horizontal.svg"
               alt="MY Chess Tour"

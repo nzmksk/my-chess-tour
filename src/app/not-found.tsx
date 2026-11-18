@@ -29,7 +29,7 @@ export default function NotFound() {
       </div>
 
       {/* CTA */}
-      <Link href="/tournaments" className="btn-primary w-fit px-8 py-3">
+      <Link href="/" className="btn-primary w-fit px-8 py-3">
         Return Home
       </Link>
     </main>

@@ -235,7 +235,7 @@ describe("sendTournamentCancellationEmail", () => {
     const { html } = mockSend.mock.calls[0][0];
     expect(html).toContain("Ali");
     expect(html).toContain("KL Open 2026");
-    expect(html).toContain("https://mychesstour.com/tournaments");
+    expect(html).toContain('href="https://mychesstour.com/"');
     expect(html).not.toContain("{{playerName}}");
     expect(html).not.toContain("{{tournamentName}}");
     expect(html).not.toContain("{{browseUrl}}");
@@ -858,7 +858,8 @@ describe("sendOkuReviewEmail", () => {
     expect(sent().to).toBe("p@example.com");
     expect(sent().subject).toBe("Your OKU status is verified");
     expect(sent().html).toContain("Farid|");
-    expect(sent().html).toContain("/tournaments|");
+    // browseUrl is the site root, where the tournament list lives.
+    expect(sent().html).toMatch(/\/settings\|https?:\/\/[^|/]+\/\|/);
   });
 
   it("uses the rejected template with the escaped reason and a link to settings", async () => {
@@ -927,9 +928,10 @@ describe("sendRegistrationConfirmationEmail", () => {
     expect(sent().html).toContain("|Free|");
   });
 
-  it("falls back to the tournaments list without a slug", async () => {
+  it("falls back to the tournament list at / without a slug", async () => {
     await sendRegistrationConfirmationEmail("p@example.com", { ...base, tournamentSlug: null });
-    expect(sent().html).toMatch(/\/tournaments\|/);
+    expect(sent().html).toMatch(/\|https?:\/\/[^|/]+\/\|/);
+    expect(sent().html).not.toContain("/tournaments");
   });
 
   it("escapes organizer- and player-supplied values", async () => {

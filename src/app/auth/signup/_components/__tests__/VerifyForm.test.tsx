@@ -155,7 +155,7 @@ describe("VerifyForm", () => {
       fireEvent.change(getCodeInput(), { target: { value: VALID_CODE } });
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/tournaments");
+    expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("shows an inline error when verification fails", async () => {

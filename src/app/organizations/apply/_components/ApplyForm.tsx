@@ -343,7 +343,7 @@ export default function ApplyForm() {
             </span>
           </button>
           <button
-            onClick={() => router.push("/tournaments")}
+            onClick={() => router.push("/")}
             className="btn-secondary w-full rounded-md"
           >
             Back to Tournaments

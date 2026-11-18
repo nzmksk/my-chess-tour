@@ -54,7 +54,7 @@ describe("SignedOutPage", () => {
       });
     }
 
-    expect(mockPush).toHaveBeenCalledWith("/tournaments");
+    expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("decrements the displayed countdown each second", async () => {

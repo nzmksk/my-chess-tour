@@ -25,7 +25,7 @@ export async function login(
   const safeRedirectTo =
     rawRedirectTo.startsWith("/") && !rawRedirectTo.startsWith("//")
       ? rawRedirectTo
-      : "/tournaments";
+      : "/";
 
   const { errors, isValid } = validateLoginForm({
     email,

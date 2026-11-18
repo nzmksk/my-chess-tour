@@ -94,7 +94,7 @@ export default function VerifyForm() {
       // user into the app (or back where they started, e.g. an invitation).
       // Profile details are completed later in /settings.
       clearForm();
-      router.push(takeSignupReturnTo() ?? "/tournaments");
+      router.push(takeSignupReturnTo() ?? "/");
     } catch {
       setVerifyError("Network error. Please try again.");
     } finally {

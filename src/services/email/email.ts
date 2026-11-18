@@ -66,7 +66,7 @@ export async function sendTournamentCancellationEmail(
   const html = loadTemplate("tournament-cancellation.html")
     .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
     .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
-    .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/tournaments`);
+    .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/`);
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
@@ -808,7 +808,7 @@ export async function sendOkuReviewEmail(
   let html = loadTemplate(template)
     .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{settingsUrl\}\}/g, `${siteUrl}/settings`)
-    .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/tournaments`);
+    .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/`);
 
   if (!params.verified) {
     html = html.replace(
@@ -851,7 +851,7 @@ export async function sendRegistrationConfirmationEmail(
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const tournamentUrl = params.tournamentSlug
     ? `${siteUrl}/tournaments/${encodeURIComponent(params.tournamentSlug)}`
-    : `${siteUrl}/tournaments`;
+    : `${siteUrl}/`;
 
   const html = loadTemplate("registration-confirmed.html")
     .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
