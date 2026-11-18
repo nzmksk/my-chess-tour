@@ -20,6 +20,7 @@ import PrizePoolPanel from "./PrizePoolPanel";
 
 type TournamentStatus =
   | "draft"
+  | "pending_funding"
   | "published"
   | "ongoing"
   | "completed"
@@ -104,6 +105,10 @@ const STATUS_CONFIG: Record<
   draft: {
     label: "Draft",
     className: "bg-bg-raised text-text-muted border border-border",
+  },
+  pending_funding: {
+    label: "Awaiting Prize Funding",
+    className: "bg-warning/15 text-warning border border-warning/20",
   },
   published: {
     label: "Published",
@@ -233,9 +238,13 @@ function RefundsSection({
                     </span>
                   </td>
                   <td className="font-lato text-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                    {formatInstantDate(r.processed_at ?? r.requested_at, timeZone, {
-                      withZone: false,
-                    })}
+                    {formatInstantDate(
+                      r.processed_at ?? r.requested_at,
+                      timeZone,
+                      {
+                        withZone: false,
+                      },
+                    )}
                   </td>
                 </tr>
               );

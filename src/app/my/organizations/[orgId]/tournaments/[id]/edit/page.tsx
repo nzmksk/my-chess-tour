@@ -2,7 +2,10 @@ import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { selfApiFetch } from "@/lib/http/self-fetch";
-import { getAuthClaims, hasOrgPermission } from "@/services/supabase/permission";
+import {
+  getAuthClaims,
+  hasOrgPermission,
+} from "@/services/supabase/permission";
 import { TournamentWizardProvider } from "@/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext";
 import type {
   PersistedRestriction,
@@ -24,8 +27,10 @@ import {
 } from "@/lib/tournaments/edit-policy";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/tournaments/venues";
 import {
+  funderKey,
   isPrizeDistribution,
   isPrizeFundingSource,
+  type FunderContact,
   type PrizesJson,
 } from "@/lib/tournaments/prize-funding";
 
@@ -104,7 +109,10 @@ function editStageOf(t: TournamentForEdit): EditStage {
   });
 }
 
-function buildInitialData(t: TournamentForEdit): PersistedState {
+function buildInitialData(
+  t: TournamentForEdit,
+  funderContacts: FunderContact[],
+): PersistedState {
   // Times come back as instants; the organizer edits them at the venue's wall
   // clock, which is the one they entered — not the clock of whoever is editing.
   //
@@ -181,6 +189,9 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     distribution: isPrizeDistribution(t.prizes?.distribution)
       ? t.prizes.distribution
       : ("organizer" as const),
+    funderEmails: Object.fromEntries(
+      funderContacts.map((c) => [funderKey(c.funder_name), c.funder_email]),
+    ),
   };
 
   const payoutData = {
@@ -200,6 +211,23 @@ function buildInitialData(t: TournamentForEdit): PersistedState {
     currentStepIndex: 0,
     completedSteps: [],
   };
+}
+
+/** Where each funder's payment link goes; private, so not in the tournament body. */
+async function fetchFunderContacts(
+  orgId: string,
+  id: string,
+): Promise<FunderContact[]> {
+  try {
+    const res = await selfApiFetch(
+      `/api/v1/organizations/${orgId}/tournaments/${id}/prize-funder-contacts`,
+    );
+    if (!res.ok) return [];
+    const json = await res.json();
+    return Array.isArray(json.data) ? (json.data as FunderContact[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchOrgName(orgId: string): Promise<string> {
@@ -226,10 +254,11 @@ export default async function EditTournamentPage({
     redirect("/auth/login");
   }
 
-  const [tournament, orgName, canNominate] = await Promise.all([
+  const [tournament, orgName, canNominate, funderContacts] = await Promise.all([
     fetchTournamentForEdit(orgId, id),
     fetchOrgName(orgId),
     hasOrgPermission(claims.id, orgId, "payout.request"),
+    fetchFunderContacts(orgId, id),
   ]);
 
   if (!tournament) {
@@ -244,7 +273,7 @@ export default async function EditTournamentPage({
     redirect(`/my/organizations/${orgId}/tournaments/${id}`);
   }
 
-  const initialData = buildInitialData(tournament);
+  const initialData = buildInitialData(tournament, funderContacts);
 
   return (
     <div className="bg-bg-base min-h-screen">

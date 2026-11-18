@@ -56,7 +56,13 @@ interface TournamentManageData {
     id: string;
     name: string;
     description: string | null;
-    status: "draft" | "published" | "ongoing" | "completed" | "cancelled";
+    status:
+      | "draft"
+      | "pending_funding"
+      | "published"
+      | "ongoing"
+      | "completed"
+      | "cancelled";
     start_date: string;
     end_date: string;
     registration_deadline: string | null;
@@ -401,7 +407,8 @@ export const getTournamentManageData = cache(
 );
 
 // The platform admin's view of the same data: any tournament, in any status
-// (draft, published, cancelled), regardless of which organization runs it.
+// (draft, pending_funding, published, cancelled), regardless of which
+// organization runs it.
 // Gated on the global `platform.manage` permission.
 export const getAdminTournamentManageData = cache(
   async (id: string): Promise<TournamentManageResult> => {

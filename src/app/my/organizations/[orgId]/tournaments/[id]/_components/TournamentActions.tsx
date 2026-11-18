@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getTournamentDateState } from "@/app/tournaments/utils";
-import { formatInstantDate, getTodayInTimeZone } from "@/lib/tournaments/datetime";
+import {
+  formatInstantDate,
+  getTodayInTimeZone,
+} from "@/lib/tournaments/datetime";
 import { registrationStatus as computeRegistrationStatus } from "@/lib/tournaments/registration-status";
 
 interface Props {
@@ -24,7 +27,11 @@ interface Props {
 // without a router context don't invoke the router hook).
 export default function TournamentActions(props: Props) {
   if (props.status === "draft") return <DraftActions {...props} />;
-  if (props.status !== "published") return null;
+  // A tournament waiting for its prize pool is published but unlisted: it can
+  // be cancelled (a sponsor who never pays), but has no registration to close.
+  if (props.status !== "published" && props.status !== "pending_funding") {
+    return null;
+  }
   return <PublishedActions {...props} />;
 }
 
@@ -91,7 +98,9 @@ function DraftActions({ orgId, tournamentId }: Props) {
             </h3>
             <p className="font-lato text-text-muted mt-1 text-sm">
               This tournament is a draft and is not visible to players.
-              Publishing lists it publicly and opens registration.
+              Publishing lists it publicly and opens registration. If MY Chess
+              Tour distributes its prizes, each sponsor is emailed a payment
+              link, and it is listed once they have all paid.
             </p>
           </div>
 
@@ -166,6 +175,7 @@ function DraftActions({ orgId, tournamentId }: Props) {
 }
 
 function PublishedActions({
+  status,
   orgId,
   tournamentId,
   startDate,
@@ -244,67 +254,71 @@ function PublishedActions({
       </h2>
 
       <div className="border-danger/25 flex flex-col gap-6 rounded-lg border px-5 py-5">
-        {/* Close registration */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="max-w-md">
-            <h3 className="font-lato text-text-primary text-sm font-semibold">
-              Close registration early
-            </h3>
-            <p className="font-lato text-text-muted mt-1 text-sm">
-              {closedEarly && registrationClosedAt
-                ? `Registration was closed early on ${formatInstantDate(registrationClosedAt, timeZone)}.`
-                : registrationClosed
-                  ? "Registration has already closed at its deadline."
-                  : "Stop accepting new registrations before the deadline. This cannot be undone — registration cannot be re-opened."}
-            </p>
-          </div>
+        {/* Close registration: nothing to close while unlisted. */}
+        {status === "published" && (
+          <>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="max-w-md">
+                <h3 className="font-lato text-text-primary text-sm font-semibold">
+                  Close registration early
+                </h3>
+                <p className="font-lato text-text-muted mt-1 text-sm">
+                  {closedEarly && registrationClosedAt
+                    ? `Registration was closed early on ${formatInstantDate(registrationClosedAt, timeZone)}.`
+                    : registrationClosed
+                      ? "Registration has already closed at its deadline."
+                      : "Stop accepting new registrations before the deadline. This cannot be undone — registration cannot be re-opened."}
+                </p>
+              </div>
 
-          {!registrationClosed && !confirmClose && (
-            <button
-              type="button"
-              onClick={() => {
-                setConfirmClose(true);
-                setError(null);
-              }}
-              disabled={isPending}
-              className="font-lato bg-bg-raised border-border text-text-primary hover:border-gold-dim shrink-0 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
-            >
-              Close Registration
-            </button>
-          )}
-        </div>
-
-        {confirmClose && !registrationClosed && (
-          <div className="bg-warning/10 border-warning/20 rounded-lg border p-4">
-            <p className="font-lato text-text-primary text-sm">
-              Close registration now? Players will no longer be able to
-              register, and <strong>this cannot be reversed</strong>.
-            </p>
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmClose(false);
-                  setError(null);
-                }}
-                disabled={isPending}
-                className="font-lato bg-bg-raised border-border text-text-primary hover:border-gold-dim rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                Keep Open
-              </button>
-              <button
-                type="button"
-                onClick={closeRegistration}
-                disabled={isPending}
-                className="font-lato bg-warning/20 text-warning border-warning/30 hover:bg-warning/30 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                {isPending ? "Closing…" : "Yes, Close Registration"}
-              </button>
+              {!registrationClosed && !confirmClose && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmClose(true);
+                    setError(null);
+                  }}
+                  disabled={isPending}
+                  className="font-lato bg-bg-raised border-border text-text-primary hover:border-gold-dim shrink-0 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+                >
+                  Close Registration
+                </button>
+              )}
             </div>
-          </div>
-        )}
 
-        <div className="border-border border-t" />
+            {confirmClose && !registrationClosed && (
+              <div className="bg-warning/10 border-warning/20 rounded-lg border p-4">
+                <p className="font-lato text-text-primary text-sm">
+                  Close registration now? Players will no longer be able to
+                  register, and <strong>this cannot be reversed</strong>.
+                </p>
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmClose(false);
+                      setError(null);
+                    }}
+                    disabled={isPending}
+                    className="font-lato bg-bg-raised border-border text-text-primary hover:border-gold-dim rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+                  >
+                    Keep Open
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeRegistration}
+                    disabled={isPending}
+                    className="font-lato bg-warning/20 text-warning border-warning/30 hover:bg-warning/30 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {isPending ? "Closing…" : "Yes, Close Registration"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="border-border border-t" />
+          </>
+        )}
 
         {/* Cancel tournament */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

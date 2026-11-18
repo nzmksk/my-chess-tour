@@ -40,20 +40,46 @@ const pool = (funded: number) => ({
   fully_funded: funded >= 50000,
 });
 
-function respond(funded: number, fundings: unknown[] = [], awards: unknown[] = []) {
+function respond(
+  funded: number,
+  {
+    status = funded >= 50000 ? "published" : "pending_funding",
+    fundings = [] as unknown[],
+    missing = [] as string[],
+    awards = [] as unknown[],
+  } = {},
+) {
   mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === "POST" && url.endsWith("/prize-funding")) {
+      return { ok: true, json: async () => ({ data: { linked: 1, missing_contacts: [], released: false } }) };
+    }
     if (init?.method === "POST") {
-      return {
-        ok: true,
-        json: async () => ({ data: { id: "f-1", checkout_url: "https://gate.chip-in.asia/p/1" } }),
-      };
+      return { ok: true, json: async () => ({ data: { id: "a-1" } }) };
     }
     if (url.endsWith("/prize-funding")) {
-      return { ok: true, json: async () => ({ data: { pool: pool(funded), fundings } }) };
+      return {
+        ok: true,
+        json: async () => ({
+          data: { pool: pool(funded), status, fundings, missing_contacts: missing },
+        }),
+      };
     }
     return { ok: true, json: async () => ({ data: { pool: pool(funded), awards } }) };
   });
 }
+
+const funding = (over: Record<string, unknown>) => ({
+  id: "f-1",
+  funder_name: "Acme",
+  funder_email: "pay@acme.test",
+  amount_cents: 45000,
+  status: "pending",
+  checkout_url: "https://gate.chip-in.asia/p/1",
+  paid_at: null,
+  cancelled_at: null,
+  created_at: "2026-11-18T00:00:00Z",
+  ...over,
+});
 
 const PARTICIPANTS = [
   { user_id: "u1", name: "Aisyah Rahman", status: "confirmed" },
@@ -77,33 +103,53 @@ describe("declaredPrizes", () => {
 });
 
 describe("PrizePoolPanel", () => {
-  it("says registration waits for the rest of the pool", async () => {
+  it("says the tournament stays hidden until the pool is paid in", async () => {
     respond(20000);
     renderPanel();
-    await waitFor(() => expect(screen.getByText(/RM 300.00 still to come/)).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Create payment link" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/stays hidden from players/)).toBeTruthy());
+    expect(screen.getByText(/RM 300.00 still to come/)).toBeTruthy();
+    // No winners before the tournament is even listed.
+    expect(screen.queryByLabelText("Winner")).toBeNull();
   });
 
-  it("hides the funding form once the pool is funded", async () => {
+  it("says the tournament is listed once funded", async () => {
     respond(50000);
     renderPanel();
-    await waitFor(() => expect(screen.getByText(/fully funded, so registration is open/)).toBeTruthy());
-    expect(screen.queryByRole("button", { name: "Create payment link" })).toBeNull();
+    await waitFor(() => expect(screen.getByText(/fully funded, so the tournament is listed/)).toBeTruthy());
   });
 
-  it("creates a payment link for a sponsor and shows it", async () => {
-    respond(20000);
+  it("lists each sponsor's request, hiding superseded ones that weren't paid", async () => {
+    respond(5000, {
+      fundings: [
+        funding({}),
+        funding({ id: "f-0", amount_cents: 30000, cancelled_at: "2026-11-17T00:00:00Z" }),
+        funding({ id: "f-2", funder_name: "Ministry", amount_cents: 5000, status: "paid", checkout_url: null }),
+      ],
+    });
     renderPanel();
-    await screen.findByRole("button", { name: "Create payment link" });
+    await screen.findByText(/Acme · RM 450.00/);
+    expect(screen.queryByText(/RM 300.00 ·|Acme · RM 300.00/)).toBeNull();
+    expect(screen.getByText(/Ministry · RM 50.00/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry sending links" })).toBeNull();
+  });
 
-    fireEvent.change(screen.getByLabelText("Sponsor name"), { target: { value: "Acme" } });
-    fireEvent.change(screen.getByLabelText("Sponsor email"), { target: { value: "a@acme.test" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create payment link" }));
+  it("warns about a sponsor with no address", async () => {
+    respond(0, { missing: ["Ministry"] });
+    renderPanel();
+    await waitFor(() =>
+      expect(screen.getByText(/No email address for Ministry/)).toBeTruthy(),
+    );
+  });
 
-    await waitFor(() => expect(screen.getByText("https://gate.chip-in.asia/p/1")).toBeTruthy());
+  it("retries a link that wasn't created", async () => {
+    respond(0, { fundings: [funding({ checkout_url: null })] });
+    renderPanel();
+    await screen.findByText("Link not sent yet");
+    fireEvent.click(screen.getByRole("button", { name: "Retry sending links" }));
+    await waitFor(() => expect(screen.getByText("Sent 1 payment link.")).toBeTruthy());
     const post = mockFetch.mock.calls.find(([, init]) => init?.method === "POST")!;
     expect(post[0]).toBe("/api/v1/organizations/org-1/tournaments/t-1/prize-funding");
-    expect(JSON.parse(post[1].body)).toEqual({ funder_name: "Acme", funder_email: "a@acme.test" });
   });
 
   it("offers only confirmed players as winners, and fills the prize's amount", async () => {

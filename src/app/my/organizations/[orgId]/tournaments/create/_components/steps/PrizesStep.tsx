@@ -11,8 +11,10 @@ import { useTournamentWizard } from "../TournamentWizardContext";
 import LockedFieldset from "../LockedFieldset";
 import { newRowId } from "../rowId";
 import {
+  FUNDER_EMAIL_RE,
   PRIZE_FUNDING_LABELS,
   PRIZE_FUNDING_SOURCES,
+  funderKey,
   type PrizeDistribution,
   type PrizeFundingSource,
 } from "@/lib/tournaments/prize-funding";
@@ -27,11 +29,38 @@ type SpecialPrizeErrors = Partial<{ name: string; amount: string }>;
 type PrizesErrors = {
   categories: Record<string, CategoryErrors>;
   specialPrizes: Record<string, SpecialPrizeErrors>;
+  /** A funder's address that isn't one, keyed by funderKey. */
+  contacts?: Record<string, string>;
   /** Step-level error: special prizes declared with no category to attach to. */
   structure?: string;
 };
 
 const NO_ERRORS: PrizesErrors = { categories: {}, specialPrizes: {} };
+
+/**
+ * The funders the form names on prizes with money, in order of appearance:
+ * the people a platform-distributed pool will email. Mirrors declaredFunders
+ * (src/lib/tournaments/prize-funding.ts) on the wizard's own shape.
+ */
+export function formFunders(data: PrizesData): { key: string; name: string }[] {
+  const seen = new Map<string, string>();
+  const add = (name: string, hasMoney: boolean) => {
+    const trimmed = name.trim();
+    if (!trimmed || !hasMoney) return;
+    const key = funderKey(trimmed);
+    if (!seen.has(key)) seen.set(key, trimmed);
+  };
+  for (const cat of data.categories) {
+    add(
+      cat.funderName,
+      cat.prizes.some((p) => p.amount !== "" && Number(p.amount) > 0),
+    );
+  }
+  for (const sp of data.specialPrizes) {
+    add(sp.funderName, sp.amount !== "" && Number(sp.amount) > 0);
+  }
+  return [...seen].map(([key, name]) => ({ key, name }));
+}
 
 function validate(data: PrizesData): PrizesErrors {
   const errors: PrizesErrors = { categories: {}, specialPrizes: {} };
@@ -71,6 +100,19 @@ function validate(data: PrizesData): PrizesErrors {
       "Add at least one prize category with a placing — special prizes cannot be the only prizes you award.";
   }
 
+  // A blank address is left for publish to report (a draft may not have it
+  // yet); one that isn't an address is caught here.
+  if (data.distribution === "platform") {
+    const contacts: Record<string, string> = {};
+    for (const f of formFunders(data)) {
+      const email = (data.funderEmails?.[f.key] ?? "").trim();
+      if (email && !FUNDER_EMAIL_RE.test(email)) {
+        contacts[f.key] = "Enter a valid email address.";
+      }
+    }
+    if (Object.keys(contacts).length > 0) errors.contacts = contacts;
+  }
+
   return errors;
 }
 
@@ -78,6 +120,7 @@ function hasErrors(errors: PrizesErrors): boolean {
   return (
     Object.keys(errors.categories).length > 0 ||
     Object.keys(errors.specialPrizes).length > 0 ||
+    Object.keys(errors.contacts ?? {}).length > 0 ||
     errors.structure !== undefined
   );
 }
@@ -288,6 +331,60 @@ function PrizeFundingFields({
           onChange={(e) => onChange({ funderName: e.target.value })}
         />
       </div>
+    </div>
+  );
+}
+
+// Publishing a platform-distributed tournament emails each funder a payment
+// link for their share, and the tournament stays unlisted until they have all
+// paid. The addresses are private: they never appear on the public page.
+function FunderContactsFields({
+  funders,
+  emails,
+  errors,
+  onChange,
+}: {
+  funders: { key: string; name: string }[];
+  emails: Record<string, string>;
+  errors: Record<string, string>;
+  onChange: (key: string, email: string) => void;
+}) {
+  return (
+    <div className="mt-4">
+      <h3 className="font-cinzel text-gold-muted mb-2 text-xs font-bold tracking-widest uppercase">
+        Sponsor Payment Links
+      </h3>
+      <p className="font-lato text-text-muted mb-3 text-xs">
+        When you publish, each funder is emailed a payment link for their share.
+        Your tournament stays hidden from players until every share is paid.
+        These addresses are never shown publicly.
+      </p>
+      {funders.length === 0 ? (
+        <p className="font-lato text-text-muted text-xs">
+          Name a funder on each prize with money to add their email here.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {funders.map((f) => (
+            <div key={f.key}>
+              <label className="input-label" htmlFor={`funder-email-${f.key}`}>
+                {f.name} email
+              </label>
+              <input
+                id={`funder-email-${f.key}`}
+                type="email"
+                className={`input w-full ${errors[f.key] ? "input-error" : ""}`}
+                placeholder="finance@sponsor.com"
+                value={emails[f.key] ?? ""}
+                onChange={(e) => onChange(f.key, e.target.value)}
+              />
+              {errors[f.key] && (
+                <p className="input-hint error mt-0.5">{errors[f.key]}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -603,6 +700,20 @@ export default function PrizesStep() {
           </label>
         ))}
       </div>
+
+      {form.distribution === "platform" && (
+        <FunderContactsFields
+          funders={formFunders(form)}
+          emails={form.funderEmails ?? {}}
+          errors={errors.contacts ?? {}}
+          onChange={(key, email) =>
+            setForm((f) => ({
+              ...f,
+              funderEmails: { ...(f.funderEmails ?? {}), [key]: email },
+            }))
+          }
+        />
+      )}
     </LockedFieldset>
   );
 }

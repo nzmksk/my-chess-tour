@@ -3,15 +3,14 @@
 import Link from "next/link";
 import { formatCalendarDate } from "@/lib/tournaments/datetime";
 import AgreementGate from "./AgreementGate";
-import BankAccountNotice, {
-  type BankAccountStatus,
-} from "./BankAccountNotice";
+import BankAccountNotice, { type BankAccountStatus } from "./BankAccountNotice";
 import PendingNominations, {
   type PendingNomination,
 } from "./PendingNominations";
 
 type TournamentStatus =
   | "draft"
+  | "pending_funding"
   | "published"
   | "ongoing"
   | "completed"
@@ -57,6 +56,10 @@ const STATUS_CONFIG: Record<
     label: "Draft",
     className: "bg-bg-raised text-text-muted border border-border",
   },
+  pending_funding: {
+    label: "Awaiting Prize Funding",
+    className: "bg-warning/15 text-warning border border-warning/20",
+  },
   published: {
     label: "Published",
     className: "bg-success/10 text-success border border-success/20",
@@ -89,6 +92,7 @@ function getActionConfig(status: TournamentStatus): {
   switch (status) {
     case "draft":
       return { label: "Edit", pathSuffix: "/edit" };
+    case "pending_funding":
     case "published":
     case "ongoing":
       return { label: "Manage", pathSuffix: "" };
