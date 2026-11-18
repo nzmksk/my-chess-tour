@@ -4,6 +4,12 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { assertUploadedObject } from "@/services/supabase/storage";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
+import {
+  hasSensitiveDataConsent,
+  withdrawSensitiveDataConsent,
+} from "@/services/consent/sensitive-data";
+
+const OKU_BUCKET = "oku-documents";
 
 // Must match the uploader in OkuVerificationCard.
 const OKU_MAX_BYTES = 5 * 1024 * 1024;
@@ -20,6 +26,11 @@ const OKU_MIME_TYPES = [
 // belongs to this user, confirm there is a sane file behind it, store it, and
 // set oku_status = 'pending'. Admin review then flips it to 'verified' /
 // 'rejected'.
+//
+// The card is health data, held only with the player's separate consent
+// (#451). The storage policy already refused the upload without it; this
+// re-checks before the card is put in front of a reviewer, so a grant
+// withdrawn between upload and registration still stops it here.
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
@@ -68,7 +79,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // never passes through this route. The bucket's file_size_limit and
   // allowed_mime_types (005_bucket_policies.sql) reject bad uploads at Storage;
   // this re-checks the object actually registered, and keep the two in sync.
-  const check = await assertUploadedObject("oku-documents", documentPath, {
+  const consent = await hasSensitiveDataConsent(claims.id, "health");
+  if (!consent.ok) {
+    return internalErrorResponse(
+      "POST /api/v1/profile/oku: has_sensitive_data_consent failed",
+      consent.error,
+    );
+  }
+  if (!consent.granted) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONSENT_REQUIRED",
+          message:
+            "Please consent to the processing of your health data before submitting your OKU card",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  const check = await assertUploadedObject(OKU_BUCKET, documentPath, {
     maxBytes: OKU_MAX_BYTES,
     mimeTypes: OKU_MIME_TYPES,
   });
@@ -101,6 +132,83 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json(
     { message: "OKU document submitted for verification" },
+    { status: 200 },
+  );
+}
+
+// Withdraws the player's consent to the processing of their health data
+// (#451), which means the data goes: every card they have uploaded (a
+// resubmission after rejection leaves the earlier file behind), their OKU
+// status, and the review that went with it. A verified player drops back to
+// 'none' and loses OKU fee tiers for future registrations; entries already paid
+// for are not touched.
+//
+// The order makes every partial failure safe to retry. Files first, then the
+// profile, then the withdrawal record: a withdrawal is never recorded while the
+// card still exists, and until the profile is reset the player still sees the
+// withdraw button and can try again. The service role removes the files
+// because clients have no DELETE policy on the bucket (005_bucket_policies.sql).
+export async function DELETE(): Promise<NextResponse> {
+  const claims = await getAuthClaims();
+
+  if (!claims) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Authentication required" } },
+      { status: 401 },
+    );
+  }
+
+  const folder = `users/${claims.id}/oku`;
+  const bucket = supabaseAdmin.storage.from(OKU_BUCKET);
+
+  const { data: objects, error: listError } = await bucket.list(folder, {
+    limit: 1000,
+  });
+  if (listError) {
+    return internalErrorResponse(
+      "DELETE /api/v1/profile/oku: listing OKU documents failed",
+      listError,
+    );
+  }
+
+  const paths = (objects ?? []).map((object) => `${folder}/${object.name}`);
+  if (paths.length > 0) {
+    const { error: removeError } = await bucket.remove(paths);
+    if (removeError) {
+      return internalErrorResponse(
+        "DELETE /api/v1/profile/oku: removing OKU documents failed",
+        removeError,
+      );
+    }
+  }
+
+  const { error: profileError } = await supabaseAdmin
+    .from("player_profiles")
+    .update({
+      oku_status: "none",
+      oku_document_path: null,
+      oku_reviewed_by: null,
+      oku_reviewed_at: null,
+      oku_rejection_reason: null,
+    })
+    .eq("user_id", claims.id);
+  if (profileError) {
+    return internalErrorResponse(
+      "DELETE /api/v1/profile/oku: resetting OKU status failed",
+      profileError,
+    );
+  }
+
+  const withdrawn = await withdrawSensitiveDataConsent(claims.id, "health");
+  if (!withdrawn.ok) {
+    return internalErrorResponse(
+      "DELETE /api/v1/profile/oku: record_sensitive_data_consent failed",
+      withdrawn.error,
+    );
+  }
+
+  return NextResponse.json(
+    { message: "Consent withdrawn and OKU card deleted" },
     { status: 200 },
   );
 }
