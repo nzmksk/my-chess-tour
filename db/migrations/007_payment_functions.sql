@@ -69,6 +69,10 @@ DECLARE
 BEGIN
   -- A platform-distributed prize pool must be fully funded before anyone can
   -- enter (#523). The checkout route checks first; this is the backstop.
+  -- Checked under the tournament row lock (the capacity trigger takes the same
+  -- lock again on insert), so a prize edit either commits first and is seen
+  -- here, or waits and sees this hold (guard_tournament_prizes_in_checkout).
+  PERFORM 1 FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
   IF prize_pool_blocks_registration(p_tournament_id) THEN
     RAISE EXCEPTION 'PRIZE_POOL_NOT_FUNDED: registration opens once the prize pool is funded'
       USING ERRCODE = 'P0001';
@@ -163,6 +167,9 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
+  -- Under the tournament row lock, for the same reason as the first attempt.
+  -- assert_tournament_capacity below takes it again.
+  PERFORM 1 FROM tournaments WHERE id = v_reg.tournament_id FOR UPDATE;
   IF prize_pool_blocks_registration(v_reg.tournament_id) THEN
     RAISE EXCEPTION 'PRIZE_POOL_NOT_FUNDED: registration opens once the prize pool is funded'
       USING ERRCODE = 'P0001';

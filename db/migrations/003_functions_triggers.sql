@@ -895,6 +895,79 @@ CREATE TRIGGER guard_seats_taken BEFORE UPDATE ON tournaments
   FOR EACH ROW EXECUTE FUNCTION guard_tournament_seats_taken();
 
 -- =============================================
+-- PRIZE POOL HELD FOR LIVE CHECKOUTS (#523)
+-- A platform-distributed prize pool must be fully funded before anyone can
+-- enter. The checkout RPCs check that under the tournament row lock, but prizes
+-- only freeze at the first PAID registration (guard_tournament_paid_fields). A
+-- player who has a live CHIP link and then pays would otherwise be confirmed
+-- against prizes raised while they were paying, which the pool no longer
+-- covers: settle_registration_payment never re-checks the pool, and can't
+-- refuse money already taken.
+--
+-- So while any checkout hold is live (the same 10-minute window as
+-- count_taken_seats, which is also when CHIP's due_strict makes the link
+-- unpayable), a prize change that would leave the pool short is refused. A
+-- change the money already paid in still covers is allowed, as is any change on
+-- an organizer-paid tournament. The organizer can retry once the checkouts
+-- finish.
+--
+-- Not covered: a payment made just before the link lapsed whose webhook lands
+-- after a raise saved once the window had passed. That player paid while the
+-- pool covered the prizes; the raise still asks the funders for the top-up and
+-- pauses further registration.
+--
+-- Runs under the tournament row lock (BEFORE UPDATE), which the checkout RPCs
+-- take before their own pool check, so the two serialize. SECURITY DEFINER so
+-- the hold count isn't filtered by the caller's RLS. declared_prize_total_cents
+-- lives in 007; plpgsql resolves it at call time.
+--
+-- The PATCH route turns the PRIZES_IN_CHECKOUT sentinel into a readable 409.
+-- Named to fire after guard_paid_fields, so a change after payment reports the
+-- paid lock instead.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_prizes_in_checkout()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_live integer;
+BEGIN
+  IF NEW.prizes IS NOT DISTINCT FROM OLD.prizes
+     OR COALESCE(NEW.prizes->>'distribution', 'organizer') <> 'platform' THEN
+    RETURN NEW;
+  END IF;
+
+  IF declared_prize_total_cents(NEW.prizes) <= COALESCE((
+       SELECT SUM(s.total_prize_funding_cents)
+       FROM tournament_payout_summary s
+       WHERE s.tournament_id = NEW.id
+     ), 0) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT COUNT(*)::integer INTO v_live
+  FROM registrations
+  WHERE tournament_id = NEW.id
+    AND status = 'pending_payment'
+    AND registered_at > now() - interval '10 minutes';
+
+  IF v_live > 0 THEN
+    RAISE EXCEPTION
+      'PRIZES_IN_CHECKOUT: % checkouts are live; tournament % cannot raise its prizes beyond the funded pool',
+      v_live, NEW.id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_prizes_in_checkout BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_prizes_in_checkout();
+
+-- =============================================
 -- BULK PARTICIPANT COUNTS
 -- Used by the tournaments list API.
 -- =============================================

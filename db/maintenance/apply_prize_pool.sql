@@ -4,9 +4,10 @@
 -- #523 edits the base migrations in place: the 'pending_funding' tournament
 -- status, player_bank_accounts, prize_fundings, prize_funder_contacts and
 -- prize_awards in 001 (and the bank columns leave player_profiles), their
--- indexes in 002, triggers, audit redaction/anonymisation, set_player_bank_account
--- and the agreement version in 003, RLS in 004, and the money functions in 007. A
--- fresh build gets all of it. 003 can't simply be re-run on a long-lived database
+-- indexes in 002, triggers (including the prize guard for live checkouts),
+-- audit redaction/anonymisation, set_player_bank_account and the agreement
+-- version in 003, RLS in 004, and the money functions in 007. A fresh build
+-- gets all of it. 003 can't simply be re-run on a long-lived database
 -- (it creates triggers), so its part is repeated below, generated from those
 -- files, in one transaction. 007 is CREATE OR REPLACE throughout and IS re-run.
 --
@@ -14,9 +15,9 @@
 --   1. Run this script. It ends in ROLLBACK, so it is a dry run until that line
 --      is changed to COMMIT.
 --   2. Re-run db/migrations/007_payment_functions.sql in full: the prize
---      functions, the registration gate inside create_registration_with_payment
---      and start_new_payment_attempt, and settle_bank_account_verification's
---      player branch.
+--      functions, the registration gate (under the tournament lock) inside
+--      create_registration_with_payment and start_new_payment_attempt, and
+--      settle_bank_account_verification's player branch.
 --   3. Deploy the app. Before step 2 the checkout route's prize_pool_blocks_
 --      registration call fails, so deploy only after it.
 --
@@ -444,6 +445,48 @@ IMMUTABLE
 AS $$
   SELECT '2026-11-18'::varchar(20);
 $$;
+
+CREATE OR REPLACE FUNCTION guard_tournament_prizes_in_checkout()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_live integer;
+BEGIN
+  IF NEW.prizes IS NOT DISTINCT FROM OLD.prizes
+     OR COALESCE(NEW.prizes->>'distribution', 'organizer') <> 'platform' THEN
+    RETURN NEW;
+  END IF;
+
+  IF declared_prize_total_cents(NEW.prizes) <= COALESCE((
+       SELECT SUM(s.total_prize_funding_cents)
+       FROM tournament_payout_summary s
+       WHERE s.tournament_id = NEW.id
+     ), 0) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT COUNT(*)::integer INTO v_live
+  FROM registrations
+  WHERE tournament_id = NEW.id
+    AND status = 'pending_payment'
+    AND registered_at > now() - interval '10 minutes';
+
+  IF v_live > 0 THEN
+    RAISE EXCEPTION
+      'PRIZES_IN_CHECKOUT: % checkouts are live; tournament % cannot raise its prizes beyond the funded pool',
+      v_live, NEW.id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_prizes_in_checkout BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_prizes_in_checkout();
 
 REVOKE EXECUTE ON FUNCTION set_player_bank_account FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION set_player_bank_account TO service_role;
