@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { classifyRegistration } from "../classify";
+import { classifyRegistration, isTournamentInProgress } from "../classify";
 import type { PlayerRegistration } from "../types";
 
 function registration(
@@ -136,5 +136,23 @@ describe("classifyRegistration", () => {
       expect(classifyRegistration(reg, duringEvent)).toBe("upcoming");
       expect(classifyRegistration(reg, klNoon("2026-04-01"))).toBe("past");
     });
+  });
+});
+
+describe("isTournamentInProgress", () => {
+  const { tournament } = registration();
+
+  it("is true from start_date through end_date at the venue", () => {
+    expect(isTournamentInProgress(tournament, klNoon("2026-03-15"))).toBe(true);
+    expect(isTournamentInProgress(tournament, klNoon("2026-03-17"))).toBe(true);
+  });
+
+  it("is false before it starts and after it ends", () => {
+    expect(isTournamentInProgress(tournament, klNoon("2026-03-14"))).toBe(
+      false,
+    );
+    expect(isTournamentInProgress(tournament, klNoon("2026-03-18"))).toBe(
+      false,
+    );
   });
 });

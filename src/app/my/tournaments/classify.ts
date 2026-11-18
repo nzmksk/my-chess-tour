@@ -1,5 +1,6 @@
 import {
   getTodayInTimeZone,
+  getTournamentDateState,
   resolveTimeZone,
 } from "@/lib/tournaments/datetime";
 import type { PlayerRegistration } from "./types";
@@ -36,4 +37,18 @@ export function classifyRegistration(
   return reg.tournament.end_date >= venueToday(reg.tournament, now)
     ? "upcoming"
     : "past";
+}
+
+/** Whether the tournament is being played today, at its venue. */
+export function isTournamentInProgress(
+  tournament: RegistrationTournament,
+  now: Date = new Date(),
+): boolean {
+  return (
+    getTournamentDateState(
+      tournament.start_date,
+      tournament.end_date,
+      venueToday(tournament, now),
+    ) === "ongoing"
+  );
 }

@@ -7,7 +7,11 @@ import type { TournamentFormat, TimeControl } from "@/app/tournaments/types";
 import { formatRinggit } from "@/services/payouts/format";
 import { formatInstantDate } from "@/lib/tournaments/datetime";
 import { SUPPORT_EMAIL } from "@/lib/reference/contact";
-import { classifyRegistration, type RegistrationTab as Tab } from "../classify";
+import {
+  classifyRegistration,
+  isTournamentInProgress,
+  type RegistrationTab as Tab,
+} from "../classify";
 
 interface Props {
   registrations: PlayerRegistration[];
@@ -107,9 +111,15 @@ function RefundLine({
 interface RegistrationCardProps {
   registration: PlayerRegistration;
   dimmed?: boolean;
+  /** Being played today at the venue (#619). */
+  inProgress?: boolean;
 }
 
-function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
+function RegistrationCard({
+  registration,
+  dimmed,
+  inProgress,
+}: RegistrationCardProps) {
   const { tournament, status } = registration;
   const startDate = new Date(tournament.start_date + "T00:00:00");
   const month = startDate
@@ -136,9 +146,16 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
 
       {/* Tournament info */}
       <div className="flex-1 min-w-0">
-        <h4 className="font-lato text-sm font-semibold text-text-primary truncate">
-          {tournament.name}
-        </h4>
+        <div className="flex min-w-0 items-center gap-2">
+          <h4 className="font-lato text-text-primary truncate text-sm font-semibold">
+            {tournament.name}
+          </h4>
+          {inProgress && (
+            <span className="font-cinzel bg-gold-ghost border-gold-dim text-gold-bright shrink-0 rounded-md border px-2 py-0.5 text-[0.625rem] font-bold tracking-widest whitespace-nowrap uppercase">
+              In progress
+            </span>
+          )}
+        </div>
         <p className="font-lato text-xs text-text-muted mt-0.5">
           {tournament.venue_name}
           {format && tc && (
@@ -276,6 +293,10 @@ export default function RegistrationsClient({ registrations }: Props) {
               key={reg.id}
               registration={reg}
               dimmed={activeTab === "past"}
+              inProgress={
+                activeTab === "upcoming" &&
+                isTournamentInProgress(reg.tournament)
+              }
             />
           ))}
         </div>

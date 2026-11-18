@@ -148,4 +148,28 @@ describe("RegistrationsClient", () => {
       .map((h) => h.textContent);
     expect(names).toEqual(["Ten-Day Classical", "Weekend Blitz"]);
   });
+
+  it("marks an event being played today as In progress", () => {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+    }).format(new Date());
+    const running = registration();
+    render(
+      <RegistrationsClient
+        registrations={[
+          {
+            ...running,
+            tournament: {
+              ...running.tournament,
+              start_date: "2020-01-01",
+              end_date: today,
+            },
+          },
+          registration({ id: "reg-2" }),
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("In progress")).toHaveLength(1);
+  });
 });
