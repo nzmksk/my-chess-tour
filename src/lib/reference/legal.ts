@@ -128,6 +128,63 @@ export function changesSince(
   return relevant.flatMap((entry) => [...entry.changes]);
 }
 
+// ---------------------------------------------------------------------------
+// Sensitive data consent (#451)
+//
+// Health data (an OKU card and the disability status it proves) and financial
+// data (a player's bank details) are each held only with their own explicit
+// consent. Agreeing to the Terms at signup is not consent to either: each is
+// asked for on its own, with its own checkbox, at the moment the data is
+// collected, and recorded in sensitive_data_consents.
+//
+// The statement is the checkbox label, word for word, and the version stored
+// with a grant is the version of the statement the user saw. Same history
+// rule as the documents above: a reworded statement is a new entry at the top,
+// so the wording behind every recorded version stays in the code.
+// ---------------------------------------------------------------------------
+
+export type SensitiveDataCategory = "health" | "financial";
+
+export interface ConsentVersion {
+  /** Effective date, ISO. Stored with each grant. */
+  version: string;
+  /** The checkbox label: exactly what the user agrees to. */
+  statement: string;
+}
+
+/** Each category's consent statements, newest first. */
+export const SENSITIVE_DATA_CONSENT_HISTORY: Readonly<
+  Record<SensitiveDataCategory, readonly ConsentVersion[]>
+> = {
+  health: [
+    {
+      version: "2026-11-19",
+      statement:
+        "I consent to MY Chess Tour processing my OKU card and disability status to verify me for OKU fee tiers, categories and special prizes. Only platform reviewers see my card. Organisers of tournaments I enter see only that I am verified OKU. I can withdraw this consent at any time, which deletes my card and removes my OKU verification.",
+    },
+  ],
+  financial: [
+    {
+      version: "2026-11-19",
+      statement:
+        "I consent to MY Chess Tour storing my bank name, account holder name and account number to pay me prizes, and sharing them with CHIP, its payment processor, to verify the account and make the transfer. Organisers never see them. I can withdraw this consent at any time by removing my bank details. Records of prizes already paid are kept for 7 years, as the law requires.",
+    },
+  ],
+};
+
+/** The consent statement currently in force for a category. */
+export function currentConsent(
+  category: SensitiveDataCategory,
+): ConsentVersion {
+  return SENSITIVE_DATA_CONSENT_HISTORY[category][0];
+}
+
+export function isSensitiveDataCategory(
+  value: unknown,
+): value is SensitiveDataCategory {
+  return value === "health" || value === "financial";
+}
+
 const LEGAL_VERSION_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const MONTHS = [
