@@ -197,6 +197,7 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 
 ### P11. My Tournaments — ✅ Built
 - **Entry:** `/my/tournaments` → `GET /api/v1/me/registrations` (runs a lazy expiry sweep on read). Upcoming/past/cancelled with status badges.
+- **Bucketing (#619):** a registration stays under Upcoming until its `end_date` has passed *at the venue* (`getTodayInTimeZone(tournament.timezone)`, compared as date strings like discovery), with an "In progress" badge from `start_date` to `end_date`. Past is ordered by most recent `end_date`. Logic in `src/app/my/tournaments/classify.ts`.
 - **Gaps:** ❌ no "Payment History / download receipt" screen (MVP Flow 5) — CHIP emails the receipt instead 🟢.
 
 ### P12. Registration cancellation (player-initiated) — ❌ Not built
