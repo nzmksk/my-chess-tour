@@ -388,6 +388,86 @@ export async function sendPrizePaidEmail(
   }
 }
 
+// Asks a sponsor to pay their share of a platform-distributed prize pool
+// (#523). Sent automatically when the tournament is published, and again with
+// a fresh link if their share changes or a payment fails. The checkout link is
+// CHIP's, so it only becomes a button if it really is an https URL.
+export async function sendPrizeFundingRequestEmail(
+  email: string,
+  params: {
+    funderName: string;
+    organizerName: string;
+    tournamentName: string;
+    amountCents: number;
+    /** The prizes this contribution funds, e.g. "Open — 1st, Open — 2nd". */
+    prizeList: string;
+    checkoutUrl: string;
+  },
+) {
+  const checkoutUrl = safeHttpsUrl(params.checkoutUrl);
+  if (!checkoutUrl) {
+    throw new Error("Prize funding request email: the checkout link is not an https URL");
+  }
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate("prize-funding-request.html")
+    .replace(/\{\{funderName\}\}/g, escapeHtml(params.funderName))
+    .replace(/\{\{organizerName\}\}/g, escapeHtml(params.organizerName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{prizeList\}\}/g, escapeHtml(params.prizeList))
+    .replace(/\{\{checkoutUrl\}\}/g, escapeHtml(checkoutUrl))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `Prize fund payment for ${params.tournamentName}`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send prize funding request email:", error);
+    throw new Error(`Failed to send prize funding request email: ${error.message}`);
+  }
+}
+
+// Tells an organization its platform-distributed tournament is now listed,
+// because the payment that completed its prize pool has settled (#523).
+export async function sendTournamentListedEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    orgName: string;
+    tournamentName: string;
+    /** The public page, when the tournament has a slug. */
+    tournamentUrl: string | null;
+    fundedCents: number;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate("tournament-listed.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{orgName\}\}/g, escapeHtml(params.orgName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.fundedCents))
+    .replace(/\{\{ctaUrl\}\}/g, escapeHtml(params.tournamentUrl ?? `${siteUrl}/my/organizations`))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${params.tournamentName} is now open for registration`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send tournament listed email:", error);
+    throw new Error(`Failed to send tournament listed email: ${error.message}`);
+  }
+}
+
 // Tells an organization the outcome of its early payout request. Approval means
 // the transfer is being sent, not that it has landed: sendPayoutProcessedEmail
 // follows once it settles. One function with a boolean branch, like
