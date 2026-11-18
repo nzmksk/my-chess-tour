@@ -9,6 +9,7 @@ import {
   rememberSignupReturnTo,
   SIGNUP_FORM_STORAGE_KEY,
 } from "@/lib/auth/signup-storage";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 
 export default function LoginForm({
   successMessage,
@@ -80,7 +81,7 @@ export default function LoginForm({
                 Reset Password
               </Link>
               <a
-                href="mailto:mychesstour@gmail.com"
+                href={`mailto:${SUPPORT_EMAIL}`}
                 className="btn-secondary mt-2 block text-center"
               >
                 Contact Support

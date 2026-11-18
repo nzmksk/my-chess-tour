@@ -264,7 +264,9 @@ describe("LoginForm", () => {
     mockState.locked = true;
     mockState.lockedSeconds = 900;
     render(<LoginForm />);
-    expect(screen.getByText("Contact Support")).toBeDefined();
+    expect(
+      screen.getByText("Contact Support").closest("a")?.getAttribute("href"),
+    ).toBe("mailto:support@mychesstour.com");
   });
 
   // --- Pending state ---------------------------------------------------------
