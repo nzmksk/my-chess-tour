@@ -117,6 +117,35 @@ describe("isAllowedOrigin", () => {
     expect(isAllowedOrigin("https://internal:8080", forwarded)).toBe(false);
   });
 
+  it("refuses plain HTTP on the request's own hostname", () => {
+    expect(isAllowedOrigin("http://staging.mychesstour.com", request)).toBe(
+      false,
+    );
+    expect(
+      isAllowedOrigin(
+        "http://staging.mychesstour.com",
+        apiRequest("/api/v1/profile", {
+          headers: { "x-forwarded-proto": "https" },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("takes the request's scheme from x-forwarded-proto", () => {
+    const lan = apiRequest("/api/v1/profile", {
+      host: "192.168.1.5:3000",
+      headers: { "x-forwarded-proto": "http" },
+    });
+    expect(isAllowedOrigin("http://192.168.1.5:3000", lan)).toBe(true);
+    expect(isAllowedOrigin("https://192.168.1.5:3000", lan)).toBe(false);
+  });
+
+  it("refuses the request's host on another port", () => {
+    expect(
+      isAllowedOrigin("https://staging.mychesstour.com:8443", request),
+    ).toBe(false);
+  });
+
   it("allows a dev server on another port as same origin", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
     const dev = new NextRequest("http://localhost:3001/api/v1/profile", {

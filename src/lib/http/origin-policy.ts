@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveRequestOrigin } from "./self-fetch";
 import { isBrowserApiPath } from "./server-to-server";
 
 /**
@@ -35,7 +36,7 @@ const PREFLIGHT_HEADERS = {
  * (www.mychesstour.com → admin.mychesstour.com, staging.mychesstour.com →
  * admin.staging.mychesstour.com).
  *
- * The host serving the request is always allowed on top of these (see
+ * The origin serving the request is always allowed on top of these (see
  * isAllowedOrigin), which is what covers deploy previews, branch deploys and a
  * dev server on any port. Deploy previews are not on this list on purpose:
  * the repo is public, previews build pull-request code, and none of it should
@@ -57,13 +58,13 @@ export function allowedOrigins(): Set<string> {
 
 /**
  * Whether a request from `origin` may use the API: either the request's own
- * host (same origin) or one of allowedOrigins(). "null" and anything that
+ * origin or one of allowedOrigins(). "null" and anything that
  * isn't an http(s) origin are never allowed.
  */
 export function isAllowedOrigin(origin: string, request: NextRequest): boolean {
   const parsed = parseOrigin(origin);
   if (!parsed) return false;
-  return isSameHost(parsed, request) || allowedOrigins().has(parsed.origin);
+  return isSameOrigin(parsed, request) || allowedOrigins().has(parsed.origin);
 }
 
 /**
@@ -121,7 +122,7 @@ export function applyCorsHeaders(
   if (
     origin &&
     parsed &&
-    !isSameHost(parsed, request) &&
+    !isSameOrigin(parsed, request) &&
     allowedOrigins().has(parsed.origin)
   ) {
     for (const [name, value] of Object.entries(
@@ -170,22 +171,20 @@ function parseOrigin(value: string): URL | null {
 }
 
 /**
- * Whether the origin names the host this request was sent to, the same test
- * Next applies to server actions. The host comes from x-forwarded-host, else
- * host. A page on another site can't set either on a victim's request: the
- * browser writes Host, and a custom header would need a preflight, which a
- * disallowed origin fails.
+ * Whether the origin is the one this request was sent to: same scheme, host
+ * and port. The request's origin comes from resolveRequestOrigin, which reads
+ * x-forwarded-host (else host) and x-forwarded-proto (else http only for
+ * loopback hosts, https otherwise).
+ *
+ * The scheme matters: http://our-host is a different origin from
+ * https://our-host. A network attacker who can serve a page over plain HTTP on
+ * our hostname must not pass as same-origin, since browsers without
+ * schemeful SameSite would attach the auth cookies to its writes.
+ *
+ * A page on another site can't set any of these headers on a victim's
+ * request: the browser writes Host, and a custom header would need a
+ * preflight, which a disallowed origin fails.
  */
-function isSameHost(origin: URL, request: NextRequest): boolean {
-  const host =
-    firstValue(request.headers.get("x-forwarded-host")) ??
-    firstValue(request.headers.get("host")) ??
-    request.nextUrl.host;
-  return origin.host === host.toLowerCase();
-}
-
-// Proxies may append to these headers ("a, b"); the first entry is the client-facing one.
-function firstValue(value: string | null): string | null {
-  const first = value?.split(",")[0]?.trim();
-  return first ? first : null;
+function isSameOrigin(origin: URL, request: NextRequest): boolean {
+  return origin.origin === resolveRequestOrigin(request.headers).toLowerCase();
 }

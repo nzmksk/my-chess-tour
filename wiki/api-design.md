@@ -1293,7 +1293,7 @@ Every `/api` route authenticates with the Supabase session cookies, which the br
 
 **Allowed origins:**
 
-- **The host serving the request** (`x-forwarded-host`, else `host`). This is plain same-origin traffic, and it is what makes deploy previews, branch deploys and a dev server on any port work.
+- **The origin serving the request**: scheme, host and port, as `resolveRequestOrigin` reads them (`x-forwarded-host`, else `host`; `x-forwarded-proto`, else `http` for loopback and `https` otherwise). This is plain same-origin traffic, and it is what makes deploy previews, branch deploys and a dev server on any port work. `http://` on our own hostname is a different origin and is refused, so a page injected over plain HTTP can't pass as us.
 - **`NEXT_PUBLIC_SITE_URL`** and its **admin subdomain**: `www.mychesstour.com` → `admin.mychesstour.com`, `staging.mychesstour.com` → `admin.staging.mychesstour.com`.
 
 Deploy previews are not trusted to call _another_ deployment's API. The repo is public and previews build pull-request code.
