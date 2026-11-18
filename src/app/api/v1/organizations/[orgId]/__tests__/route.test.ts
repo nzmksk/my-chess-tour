@@ -45,6 +45,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { PATCH } from "../route";
+import { hitWindow } from "@/services/rate-limit/window";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -113,6 +114,20 @@ describe("PATCH /api/v1/organizations/[orgId]", () => {
       mockGetClaims.mockResolvedValue({ data: { claims: null }, error: null });
       const res = await PATCH(makePatch({ name: "X" }), params());
       expect(res.status).toBe(401);
+    });
+
+    it("429 once the user is over the save limit, changing nothing", async () => {
+      vi.mocked(hitWindow).mockResolvedValueOnce(240);
+      const res = await PATCH(makePatch({ name: "X" }), params());
+
+      expect(hitWindow).toHaveBeenCalledWith(
+        `ratelimit:organizationSave:user:${appIdFor(USER_ID)}`,
+        30,
+        600,
+      );
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("240");
+      expect(mockFrom).not.toHaveBeenCalled();
     });
 
     it("404 when the organization does not exist", async () => {

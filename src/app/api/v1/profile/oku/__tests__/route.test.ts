@@ -29,6 +29,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { POST } from "../route";
+import { hitWindow } from "@/services/rate-limit/window";
 
 const USER = "bbbbbbbb-0000-0000-0000-000000000001";
 // The JWT sub is the AUTH id; the OKU folder and the profile row are keyed by
@@ -64,6 +65,22 @@ describe("POST /api/v1/profile/oku", () => {
       makeReq({ document_path: `users/${APP_USER}/oku/1.png` }),
     );
     expect(res.status).toBe(401);
+  });
+
+  it("429 once the user is over the submission limit, recording nothing", async () => {
+    vi.mocked(hitWindow).mockResolvedValueOnce(7200);
+    const res = await POST(
+      makeReq({ document_path: `users/${APP_USER}/oku/1.png` }),
+    );
+
+    expect(hitWindow).toHaveBeenCalledWith(
+      `ratelimit:okuDocument:user:${APP_USER}`,
+      5,
+      86400,
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("7200");
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("400 when document_path is missing", async () => {

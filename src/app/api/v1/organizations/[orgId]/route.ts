@@ -6,6 +6,7 @@ import {
 import { NextRequest, NextResponse } from "next/server";
 import { validateOrgUpdate } from "./validators";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { enforceRateLimit } from "@/services/rate-limit/limiter";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -46,6 +47,13 @@ export async function PATCH(
       { status: 401 },
     );
   }
+
+  const limited = await enforceRateLimit(
+    "organizationSave",
+    request,
+    claims.id,
+  );
+  if (limited) return limited;
 
   let rawBody: unknown;
   try {
