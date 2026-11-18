@@ -121,4 +121,31 @@ describe("RegistrationsClient", () => {
       "support@mychesstour.com",
     );
   });
+
+  it("lists Past by most recent end_date, not start_date", () => {
+    const pastEvent = (
+      id: string,
+      name: string,
+      start: string,
+      end: string,
+    ) => {
+      const reg = registration({ id });
+      const tournament = { ...reg.tournament, name, start_date: start };
+      return { ...reg, tournament: { ...tournament, end_date: end } };
+    };
+    render(
+      <RegistrationsClient
+        registrations={[
+          pastEvent("r1", "Weekend Blitz", "2020-01-05", "2020-01-05"),
+          pastEvent("r2", "Ten-Day Classical", "2020-01-01", "2020-01-10"),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Past/ }));
+
+    const names = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((h) => h.textContent);
+    expect(names).toEqual(["Ten-Day Classical", "Weekend Blitz"]);
+  });
 });

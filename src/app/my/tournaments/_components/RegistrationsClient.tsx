@@ -204,10 +204,14 @@ export default function RegistrationsClient({ registrations }: Props) {
       else cancelled.push(reg);
     }
 
-    // Upcoming arrives from the API already sorted by nearest start date first.
-    // Past reads best most-recent-first, i.e. the reverse chronological order.
+    // Upcoming: nearest start first. Past: most recently finished first, by
+    // end_date, since a long event can end after a later-starting short one.
+    // Both are stable, so ties keep the API's most-recently-registered order.
+    upcoming.sort((a, b) =>
+      a.tournament.start_date.localeCompare(b.tournament.start_date),
+    );
     past.sort((a, b) =>
-      b.tournament.start_date.localeCompare(a.tournament.start_date),
+      b.tournament.end_date.localeCompare(a.tournament.end_date),
     );
 
     return { upcoming, past, cancelled };
