@@ -291,15 +291,6 @@
     );
   }
 
-  /* Gold gradient progress bar fill */
-  .progress-fill {
-    background: linear-gradient(
-      90deg,
-      var(--color-gold-bright),
-      var(--color-gold-deep)
-    );
-  }
-
   /* ── Filter bar ── */
   .filter-btn {
     @apply font-lato border-border text-text-body cursor-pointer appearance-none rounded-md border p-2 text-sm whitespace-nowrap transition duration-150;
