@@ -9,7 +9,7 @@ A tournament moves through these stages, in this order. A field locked at one st
 | Stage | When | What it means for editing |
 |---|---|---|
 | `draft` | `status = 'draft'` | Everything is editable. Placeholder dates don't count as "past". |
-| `published` | published, start date not reached, no paid registration | Everything is editable, but the tournament has to **stay publishable** (see below). |
+| `published` | published (or `pending_funding`, a platform-distributed tournament waiting for its prize pool), start date not reached, no paid registration | Everything is editable, but the tournament has to **stay publishable** (see below). A prize edit on a platform-distributed pool re-asks the funders ([prize-flow.md](./prize-flow.md#keeping-the-requests-in-line-with-the-prizes)). |
 | `paid` | published, start date not reached, at least one `payments` row with `type='registration'` and `status='paid'` | What the player paid for is locked. Capacity can only go up. |
 | `ongoing` | the venue's today is between the start and end dates | Only the description is editable. |
 | `completed` | the venue's today is after the end date | Nothing is editable. |

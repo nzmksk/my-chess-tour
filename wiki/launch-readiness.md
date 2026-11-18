@@ -212,7 +212,7 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 - **Priority:** 🟡 — the launch-blocking case (tournament cancelled, players owed money) is handled; the rest is a support-load and trust question.
 
 ### P14. Prize claim / winner payout — ⚠️ Built, unverified on staging (#523)
-- Only for tournaments whose prizes MY Chess Tour distributes (`prizes.distribution = "platform"`). The organizer enters winners, a platform admin approves at `/admin/prizes`, CHIP Send pays the winner's verified `player_bank_accounts` row, and `settle_prize_award` books the `player_prize` row. Full flow: [prize-flow.md](./prize-flow.md).
+- Only for tournaments whose prizes MY Chess Tour distributes (`prizes.distribution = "platform"`). Publishing one emails every funder a CHIP payment link for their share and holds the tournament unlisted in `pending_funding` until the pool is paid in. The organizer then enters winners, a platform admin approves at `/admin/prizes`, CHIP Send pays the winner's verified `player_bank_accounts` row, and `settle_prize_award` books the `player_prize` row. Full flow: [prize-flow.md](./prize-flow.md).
 - **Gaps:** 🟡 returning undistributed funds to sponsors (and the whole pool on cancellation) is a manual ops step. 🟡 CHIP Send behaviour for player recipients still needs a sandbox run.
 
 ### P15. Dependent accounts (register on behalf of others) — ❌ Not built (deferred)

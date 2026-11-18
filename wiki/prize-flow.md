@@ -20,19 +20,53 @@ available = balance - reserved                available_prize_pool_cents
 
 ## Money in: funding
 
-1. **Ask.** The organizer (owner, `payout.request`) fills in a sponsor's name and email on the tournament's manage page: `POST /api/v1/organizations/[orgId]/tournaments/[id]/prize-funding`. That records a `prize_fundings` row and creates a CHIP Collect purchase with `reference` = the row id and **no due date** (a sponsor may take days). The response is the checkout link, which the organizer forwards. An omitted amount means everything the pool still needs. A larger amount is refused, so a pool is never deliberately over-funded. A pool may have several sponsors, each with their own link.
-2. **Pay.** The sponsor pays on CHIP and lands on `/prize-funding/thank-you`.
-3. **Settle.** The **existing** Collect webhook (`webhooks/chip/route.ts`) looks for a `prize_fundings` row (by purchase id, then by reference) **before** the registration path. When it finds one, `settle_prize_funding` books one `type='prize_funding'` ledger row and marks the contribution paid. It never reaches `settle_registration_payment`. It follows the same rules as registrations: a mismatched amount is left pending for a person, a late `paid` wins over an earlier failure, and a duplicate is a no-op.
+Funding is automatic. The organizer never types in an amount or forwards a link.
 
-### The registration gate
+1. **Declare.** In the wizard's Prizes step, every prize with money names its funder (`prizes[].funding.funder_name`). When the platform distributes the prizes, the step also asks for each funder's email. Those addresses are saved through their own route (`PUT .../prize-funder-contacts`) into `prize_funder_contacts`, **never into `tournaments.prizes`**. That document is readable by anyone once the tournament is listed (the "Public can view published tournaments" policy), and a sponsor's address is not public. A funder is matched by name, ignoring case and surrounding spaces, so "ACME" on one category and "acme " on another are one sponsor with one link.
+2. **Publish.** `POST .../publish` refuses a platform-distributed pool unless every funder has an address. It then moves the tournament to **`pending_funding`** instead of `published` (below), and calls `syncPrizeFundingRequests` (`src/services/prizes/funding-requests.ts`).
+3. **Ask.** The sync has two halves.
+   - **Rows.** `reconcile_prize_funding_requests` works under the tournament lock and keeps **one open `prize_fundings` request per funder** for what that funder still owes (their declared share, `declared_prize_funders`, minus what they have paid).
+   - **Network.** Outside the transaction, the app creates each new request's CHIP Collect purchase (`reference` = the row id, no due date, since a sponsor may take days). It then emails the funder `prize-funding-request`, which shows their amount, the prizes it funds and the link.
+4. **Pay.** The sponsor pays on CHIP and lands on `/prize-funding/thank-you`.
+5. **Settle.** The **existing** Collect webhook (`webhooks/chip/route.ts`) looks for a `prize_fundings` row **before** the registration path: by purchase id, then by reference. When it finds one, `settle_prize_funding` books one `type='prize_funding'` ledger row and marks the contribution paid. It never reaches `settle_registration_payment`. It follows the same rules as registrations:
+   - an amount that doesn't match is left pending for a person to look at;
+   - a late `paid` beats an earlier failure;
+   - a repeat delivery does nothing.
 
-A platform-distributed tournament **may publish before it is funded, but no one can register until the pool is fully funded** (`funded >= declared`). Otherwise players would enter an event whose advertised prizes have no money behind them. The gate is enforced in three places:
+   When this payment completes the pool, the tournament is **listed** (see below).
+
+### Keeping the requests in line with the prizes
+
+The reconcile runs again whenever what is owed might have changed: a prize edit on a tournament that is out of draft, saving funder contacts, an approved cancellation, the organizer's **Retry** on the manage page, and the daily run. For each funder:
+
+| What it finds | What it does |
+|---|---|
+| The funder owes nothing (fully paid, or dropped from the prizes) | Cancels every open request |
+| An open request already asks for exactly what is owed, at the current address | Keeps it, and cancels any others |
+| Anything else (the share or the address changed, or the last payment failed) | Cancels the open requests and asks again with a fresh link |
+| No address on file | Creates nothing. The funder is reported in `missing_contacts` and the manage page warns about them |
+
+A cancelled request (`cancelled_at`) has its CHIP purchase cancelled too, as a best effort. If it is paid anyway, the money is booked. Real money wins, and any surplus is residual (below).
+
+If CHIP fails while a link is being created, the request stays open with no link, and the next sync retries it. A link created for a request that was cancelled or linked in the meantime is cancelled rather than kept.
+
+### Pending funding: unlisted until funded
+
+A platform-distributed tournament with prize money **is not visible to the public until its pool is fully funded** (`funded >= declared`). Otherwise players would see, and pay into, an event whose advertised prizes have no money behind them.
+
+- **Publishing** sets `status = 'pending_funding'`. The slug, `published_at` and `registration_closed_at` are stamped as for any publish, but the "Public can view published tournaments" policy and every public query read `status = 'published'` only, so the tournament stays hidden. The organizer sees it as "Awaiting Prize Funding". They can still edit it under the published rules, and they can request its cancellation (a sponsor who never pays is the usual reason). There is no registration to close.
+- **Listing.** `release_funded_tournament` moves it to `published` once the pool is complete. It is called by `settle_prize_funding` (reported as `went_live`) and at the end of every reconcile. That covers an edit that lowers the prizes to what has been paid, and a switch to the organizer paying the winners before anything was paid in. The webhook (or route) then refreshes the public pages, and `tournament-listed` tells the organization's owners and admins.
+- **Organizer-paid tournaments** (`distribution = "organizer"`) and tournaments with no prize money are listed the moment they are published, as before.
+
+Taking distribution away from the platform is refused once any sponsor has paid in, because that money is held for the winners.
+
+### The registration gate (backstop)
+
+Once listed, a tournament can still have its prizes **raised** until the first paid registration freezes them. That reopens the gap. The reconcile asks the funders for the top-up, and registration is paused until it is paid. Three places enforce this:
 
 - the checkout route asks `prize_pool_blocks_registration` first and answers `422 PRIZE_POOL_NOT_FUNDED`;
 - `create_registration_with_payment` and `start_new_payment_attempt` refuse the same way, as the backstop;
 - the public page reads the gate live (outside the tournament cache) and shows "Opens Once Prizes Are Funded".
-
-Prizes are a money field, so they freeze at the first paid registration. Before that, raising the declared prizes reopens the gap and closes registration again until it is topped up.
 
 ## Money out: awards
 
@@ -75,10 +109,11 @@ Registration with CHIP Send reuses `src/services/payouts/bank-account.ts` (`regi
 
 ## The daily run
 
-`POST /api/v1/cron/payouts` (see [payout-flow.md](./payout-flow.md#the-daily-run)) ends with two prize passes from `src/services/prizes/sweep.ts`. Their counts are `stuckPrizes` and `retriedPrizes`:
+`POST /api/v1/cron/payouts` (see [payout-flow.md](./payout-flow.md#the-daily-run)) ends with three prize passes. Their counts are `stuckPrizes`, `retriedPrizes` and `prizeFunding`:
 
-1. **Stuck awards.** `processing` for over `PAYOUT_STUCK_HOURS`: one with an instruction is settled from CHIP's single-instruction GET, and one claimed without an instruction is resumed.
+1. **Stuck awards** (`src/services/prizes/sweep.ts`). An award `processing` for over `PAYOUT_STUCK_HOURS` is handled one of two ways. One with an instruction is settled from CHIP's single-instruction GET. One claimed without an instruction is resumed.
 2. **Pending awards.** Every approved, unsettled `pending` award goes back through `executePrizeAward`. This is also what registers a waiting winner's account.
+3. **Funding** (`sweepPrizeFundingRequests`). Every `pending_funding` tournament is reconciled. That asks again, with a fresh link, any sponsor whose payment failed, and retries any link CHIP refused at publish. Then any link still missing elsewhere is created (a top-up on a listed tournament).
 
 ## Residual funds: returned to the funders
 
@@ -90,6 +125,8 @@ The return itself is an **operations step today**, not automated. Once the remai
 
 | Email | To | When |
 |---|---|---|
+| Prize fund payment | Each funder | Publish; again with a fresh link when their share or address changes, or their payment failed |
+| Tournament is open | Organization owners and admins | The payment that completes the pool lists the tournament |
 | Prize awarded | Winner | Admin approval; again if their account is rejected while the award waits |
 | Prize paid | Winner | Settlement, with CHIP's receipt |
 | Admin alert: prize winners to review | Every platform admin | A winner is entered |
@@ -99,7 +136,8 @@ Best-effort and after the response, following the `Promise.allSettled` disciplin
 
 ## Known limits
 
-- Returning residual funds, and the whole pool on cancellation, is manual (above).
+- Returning residual funds, and the whole pool on cancellation, is manual (above). Cancelling withdraws the open payment links automatically; money already paid in is returned by hand.
+- A tournament still waiting for funding when its registration deadline passes is listed once funded, but with registration already closed. The organizer should move the deadline or cancel.
 - An organizer can't withdraw an award awaiting review; an admin rejects it with a reason instead.
 - The winner must have a login: an award goes to a confirmed registrant's own `player_bank_accounts`. Guardians and managed players (#504) will widen `can_act_for`, not this flow.
-- Rolling out to an existing database: `db/maintenance/apply_prize_pool.sql`, then re-run 007. It drops the old free-text player bank columns, so players re-enter their details.
+- Rolling out to an existing database: `db/maintenance/apply_prize_pool.sql`, then re-run 007. It adds the `pending_funding` status, and drops the old free-text player bank columns, so players re-enter their details.

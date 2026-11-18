@@ -250,8 +250,11 @@ export default function OrganizerAgreementPage() {
                   claw-back;
                 </li>
                 <li>
-                  registration for the tournament does not open until the pool
-                  is fully funded;
+                  when you publish the tournament, MCT sends each funder you
+                  name a request to pay their share. The tournament is not
+                  listed publicly, and registration does not open, until the
+                  pool is fully funded. You must give MCT a valid contact for
+                  every funder;
                 </li>
                 <li>
                   distribution follows the final results as certified by the
