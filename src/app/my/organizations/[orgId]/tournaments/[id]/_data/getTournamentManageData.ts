@@ -9,6 +9,7 @@ import { hasPaidRegistration } from "@/services/payments/paid-registration";
 import { loadRoster, rosterDisplayName } from "@/services/registrations/roster";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
 import { refundState, type RefundState } from "@/lib/refunds/state";
+import type { PrizesJson } from "@/lib/tournaments/prize-funding";
 import {
   INTERNAL_ERROR_MESSAGE,
   logInternalError,
@@ -55,7 +56,13 @@ interface TournamentManageData {
     id: string;
     name: string;
     description: string | null;
-    status: "draft" | "published" | "ongoing" | "completed" | "cancelled";
+    status:
+      | "draft"
+      | "pending_funding"
+      | "published"
+      | "ongoing"
+      | "completed"
+      | "cancelled";
     start_date: string;
     end_date: string;
     registration_deadline: string | null;
@@ -75,7 +82,7 @@ interface TournamentManageData {
     is_mcf_rated: boolean;
     max_participants: number;
     entry_fees: unknown;
-    prizes: unknown;
+    prizes: PrizesJson | null;
     restrictions: unknown;
     /** The organization that runs the tournament. */
     organization: { id: string; name: string | null };
@@ -400,7 +407,8 @@ export const getTournamentManageData = cache(
 );
 
 // The platform admin's view of the same data: any tournament, in any status
-// (draft, published, cancelled), regardless of which organization runs it.
+// (draft, pending_funding, published, cancelled), regardless of which
+// organization runs it.
 // Gated on the global `platform.manage` permission.
 export const getAdminTournamentManageData = cache(
   async (id: string): Promise<TournamentManageResult> => {

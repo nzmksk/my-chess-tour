@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   PRIZE_FUNDING_SOURCES,
+  declaredFunders,
+  needsPrizeFunding,
+  validateFunderContacts,
   isPrizeDistribution,
   isPrizeFundingSource,
   totalDeclaredPrizeCents,
@@ -195,5 +198,72 @@ describe("validatePrizeStructure", () => {
   it("ignores a tournament with no prizes declared", () => {
     expect(validatePrizeStructure(null)).toEqual([]);
     expect(validatePrizeStructure(undefined)).toEqual([]);
+  });
+});
+
+describe("platform-distributed pools", () => {
+  const POOL: PrizesJson = {
+    categories: [
+      {
+        name: "Open",
+        funding: { source: "sponsor", funder_name: "ACME Sdn Bhd" },
+        entries: [
+          { place: "1st", amount_cents: 30000 },
+          { place: "2nd", amount_cents: 15000 },
+        ],
+      },
+      {
+        name: "Veterans",
+        funding: { source: "sponsor", funder_name: "Placeholder Co" },
+        entries: [{ place: "1st", amount_cents: 0 }],
+      },
+    ],
+    special: [
+      {
+        name: "Best Junior",
+        funding: { source: "sponsor", funder_name: " acme sdn bhd " },
+        amount_cents: 5000,
+      },
+      {
+        name: "Best Female",
+        funding: { source: "grant", funder_name: "Ministry" },
+        amount_cents: 2000,
+      },
+    ],
+    distribution: "platform",
+  };
+
+  it("gives each funder one share, matched ignoring case and spaces", () => {
+    expect(declaredFunders(POOL)).toEqual([
+      { key: "acme sdn bhd", name: "ACME Sdn Bhd", amount_cents: 50000 },
+      { key: "ministry", name: "Ministry", amount_cents: 2000 },
+    ]);
+  });
+
+  it("waits for funding only when the platform pays out real money", () => {
+    expect(needsPrizeFunding(POOL)).toBe(true);
+    expect(needsPrizeFunding({ ...POOL, distribution: "organizer" })).toBe(false);
+    expect(needsPrizeFunding({ ...POOL, distribution: undefined })).toBe(false);
+    expect(
+      needsPrizeFunding({
+        distribution: "platform",
+        categories: [{ name: "Open", entries: [{ place: "1st", amount_cents: 0 }] }],
+      }),
+    ).toBe(false);
+    expect(needsPrizeFunding(null)).toBe(false);
+  });
+
+  it("asks for an address for every funder of a platform pool", () => {
+    expect(
+      validateFunderContacts(POOL, [
+        { funder_name: "acme SDN bhd", funder_email: "pay@acme.test" },
+        { funder_name: "Ministry", funder_email: "not-an-email" },
+      ]),
+    ).toEqual(["Ministry: add the email address their payment link is sent to"]);
+    expect(validateFunderContacts(POOL, [])).toHaveLength(2);
+  });
+
+  it("needs no addresses when the organizer pays the winners", () => {
+    expect(validateFunderContacts({ ...POOL, distribution: "organizer" }, [])).toEqual([]);
   });
 });

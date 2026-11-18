@@ -6,6 +6,9 @@ import {
 } from "@/services/chip/send";
 import { settleBankAccountVerification } from "@/services/payouts/bank-account";
 import { settlePayout } from "@/services/payouts/settle";
+import { settlePrizeAward } from "@/services/prizes/settle";
+import { onPlayerBankVerdict } from "@/services/prizes/execute";
+import { afterResponse } from "@/lib/http/after-response";
 import { normalizePublicKey } from "@/services/chip/public-key";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
@@ -142,6 +145,63 @@ function toChipId(id: unknown): number | null {
   return typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
+const BANK_ACCOUNT_TABLES = [
+  "organization_bank_accounts",
+  "player_bank_accounts",
+] as const;
+
+/**
+ * Finds our row for a CHIP bank account in one table: by `reference` (our row
+ * id) first, then by CHIP's integer id. A lookup failure is a 500, so CHIP
+ * redelivers.
+ */
+async function findBankAccount(
+  table: (typeof BANK_ACCOUNT_TABLES)[number],
+  reference: string | null | undefined,
+  chipId: number | null,
+): Promise<{ id: string | null } | { error: NextResponse }> {
+  if (reference && UUID_RE.test(reference)) {
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select("id")
+      .eq("id", reference)
+      .maybeSingle();
+    if (error) {
+      return {
+        error: internalErrorResponse(
+          `CHIP Send webhook: failed to look up bank account ${reference} in ${table}; asking CHIP to redeliver`,
+          error,
+        ),
+      };
+    }
+    const id = (data as { id: string } | null)?.id ?? null;
+    if (id) return { id };
+  }
+
+  if (chipId !== null) {
+    // CHIP may hand back one recipient id for an identical (account, bank)
+    // pair, so several of our rows can share it — take the newest.
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select("id")
+      .eq("chip_bank_account_id", chipId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      return {
+        error: internalErrorResponse(
+          `CHIP Send webhook: failed to look up the bank account for recipient ${chipId} in ${table}; asking CHIP to redeliver`,
+          error,
+        ),
+      };
+    }
+    return { id: (data as { id: string } | null)?.id ?? null };
+  }
+
+  return { id: null };
+}
+
 async function handleBankAccountEvent(
   obj: ChipSendBankAccountObject,
   eventType: string,
@@ -151,42 +211,24 @@ async function handleBankAccountEvent(
 
   const chipId = toChipId(obj.id);
 
-  // Correlate on `reference` (our organization_bank_accounts.id, sent at
-  // registration), falling back to CHIP's integer id.
+  // Correlate on `reference` (the row id we sent at registration), falling back
+  // to CHIP's integer id. An organization's payout account and a player's prize
+  // account (#523) are registered the same way, so both tables are searched.
+  // Every table by reference before any by CHIP id: the same real account can be
+  // registered by an organization and a player, and share CHIP's id.
   let bankAccountId: string | null = null;
 
-  if (obj.reference && UUID_RE.test(obj.reference)) {
-    const { data, error } = await supabaseAdmin
-      .from("organization_bank_accounts")
-      .select("id")
-      .eq("id", obj.reference)
-      .maybeSingle();
-    if (error) {
-      return internalErrorResponse(
-        `CHIP Send webhook: failed to look up bank account ${obj.reference}; asking CHIP to redeliver`,
-        error,
+  search: for (const by of ["reference", "chip_id"] as const) {
+    for (const table of BANK_ACCOUNT_TABLES) {
+      const found = await findBankAccount(
+        table,
+        by === "reference" ? obj.reference : null,
+        by === "chip_id" ? chipId : null,
       );
+      if ("error" in found) return found.error;
+      bankAccountId = found.id;
+      if (bankAccountId) break search;
     }
-    bankAccountId = (data as { id: string } | null)?.id ?? null;
-  }
-
-  if (!bankAccountId && chipId !== null) {
-    // CHIP may hand back one recipient id for an identical (account, bank)
-    // pair, so several of our rows can share it — take the newest.
-    const { data, error } = await supabaseAdmin
-      .from("organization_bank_accounts")
-      .select("id")
-      .eq("chip_bank_account_id", chipId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) {
-      return internalErrorResponse(
-        `CHIP Send webhook: failed to look up the bank account for recipient ${chipId}; asking CHIP to redeliver`,
-        error,
-      );
-    }
-    bankAccountId = (data as { id: string } | null)?.id ?? null;
   }
 
   if (!bankAccountId) {
@@ -197,7 +239,7 @@ async function handleBankAccountEvent(
     return ack();
   }
 
-  const { error } = await settleBankAccountVerification({
+  const { error, playerVerdict } = await settleBankAccountVerification({
     bankAccountId,
     chipBankAccountId: chipId,
     verified: outcome === "verified",
@@ -214,6 +256,85 @@ async function handleBankAccountEvent(
     );
   }
 
+  // A winner's prize account (#523): send what is waiting on it, or tell them
+  // it was rejected. After the 200, so CHIP never waits on our own send.
+  if (playerVerdict) {
+    afterResponse(() =>
+      onPlayerBankVerdict(playerVerdict.userId, playerVerdict.verified),
+    );
+  }
+
+  return ack();
+}
+
+/**
+ * Finds the prize award a send instruction is about (#523): by `reference` (our
+ * award id), then by CHIP's instruction id. Asked only when no payout matched.
+ */
+async function findPrizeAward(
+  reference: string | null | undefined,
+  chipId: number | null,
+): Promise<{ id: string | null } | { error: NextResponse }> {
+  if (reference && UUID_RE.test(reference)) {
+    const { data, error } = await supabaseAdmin
+      .from("prize_awards")
+      .select("id")
+      .eq("id", reference)
+      .maybeSingle();
+    if (error) {
+      return {
+        error: internalErrorResponse(
+          `CHIP Send webhook: failed to look up prize award ${reference}; asking CHIP to redeliver`,
+          error,
+        ),
+      };
+    }
+    const id = (data as { id: string } | null)?.id ?? null;
+    if (id) return { id };
+  }
+  if (chipId !== null) {
+    const { data, error } = await supabaseAdmin
+      .from("prize_awards")
+      .select("id")
+      .eq("chip_send_instruction_id", chipId)
+      .maybeSingle();
+    if (error) {
+      return {
+        error: internalErrorResponse(
+          `CHIP Send webhook: failed to look up the prize award for instruction ${chipId}; asking CHIP to redeliver`,
+          error,
+        ),
+      };
+    }
+    return { id: (data as { id: string } | null)?.id ?? null };
+  }
+  return { id: null };
+}
+
+async function settleAwardFromWebhook(
+  awardId: string,
+  obj: ChipSendInstructionObject,
+  eventType: string,
+  chipId: number | null,
+  paid: boolean,
+): Promise<NextResponse> {
+  const failureCode = (obj.state ?? eventType.split(".").pop() ?? "failed").toLowerCase();
+  const { error } = await settlePrizeAward({
+    awardId,
+    chipSendInstructionId: chipId,
+    paid,
+    amountCents: paid ? chipSendAmountToCents(obj.amount) : null,
+    receiptUrl: paid ? obj.receipt_url : null,
+    failureReason: paid ? null : `send_instruction_${failureCode}`,
+  });
+  if (error) {
+    if (error.code === "P0002") return ack();
+    // The money may already have left, so this must not be swallowed.
+    return internalErrorResponse(
+      `CHIP Send webhook: settle_prize_award failed for award ${awardId} (${paid ? "paid" : "failed"}); asking CHIP to redeliver`,
+      error,
+    );
+  }
   return ack();
 }
 
@@ -271,8 +392,15 @@ async function handleSendInstructionEvent(
     payoutId = (data as { id: string } | null)?.id ?? null;
   }
 
+  const paid = outcome === "completed";
+
   if (!payoutId) {
-    console.warn("CHIP Send webhook: send instruction event with no matching payout", {
+    // Not a payout: a prize award sent the same way (#523)?
+    const award = await findPrizeAward(obj.reference, chipId);
+    if ("error" in award) return award.error;
+    if (award.id) return settleAwardFromWebhook(award.id, obj, eventType, chipId, paid);
+
+    console.warn("CHIP Send webhook: send instruction event with no matching payout or prize award", {
       event: eventType,
       chipId,
       reference: obj.reference ?? null,
@@ -280,7 +408,6 @@ async function handleSendInstructionEvent(
     return ack();
   }
 
-  const paid = outcome === "completed";
   // The state when there is one, else the last part of the event name. Either way
   // it lands on a code describePayoutFailure knows: rejected, deleted or failed.
   const failureCode =

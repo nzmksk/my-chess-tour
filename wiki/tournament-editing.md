@@ -9,7 +9,7 @@ A tournament moves through these stages, in this order. A field locked at one st
 | Stage | When | What it means for editing |
 |---|---|---|
 | `draft` | `status = 'draft'` | Everything is editable. Placeholder dates don't count as "past". |
-| `published` | published, start date not reached, no paid registration | Everything is editable, but the tournament has to **stay publishable** (see below). |
+| `published` | published (or `pending_funding`, a platform-distributed tournament waiting for its prize pool), start date not reached, no paid registration | Everything is editable, but the tournament has to **stay publishable** (see below). A prize edit on a platform-distributed pool re-asks the funders ([prize-flow.md](./prize-flow.md#keeping-the-requests-in-line-with-the-prizes)). |
 | `paid` | published, start date not reached, at least one `payments` row with `type='registration'` and `status='paid'` | What the player paid for is locked. Capacity can only go up. |
 | `ongoing` | the venue's today is between the start and end dates | Only the description is editable. |
 | `completed` | the venue's today is after the end date | Nothing is editable. |
@@ -60,6 +60,7 @@ A published tournament (`status = 'published'`) is checked after every edit agai
 | Layer | Where | Covers |
 |---|---|---|
 | Database (authority for the `paid` stage) | `guard_tournament_paid_fields` trigger, `db/migrations/003_functions_triggers.sql` | Every `paid`-locked column, and a capacity decrease, for any writer (service role, SQL editor). Raises `P0001` naming the columns. |
+| Database, prize pool during checkout (#523) | `guard_tournament_prizes_in_checkout` trigger, same file | On a platform-distributed tournament, a prize change that would leave the pool short of what the funders have paid in, while any checkout hold is live. Raises `P0001` with a `PRIZES_IN_CHECKOUT` sentinel, which the PATCH route turns into a **409** ("try again in 10 minutes"). See [prize-flow.md](./prize-flow.md#the-registration-gate-backstop). |
 | Database, capacity floor (every stage) | `guard_tournament_seats_taken` trigger, same file | A capacity below the seats already taken: confirmed registrations plus checkout holds still inside the 10-minute window (`count_taken_seats`, the count `assert_tournament_capacity` uses). Raises `P0001` with a `CAPACITY_BELOW_TAKEN: <n>` sentinel. |
 | API (readable errors, the date stages) | `PATCH /api/v1/organizations/[orgId]/tournaments/[id]` | Every stage. **409** `CONFLICT`, with `message` saying why and `details` listing the refused field names. **422** for the publishable bar, and for a capacity below the seats taken ("5 places are already taken, so capacity can't go below 5."), mapped from the trigger's error rather than checked first. |
 | API, payout beneficiary | `PUT .../tournaments/[id]/beneficiary` (nominate, withdraw) and `POST`/`DELETE .../nominations/[tournamentId]` (accept, decline), via `beneficiaryLockResponse` in `src/app/api/v1/organizations/_lib/beneficiary-lock.ts` | The date stages: from the start date, all four are refused with a **409** and `lockReason(stage)`. The trigger covers `paid` for all four, and the RPCs refuse a cancelled tournament. The nominee's pending list (`GET .../nominations`) leaves out the ones the dates have locked. |

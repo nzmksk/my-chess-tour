@@ -10,6 +10,7 @@ const {
   mockMembershipBuilder,
   mockTournamentFetchBuilder,
   mockTournamentUpdateBuilder,
+  mockContactsBuilder,
   mockFrom,
   mockGetClaims,
 } = vi.hoisted(() => {
@@ -45,6 +46,7 @@ const {
   const mockMembershipBuilder = makeBuilder({ data: null, error: null });
   const mockTournamentFetchBuilder = makeBuilder({ data: null, error: null });
   const mockTournamentUpdateBuilder = makeBuilder({ data: null, error: null });
+  const mockContactsBuilder = makeBuilder({ data: [], error: null });
 
   // Track tournament table calls: first is fetch, second is update
   let tournamentCallIndex = 0;
@@ -52,6 +54,7 @@ const {
   const mockFrom = vi.fn((table: string) => {
     if (table === "organizations") return mockOrgBuilder;
     if (table === "organization_memberships") return mockMembershipBuilder;
+    if (table === "prize_funder_contacts") return mockContactsBuilder;
     if (table === "tournaments") {
       const builder =
         tournamentCallIndex === 0
@@ -77,10 +80,16 @@ const {
     mockMembershipBuilder,
     mockTournamentFetchBuilder,
     mockTournamentUpdateBuilder,
+    mockContactsBuilder,
     mockFrom,
     mockGetClaims,
   };
 });
+
+const { mockSync } = vi.hoisted(() => ({ mockSync: vi.fn() }));
+vi.mock("@/services/prizes/funding-requests", () => ({
+  syncPrizeFundingRequests: mockSync,
+}));
 
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom },
@@ -104,6 +113,8 @@ vi.mock("next/cache", () => ({
 }));
 
 import { POST } from "../route";
+import { revalidateTag } from "next/cache";
+import { appIdFor } from "@/test/identity";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -527,6 +538,109 @@ describe("POST /api/v1/organizations/[orgId]/tournaments/[id]/publish", () => {
           registration_closed_at: VALID_DRAFT_TOURNAMENT.registration_deadline,
         }),
       );
+    });
+  });
+
+  describe("platform-distributed prizes", () => {
+    const PLATFORM_DRAFT = {
+      ...VALID_DRAFT_TOURNAMENT,
+      prizes: {
+        categories: [
+          {
+            name: "Open",
+            funding: { source: "sponsor", funder_name: "ACME" },
+            entries: [{ place: "1st", amount_cents: 30000 }],
+          },
+        ],
+        distribution: "platform",
+      },
+    };
+
+    function setContacts(data: unknown, error: unknown = null) {
+      (mockContactsBuilder as Record<string, unknown>).then = (
+        onfulfilled: (v: unknown) => unknown,
+        onrejected?: (r: unknown) => unknown,
+      ) => Promise.resolve({ data, error }).then(onfulfilled, onrejected);
+    }
+
+    beforeEach(() => {
+      setTournamentFetchResult(PLATFORM_DRAFT);
+      setTournamentUpdateResult({ ...PUBLISHED_RESULT, status: "pending_funding" });
+      setContacts([{ funder_name: "ACME", funder_email: "pay@acme.test" }]);
+      mockSync.mockResolvedValue({
+        error: null,
+        released: false,
+        linked: 1,
+        unlinked: 0,
+        missingContacts: [],
+      });
+    });
+
+    it("refuses to publish without every funder's address", async () => {
+      setUser();
+      setContacts([]);
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.error.message).toBe(
+        "ACME: add the email address their payment link is sent to",
+      );
+      expect(mockTournamentUpdateBuilder.update).not.toHaveBeenCalled();
+      expect(mockSync).not.toHaveBeenCalled();
+    });
+
+    it("publishes into pending_funding, unlisted, and sends the payment links", async () => {
+      setUser();
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "pending_funding" }),
+      );
+      expect(mockSync).toHaveBeenCalledWith(TOUR_ID, appIdFor(USER_ID));
+      const body = await res.json();
+      expect(body.data.status).toBe("pending_funding");
+      expect(body.data.funding).toEqual({ linked: 1, unlinked: 0, missing_contacts: [] });
+      // Nothing public changed.
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it("still publishes when CHIP is down, leaving the links to be retried", async () => {
+      setUser();
+      mockSync.mockResolvedValue({
+        error: null,
+        released: false,
+        linked: 0,
+        unlinked: 1,
+        missingContacts: [],
+      });
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).data.funding.unlinked).toBe(1);
+    });
+
+    it("lists straight away when the organizer pays the winners", async () => {
+      setUser();
+      setTournamentFetchResult({
+        ...PLATFORM_DRAFT,
+        prizes: { ...PLATFORM_DRAFT.prizes, distribution: "organizer" },
+      });
+      setTournamentUpdateResult(PUBLISHED_RESULT);
+      const res = await POST(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(200);
+      expect(mockTournamentUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "published" }),
+      );
+      expect(mockContactsBuilder.select).not.toHaveBeenCalled();
+      expect(mockSync).not.toHaveBeenCalled();
+      expect(revalidateTag).toHaveBeenCalled();
     });
   });
 

@@ -38,12 +38,19 @@ export type PlayerProfile = {
   title: ChessTitle | null;
   mcf_id: number | null;
   national_rating: number | null;
-  // Banking / payout details. The full account number is never sent to the
-  // client; only the last 4 digits are exposed for display.
+  // Prize payout destination (player_bank_accounts). The full account number
+  // is never sent to the client; only the last 4 digits are exposed for display.
   bank_name: string | null;
+  bank_code: string | null;
   bank_account_holder: string | null;
   bank_account_number_last4: string | null;
+  // CHIP Send verification. "pending" until the player is awarded a prize
+  // through the platform, when the account is checked with their bank.
+  bank_account_status: BankAccountStatus | null;
+  bank_account_rejection_reason: string | null;
 };
+
+export type BankAccountStatus = "pending" | "verified" | "rejected";
 
 // Public-facing subset of a player's profile. Excludes private fields
 // (email, date_of_birth) that must never be exposed publicly. Age is a computed
@@ -78,9 +85,10 @@ export type UpdateProfilePayload = {
 };
 
 // Write shape for the banking sub-route. Unlike the read shape, this carries the
-// full account number (only ever travels client -> server on save).
+// full account number (only ever travels client -> server on save). No bank
+// name: the server derives it from the SWIFT code. All three null clears it.
 export type UpdateBankingPayload = {
-  bank_name: string | null;
-  bank_account_holder: string | null;
-  bank_account_number: string | null;
+  bank_code: string | null;
+  account_holder: string | null;
+  account_number: string | null;
 };

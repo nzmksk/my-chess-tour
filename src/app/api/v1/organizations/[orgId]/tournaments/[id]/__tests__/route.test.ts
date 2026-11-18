@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { appIdFor } from "@/test/identity";
 import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 // The real wizard mapping, so a round-trip test exercises what the client
 // actually sends rather than a hand-built approximation of it.
@@ -113,6 +114,15 @@ vi.mock("next/headers", () => ({
 vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
 }));
+
+const { mockSyncFunding, mockLoadPool } = vi.hoisted(() => ({
+  mockSyncFunding: vi.fn(),
+  mockLoadPool: vi.fn(),
+}));
+vi.mock("@/services/prizes/funding-requests", () => ({
+  syncPrizeFundingRequests: mockSyncFunding,
+}));
+vi.mock("@/services/prizes/pool", () => ({ loadPrizePoolPosition: mockLoadPool }));
 
 import { PATCH } from "../route";
 
@@ -1110,6 +1120,104 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
     });
   });
 
+  describe("platform-distributed prize pools", () => {
+    const POOL_PRIZES = {
+      categories: [
+        {
+          name: "Open",
+          funding: { source: "sponsor", funder_name: "ACME" },
+          entries: [{ place: "1st", amount_cents: 30000 }],
+        },
+      ],
+      distribution: "platform",
+    };
+    const PENDING = {
+      ...EXISTING_TOURNAMENT,
+      status: "pending_funding",
+      name: "KL Open",
+      description: null,
+      venue_name: "Dewan",
+      venue_address: "1 Jalan",
+      format: { type: "rapid", system: "swiss", rounds: 7 },
+      time_control: { base_minutes: 15, increment_seconds: 0, delay_seconds: 0 },
+      prizes: POOL_PRIZES,
+    };
+
+    function patchPending(body: unknown, row: unknown = PENDING) {
+      setUser();
+      setTournamentFetchResult(row);
+      setTournamentUpdateResult({ ...UPDATED_TOURNAMENT, status: "pending_funding" });
+      return PATCH(makeRequest(ORG_ID, TOUR_ID, body), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+    }
+
+    beforeEach(() => {
+      mockSyncFunding.mockResolvedValue({
+        error: null,
+        released: false,
+        linked: 1,
+        unlinked: 0,
+        missingContacts: [],
+      });
+      mockLoadPool.mockResolvedValue({ ok: true, position: { funded_cents: 0 } });
+    });
+
+    it("re-asks the funders when a pending tournament's prizes change", async () => {
+      const raised = {
+        ...POOL_PRIZES,
+        categories: [{ ...POOL_PRIZES.categories[0], entries: [{ place: "1st", amount_cents: 40000 }] }],
+      };
+      const res = await patchPending({ prizes: raised });
+      expect(res.status).toBe(200);
+      expect(mockSyncFunding).toHaveBeenCalledWith(TOUR_ID, appIdFor(USER_ID));
+      expect((await res.json()).data.status).toBe("pending_funding");
+    });
+
+    it("leaves the funders alone when the prizes don't change", async () => {
+      const res = await patchPending({ description: "Parking at the back" });
+      expect(res.status).toBe(200);
+      expect(mockSyncFunding).not.toHaveBeenCalled();
+    });
+
+    it("reports the tournament listed when the edit leaves nothing to collect", async () => {
+      mockSyncFunding.mockResolvedValue({
+        error: null,
+        released: true,
+        linked: 0,
+        unlinked: 0,
+        missingContacts: [],
+      });
+      const res = await patchPending({ prizes: { ...POOL_PRIZES, distribution: "organizer" } });
+      expect(res.status).toBe(200);
+      expect((await res.json()).data.status).toBe("published");
+    });
+
+    it("refuses taking distribution from the platform once sponsors have paid", async () => {
+      mockLoadPool.mockResolvedValue({ ok: true, position: { funded_cents: 30000 } });
+      const res = await patchPending({ prizes: { ...POOL_PRIZES, distribution: "organizer" } });
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.message).toMatch(/already paid prize money/);
+      expect(mockTournamentUpdateBuilder.update).not.toHaveBeenCalled();
+      expect(mockSyncFunding).not.toHaveBeenCalled();
+    });
+
+    it("holds a pending tournament to the publishable rules", async () => {
+      const res = await patchPending({ venue_address: "" });
+      expect(res.status).toBe(422);
+      expect(mockTournamentUpdateBuilder.update).not.toHaveBeenCalled();
+    });
+
+    it("doesn't ask anyone for money while the tournament is a draft", async () => {
+      const res = await patchPending(
+        { prizes: { ...POOL_PRIZES, special: [] } },
+        { ...PENDING, status: "draft" },
+      );
+      expect(res.status).toBe(200);
+      expect(mockSyncFunding).not.toHaveBeenCalled();
+    });
+  });
+
   describe("capacity below the seats taken", () => {
     it("returns 422 naming the count when the trigger refuses the decrease", async () => {
       setUser();
@@ -1147,6 +1255,36 @@ describe("PATCH /api/v1/organizations/[orgId]/tournaments/[id]", () => {
         message: "CAPACITY_BELOW_TAKEN: 5 places are already taken",
       });
       const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { max_participants: 3 }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(500);
+    });
+  });
+
+  describe("prizes raised during a live checkout", () => {
+    it("returns 409 when the trigger refuses a raise the pool doesn't cover", async () => {
+      setUser();
+      setTournamentUpdateResult(null, {
+        code: "P0001",
+        message: `PRIZES_IN_CHECKOUT: 1 checkouts are live; tournament ${TOUR_ID} cannot raise its prizes beyond the funded pool`,
+      });
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { name: "Renamed" }), {
+        params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+      });
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error.code).toBe("CONFLICT");
+      expect(body.error.details).toEqual(["prizes"]);
+      expect(body.error.message).toMatch(/paying for this tournament right now/);
+    });
+
+    it("needs the trigger's SQLSTATE, not just its wording", async () => {
+      setUser();
+      setTournamentUpdateResult(null, {
+        code: "XX000",
+        message: "PRIZES_IN_CHECKOUT: 1 checkouts are live",
+      });
+      const res = await PATCH(makeRequest(ORG_ID, TOUR_ID, { name: "Renamed" }), {
         params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
       });
       expect(res.status).toBe(500);

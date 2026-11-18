@@ -34,6 +34,10 @@ import {
   sendPayoutFailedEmail,
   sendPayoutProcessedEmail,
   sendPayoutReviewEmail,
+  sendPrizeAwardedEmail,
+  sendPrizePaidEmail,
+  sendPrizeFundingRequestEmail,
+  sendTournamentListedEmail,
   sendRefundOutcomeEmail,
   sendRegistrationConfirmationEmail,
   sendTournamentCancellationEmail,
@@ -1193,5 +1197,203 @@ describe("sendInvitationResponseEmail", () => {
     await expect(
       sendInvitationResponseEmail("aisha@example.com", { ...base, accepted: true }),
     ).rejects.toThrow(/nope/);
+  });
+});
+
+describe("sendPrizeAwardedEmail", () => {
+  const base = {
+    recipientName: "Aisyah",
+    tournamentName: "Merdeka Open",
+    prizeName: "Open — 1st",
+    amountCents: 30000,
+    accountLast4: "0101",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{bankLine}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () => mockSend.mock.calls[0][0] as { subject: string; html: string };
+
+  it("loads the template and says where the prize will go", async () => {
+    await sendPrizeAwardedEmail("w@example.com", base);
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("prize-awarded.html"),
+      "utf-8",
+    );
+    expect(sent().html).toContain("RM 300.00");
+    expect(sent().html).toContain("account ending in 0101");
+    expect(sent().subject).toBe("You've been awarded a prize at Merdeka Open");
+  });
+
+  it("asks for bank details when there is no verified account", async () => {
+    await sendPrizeAwardedEmail("w@example.com", { ...base, accountLast4: null });
+    expect(sent().html).toContain("Please add your bank details");
+    expect(sent().html).toContain("/settings|Add Bank Details");
+    expect(sent().subject).toMatch(/^Action needed/);
+  });
+
+  it("asks them to fix a rejected account", async () => {
+    await sendPrizeAwardedEmail("w@example.com", {
+      ...base,
+      accountLast4: null,
+      accountRejected: true,
+    });
+    expect(sent().html).toContain("couldn&#39;t be verified");
+  });
+
+  it("never renders more than the last 4 digits", async () => {
+    await sendPrizeAwardedEmail("w@example.com", { ...base, accountLast4: "514100000101" });
+    expect(sent().html).not.toContain("514100000101");
+    expect(sent().html).toContain("ending in 0101");
+  });
+
+  it("escapes the prize and tournament names", async () => {
+    await sendPrizeAwardedEmail("w@example.com", {
+      ...base,
+      prizeName: "<i>Best</i>",
+      tournamentName: "<b>Open</b>",
+    });
+    expect(sent().html).toContain("&lt;i&gt;Best&lt;/i&gt;");
+    expect(sent().html).toContain("&lt;b&gt;Open&lt;/b&gt;");
+  });
+
+  it("throws when Resend fails", async () => {
+    mockSend.mockResolvedValue({ error: { message: "rate limited" } });
+    await expect(sendPrizeAwardedEmail("w@example.com", base)).rejects.toThrow(
+      "rate limited",
+    );
+  });
+});
+
+describe("sendPrizePaidEmail", () => {
+  const base = {
+    recipientName: "Aisyah",
+    tournamentName: "Merdeka Open",
+    prizeName: "Open — 1st",
+    amountCents: 30000,
+    accountLast4: "0101",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{accountLast4}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sentHtml = () => mockSend.mock.calls[0][0].html as string;
+
+  it("links to CHIP's receipt when there is a safe one", async () => {
+    await sendPrizePaidEmail("w@example.com", {
+      ...base,
+      receiptUrl: "https://chip.test/receipt/7001",
+    });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("prize-paid.html"),
+      "utf-8",
+    );
+    expect(sentHtml()).toContain("https://chip.test/receipt/7001|View Receipt");
+    expect(sentHtml()).toContain("RM 300.00");
+  });
+
+  it("falls back to settings when the receipt isn't a safe https URL", async () => {
+    await sendPrizePaidEmail("w@example.com", { ...base, receiptUrl: "javascript:alert(1)" });
+    expect(sentHtml()).toContain("/settings|View Settings");
+    expect(sentHtml()).not.toContain("javascript:");
+  });
+
+  it("never renders more than the last 4 digits", async () => {
+    await sendPrizePaidEmail("w@example.com", { ...base, accountLast4: "514100000101" });
+    expect(sentHtml()).toContain("|0101|");
+    expect(sentHtml()).not.toContain("514100000101");
+  });
+});
+
+describe("sendPrizeFundingRequestEmail", () => {
+  const base = {
+    funderName: "ACME <Sdn Bhd>",
+    organizerName: "KL Chess",
+    tournamentName: "Merdeka Open",
+    amountCents: 45000,
+    prizeList: "Open — 1st, Open — 2nd",
+    checkoutUrl: "https://gate.chip-in.asia/p/abc",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{funderName}}|{{organizerName}}|{{tournamentName}}|{{amount}}|{{prizeList}}|{{checkoutUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  it("sends the sponsor their share and the CHIP link", async () => {
+    await sendPrizeFundingRequestEmail("pay@acme.test", base);
+    const sent = mockSend.mock.calls[0][0];
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("prize-funding-request.html"),
+      "utf-8",
+    );
+    expect(sent.to).toBe("pay@acme.test");
+    expect(sent.subject).toBe("Prize fund payment for Merdeka Open");
+    expect(sent.html).toContain("RM 450.00");
+    expect(sent.html).toContain("https://gate.chip-in.asia/p/abc");
+    expect(sent.html).toContain("ACME &lt;Sdn Bhd&gt;");
+  });
+
+  it("refuses a link that isn't https", async () => {
+    await expect(
+      sendPrizeFundingRequestEmail("pay@acme.test", { ...base, checkoutUrl: "javascript:alert(1)" }),
+    ).rejects.toThrow(/https/);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("throws when Resend refuses", async () => {
+    mockSend.mockResolvedValue({ error: { message: "rate limited" } });
+    await expect(sendPrizeFundingRequestEmail("pay@acme.test", base)).rejects.toThrow(
+      /rate limited/,
+    );
+  });
+});
+
+describe("sendTournamentListedEmail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{recipientName}}|{{orgName}}|{{tournamentName}}|{{amount}}|{{ctaUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  it("links to the public page and states the pool", async () => {
+    await sendTournamentListedEmail("owner@org.test", {
+      recipientName: "Hafiz",
+      orgName: "KL Chess",
+      tournamentName: "Merdeka Open",
+      tournamentUrl: "https://mychesstour.com/tournaments/merdeka-open",
+      fundedCents: 50000,
+    });
+    const sent = mockSend.mock.calls[0][0];
+    expect(sent.subject).toBe("Merdeka Open is now open for registration");
+    expect(sent.html).toBe(
+      "Hafiz|KL Chess|Merdeka Open|RM 500.00|https://mychesstour.com/tournaments/merdeka-open",
+    );
+  });
+
+  it("falls back to the dashboard without a public page", async () => {
+    await sendTournamentListedEmail("owner@org.test", {
+      recipientName: "Hafiz",
+      orgName: "KL Chess",
+      tournamentName: "Merdeka Open",
+      tournamentUrl: null,
+      fundedCents: 50000,
+    });
+    expect(mockSend.mock.calls[0][0].html).toContain("/my/organizations");
   });
 });

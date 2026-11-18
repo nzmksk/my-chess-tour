@@ -4,6 +4,7 @@ import Link from "next/link";
 
 type TournamentStatus =
   | "draft"
+  | "pending_funding"
   | "published"
   | "ongoing"
   | "completed"
@@ -61,6 +62,10 @@ const TOUR_STATUS_CONFIG: Record<
   draft: {
     label: "Draft",
     className: "bg-bg-raised text-text-muted border border-border",
+  },
+  pending_funding: {
+    label: "Awaiting Prize Funding",
+    className: "bg-warning/15 text-warning border border-warning/20",
   },
   published: {
     label: "Open",
@@ -242,7 +247,8 @@ function StuckRefundsAlert({ count }: { count: number | null }) {
 }
 
 export default function AdminDashboardClient({ data }: Props) {
-  const { stats, stuck_refunds, pending_organizations, recent_tournaments } = data;
+  const { stats, stuck_refunds, pending_organizations, recent_tournaments } =
+    data;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
@@ -321,6 +327,12 @@ export default function AdminDashboardClient({ data }: Props) {
           className="card hover:border-gold-dim font-lato text-text-primary flex-1 rounded-md px-4 py-3 text-sm font-semibold transition-colors"
         >
           Payouts →
+        </Link>
+        <Link
+          href="/admin/prizes"
+          className="card hover:border-gold-dim font-lato text-text-primary flex-1 rounded-md px-4 py-3 text-sm font-semibold transition-colors"
+        >
+          Prizes →
         </Link>
         <Link
           href="/admin/refunds"

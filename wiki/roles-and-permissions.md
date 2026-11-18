@@ -79,8 +79,8 @@ organization-scoped and only mean anything inside the org they were granted in.
 | `payment.view` | organization | View the payments/payout figures for the org's tournaments. |
 | `refund.manage` | organization | Manage refunds for the org's tournaments. |
 | `bank_account.manage` | organization | Read and replace the org's payout bank account. **Owner only** — narrower than `org.manage` on purpose (see below). |
-| `payout.view` | organization | See the org's payouts, including payouts where it is the beneficiary. Bank details are not part of this. |
-| `payout.request` | organization | Anything that moves the org's money: nominate or accept a payout beneficiary, request an early payout. **Owner only.** |
+| `payout.view` | organization | See the org's payouts, including payouts where it is the beneficiary, and a platform-distributed prize pool's funding and awards (#523). Bank details are not part of this. |
+| `payout.request` | organization | Anything that moves money for the org: nominate or accept a payout beneficiary, request an early payout, create a sponsor's prize-funding link, enter a prize winner (#523). **Owner only.** |
 
 ---
 
@@ -116,7 +116,8 @@ Straight from the `role_permissions` inserts in `006_seed.sql`:
   `bank_account.manage` and `payout.request`**. So an org admin can run
   tournaments, manage members/refunds and see payouts, but cannot change the
   organization's own settings/roles, cannot cancel/close a tournament, and cannot
-  see or redirect where the organization's money is paid out.
+  see or redirect where the organization's money is paid out. An org admin can
+  see a prize pool but not fund it or name its winners.
 - **`member`** is view-only: `tournament.view` + `registration.view`.
 
 **Why `bank_account.manage` is separate from `org.manage`.** The two are held by

@@ -174,6 +174,13 @@ export interface PrizesData {
   specialPrizes: SpecialPrize[];
   /** Who pays the winners — the organizer directly, or the platform. */
   distribution: PrizeDistribution;
+  /**
+   * Where each funder's payment link is sent, keyed by funderKey(name). Only
+   * used when the platform distributes the prizes. Saved to its own private
+   * route, never into tournaments.prizes (which the public can read).
+   * Optional: a session saved before this existed won't have it.
+   */
+  funderEmails?: Record<string, string>;
 }
 
 /**

@@ -15,9 +15,12 @@ import {
 } from "@/lib/tournaments/datetime";
 import type { RefundState } from "@/lib/refunds/state";
 import { formatRinggit } from "@/services/payouts/format";
+import type { PrizesJson } from "@/lib/tournaments/prize-funding";
+import PrizePoolPanel from "./PrizePoolPanel";
 
 type TournamentStatus =
   | "draft"
+  | "pending_funding"
   | "published"
   | "ongoing"
   | "completed"
@@ -48,6 +51,8 @@ interface Tournament {
   format: Format | null;
   max_participants: number;
   organization?: { id: string; name: string | null };
+  /** The declared prizes; `distribution: "platform"` means we pay the winners (#523). */
+  prizes?: PrizesJson | null;
 }
 
 interface Stats {
@@ -100,6 +105,10 @@ const STATUS_CONFIG: Record<
   draft: {
     label: "Draft",
     className: "bg-bg-raised text-text-muted border border-border",
+  },
+  pending_funding: {
+    label: "Awaiting Prize Funding",
+    className: "bg-warning/15 text-warning border border-warning/20",
   },
   published: {
     label: "Published",
@@ -229,9 +238,13 @@ function RefundsSection({
                     </span>
                   </td>
                   <td className="font-lato text-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                    {formatInstantDate(r.processed_at ?? r.requested_at, timeZone, {
-                      withZone: false,
-                    })}
+                    {formatInstantDate(
+                      r.processed_at ?? r.requested_at,
+                      timeZone,
+                      {
+                        withZone: false,
+                      },
+                    )}
                   </td>
                 </tr>
               );
@@ -369,6 +382,17 @@ export default function TournamentManageClient({
           note="Awaiting payment"
         />
       </div>
+
+      {/* The organizer funds the pool and names the winners; admins work from
+          /admin/prizes. Not shown on drafts' read-only admin view. */}
+      {!isAdminView && tournament.prizes?.distribution === "platform" && (
+        <PrizePoolPanel
+          orgId={orgId}
+          tournamentId={tournament.id}
+          prizes={tournament.prizes}
+          participants={participants}
+        />
+      )}
 
       {refunds && refunds.length > 0 && (
         <RefundsSection

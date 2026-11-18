@@ -192,9 +192,9 @@ describe("WizardShell — Save Changes", () => {
   });
 
   it("redirects and clears the draft once the save succeeds", async () => {
-    mockFetch.mockResolvedValueOnce(
-      jsonResponse(200, { data: { id: TOUR_ID } }),
-    );
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: TOUR_ID } }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }));
 
     await clickSaveChanges();
 
@@ -210,6 +210,15 @@ describe("WizardShell — Save Changes", () => {
     expect(init.method).toBe("PATCH");
     // The venue names the zone; the client does not send one.
     expect(JSON.parse(init.body)).not.toHaveProperty("timezone");
+
+    // Sponsors' addresses go to their own private route, never in the body:
+    // an organizer-paid tournament keeps none.
+    const [contactsUrl, contactsInit] = mockFetch.mock.calls[1];
+    expect(contactsUrl).toBe(
+      `/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}/prize-funder-contacts`,
+    );
+    expect(contactsInit.method).toBe("PUT");
+    expect(JSON.parse(contactsInit.body)).toEqual({ contacts: [] });
   });
 });
 
@@ -231,6 +240,7 @@ describe("WizardShell — editing a draft", () => {
   it("saves the edits, then publishes, then returns to the tournament", async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse(200, { data: { id: TOUR_ID } }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
       .mockResolvedValueOnce(
         jsonResponse(200, { data: { id: TOUR_ID, status: "published" } }),
       );
@@ -247,13 +257,15 @@ describe("WizardShell — editing a draft", () => {
     const base = `/api/v1/organizations/${ORG_ID}/tournaments/${TOUR_ID}`;
     expect(mockFetch.mock.calls[0][0]).toBe(base);
     expect(mockFetch.mock.calls[0][1].method).toBe("PATCH");
-    expect(mockFetch.mock.calls[1][0]).toBe(`${base}/publish`);
-    expect(mockFetch.mock.calls[1][1].method).toBe("POST");
+    expect(mockFetch.mock.calls[1][0]).toBe(`${base}/prize-funder-contacts`);
+    expect(mockFetch.mock.calls[2][0]).toBe(`${base}/publish`);
+    expect(mockFetch.mock.calls[2][1].method).toBe("POST");
   });
 
   it("shows the publish validator's reasons and stays put when refused", async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse(200, { data: { id: TOUR_ID } }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
       .mockResolvedValueOnce(
         jsonResponse(422, {
           error: {

@@ -231,6 +231,25 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
   }
   const isConfirmed = registrationStatus === "confirmed";
 
+  // A platform-distributed prize pool must be fully funded before anyone can
+  // register (#523). Read live, outside the tournament cache: it changes when a
+  // sponsor's payment clears, not when the tournament is edited.
+  let awaitingPrizeFunding = false;
+  if (tournament.prizes?.distribution === "platform") {
+    const { data: blocked, error: poolError } = await supabaseAdmin.rpc(
+      "prize_pool_blocks_registration",
+      { p_tournament_id: tournamentId },
+    );
+    if (poolError) {
+      // Fail closed, as checkout does: the button says why it's unavailable.
+      console.error(
+        `Tournament ${tournamentId}: failed to check the prize pool`,
+        poolError.message,
+      );
+    }
+    awaitingPrizeFunding = poolError ? true : blocked === true;
+  }
+
   const now = new Date();
   // registration_closed_at is the effective close time (the deadline by default,
   // earlier if the organizer closed registration early). Registration always
@@ -255,6 +274,7 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
       tournament={tournament}
       isAuthenticated={!!claims}
       registrationStatus={registrationStatus}
+      awaitingPrizeFunding={awaitingPrizeFunding}
       canViewStartingRank={canViewStartingRank}
       startingRank={startingRank}
       now={now.toISOString()}

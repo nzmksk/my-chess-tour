@@ -77,6 +77,9 @@ DROP VIEW IF EXISTS public.tournament_payout_summary CASCADE;
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS public.audit_logs              CASCADE;
 DROP TABLE IF EXISTS public.tournament_cancellation_requests CASCADE;
+DROP TABLE IF EXISTS public.prize_awards            CASCADE;
+DROP TABLE IF EXISTS public.prize_fundings          CASCADE;
+DROP TABLE IF EXISTS public.prize_funder_contacts   CASCADE;
 DROP TABLE IF EXISTS public.payouts                 CASCADE;
 DROP TABLE IF EXISTS public.refunds                 CASCADE;
 DROP TABLE IF EXISTS public.payments                CASCADE;
@@ -87,6 +90,7 @@ DROP TABLE IF EXISTS public.organization_memberships CASCADE;
 DROP TABLE IF EXISTS public.organization_documents  CASCADE;
 DROP TABLE IF EXISTS public.organization_bank_accounts CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
+DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
 DROP TABLE IF EXISTS public.player_profiles         CASCADE;
 DROP TABLE IF EXISTS public.user_global_roles       CASCADE;
 DROP TABLE IF EXISTS public.users                   CASCADE;

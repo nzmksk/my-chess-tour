@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { WIZARD_STEPS, useTournamentWizard } from "./TournamentWizardContext";
+import { formFunders } from "./steps/PrizesStep";
 import WizardProgressBar from "./WizardProgressBar";
 import { toPersistedRestrictions } from "./restrictions";
 import { toPersistedEntryFees } from "./entryFees";
@@ -302,12 +303,53 @@ export default function WizardShell({
     return { ok: true, id };
   }
 
+  /**
+   * Saves where each funder's payment link goes. Its own private route, never
+   * part of the tournament body: the prizes are public once listed, sponsors'
+   * addresses aren't. Only a platform-distributed pool keeps any; switching to
+   * paying the winners yourself clears them.
+   */
+  async function syncFunderContacts(id: string): Promise<SaveResult> {
+    if (isLocked("prizes")) return { ok: true, id };
+    const emails = prizesData.funderEmails ?? {};
+    const contacts =
+      prizesData.distribution === "platform"
+        ? formFunders(prizesData)
+            .map((f) => ({
+              funder_name: f.name,
+              funder_email: (emails[f.key] ?? "").trim(),
+            }))
+            .filter((c) => c.funder_email)
+        : [];
+
+    const res = await fetch(
+      `/api/v1/organizations/${orgId}/tournaments/${id}/prize-funder-contacts`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts }),
+      },
+    );
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: await errorMessageFrom(
+          res,
+          "Your tournament was saved, but the sponsors' email addresses weren't.",
+        ),
+      };
+    }
+    return { ok: true, id };
+  }
+
   // Remembers the id before nominating: if the nomination fails on a new tournament,
   // the next attempt must update that tournament rather than create a second one.
   async function saveAll(): Promise<SaveResult> {
     const saved = await saveDraftToApi();
     if (!saved.ok) return saved;
     setTournamentId(saved.id);
+    const contacts = await syncFunderContacts(saved.id);
+    if (!contacts.ok) return contacts;
     return syncBeneficiary(saved.id);
   }
 

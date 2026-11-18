@@ -290,6 +290,184 @@ export async function sendPayoutFailedEmail(
   }
 }
 
+// Tells a winner they have been awarded a prize from a platform-distributed
+// prize pool (#523), once a platform admin has approved it and before the money
+// moves. Says where it will be sent (last 4 digits only), or asks them to add or
+// fix their bank details when there is no verified account yet.
+export async function sendPrizeAwardedEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    prizeName: string;
+    amountCents: number;
+    /** Last 4 of the account the prize will go to; null when there isn't one yet. */
+    accountLast4: string | null;
+    /** The player's account exists but couldn't be verified. */
+    accountRejected?: boolean;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const settingsUrl = `${siteUrl}/settings`;
+  // Defence in depth: whatever a caller passes, render at most 4 digits.
+  const last4 = params.accountLast4?.replace(/\D/g, "").slice(-4) || null;
+
+  const bankLine = params.accountRejected
+    ? "Your bank account couldn't be verified. Please check your bank details in Settings so we can send your prize."
+    : last4
+      ? `It will be sent to your account ending in ${last4}.`
+      : "Please add your bank details in Settings so we can send your prize.";
+  const needsAction = params.accountRejected || !last4;
+
+  const html = loadTemplate("prize-awarded.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{prizeName\}\}/g, escapeHtml(params.prizeName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{bankLine\}\}/g, escapeHtml(bankLine))
+    .replace(/\{\{ctaUrl\}\}/g, escapeHtml(settingsUrl))
+    .replace(/\{\{ctaLabel\}\}/g, needsAction ? "Add Bank Details" : "View Settings")
+    .replace(/\{\{settingsUrl\}\}/g, settingsUrl);
+
+  const subject = needsAction
+    ? `Action needed: add your bank details to receive your prize from ${params.tournamentName}`
+    : `You've been awarded a prize at ${params.tournamentName}`;
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send prize awarded email:", error);
+    throw new Error(`Failed to send prize awarded email: ${error.message}`);
+  }
+}
+
+// Tells a winner their prize has been sent (#523), pointing at CHIP's receipt
+// when there is one.
+export async function sendPrizePaidEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    prizeName: string;
+    amountCents: number;
+    accountLast4: string;
+    receiptUrl?: string | null;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const settingsUrl = `${siteUrl}/settings`;
+  const receiptUrl = safeHttpsUrl(params.receiptUrl);
+  // Defence in depth: whatever a caller passes, render at most 4 digits.
+  const last4 = params.accountLast4.replace(/\D/g, "").slice(-4);
+
+  const html = loadTemplate("prize-paid.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{prizeName\}\}/g, escapeHtml(params.prizeName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{accountLast4\}\}/g, last4)
+    .replace(/\{\{ctaUrl\}\}/g, escapeHtml(receiptUrl ?? settingsUrl))
+    .replace(/\{\{ctaLabel\}\}/g, receiptUrl ? "View Receipt" : "View Settings")
+    .replace(/\{\{settingsUrl\}\}/g, settingsUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `Your prize from ${params.tournamentName} has been sent`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send prize paid email:", error);
+    throw new Error(`Failed to send prize paid email: ${error.message}`);
+  }
+}
+
+// Asks a sponsor to pay their share of a platform-distributed prize pool
+// (#523). Sent automatically when the tournament is published, and again with
+// a fresh link if their share changes or a payment fails. The checkout link is
+// CHIP's, so it only becomes a button if it really is an https URL.
+export async function sendPrizeFundingRequestEmail(
+  email: string,
+  params: {
+    funderName: string;
+    organizerName: string;
+    tournamentName: string;
+    amountCents: number;
+    /** The prizes this contribution funds, e.g. "Open — 1st, Open — 2nd". */
+    prizeList: string;
+    checkoutUrl: string;
+  },
+) {
+  const checkoutUrl = safeHttpsUrl(params.checkoutUrl);
+  if (!checkoutUrl) {
+    throw new Error("Prize funding request email: the checkout link is not an https URL");
+  }
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate("prize-funding-request.html")
+    .replace(/\{\{funderName\}\}/g, escapeHtml(params.funderName))
+    .replace(/\{\{organizerName\}\}/g, escapeHtml(params.organizerName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
+    .replace(/\{\{prizeList\}\}/g, escapeHtml(params.prizeList))
+    .replace(/\{\{checkoutUrl\}\}/g, escapeHtml(checkoutUrl))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `Prize fund payment for ${params.tournamentName}`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send prize funding request email:", error);
+    throw new Error(`Failed to send prize funding request email: ${error.message}`);
+  }
+}
+
+// Tells an organization its platform-distributed tournament is now listed,
+// because the payment that completed its prize pool has settled (#523).
+export async function sendTournamentListedEmail(
+  email: string,
+  params: {
+    recipientName: string;
+    orgName: string;
+    tournamentName: string;
+    /** The public page, when the tournament has a slug. */
+    tournamentUrl: string | null;
+    fundedCents: number;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate("tournament-listed.html")
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{orgName\}\}/g, escapeHtml(params.orgName))
+    .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
+    .replace(/\{\{amount\}\}/g, formatRinggit(params.fundedCents))
+    .replace(/\{\{ctaUrl\}\}/g, escapeHtml(params.tournamentUrl ?? `${siteUrl}/my/organizations`))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${params.tournamentName} is now open for registration`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send tournament listed email:", error);
+    throw new Error(`Failed to send tournament listed email: ${error.message}`);
+  }
+}
+
 // Tells an organization the outcome of its early payout request. Approval means
 // the transfer is being sent, not that it has landed: sendPayoutProcessedEmail
 // follows once it settles. One function with a boolean branch, like
@@ -345,7 +523,7 @@ export async function sendPayoutReviewEmail(
  *   early_request    an organizer filed an early payout request to review
  *   awaiting_budget  a payout is parked until a CHIP Send budget request is approved
  */
-export type AdminPayoutAlert = "early_request" | "awaiting_budget";
+export type AdminPayoutAlert = "early_request" | "awaiting_budget" | "prize_review";
 
 const ADMIN_ALERTS: Record<
   AdminPayoutAlert,
@@ -363,6 +541,13 @@ const ADMIN_ALERTS: Record<
       "A payout could not be sent because the CHIP Send balance is too low. A budget increase has been requested; the payout goes out on the next run once it is approved.",
     subject: "Payout waiting on CHIP Send budget",
     ctaLabel: "View Payouts",
+  },
+  prize_review: {
+    headline: "Prize Winners to Review",
+    intro:
+      "An organizer has entered prize winners for a tournament whose prizes MY Chess Tour distributes. No money moves until you approve each award.",
+    subject: "Prize winners to review",
+    ctaLabel: "Review Prizes",
   },
 };
 

@@ -177,6 +177,19 @@ describe("POST .../tournaments/[id]/cancel", () => {
     );
   });
 
+  it("lets a tournament still waiting for its prize pool be cancelled", async () => {
+    setThen(mockTournamentFetchBuilder, {
+      id: TOUR_ID,
+      status: "pending_funding",
+      start_date: "2026-08-01",
+      end_date: "2026-08-03",
+    });
+    const res = await POST(makeRequest({ reason: "Sponsor pulled out" }), {
+      params: Promise.resolve({ orgId: ORG_ID, id: TOUR_ID }),
+    });
+    expect(res.status).toBe(201);
+  });
+
   it("returns 409 when the tournament is not published", async () => {
     setThen(mockTournamentFetchBuilder, { id: TOUR_ID, status: "draft" });
     const res = await POST(makeRequest({ reason: "x" }), {

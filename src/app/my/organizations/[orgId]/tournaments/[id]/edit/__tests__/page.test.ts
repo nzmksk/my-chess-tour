@@ -97,19 +97,22 @@ function ok(body: Json) {
   return { ok: true, json: async () => body };
 }
 
-/** Routes selfApiFetch: the tournament GET and the org dashboard. */
+/** Routes selfApiFetch: the tournament GET, the org dashboard and the funder contacts. */
 function serve({
   tournament = TOURNAMENT as Json | undefined,
   extra = { hasPaidRegistration: false } as Json,
   manage,
   dashboard = ok({ data: { organization: { name: "KL Chess Club" } } }),
+  contacts = ok({ data: [] }),
 }: {
   tournament?: Json;
   extra?: Json;
   manage?: unknown;
   dashboard?: unknown;
+  contacts?: unknown;
 } = {}) {
   mockSelfFetch.mockImplementation(async (url: string) => {
+    if (url.endsWith("/prize-funder-contacts")) return contacts;
     if (url.endsWith("/dashboard")) {
       if (dashboard instanceof Error) throw dashboard;
       return dashboard;
@@ -218,6 +221,20 @@ describe("EditTournamentPage org name", () => {
 });
 
 describe("EditTournamentPage hydration", () => {
+  it("loads the funders' private addresses into the prizes step", async () => {
+    serve({
+      contacts: ok({ data: [{ funder_name: " Acme ", funder_email: "pay@acme.test" }] }),
+    });
+    const data = (await render()).provider.initialData as Json;
+    expect((data.prizesData as Json).funderEmails).toEqual({ acme: "pay@acme.test" });
+  });
+
+  it("starts with no addresses when the contacts can't be loaded", async () => {
+    serve({ contacts: { ok: false, json: async () => ({}) } });
+    const data = (await render()).provider.initialData as Json;
+    expect((data.prizesData as Json).funderEmails).toEqual({});
+  });
+
   it("maps a full tournament into the wizard's state", async () => {
     const data = (await render()).provider.initialData as Json;
 

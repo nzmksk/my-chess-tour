@@ -37,7 +37,13 @@ interface DashboardData {
     start_date: string;
     current_participants: number;
     max_participants: number;
-    status: "draft" | "published" | "ongoing" | "completed" | "cancelled";
+    status:
+      | "draft"
+      | "pending_funding"
+      | "published"
+      | "ongoing"
+      | "completed"
+      | "cancelled";
   }[];
 }
 
@@ -56,9 +62,13 @@ async function fetchDashboard(orgId: string): Promise<DashboardData | null> {
 
 // Best-effort, and gated on payout.request: anyone who can't accept a nomination
 // gets a 403 here, which simply means no panel.
-async function fetchPendingNominations(orgId: string): Promise<PendingNomination[]> {
+async function fetchPendingNominations(
+  orgId: string,
+): Promise<PendingNomination[]> {
   try {
-    const res = await selfApiFetch(`/api/v1/organizations/${orgId}/nominations`);
+    const res = await selfApiFetch(
+      `/api/v1/organizations/${orgId}/nominations`,
+    );
     if (!res.ok) return [];
     const json = await res.json();
     return json.data ?? [];

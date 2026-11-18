@@ -26,6 +26,15 @@ CREATE UNIQUE INDEX uniq_active_bank_destination
 CREATE INDEX idx_bank_accounts_chip_id ON organization_bank_accounts (chip_bank_account_id)
   WHERE chip_bank_account_id IS NOT NULL;
 
+-- Player bank accounts. One active account per player, as for organizations.
+-- Deliberately NO destination-uniqueness index like uniq_active_bank_destination:
+-- junior players' prizes routinely go to a parent's account, so siblings can
+-- legitimately share one.
+CREATE UNIQUE INDEX uniq_active_bank_account_per_player
+  ON player_bank_accounts (user_id) WHERE is_active;
+CREATE INDEX idx_player_bank_accounts_chip_id ON player_bank_accounts (chip_bank_account_id)
+  WHERE chip_bank_account_id IS NOT NULL;
+
 -- Organization documents (fetched as a set per application/organization)
 CREATE INDEX idx_org_documents_org ON organization_documents (organization_id);
 
@@ -126,3 +135,34 @@ CREATE INDEX idx_payouts_org_status       ON payouts (organization_id, status, c
 CREATE INDEX idx_payouts_recipient_status ON payouts (recipient_organization_id, status, created_at);
 CREATE INDEX idx_payouts_pending_review   ON payouts (requested_at) WHERE approval = 'pending';
 CREATE INDEX idx_payouts_in_flight        ON payouts (status, updated_at) WHERE status = 'processing';
+
+-- Prize fundings
+-- One CHIP purchase per contribution, so webhook correlation can't fan out.
+CREATE UNIQUE INDEX uniq_prize_fundings_chip_transaction
+  ON prize_fundings (chip_transaction_id) WHERE chip_transaction_id IS NOT NULL;
+CREATE INDEX idx_prize_fundings_tournament ON prize_fundings (tournament_id, created_at);
+-- Open requests still waiting for their CHIP purchase (a gateway failure at
+-- publish), which the daily run retries.
+CREATE INDEX idx_prize_fundings_unlinked
+  ON prize_fundings (created_at)
+  WHERE status = 'pending' AND cancelled_at IS NULL AND checkout_url IS NULL;
+
+-- Prize funder contacts: one per funder name per tournament, matched the way
+-- reconcile_prize_funding_requests matches the prizes document.
+CREATE UNIQUE INDEX uniq_prize_funder_contact
+  ON prize_funder_contacts (tournament_id, lower(btrim(funder_name)));
+
+-- Prize awards
+CREATE UNIQUE INDEX uniq_prize_awards_chip_send_instruction
+  ON prize_awards (chip_send_instruction_id) WHERE chip_send_instruction_id IS NOT NULL;
+-- The same winner can't hold the same prize twice. A tie splits a prize between
+-- DIFFERENT players, which this allows; enter_prize_award caps the split at the
+-- declared amount. Rejected and failed awards fall out, so the winner can be
+-- entered again.
+CREATE UNIQUE INDEX uniq_live_prize_award
+  ON prize_awards (tournament_id, category, COALESCE(place, ''), user_id)
+  WHERE approval <> 'rejected' AND status <> 'failed';
+CREATE INDEX idx_prize_awards_tournament     ON prize_awards (tournament_id, entered_at);
+CREATE INDEX idx_prize_awards_user           ON prize_awards (user_id);
+CREATE INDEX idx_prize_awards_pending_review ON prize_awards (entered_at) WHERE approval = 'pending';
+CREATE INDEX idx_prize_awards_in_flight      ON prize_awards (status, updated_at) WHERE status = 'processing';

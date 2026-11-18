@@ -10,7 +10,7 @@ On those platforms paste the **raw multi-line PEM with no surrounding quotes**. 
 
 ## Event types
 
-The registration settlement path consumes `purchase.paid` / `purchase.captured` / `purchase.payment_failure` (see [payment-flow.md](./payment-flow.md)); the refund path consumes `payment.refunded` / `purchase.refund_failure` / `purchase.pending_refund` (see [refund-flow.md](./refund-flow.md)).
+The registration settlement path consumes `purchase.paid` / `purchase.captured` / `purchase.payment_failure` (see [payment-flow.md](./payment-flow.md)); the refund path consumes `payment.refunded` / `purchase.refund_failure` / `purchase.pending_refund` (see [refund-flow.md](./refund-flow.md)). A purchase that is a sponsor's prize-pool contribution (a `prize_fundings` row, matched by purchase id then reference) is routed out ahead of registration settlement and settled by `settle_prize_funding` (see [prize-flow.md](./prize-flow.md)).
 
 Available event types and when they are emitted:
 

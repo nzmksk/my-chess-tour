@@ -98,6 +98,11 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+const { mockSyncFunding } = vi.hoisted(() => ({ mockSyncFunding: vi.fn() }));
+vi.mock("@/services/prizes/funding-requests", () => ({
+  syncPrizeFundingRequests: mockSyncFunding,
+}));
+
 vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
 }));
@@ -156,6 +161,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   setAdmin();
   setAdminRpcDispatch();
+  mockSyncFunding.mockResolvedValue({
+    error: null,
+    released: false,
+    linked: 0,
+    unlinked: 0,
+    missingContacts: [],
+  });
   // Would refund on the spot, if anything called it: the route must not.
   mockRefundChipPurchase.mockResolvedValue({
     type: "payment",
@@ -250,6 +262,14 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
         p_rejection_reason: null,
       }),
     );
+  });
+
+  it("withdraws the sponsors' payment links when it approves", async () => {
+    const res = await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockSyncFunding).toHaveBeenCalledWith(TOUR_ID, null);
   });
 
   it("rejects a request with a reason", async () => {

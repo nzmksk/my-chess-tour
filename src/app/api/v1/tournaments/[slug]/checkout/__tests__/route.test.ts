@@ -871,3 +871,97 @@ describe("POST /api/v1/tournaments/:slug/checkout — identity indirection", () 
     expect(mockCreateChipPurchase).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/v1/tournaments/:slug/checkout — prize pool gate (#523)", () => {
+  const platformPrizes = {
+    categories: [{ name: "Open", entries: [{ place: "1st", amount_cents: 50000 }] }],
+    distribution: "platform",
+  };
+
+  // The identity block above leaves lookupAppUserId answering null.
+  beforeEach(() => {
+    mockLookupAppUserId.mockImplementation(async (authUserId: string) =>
+      appIdFor(authUserId),
+    );
+  });
+
+  it("refuses to register while a platform prize pool is unfunded", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({ prizes: platformPrizes }),
+      error: null,
+    });
+    mockRpc.mockResolvedValueOnce({ data: true, error: null });
+
+    const res = await POST(makeRequest(SLUG), { params: Promise.resolve({ slug: SLUG }) });
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("PRIZE_POOL_NOT_FUNDED");
+    expect(mockRpc).toHaveBeenCalledWith("prize_pool_blocks_registration", {
+      p_tournament_id: VALID_UUID,
+    });
+    expect(mockRpc).not.toHaveBeenCalledWith(
+      "create_registration_with_payment",
+      expect.anything(),
+    );
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("registers once the pool is fully funded", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({ prizes: platformPrizes }),
+      error: null,
+    });
+    mockRpc.mockResolvedValueOnce({ data: false, error: null });
+
+    const res = await POST(makeRequest(SLUG), { params: Promise.resolve({ slug: SLUG }) });
+
+    expect(res.status).toBe(201);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "create_registration_with_payment",
+      expect.anything(),
+    );
+  });
+
+  it("never checks the pool of a tournament whose organizer pays the winners", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({ prizes: { ...platformPrizes, distribution: "organizer" } }),
+      error: null,
+    });
+
+    await POST(makeRequest(SLUG), { params: Promise.resolve({ slug: SLUG }) });
+
+    expect(mockRpc).not.toHaveBeenCalledWith(
+      "prize_pool_blocks_registration",
+      expect.anything(),
+    );
+  });
+
+  it("maps the database backstop to the same 422", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "PRIZE_POOL_NOT_FUNDED: registration opens once the prize pool is funded",
+      },
+    });
+
+    const res = await POST(makeRequest(SLUG), { params: Promise.resolve({ slug: SLUG }) });
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("PRIZE_POOL_NOT_FUNDED");
+  });
+
+  it("500s when the pool can't be checked", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({ prizes: platformPrizes }),
+      error: null,
+    });
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: "db down" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(makeRequest(SLUG), { params: Promise.resolve({ slug: SLUG }) });
+
+    expect(res.status).toBe(500);
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+});

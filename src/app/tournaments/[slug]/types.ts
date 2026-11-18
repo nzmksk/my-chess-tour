@@ -35,6 +35,8 @@ interface PrizesData {
    * publish validation reads.
    */
   special?: SpecialPrize[] | null;
+  /** Who pays the winners: the organizer (default) or MY Chess Tour (#523). */
+  distribution?: "organizer" | "platform";
 }
 
 export interface Restrictions {

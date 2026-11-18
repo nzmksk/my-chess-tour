@@ -10,7 +10,7 @@
 -- Covers:
 --   R1  redact_jsonb_columns masks listed keys, leaves the rest untouched, and
 --       is idempotent (the maintenance scrub re-applies it)
---   R2  INSERT on player_profiles redacts bank_account_number in new_data
+--   R2  INSERT on player_bank_accounts redacts account_number in new_data
 --   R3  UPDATE redacts BOTH old_data and new_data (the old value is the one
 --       that would otherwise sit in the log forever)
 --   R4  oku_document_path is redacted too — it is a capability-bearing storage
@@ -40,6 +40,7 @@ BEGIN;
 DO $$
 DECLARE
   v_user  uuid;
+  v_bank  uuid;
   v_org   uuid;
   v_tour  uuid;
   v_got   text;
@@ -83,45 +84,46 @@ BEGIN
     RETURNING id INTO v_user;
 
   -- ---- R2: INSERT redacts new_data ----------------------------------------
-  INSERT INTO player_profiles (user_id, bank_name, bank_account_holder, bank_account_number)
-    VALUES (v_user, 'Maybank', 'Test Holder', '1234567890');
+  -- A player's prize account (#523). player_profiles carried these columns
+  -- before they moved to player_bank_accounts.
+  INSERT INTO player_profiles (user_id) VALUES (v_user);
+  v_bank := (set_player_bank_account(v_user, 'MBBEMYKL', 'Maybank', 'Test Holder', '1234567890') ->> 'id')::uuid;
 
-  SELECT new_data ->> 'bank_account_number' INTO v_got
+  SELECT new_data ->> 'account_number' INTO v_got
   FROM audit_logs
-  WHERE table_name = 'player_profiles' AND record_id = v_user::text AND action = 'INSERT';
+  WHERE table_name = 'player_bank_accounts' AND record_id = v_bank::text AND action = 'INSERT';
 
   IF v_got IS DISTINCT FROM '****7890' THEN
-    RAISE EXCEPTION 'R2 FAIL: new_data.bank_account_number=% (expected ****7890)', v_got;
+    RAISE EXCEPTION 'R2 FAIL: new_data.account_number=% (expected ****7890)', v_got;
   END IF;
   RAISE NOTICE 'R2 PASS — INSERT snapshot redacted';
 
   -- ---- R3: UPDATE redacts old_data as well as new_data --------------------
-  UPDATE player_profiles SET bank_account_number = '9876543210' WHERE user_id = v_user;
+  UPDATE player_bank_accounts SET account_number = '9876543210' WHERE id = v_bank;
 
-  SELECT old_data ->> 'bank_account_number' INTO v_got
+  SELECT old_data ->> 'account_number' INTO v_got
   FROM audit_logs
-  WHERE table_name = 'player_profiles' AND record_id = v_user::text AND action = 'UPDATE'
+  WHERE table_name = 'player_bank_accounts' AND record_id = v_bank::text AND action = 'UPDATE'
   ORDER BY id DESC LIMIT 1;
 
   IF v_got IS DISTINCT FROM '****7890' THEN
-    RAISE EXCEPTION 'R3 FAIL: old_data.bank_account_number=% (expected ****7890 — the superseded value must not be retained in full)', v_got;
+    RAISE EXCEPTION 'R3 FAIL: old_data.account_number=% (expected ****7890 — the superseded value must not be retained in full)', v_got;
   END IF;
 
-  SELECT new_data ->> 'bank_account_number' INTO v_got
+  SELECT new_data ->> 'account_number' INTO v_got
   FROM audit_logs
-  WHERE table_name = 'player_profiles' AND record_id = v_user::text AND action = 'UPDATE'
+  WHERE table_name = 'player_bank_accounts' AND record_id = v_bank::text AND action = 'UPDATE'
   ORDER BY id DESC LIMIT 1;
 
   IF v_got IS DISTINCT FROM '****3210' THEN
-    RAISE EXCEPTION 'R3 FAIL: new_data.bank_account_number=% (expected ****3210)', v_got;
+    RAISE EXCEPTION 'R3 FAIL: new_data.account_number=% (expected ****3210)', v_got;
   END IF;
 
   -- Nothing anywhere in the audit trail may hold the full number.
   IF EXISTS (
     SELECT 1 FROM audit_logs
-    WHERE table_name = 'player_profiles' AND record_id = v_user::text
-      AND (old_data::text LIKE '%1234567890%' OR new_data::text LIKE '%1234567890%'
-        OR old_data::text LIKE '%9876543210%' OR new_data::text LIKE '%9876543210%')
+    WHERE old_data::text LIKE '%1234567890%' OR new_data::text LIKE '%1234567890%'
+       OR old_data::text LIKE '%9876543210%' OR new_data::text LIKE '%9876543210%'
   ) THEN
     RAISE EXCEPTION 'R3 FAIL: a full account number survives somewhere in audit_logs';
   END IF;
@@ -143,9 +145,9 @@ BEGIN
   RAISE NOTICE 'R4 PASS — storage path redacted';
 
   -- ---- R5: NULL stays NULL ------------------------------------------------
-  UPDATE player_profiles SET bank_account_number = NULL WHERE user_id = v_user;
+  UPDATE player_profiles SET oku_document_path = NULL WHERE user_id = v_user;
 
-  SELECT new_data -> 'bank_account_number' INTO v_json
+  SELECT new_data -> 'oku_document_path' INTO v_json
   FROM audit_logs
   WHERE table_name = 'player_profiles' AND record_id = v_user::text AND action = 'UPDATE'
   ORDER BY id DESC LIMIT 1;

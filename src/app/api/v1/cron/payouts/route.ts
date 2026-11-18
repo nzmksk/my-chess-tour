@@ -14,6 +14,14 @@ import {
   type BankRegistrationStats,
   registerPendingBankAccounts,
 } from "@/services/payouts/bank-account";
+import {
+  reconcileStuckPrizeAwards,
+  retryPendingPrizeAwards,
+} from "@/services/prizes/sweep";
+import {
+  type FundingSweepStats,
+  sweepPrizeFundingRequests,
+} from "@/services/prizes/funding-requests";
 
 // Session-less background job (mirrors the CHIP webhook and the FIDE cron): uses
 // supabaseAdmin only, and needs the Node runtime for CHIP Send's HMAC signing and
@@ -28,6 +36,9 @@ interface RunStats {
   stuck: PassStats | null;
   retried: PassStats | null;
   sweep: SweepStats | null;
+  stuckPrizes: PassStats | null;
+  retriedPrizes: PassStats | null;
+  prizeFunding: FundingSweepStats | null;
 }
 
 /**
@@ -89,11 +100,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     stuck: await runPass("stuck payout", () => reconcileStuckPayouts()),
     retried: await runPass("pending payout", retryPendingPayouts),
     sweep: await runPass("payable tournament", sweepPayableTournaments),
+    // Prize awards from platform-distributed pools (#523): same reconciler and
+    // retry as payouts. The retry also registers a winner's pending account.
+    stuckPrizes: await runPass("stuck prize award", () => reconcileStuckPrizeAwards()),
+    retriedPrizes: await runPass("pending prize award", retryPendingPrizeAwards),
+    // Sponsors of pools still being collected: re-ask after a failed payment,
+    // and retry any payment link CHIP refused at publish.
+    prizeFunding: await runPass("prize funding", sweepPrizeFundingRequests),
   };
 
   console.info(`Payout cron: ${JSON.stringify(stats)}`);
 
-  if (!stats.bankAccounts || !stats.stuck || !stats.retried || !stats.sweep) {
+  if (
+    !stats.bankAccounts ||
+    !stats.stuck ||
+    !stats.retried ||
+    !stats.sweep ||
+    !stats.stuckPrizes ||
+    !stats.retriedPrizes ||
+    !stats.prizeFunding
+  ) {
     return NextResponse.json(
       {
         error: { code: "INTERNAL_ERROR", message: INTERNAL_ERROR_MESSAGE },

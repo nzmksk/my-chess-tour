@@ -18,6 +18,10 @@ ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_bank_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prize_fundings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prize_funder_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE prize_awards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- =============================================
@@ -396,6 +400,82 @@ USING (has_global_permission(app_user_id(), 'platform.manage'));
 -- write goes through the service-role functions in 007_payment_functions.sql.
 -- db/tests/settle_payout.sql checks this.
 REVOKE UPDATE, INSERT, DELETE ON payouts FROM anon, authenticated;
+
+-- =============================================
+-- PLAYER BANK ACCOUNTS (#523)
+-- The player's own prize destination. Readable by its owner and platform
+-- admins only: unlike player_profiles there is no org-member read, because an
+-- organizer has no business knowing where a player's money lands. As for the
+-- organization table, no client writes: set_player_bank_account supersedes
+-- rather than updates, and a blanket UPDATE policy would let a player mark
+-- their own row verified.
+-- =============================================
+CREATE POLICY "Players can view own bank accounts"
+ON player_bank_accounts FOR SELECT
+USING (can_act_for(user_id));
+
+CREATE POLICY "Platform admins full access to player bank accounts"
+ON player_bank_accounts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON player_bank_accounts FROM anon, authenticated;
+
+-- =============================================
+-- PRIZE FUNDINGS / PRIZE AWARDS (#523)
+-- The organizing org's payout viewers can read its prize pool; a winner can
+-- read their own awards. No client writes on either, for the reason given on
+-- payouts: an INSERT policy can't check the row's columns, so it would let an
+-- org owner create an approved award, or a "paid" contribution, past every
+-- guard in 007_payment_functions.sql. Every write goes through those
+-- functions via the service role.
+-- =============================================
+CREATE POLICY "Org payout viewers can view prize fundings"
+ON prize_fundings FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM tournaments t
+    WHERE t.id = prize_fundings.tournament_id
+      AND has_org_permission(app_user_id(), t.organization_id, 'payout.view')
+  )
+);
+
+CREATE POLICY "Platform admins full access to prize fundings"
+ON prize_fundings FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON prize_fundings FROM anon, authenticated;
+
+-- A sponsor's address is seen by the organizer who entered it and by platform
+-- admins, never by the public. Written only by set_prize_funder_contacts.
+CREATE POLICY "Org members can view prize funder contacts"
+ON prize_funder_contacts FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM tournaments t
+    WHERE t.id = prize_funder_contacts.tournament_id
+      AND has_org_permission(app_user_id(), t.organization_id, 'tournament.view')
+  )
+);
+
+CREATE POLICY "Platform admins full access to prize funder contacts"
+ON prize_funder_contacts FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON prize_funder_contacts FROM anon, authenticated;
+
+CREATE POLICY "Org payout viewers can view prize awards"
+ON prize_awards FOR SELECT
+USING (has_org_permission(app_user_id(), organization_id, 'payout.view'));
+
+CREATE POLICY "Winners can view own prize awards"
+ON prize_awards FOR SELECT
+USING (can_act_for(user_id));
+
+CREATE POLICY "Platform admins full access to prize awards"
+ON prize_awards FOR ALL
+USING (has_global_permission(app_user_id(), 'platform.manage'));
+
+REVOKE UPDATE, INSERT, DELETE ON prize_awards FROM anon, authenticated;
 
 -- =============================================
 -- TOURNAMENT CANCELLATION REQUESTS

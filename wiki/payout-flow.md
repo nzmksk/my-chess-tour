@@ -2,7 +2,7 @@
 
 How an organization receives its tournament revenue through **CHIP Send**. As in the [payment](./payment-flow.md) and [refund](./refund-flow.md) flows, money state is enforced in Postgres (SECURITY DEFINER functions + row locks), network calls happen outside those transactions, and settlement is idempotent so the synchronous response and the webhook can't double-book.
 
-Scope: the payout machine and the admin trigger (#520), early payouts and their review (#521), the automatic sweep and its reconcilers (#522). Platform-managed prizes are #523.
+Scope: the payout machine and the admin trigger (#520), early payouts and their review (#521), the automatic sweep and its reconcilers (#522). Platform-managed prizes (#523) reuse this machinery and are documented in [prize-flow.md](./prize-flow.md).
 
 ## What is owed
 
@@ -64,6 +64,8 @@ A GitHub Actions schedule (`.github/workflows/organizer-payouts.yml`, 01:00 UTC 
 3. **The sweep.** `list_payable_tournaments(PAYOUT_HOLD_DAYS, MIN_PAYOUT_CENTS)` returns every tournament due an automatic payout. Each is queued (`queue_payout`, `kind='automatic'`, no amount, no requester) and sent, `PAYOUT_CONCURRENCY` at a time. The sweep runs last so a payout it parks on budget isn't retried straight away.
 
 Per-payout failures are counted and the run moves on. The response gives each payout pass's counts in `executePayout`'s terms (`sent`, `paid`, `failed`, `awaiting_budget`, `blocked`, `skipped`, `error`), plus `swept` and `queued` for the sweep, and `bankAccounts` in registration terms (`checked`, `verified`, `rejected`, `pending`, `skipped`, `error`). A pass that can't load its work list makes the run a 500, so the scheduled job shows as failed, but the other passes still run.
+
+**Last, the prize award passes** (`src/services/prizes/sweep.ts`): the same stuck reconciler and pending retry for prize awards, reported as `stuckPrizes` and `retriedPrizes`. See [prize-flow.md](./prize-flow.md#the-daily-run).
 
 **When a tournament is due.** `tournament_end_instant` is local midnight after `end_date` in the tournament's own `timezone`, as an absolute instant: `(end_date + 1)::timestamp AT TIME ZONE timezone`. A tournament is payable once that plus three days has passed, so a GMT+9 venue is paid an hour before a GMT+8 one with the same end date. It is one instant comparison: no calendar date crosses from Node, and `current_date` (the server's UTC date) is never used. The function has a `COALESCE` seam for tournament schedules, which are planned and not built: when they land, the last session's `ends_at` goes first, and every caller is already correct.
 

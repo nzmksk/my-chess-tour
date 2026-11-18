@@ -21,8 +21,11 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
-  const [{ data: userData, error: userError }, { data: profileData }] =
-    await Promise.all([
+  const [
+    { data: userData, error: userError },
+    { data: profileData },
+    { data: bankData },
+  ] = await Promise.all([
       supabaseAdmin
         .from("users")
         .select("id, first_name, last_name, email, avatar_url")
@@ -31,9 +34,18 @@ export async function GET(): Promise<NextResponse> {
       supabaseAdmin
         .from("player_profiles")
         .select(
-          "date_of_birth, gender, nationality, oku_status, oku_rejection_reason, fide_id, fide_rating, fide_rating_synced_at, fide_name_verified, fide_verified_name, title, mcf_id, national_rating, bank_name, bank_account_holder, bank_account_number",
+          "date_of_birth, gender, nationality, oku_status, oku_rejection_reason, fide_id, fide_rating, fide_rating_synced_at, fide_name_verified, fide_verified_name, title, mcf_id, national_rating",
         )
         .eq("user_id", claims.id)
+        .maybeSingle(),
+      // The prize destination (#523): only the active row.
+      supabaseAdmin
+        .from("player_bank_accounts")
+        .select(
+          "bank_name, bank_code, account_holder, account_number, status, rejection_reason",
+        )
+        .eq("user_id", claims.id)
+        .eq("is_active", true)
         .maybeSingle(),
     ]);
 
@@ -64,12 +76,15 @@ export async function GET(): Promise<NextResponse> {
       title: profileData?.title ?? null,
       mcf_id: profileData?.mcf_id ?? null,
       national_rating: profileData?.national_rating ?? null,
-      bank_name: profileData?.bank_name ?? null,
-      bank_account_holder: profileData?.bank_account_holder ?? null,
+      bank_name: bankData?.bank_name ?? null,
+      bank_code: bankData?.bank_code ?? null,
+      bank_account_holder: bankData?.account_holder ?? null,
       // Never expose the full account number; only the last 4 digits for display.
-      bank_account_number_last4: profileData?.bank_account_number
-        ? profileData.bank_account_number.slice(-4)
+      bank_account_number_last4: bankData?.account_number
+        ? bankData.account_number.slice(-4)
         : null,
+      bank_account_status: bankData?.status ?? null,
+      bank_account_rejection_reason: bankData?.rejection_reason ?? null,
     },
   });
 }

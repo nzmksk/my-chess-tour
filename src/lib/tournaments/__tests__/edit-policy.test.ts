@@ -41,6 +41,13 @@ describe("resolveEditStage", () => {
     expect(stage()).toBe("published");
   });
 
+  it("holds a tournament waiting for its prize pool to the published rules", () => {
+    expect(stage({ status: "pending_funding" })).toBe("published");
+    expect(stage({ status: "pending_funding", startDate: TODAY, endDate: TODAY })).toBe(
+      "ongoing",
+    );
+  });
+
   it("is paid once a registration payment settles", () => {
     expect(stage({ hasPaidRegistration: true })).toBe("paid");
   });

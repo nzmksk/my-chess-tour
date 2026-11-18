@@ -250,17 +250,37 @@ export default function OrganizerAgreementPage() {
                   claw-back;
                 </li>
                 <li>
+                  when you publish the tournament, MCT sends each funder you
+                  name a request to pay their share. The tournament is not
+                  listed publicly, and registration does not open, until the
+                  pool is fully funded. You must give MCT a valid contact for
+                  every funder;
+                </li>
+                <li>
                   distribution follows the final results as certified by the
-                  tournament arbiter;
+                  tournament arbiter: you enter each winner, MCT reviews each
+                  award before any money moves, and a prize is paid only to a
+                  confirmed participant, by transfer to the bank account they
+                  have registered with MCT once it has been verified;
+                </li>
+                <li>
+                  MCT never pays out more prize money than it has collected for
+                  the tournament;
+                </li>
+                <li>
+                  any part of the pool that is not awarded — a prize with no
+                  eligible winner, a forfeited prize, or anything paid in beyond
+                  the declared prizes — is returned to the parties that funded
+                  it, in proportion to what each paid in and less any transfer
+                  costs, once every award for the tournament has been settled;
                 </li>
                 <li>
                   a prize that remains unclaimed twelve months after the
-                  tournament ends is returned to the party that funded it, less
-                  any transfer costs; and
+                  tournament ends is treated the same way; and
                 </li>
                 <li>
                   if the tournament is cancelled before results are certified,
-                  the entire pool is returned to the funder.
+                  the entire pool is returned to the funders.
                 </li>
               </ul>
             </section>

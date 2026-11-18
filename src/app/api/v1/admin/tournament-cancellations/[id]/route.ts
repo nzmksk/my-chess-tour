@@ -15,6 +15,7 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -348,6 +349,17 @@ export async function PATCH(
   if (action === "approve") {
     revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
     if (t?.slug) revalidateTag(tournamentTag(t.slug), PURGE_PROFILE);
+
+    // A platform-distributed pool stops collecting: every open sponsor link is
+    // withdrawn (and its CHIP purchase cancelled). Money already paid in is
+    // returned to the funders by the residual-funds step (wiki/prize-flow.md).
+    const funding = await syncPrizeFundingRequests(tournamentId, null);
+    if (funding.error) {
+      console.error(
+        `Cancellation of tournament ${tournamentId}: failed to withdraw its prize-funding requests`,
+        funding.error.message,
+      );
+    }
 
     afterResponse(() => notifyRegisteredPlayers(tournamentId, tournamentName));
   }

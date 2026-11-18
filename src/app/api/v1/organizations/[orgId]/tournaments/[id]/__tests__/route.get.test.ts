@@ -102,6 +102,15 @@ vi.mock("@/services/supabase/server", () => ({
   }),
 }));
 
+const { mockSyncFunding, mockLoadPool } = vi.hoisted(() => ({
+  mockSyncFunding: vi.fn(),
+  mockLoadPool: vi.fn(),
+}));
+vi.mock("@/services/prizes/funding-requests", () => ({
+  syncPrizeFundingRequests: mockSyncFunding,
+}));
+vi.mock("@/services/prizes/pool", () => ({ loadPrizePoolPosition: mockLoadPool }));
+
 vi.mock("next/headers", () => ({
   cookies: vi.fn().mockResolvedValue({
     getAll: vi.fn().mockReturnValue([]),

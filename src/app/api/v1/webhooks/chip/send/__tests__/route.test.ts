@@ -6,7 +6,15 @@ import crypto from "node:crypto";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockFrom, lookups, mockSettle, mockSettlePayout, eqCalls } = vi.hoisted(() => {
+const {
+  mockFrom,
+  lookups,
+  mockSettle,
+  mockSettlePayout,
+  mockSettleAward,
+  mockOnPlayerVerdict,
+  eqCalls,
+} = vi.hoisted(() => {
   const lookups: Array<{ data: unknown; error: unknown }> = [];
   const eqCalls: Array<[string, unknown]> = [];
 
@@ -36,6 +44,8 @@ const { mockFrom, lookups, mockSettle, mockSettlePayout, eqCalls } = vi.hoisted(
     mockFrom: vi.fn(() => makeBuilder()),
     mockSettle: vi.fn(),
     mockSettlePayout: vi.fn(),
+    mockSettleAward: vi.fn(),
+    mockOnPlayerVerdict: vi.fn(),
   };
 });
 
@@ -51,7 +61,16 @@ vi.mock("@/services/payouts/settle", () => ({
   settlePayout: mockSettlePayout,
 }));
 
+vi.mock("@/services/prizes/settle", () => ({
+  settlePrizeAward: mockSettleAward,
+}));
+
+vi.mock("@/services/prizes/execute", () => ({
+  onPlayerBankVerdict: mockOnPlayerVerdict,
+}));
+
 import { POST } from "../route";
+import { runAfterCallbacks } from "@/test/after";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -113,6 +132,7 @@ beforeEach(() => {
   vi.stubEnv("CHIP_SEND_WEBHOOK_PUBLIC_KEY", publicKey);
   mockSettle.mockResolvedValue({ error: null, settled: true });
   mockSettlePayout.mockResolvedValue({ error: null, settled: true });
+  mockSettleAward.mockResolvedValue({ error: null, settled: true });
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
@@ -233,12 +253,30 @@ describe("bank account events", () => {
   });
 
   it("falls back to chip_bank_account_id when reference is unknown", async () => {
-    lookups.push({ data: null, error: null }); // reference miss
+    lookups.push({ data: null, error: null }); // organization reference miss
+    lookups.push({ data: null, error: null }); // player reference miss
     lookups.push({ data: { id: BANK_ID }, error: null }); // chip id hit
     await POST(makeRequest(verifiedEvent));
-    expect(eqCalls[1]).toEqual(["chip_bank_account_id", 84]);
+    expect(eqCalls[2]).toEqual(["chip_bank_account_id", 84]);
     expect(mockSettle).toHaveBeenCalledWith(
       expect.objectContaining({ bankAccountId: BANK_ID }),
+    );
+  });
+
+  it("finds a player's prize account by reference before any chip id (#523)", async () => {
+    lookups.push({ data: null, error: null }); // organization reference miss
+    lookups.push({ data: { id: BANK_ID }, error: null }); // player reference hit
+    await POST(makeRequest(verifiedEvent));
+    expect(mockFrom.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
+      "organization_bank_accounts",
+      "player_bank_accounts",
+    ]);
+    expect(eqCalls).toEqual([
+      ["id", BANK_ID],
+      ["id", BANK_ID],
+    ]);
+    expect(mockSettle).toHaveBeenCalledWith(
+      expect.objectContaining({ bankAccountId: BANK_ID, verified: true }),
     );
   });
 
@@ -504,3 +542,76 @@ describe("other deliveries", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Prize awards (#523)
+// ---------------------------------------------------------------------------
+
+describe("prize award events", () => {
+  const AWARD_ID = "55555555-5555-4555-8555-555555555555";
+
+  it("settles a completed instruction for a prize award when no payout matches", async () => {
+    lookups.push({ data: null, error: null }); // payout by reference
+    lookups.push({ data: null, error: null }); // payout by instruction id
+    lookups.push({ data: { id: AWARD_ID }, error: null }); // award by reference
+    const res = await POST(makeRequest({ ...completedEvent, reference: AWARD_ID }));
+    expect(res.status).toBe(200);
+    expect(mockSettlePayout).not.toHaveBeenCalled();
+    expect(mockSettleAward).toHaveBeenCalledWith({
+      awardId: AWARD_ID,
+      chipSendInstructionId: 8,
+      paid: true,
+      amountCents: 9950,
+      receiptUrl: "https://chip.test/r/8",
+      failureReason: null,
+    });
+  });
+
+  it("records a rejected prize transfer as failed", async () => {
+    lookups.push({ data: null, error: null });
+    lookups.push({ data: null, error: null });
+    lookups.push({ data: { id: AWARD_ID }, error: null });
+    await POST(
+      makeRequest({
+        event_type: "send_instruction.rejected",
+        id: 9,
+        reference: AWARD_ID,
+        state: "rejected",
+      }),
+    );
+    expect(mockSettleAward).toHaveBeenCalledWith(
+      expect.objectContaining({ paid: false, failureReason: "send_instruction_rejected" }),
+    );
+  });
+
+  it("returns 500 when settle_prize_award fails, so CHIP redelivers", async () => {
+    lookups.push({ data: null, error: null });
+    lookups.push({ data: null, error: null });
+    lookups.push({ data: { id: AWARD_ID }, error: null });
+    mockSettleAward.mockResolvedValue({ error: { message: "db down" }, settled: false });
+    const res = await POST(makeRequest({ ...completedEvent, reference: AWARD_ID }));
+    expect(res.status).toBe(500);
+  });
+
+  it("sends prizes waiting on a winner's account once CHIP verifies it", async () => {
+    lookups.push({ data: null, error: null }); // organization reference miss
+    lookups.push({ data: { id: BANK_ID }, error: null }); // player reference hit
+    mockSettle.mockResolvedValue({
+      error: null,
+      settled: true,
+      playerVerdict: { userId: "user-1", verified: true },
+    });
+    await POST(makeRequest(verifiedEvent));
+    expect(mockOnPlayerVerdict).not.toHaveBeenCalled();
+    await runAfterCallbacks();
+    expect(mockOnPlayerVerdict).toHaveBeenCalledWith("user-1", true);
+  });
+
+  it("does nothing more for an organization's verdict", async () => {
+    lookups.push({ data: { id: BANK_ID }, error: null });
+    await POST(makeRequest(verifiedEvent));
+    await runAfterCallbacks();
+    expect(mockOnPlayerVerdict).not.toHaveBeenCalled();
+  });
+});
+

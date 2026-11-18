@@ -718,8 +718,11 @@ export default function ProfileClient({ profile }: Props) {
 
           <BankingCard
             bankName={current.bank_name}
+            bankCode={current.bank_code}
             accountHolder={current.bank_account_holder}
             accountNumberLast4={current.bank_account_number_last4}
+            status={current.bank_account_status}
+            rejectionReason={current.bank_account_rejection_reason}
           />
 
           {/* Chess Details */}
