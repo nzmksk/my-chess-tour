@@ -23,6 +23,12 @@
 --       grant for themselves (42501)
 --   C12 a signed-in user reads their own history and nobody else's, and
 --       has_sensitive_data_consent about another user answers false for them
+--   B1  set_player_bank_account refuses bank details without financial consent
+--       (CONSENT_REQUIRED, P0001) and stores nothing
+--   B2  with consent, the details save
+--   B3  clearing the details records the withdrawal in the same call
+--   B4  after withdrawing, saving is refused again until consent is re-granted
+--   B5  clearing when there was nothing to clear still leaves consent withdrawn
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it builds
@@ -44,6 +50,7 @@ DECLARE
   v_id      bigint;
   v_role    text;
   v_priv    text;
+  v_res     jsonb;
 BEGIN
   -- ---- fixtures -----------------------------------------------------------
   INSERT INTO users (auth_user_id, email, first_name, last_name)
@@ -207,6 +214,56 @@ BEGIN
   RESET ROLE;
   PERFORM set_config('request.jwt.claims', '{}', true);
   RAISE NOTICE 'C12 PASS — own history readable, others'' hidden';
+
+  -- ===== B1 ===============================================================
+  BEGIN
+    PERFORM set_player_bank_account(v_b, 'MBBEMYKL', 'Maybank', 'Consent B', '514100004511');
+    RAISE EXCEPTION 'B1 FAIL: bank details saved without financial consent';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'CONSENT_REQUIRED:%' THEN
+      RAISE EXCEPTION 'B1 FAIL: refused for the wrong reason: %', SQLERRM;
+    END IF;
+  END;
+  IF EXISTS (SELECT 1 FROM player_bank_accounts WHERE user_id = v_b) THEN
+    RAISE EXCEPTION 'B1 FAIL: a bank row exists without consent';
+  END IF;
+  RAISE NOTICE 'B1 PASS — no bank details without financial consent';
+
+  -- ===== B2 ===============================================================
+  PERFORM record_sensitive_data_consent(v_b, 'financial', true, '2026-11-19');
+  v_res := set_player_bank_account(v_b, 'MBBEMYKL', 'Maybank', 'Consent B', '514100004511');
+  IF v_res->>'id' IS NULL THEN
+    RAISE EXCEPTION 'B2 FAIL: details not saved with consent: %', v_res;
+  END IF;
+  RAISE NOTICE 'B2 PASS — details save once consent is granted';
+
+  -- ===== B3 ===============================================================
+  v_res := set_player_bank_account(v_b, NULL, NULL, NULL, NULL);
+  IF NOT (v_res->>'changed')::boolean
+     OR EXISTS (SELECT 1 FROM player_bank_accounts WHERE user_id = v_b AND is_active)
+     OR has_sensitive_data_consent(v_b, 'financial') THEN
+    RAISE EXCEPTION 'B3 FAIL: clearing did not deactivate and withdraw: %', v_res;
+  END IF;
+  RAISE NOTICE 'B3 PASS — clearing deactivates the details and withdraws consent';
+
+  -- ===== B4 ===============================================================
+  BEGIN
+    PERFORM set_player_bank_account(v_b, 'MBBEMYKL', 'Maybank', 'Consent B', '514100004511');
+    RAISE EXCEPTION 'B4 FAIL: details saved after consent was withdrawn';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'CONSENT_REQUIRED:%' THEN
+      RAISE EXCEPTION 'B4 FAIL: refused for the wrong reason: %', SQLERRM;
+    END IF;
+  END;
+  RAISE NOTICE 'B4 PASS — withdrawn consent blocks the next save';
+
+  -- ===== B5 ===============================================================
+  PERFORM record_sensitive_data_consent(v_b, 'financial', true, '2026-11-19');
+  v_res := set_player_bank_account(v_b, NULL, NULL, NULL, NULL);
+  IF (v_res->>'changed')::boolean OR has_sensitive_data_consent(v_b, 'financial') THEN
+    RAISE EXCEPTION 'B5 FAIL: clearing nothing must still withdraw: %', v_res;
+  END IF;
+  RAISE NOTICE 'B5 PASS — clearing with no active details still withdraws consent';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END;

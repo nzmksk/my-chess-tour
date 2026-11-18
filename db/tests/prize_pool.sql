@@ -379,6 +379,8 @@ BEGIN
     RAISE EXCEPTION 'C1 FAIL: a winner with no bank account gave %', claim_prize_award_send(v_award1);
   END IF;
 
+  -- Bank details are held only with financial-data consent (#451).
+  PERFORM record_sensitive_data_consent(v_p[1], 'financial', true, '2026-11-19');
   v_bank1 := (set_player_bank_account(v_p[1], 'MBBEMYKL', 'Maybank', 'Player One', '514100000101') ->> 'id')::uuid;
   IF claim_prize_award_send(v_award1) IS DISTINCT FROM 'bank_account_not_verified' THEN
     RAISE EXCEPTION 'C1 FAIL: a pending bank account was accepted';
@@ -441,6 +443,7 @@ BEGIN
 
   -- ===== S2: a failed award is terminal and the winner can be re-entered =====
   PERFORM review_prize_award(v_award2, v_admin, 'approve', NULL);
+  PERFORM record_sensitive_data_consent(v_p[2], 'financial', true, '2026-11-19');
   v_bank2 := (set_player_bank_account(v_p[2], 'CIBBMYKL', 'CIMB Bank', 'Player Two', '800000000202') ->> 'id')::uuid;
   PERFORM settle_bank_account_verification(v_bank2, 930202, true);
   IF claim_prize_award_send(v_award2) IS NOT NULL THEN

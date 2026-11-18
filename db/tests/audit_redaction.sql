@@ -87,6 +87,7 @@ BEGIN
   -- A player's prize account (#523). player_profiles carried these columns
   -- before they moved to player_bank_accounts.
   INSERT INTO player_profiles (user_id) VALUES (v_user);
+  PERFORM record_sensitive_data_consent(v_user, 'financial', true, '2026-11-19');
   v_bank := (set_player_bank_account(v_user, 'MBBEMYKL', 'Maybank', 'Test Holder', '1234567890') ->> 'id')::uuid;
 
   SELECT new_data ->> 'account_number' INTO v_got

@@ -1191,6 +1191,13 @@ CREATE TRIGGER guard_consent_immutable
 -- Clearing (all-NULL details) deactivates the active row and inserts nothing,
 -- returning {"changed": true, "id": null}. A prize award that already
 -- snapshotted the old account keeps it; one not yet sent waits for a new one.
+--
+-- Bank details are held only with the player's financial-data consent (#451),
+-- so saving them without a current grant is refused with CONSENT_REQUIRED.
+-- The route records the grant first, from the checkbox the player ticked.
+-- Clearing is how a player withdraws that consent, so it records the
+-- withdrawal in the same transaction: there is no moment where the log says
+-- withdrawn while the details are still active, or the reverse.
 -- =============================================
 CREATE OR REPLACE FUNCTION set_player_bank_account(
   p_user_id        uuid,
@@ -1227,7 +1234,14 @@ BEGIN
     UPDATE player_bank_accounts
       SET is_active = false
       WHERE user_id = p_user_id AND is_active;
-    RETURN jsonb_build_object('changed', FOUND, 'id', NULL);
+    v_changed := FOUND;
+    PERFORM record_sensitive_data_consent(p_user_id, 'financial', false);
+    RETURN jsonb_build_object('changed', v_changed, 'id', NULL);
+  END IF;
+
+  IF NOT has_sensitive_data_consent(p_user_id, 'financial') THEN
+    RAISE EXCEPTION 'CONSENT_REQUIRED: bank details need the player''s financial data consent'
+      USING ERRCODE = 'P0001';
   END IF;
 
   IF FOUND
