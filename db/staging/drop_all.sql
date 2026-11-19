@@ -1,16 +1,19 @@
 -- =============================================================================
 -- DROP ALL — full teardown of the MY Chess Tour schema
--- Reverses migrations 001–006 so you can re-apply them from scratch.
+-- Reverses every migration in db/migrations so you can re-apply them from
+-- scratch.
 --
 -- Scope: drops everything this app owns in `public`, the avatars,
 -- oku-documents and organization-documents storage buckets and their policies,
--- the auth trigger this app adds to auth.users, and every auth account. It
--- does NOT otherwise touch Supabase-managed schemas (auth/storage) beyond
--- those app-owned objects, and does NOT drop the `public` schema itself (so
--- role grants / extensions stay intact).
+-- the auth trigger this app adds to auth.users, every auth account, and the
+-- Supabase CLI's migration history. It does NOT otherwise touch
+-- Supabase-managed schemas (auth/storage) beyond those app-owned objects, and
+-- does NOT drop the `public` schema itself (so role grants / extensions stay
+-- intact).
 --
 -- DESTRUCTIVE. Intended for local/staging resets only. Run in the Supabase SQL
--- editor or psql, then re-run 001 → 006.
+-- editor or psql, then rebuild with `supabase db push` and load
+-- db/staging/seed.sql (wiki/database-migrations.md).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -91,6 +94,7 @@ DROP TABLE IF EXISTS public.organization_documents  CASCADE;
 DROP TABLE IF EXISTS public.organization_bank_accounts CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
 DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
+DROP TABLE IF EXISTS public.sensitive_data_consents CASCADE;
 DROP TABLE IF EXISTS public.player_profiles         CASCADE;
 DROP TABLE IF EXISTS public.user_global_roles       CASCADE;
 DROP TABLE IF EXISTS public.users                   CASCADE;
@@ -140,19 +144,26 @@ DROP TYPE IF EXISTS public.refund_status        CASCADE;
 DROP TYPE IF EXISTS public.payout_kind          CASCADE;
 DROP TYPE IF EXISTS public.payout_status        CASCADE;
 DROP TYPE IF EXISTS public.invitation_status    CASCADE;
+DROP TYPE IF EXISTS public.sensitive_data_category CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
 --
---    ALL of them, not just the seed accounts (db/staging/seed.sql). public.users is
---    dropped above, and on_auth_user_created only fires on INSERT, so any
---    account left here comes back from 001 → 006 with no users record linked
---    to it. Such an account can still sign in but has no profile, and is
+--    ALL of them, not just the seed accounts (db/staging/seed.sql).
+--    public.users is dropped above, and on_auth_user_created only fires on
+--    INSERT, so any account left here comes back from a rebuild with no users
+--    record linked to it. Such an account can still sign in but has no profile, and is
 --    invisible to every lookup keyed on public.users — e.g. inviting it to an
 --    organization fails with "already been registered" (#565). A teardown that
 --    keeps some accounts therefore leaves them broken, not preserved.
 -- -----------------------------------------------------------------------------
 DELETE FROM auth.users;
+
+-- -----------------------------------------------------------------------------
+-- 8. Migration history (#631). Without this, `supabase db push` would still
+--    see every migration as applied and leave the database empty.
+-- -----------------------------------------------------------------------------
+DROP SCHEMA IF EXISTS supabase_migrations CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- Verification (all should return 0)
@@ -165,7 +176,8 @@ WHERE table_schema = 'public'
     'player_profiles','organizations','organization_memberships','organization_invitations',
     'organization_bank_accounts','organization_documents','tournaments',
     'registrations','payments','refunds','payouts','tournament_cancellation_requests',
-    'audit_logs','waitlist','bug_reports'
+    'audit_logs','waitlist','bug_reports','player_bank_accounts','prize_awards',
+    'prize_fundings','prize_funder_contacts','sensitive_data_consents'
   );
 
 SELECT 'app_enums' AS check, count(*)
@@ -176,7 +188,8 @@ WHERE n.nspname = 'public'
     'role_scope','gender','chess_title','oku_status','approval_status',
     'org_entity_type','org_document_type','bank_account_status',
     'tournament_status','registration_status','payment_type','payment_status',
-    'refund_status','payout_kind','payout_status','invitation_status'
+    'refund_status','payout_kind','payout_status','invitation_status',
+    'sensitive_data_category'
   );
 
 SELECT 'public_functions' AS check, count(*)
