@@ -65,7 +65,7 @@ Dependabot PRs and PRs from forks get no repository secrets, so they only get th
 
 That's all. A database URL only reaches staging. The workflow doesn't use a Supabase access token, which would reach every project on the account.
 
-**The first run** finds staging with the schema but no migration history. It records `001`–`006` as applied (`supabase migration repair --status applied`) without running them, then pushes the rest. Until then, PR checks treat `001`–`006` as applied. This assumes staging matches `001`–`006` exactly, so every pre-#631 `db/maintenance/apply_*.sql` script must already have been run on it.
+**The first run** finds staging with the schema but no migration history. It records `001`–`006` as applied (`supabase migration repair --status applied`) without running them, then pushes the rest. Until then, PR checks treat `001`–`006` as applied. This assumes staging matches `001`–`006` exactly. Every rollout script written before #631 must already have been run on it. The one still in the repo, `db/maintenance/apply_ledger_integrity.sql`, is not yet applied per `wiki/launch-readiness.md`. The rest were deleted once applied and are in git history.
 
 The CLI version is pinned in the workflow (`SUPABASE_CLI_VERSION`). Bump it deliberately.
 
@@ -84,7 +84,7 @@ npx supabase@2.122.1 db push --include-all --dry-run --workdir "$work" --db-url 
 npx supabase@2.122.1 db push --include-all --workdir "$work" --db-url "$DB_URL"
 ```
 
-As with staging, production must have every pre-#631 `db/maintenance/apply_*.sql` script applied before the baseline.
+As with staging, production must have every pre-#631 rollout script applied before the baseline, including `db/maintenance/apply_ledger_integrity.sql`.
 
 ## Resetting staging or a local database
 

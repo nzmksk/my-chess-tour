@@ -60,7 +60,7 @@ Approving a cancellation used to fire every refund inside the admin's PATCH. For
 - **Overlap is safe.** Two sweeps, or a sweep and an admin's Retry, both go through `claim_refund_fire`, so CHIP is called once.
 - **Not stuck yet.** Every refund now starts out unfired, so `list_stuck_refunds` counts a never-fired refund only once it was queued `REFUND_STUCK_AFTER_MINUTES` ago. Before that the sweep hasn't had its chance, and the dashboard banner shouldn't go red on every approval.
 
-**Rolling out.** `db/maintenance/apply_refund_sweep.sql`: re-run `006`, hand refunds already in the table over to the admin re-fire (rows from before #497 have `last_fired_at` NULL even if they were fired, and only the re-fire checks CHIP before refunding), deploy, then drop `list_pending_cancellation_refunds`. The workflow uses the existing `CRON_SECRET` and `PRODUCTION_URL` repository secrets.
+The sweep workflow uses the existing `CRON_SECRET` and `PRODUCTION_URL` repository secrets.
 
 ## Stuck refunds and the re-fire (#497)
 
@@ -86,8 +86,6 @@ Otherwise it stamps `last_fired_at = now()` and returns the purchase id. The loc
 The first fire, from the sweep, skips this read: nothing can have moved yet, and it would halve how many refunds each time-boxed sweep call gets through.
 
 **Where admins see it.** `/admin/refunds` (`StuckRefundsClient`) lists stuck refunds, oldest first, with player, tournament, amount, when it was requested / last sent / first failed, why it is stuck (never sent, no answer, failed, no CHIP purchase) and a **Retry refund** button (`POST /api/v1/admin/refunds/[id]/refire`, answers 200 with the outcome, 404 for an unknown refund). The admin dashboard shows a red banner linking there while any refund is stuck, and says so if it couldn't check rather than showing nothing. `GET /api/v1/admin/refunds` returns the same list.
-
-**Rolling out.** `db/maintenance/apply_refund_refire.sql` adds the column to an existing database; then re-run `006`. Deploy the app after: the new code claims before every CHIP refund. Rows pending today have `last_fired_at` NULL, so they appear on the page straight away.
 
 ## Open risks / TODO
 
@@ -120,7 +118,6 @@ Adjacent (out of scope, don't route into the refund path): `payment.charged_back
 - `db/migrations/003_functions_triggers.sql` — `review_tournament_cancellation` (queues refunds on approve).
 - `db/migrations/006_payment_functions.sql` — `settle_refund`, `list_unfired_cancellation_refunds`, `refund_fire_due`, `claim_refund_fire`, `list_stuck_refunds`.
 - `db/migrations/004_rls.sql` — "Players can view refunds of own registrations", "Org refund managers can view tournament refunds".
-- `db/maintenance/apply_refund_visibility.sql` — rolls `failed_at` and the player policy out to an existing database; `apply_refund_refire.sql` — rolls `last_fired_at` out (#497); `apply_refund_sweep.sql` — rolls the sweep out (#496).
 - `src/services/refunds/notify.ts` — `notifyRefundSettlement` (outcome emails); `src/services/chip/payment-method-label.ts` — `describePaymentMethod`.
 - `src/lib/refunds/state.ts` — `refundState`, `liveRefund`.
 - `src/app/api/v1/me/registrations/route.ts` + `src/app/my/tournaments/_components/RegistrationsClient.tsx` — player view; `src/app/my/organizations/[orgId]/tournaments/[id]/_data/getTournamentManageData.ts` + `_components/TournamentManageClient.tsx` — organizer view.
