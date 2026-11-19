@@ -1,0 +1,20 @@
+# Supabase CLI configuration for the local database (#633).
+#
+# Only `supabase db start` uses this: it runs the Supabase Postgres image with
+# the auth and storage schemas and applies supabase/migrations, which is what
+# the database tests run against (wiki/database-migrations.md). Every setting
+# left out takes the CLI's default.
+#
+# `supabase db push --db-url` (staging and production) ignores everything here.
+
+project_id = "my-chess-tour"
+
+[db]
+# Keep in step with the hosted projects (Supabase dashboard → Settings →
+# Infrastructure).
+major_version = 17
+
+[db.seed]
+# The tests build their own fixtures. supabase/staging/seed.sql is applied
+# separately where it's wanted.
+enabled = false
