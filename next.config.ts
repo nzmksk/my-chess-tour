@@ -1,12 +1,14 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs/config";
-import packageJson from "./package.json";
+import { resolveReleaseVersion } from "./src/lib/release-version";
 
 const nextConfig: NextConfig = {
-  // Which build a bug report came from (#616). Inlined at build time: Netlify
-  // sets COMMIT_REF during the build, but not in the functions at runtime.
+  // Which build a bug report came from (#616) and the footer shows (#621).
+  // Inlined at build time: the version comes from git tags (see
+  // release-version.ts), and Netlify sets COMMIT_REF during the build but not
+  // in the functions at runtime.
   env: {
-    APP_VERSION: packageJson.version,
+    APP_VERSION: resolveReleaseVersion(),
     APP_COMMIT: process.env.COMMIT_REF?.slice(0, 7) ?? "",
   },
   async redirects() {
