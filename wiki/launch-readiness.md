@@ -170,7 +170,7 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 
 ### P6. OKU (disability) verification — ⚠️ Partial
 - **Entry (player):** `/settings` → `OkuVerificationCard` → tick the health-data consent box → `POST /api/v1/profile/consents` → upload doc (≤5 MB) to the **private** `oku-documents` bucket → `POST /api/v1/profile/oku` sets `oku_status='pending'`.
-- **Consent (#451):** the card is health data, held only with its own explicit consent, recorded in the append-only `sensitive_data_consents` log with the statement version from `legal.ts`. The bucket's upload policy and the route both refuse a card without it. **Withdraw** (any state but `none`): `DELETE /api/v1/profile/oku` deletes every card in the player's folder, resets the status, then records the withdrawal.
+- **Consent (#451):** the card is health data, held only with its own explicit consent, recorded in the append-only `sensitive_data_consents` log with the statement version from `legal.ts`. The bucket's upload policy and the route both refuse a card without it. **Withdraw** (any state but `none`): `DELETE /api/v1/profile/oku` deletes everything under the player's `users/{id}/` prefix in the bucket (paged and recursive, `removeAllUnder`), resets the status, then records the withdrawal.
 - **Entry (admin):** `/admin/oku/[userId]` (signed 300s URL to the doc) → `PATCH /api/v1/admin/oku/[userId]` approve/reject (guarded on `pending`, rejection reason required).
 - **Scenarios:** re-upload allowed only in `none`/`rejected`; double-review prevented (404 if already actioned).
 - **Notification:** ✅ approve/reject emails the player (`notifyOkuReviewed`, #449): verified, or rejected with the reason and a link back to Settings to re-upload.

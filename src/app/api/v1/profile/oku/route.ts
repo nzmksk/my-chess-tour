@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
-import { assertUploadedObject } from "@/services/supabase/storage";
+import {
+  assertUploadedObject,
+  removeAllUnder,
+} from "@/services/supabase/storage";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import {
@@ -137,11 +140,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 }
 
 // Withdraws the player's consent to the processing of their health data
-// (#451), which means the data goes: every card they have uploaded (a
-// resubmission after rejection leaves the earlier file behind), their OKU
+// (#451), which means the data goes: everything they have put in the bucket,
+// their OKU
 // status, and the review that went with it. A verified player drops back to
 // 'none' and loses OKU fee tiers for future registrations; entries already paid
 // for are not touched.
+//
+// "Everything" is the whole users/{id}/ prefix, not one listing of
+// users/{id}/oku/. A resubmission after rejection leaves the earlier card
+// behind, and the upload policy checks only that prefix, so a client can put
+// any number of files at any depth under it, all health data.
+// removeAllUnder pages and recurses until nothing is left.
 //
 // The order makes every partial failure safe to retry. Files first, then the
 // profile, then the withdrawal record: a withdrawal is never recorded while the
@@ -158,28 +167,12 @@ export async function DELETE(): Promise<NextResponse> {
     );
   }
 
-  const folder = `users/${claims.id}/oku`;
-  const bucket = supabaseAdmin.storage.from(OKU_BUCKET);
-
-  const { data: objects, error: listError } = await bucket.list(folder, {
-    limit: 1000,
-  });
-  if (listError) {
+  const removeError = await removeAllUnder(OKU_BUCKET, `users/${claims.id}`);
+  if (removeError) {
     return internalErrorResponse(
-      "DELETE /api/v1/profile/oku: listing OKU documents failed",
-      listError,
+      "DELETE /api/v1/profile/oku: removing OKU documents failed",
+      removeError,
     );
-  }
-
-  const paths = (objects ?? []).map((object) => `${folder}/${object.name}`);
-  if (paths.length > 0) {
-    const { error: removeError } = await bucket.remove(paths);
-    if (removeError) {
-      return internalErrorResponse(
-        "DELETE /api/v1/profile/oku: removing OKU documents failed",
-        removeError,
-      );
-    }
   }
 
   const { error: profileError } = await supabaseAdmin

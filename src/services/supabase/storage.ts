@@ -52,3 +52,53 @@ export async function assertUploadedObject(
 
   return { ok: true };
 }
+
+// Supabase Storage lists one level at a time, at most this many entries.
+const LIST_PAGE_SIZE = 1000;
+
+/**
+ * Delete every object under `prefix`, however many there are and however deep.
+ *
+ * `list` returns one page of one level: files, plus an entry with a null id for
+ * each sub-folder. A single call is not "everything in the folder": a client
+ * with an INSERT policy can upload as many files as it likes, at any depth
+ * the policy's prefix check allows. So this recurses into sub-folders and, at
+ * each level, lists and removes the first page until a list comes back empty.
+ * Re-listing from the start works because each pass deletes what it listed.
+ * A pass that removes nothing is an error, not a loop.
+ *
+ * Returns null once nothing is left under `prefix`, or the error that stopped
+ * it. A failure part-way leaves the rest in place, so the caller can retry.
+ */
+export async function removeAllUnder(
+  bucket: string,
+  prefix: string,
+): Promise<{ message: string } | null> {
+  const storage = supabaseAdmin.storage.from(bucket);
+
+  for (;;) {
+    const { data, error } = await storage.list(prefix, {
+      limit: LIST_PAGE_SIZE,
+    });
+    if (error) return error;
+
+    const entries = data ?? [];
+    const folders = entries.filter((entry) => entry.id === null);
+    const files = entries.filter((entry) => entry.id !== null);
+
+    for (const folder of folders) {
+      const nested = await removeAllUnder(bucket, `${prefix}/${folder.name}`);
+      if (nested) return nested;
+    }
+
+    if (files.length === 0) return null;
+
+    const { data: removed, error: removeError } = await storage.remove(
+      files.map((file) => `${prefix}/${file.name}`),
+    );
+    if (removeError) return removeError;
+    if (!removed || removed.length === 0) {
+      return { message: `no objects removed under ${prefix}` };
+    }
+  }
+}

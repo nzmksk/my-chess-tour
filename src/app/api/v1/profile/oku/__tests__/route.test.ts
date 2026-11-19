@@ -212,7 +212,9 @@ describe("POST /api/v1/profile/oku", () => {
 });
 
 describe("DELETE /api/v1/profile/oku", () => {
-  const FOLDER = `users/${APP_USER}/oku`;
+  // The whole user prefix: the upload policy checks only users/{id}/, so a
+  // card can sit anywhere under it, not just in oku/.
+  const FOLDER = `users/${APP_USER}`;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -220,12 +222,21 @@ describe("DELETE /api/v1/profile/oku", () => {
       data: { claims: { sub: USER } },
       error: null,
     });
-    // A rejected card and its resubmission: both must go.
-    mockList.mockResolvedValue({
-      data: [{ name: "1.png" }, { name: "2.pdf" }],
+    // A rejected card and its resubmission: both must go. The second listing
+    // is empty because the first pass deleted them.
+    mockList
+      .mockResolvedValueOnce({
+        data: [
+          { id: "a", name: "1.png" },
+          { id: "b", name: "2.pdf" },
+        ],
+        error: null,
+      })
+      .mockResolvedValue({ data: [], error: null });
+    mockRemove.mockImplementation(async (paths: string[]) => ({
+      data: paths.map((name) => ({ name })),
       error: null,
-    });
-    mockRemove.mockResolvedValue({ data: [], error: null });
+    }));
     mockUpdateEq.mockResolvedValue({ error: null });
     // record_sensitive_data_consent: a withdrawal was written.
     mockRpc.mockResolvedValue({ data: true, error: null });
@@ -272,7 +283,7 @@ describe("DELETE /api/v1/profile/oku", () => {
   });
 
   it("skips the storage removal when there are no files", async () => {
-    mockList.mockResolvedValue({ data: [], error: null });
+    mockList.mockReset().mockResolvedValue({ data: [], error: null });
     const res = await DELETE();
     expect(res.status).toBe(200);
     expect(mockRemove).not.toHaveBeenCalled();
@@ -288,7 +299,9 @@ describe("DELETE /api/v1/profile/oku", () => {
   });
 
   it("500 and no withdrawal recorded when the files can't be listed", async () => {
-    mockList.mockResolvedValue({ data: null, error: { message: "boom" } });
+    mockList
+      .mockReset()
+      .mockResolvedValue({ data: null, error: { message: "boom" } });
     const res = await DELETE();
     expect(res.status).toBe(500);
     expect(mockRemove).not.toHaveBeenCalled();
