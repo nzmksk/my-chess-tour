@@ -1,6 +1,5 @@
 import { Octokit } from "@octokit/rest";
-
-const REPO = { owner: "nzmksk", repo: "my-chess-tour" } as const;
+import { REPO } from "@/services/github/repo";
 
 /** `user-reported` must exist on the repo; `bug` is GitHub's default label. */
 const BUG_REPORT_LABELS = ["bug", "user-reported"];
