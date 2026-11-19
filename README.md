@@ -26,13 +26,13 @@ A platform for chess tournaments in Malaysia. Organizers list their events, play
 
 ```sh
 npm ci
-# create .env.local (below)
+cp .env.example .env.local   # then fill it in (below)
 npm run dev        # http://localhost:3000
 ```
 
 ### Environment
 
-`.env*` files are git-ignored. Get the values for `.env.local` from a maintainer. Local development uses the **staging** Supabase project and CHIP's sandbox, so treat staging data as shared. Netlify holds each site's real values, stored verbatim: paste them without quotes.
+`.env*` files are git-ignored except [`.env.example`](.env.example): copy it to `.env.local` and get the values from a maintainer. Local development uses the **staging** Supabase project and CHIP's sandbox, so treat staging data as shared. Netlify holds each site's real values, stored verbatim: paste them without quotes.
 
 | Variable                                                                                                        | Used for                                                                                                                               |
 | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -119,7 +119,24 @@ wiki/                Design docs and runbooks (index below)
 3. A merge to `staging` deploys the staging site and applies any new migrations to the staging database.
 4. To release: add the changelog entry, tag a pre-release on `staging`, migrate production's database by hand, then **merge** (not squash) `staging` into `master`. Step by step: [wiki/releases.md](wiki/releases.md).
 
-**Scheduled jobs** (GitHub Actions, calling `/api/v1/cron/*` with `CRON_SECRET`): cancellation refunds every 5 minutes, organizer payouts and prize sends daily at 01:00 UTC, FIDE ratings monthly.
+## Scheduled jobs
+
+There is no `pg_cron` and no Netlify scheduler. Each job is a GitHub Actions workflow that POSTs a cron route with `Authorization: Bearer $CRON_SECRET`. GitHub cron is always UTC; Malaysia is UTC+8.
+
+| Job                  | Workflow                   | Schedule (UTC) | Frequency                                 | Route (time limit)                  | What it does                                                                                                                                                                                                                                                                              |
+| -------------------- | -------------------------- | -------------- | ----------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cancellation refunds | `cancellation-refunds.yml` | `*/5 * * * *`  | Every 5 minutes                           | `/api/v1/cron/refunds` (60 s)       | Sends the refunds an approved cancellation queued to CHIP. Each call fires a time-boxed chunk; the workflow keeps calling while the route answers `more: true`, up to 40 calls a run, and the next run picks up the rest. See [refund-flow.md](wiki/refund-flow.md#the-refund-sweep-496). |
+| Payouts and prizes   | `organizer-payouts.yml`    | `0 1 * * *`    | Daily, 01:00 UTC (09:00 MYT)              | `/api/v1/cron/payouts` (300 s)      | Re-registers bank accounts still waiting on a CHIP Send verdict, settles stuck payouts, retries pending ones, pays every tournament 3 days past its end, then the same passes for prize awards and sponsor funding links. See [payout-flow.md](wiki/payout-flow.md#the-daily-run).        |
+| FIDE ratings         | `fide-ratings.yml`         | `0 0 2 * *`    | Monthly, the 2nd at 00:00 UTC (08:00 MYT) | `/api/v1/cron/fide-ratings` (300 s) | Refreshes every player's FIDE ratings and title after FIDE publishes its monthly list.                                                                                                                                                                                                    |
+
+- **Production only.** All three call `PRODUCTION_URL` (a repository secret), so staging runs nothing on a schedule. To exercise a job on staging, call its route yourself:
+  ```sh
+  curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
+    https://staging.mychesstour.com/api/v1/cron/refunds   # or /payouts, /fide-ratings
+  ```
+- **On demand:** every workflow also has **Run workflow** in the Actions tab. All three are safe to re-run or overlap: each refund, payout and award is claimed under a row lock, and CHIP dedupes on our reference.
+- **Timing is best effort.** GitHub can start a scheduled run late under load, and it runs schedules from the default branch (`staging`). In a public repository it also disables scheduled workflows after 60 days without commits; re-enable them from the Actions tab if that happens.
+- **Not scheduled:** expiring abandoned checkouts happens lazily when the data is read ([payment-flow.md](wiki/payment-flow.md#expiry-no-chip-event)), and nothing prunes `audit_logs` yet (#507).
 
 ## Pre-launch checklists
 
@@ -160,7 +177,7 @@ Netlify stores values verbatim: paste every value **without quotes**, and PEM ke
 
 **Verify end to end**
 
-The scheduled jobs only ever call production (`PRODUCTION_URL`), so on staging you trigger the cron routes by hand:
+The [scheduled jobs](#scheduled-jobs) only ever call production (`PRODUCTION_URL`), so on staging you trigger the cron routes by hand:
 
 ```sh
 curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
