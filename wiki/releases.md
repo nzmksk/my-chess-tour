@@ -90,16 +90,13 @@ GitHub sends a `ping` when the webhook is created; its Recent Deliveries tab sho
 
 **The "What's new" dialog** (`src/components/WhatsNew.tsx`) keeps the last version seen in `localStorage` under `mct:lastSeenVersion`, so it works signed out. A first-ever visit stores the version without showing anything. Only when the browser has missed a release does the dialog fetch the releases since, from `/api/v1/changelog?after=<last seen>`; if that fails, nothing is stored or shown. A visitor who skipped several releases sees one dialog, for the newest non-silent one. It never appears on checkout and payment return (`/tournaments/[slug]/register/**`), sign-in, sign-up, verify and password reset (`/auth/**`, since a signed-out player opening `/register` is sent to sign in first) or `/prize-funding/**`; it waits for the next ordinary page, and drops a fetch still in flight when the visitor moves into one. With storage blocked it never shows. To see it again while testing, delete the key in devtools (Application → Local Storage) or set it to an older version.
 
-**CI checks the notes.** `.github/workflows/release-notes.yml` runs when a release is published or its notes are edited. It fails when the notes have no `New`, `Improved` or `Fixed` items and aren't marked `<!-- silent -->`, which is what a release published with only GitHub's generated list looks like.
-
 ## Cutting a release
 
 1. Merge the release's PRs into `staging` and wait for the staging deploy to finish.
 2. Draft a GitHub pre-release with a new tag on `staging`. The tag must start with `v` and a digit (`vMAJOR.MINOR.PATCH-alpha`), or the resolver and the changelog ignore it. Press **Generate release notes**, then write the notes for users above the generated list, with `<!-- developer notes -->` between them ([format](#writing-the-notes)). Drafts never show on the site, so take your time.
 3. **Publish** the release.
-4. Check the **Release notes** workflow run passed (Actions tab). If it failed, edit the release's notes; the edit runs the check again.
-5. **Redeploy staging** (Netlify → staging site → Deploys → Trigger deploy → Deploy site). The deploy from step 1 was built before the tag existed, so until this redeploy the footer still shows the previous release plus the commit, and the new release stays hidden.
-6. On `staging.mychesstour.com`, check that the footer shows the new tag, that `/changelogs` lists it, and that the "What's new" dialog appears (set `mct:lastSeenVersion` to the previous version first).
+4. **Redeploy staging** (Netlify → staging site → Deploys → Trigger deploy → Deploy site). The deploy from step 1 was built before the tag existed, so until this redeploy the footer still shows the previous release plus the commit, and the new release stays hidden.
+5. On `staging.mychesstour.com`, check that the footer shows the new tag, that `/changelogs` lists it with your notes, and that the "What's new" dialog appears (set `mct:lastSeenVersion` to the previous version first).
 
 To fix the notes later, edit the release on GitHub. Both sites pick up the change through the webhook, without a deploy.
 

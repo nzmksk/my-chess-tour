@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  hasUserNotes,
-  parseReleaseNotes,
-  toChangelogEntry,
-} from "../release-notes";
+import { parseReleaseNotes, toChangelogEntry } from "../release-notes";
 
 const GENERATED = `## What's Changed
 * Move /tournaments to / (#615) by @someone in https://github.com/o/r/pull/623
@@ -141,37 +137,6 @@ ${GENERATED}`);
     expect(parseReleaseNotes("### New\n- \n- **  **\n- Real.")).toEqual({
       new: ["Real."],
     });
-  });
-});
-
-describe("hasUserNotes", () => {
-  it("is true for notes with items", () => {
-    expect(hasUserNotes("### Fixed\n- A bug.")).toBe(true);
-  });
-
-  it.each(["<!-- silent -->", "<!--SILENT-->", "<!--  silent  -->\r"])(
-    "is true for notes marked silent with %j",
-    (marker) => {
-      expect(hasUserNotes(`${marker}\n${GENERATED}`)).toBe(true);
-    },
-  );
-
-  it("is false for GitHub's generated PR list alone", () => {
-    expect(hasUserNotes(GENERATED)).toBe(false);
-  });
-
-  it("is false for a headline without items", () => {
-    expect(hasUserNotes("A big release.")).toBe(false);
-  });
-
-  it("ignores a silent marker in the developer notes", () => {
-    expect(
-      hasUserNotes(`<!-- developer notes -->\n<!-- silent -->\n${GENERATED}`),
-    ).toBe(false);
-  });
-
-  it("is false for missing notes", () => {
-    expect(hasUserNotes(null)).toBe(false);
   });
 });
 

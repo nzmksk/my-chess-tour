@@ -109,7 +109,7 @@ wiki/                Design docs and runbooks (index below)
 
 - **Unit and route tests:** Vitest with jsdom, in `__tests__/` folders next to the code. They mock Supabase and CHIP, so they don't reach the SQL.
 - **Database tests:** `supabase/tests/*.sql`, the safety net for the money paths. CI builds a database from `supabase/migrations` and runs them all. To run them locally, see [wiki/database-migrations.md](wiki/database-migrations.md#tests).
-- **CI** (`.github/workflows/tests.yml`) runs lint, Vitest with coverage and the SQL suites on every PR into `staging` or `master`. `.github/workflows/release-notes.yml` checks each release's notes, which are the user-facing changelog, when it is published or edited.
+- **CI** (`.github/workflows/tests.yml`) runs lint, Vitest with coverage and the SQL suites on every PR into `staging` or `master`.
 - **Manual CHIP scenarios** to run before a release are in [wiki/payment-flow.md](wiki/payment-flow.md#c-end-to-end-manual-chip-sandbox).
 
 ## Branches, deploys and releases

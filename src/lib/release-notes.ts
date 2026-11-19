@@ -146,18 +146,6 @@ export function parseReleaseNotes(
   return notes;
 }
 
-/**
- * Whether the notes have something for users, or say on purpose that they
- * don't with the silent marker. CI requires one or the other of every
- * release, so one published with only GitHub's PR list is caught.
- */
-export function hasUserNotes(body: string | null | undefined): boolean {
-  const { new: added, improved, fixed } = parseReleaseNotes(body);
-  return (
-    Boolean(added || improved || fixed) || SILENT_PATTERN.test(userNotes(body))
-  );
-}
-
 /** The fields of a GitHub release the changelog reads. */
 export interface GitHubRelease {
   tag_name: string;
