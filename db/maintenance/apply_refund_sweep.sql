@@ -1,7 +1,7 @@
 -- =============================================================================
 -- ONE-OFF: bring an existing database up to #496 (refund sweep off the request)
 --
--- This issue edits the base migrations in place, in 007 only:
+-- This issue edits the base migrations in place, in 006 only:
 --   * adds list_unfired_cancellation_refunds (the sweep's work list),
 --   * changes list_stuck_refunds to leave out a never-fired refund queued less
 --     than p_min_age ago, and
@@ -10,7 +10,7 @@
 -- A fresh build gets all of it. A long-lived database (staging, production)
 -- needs these steps, in order:
 --
---   1. BEFORE deploying the app: re-run db/migrations/007_payment_functions.sql
+--   1. BEFORE deploying the app: re-run db/migrations/006_payment_functions.sql
 --      in full. Every statement in it is CREATE OR REPLACE / REVOKE / GRANT, so
 --      re-running is safe. The new cron route calls
 --      list_unfired_cancellation_refunds, so it has to exist first.

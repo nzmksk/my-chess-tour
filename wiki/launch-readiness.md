@@ -397,7 +397,7 @@ Flow IDs in brackets point back to the detail above.
 - [ ] **[S3]** Run the check in `db/maintenance/scrub_pre_redaction_audit_rows.sql` against staging and production; if it returns rows, decide whether to scrub them (#503). 🟡
 - [ ] **[S3]** Get the retention wording reviewed by a second person before it ships — it amends a published compliance commitment.
 - [x] **[S7]** Identity indirection (#501) — landed pre-launch, so the sweep never had to touch live payment records.
-- [ ] **[S7]** Apply `db/migrations/001`–`007` (ties to #161), then run `db/tests/identity_indirection.sql` and check the query plans on `/my/tournaments` and checkout for regression from the `app_user_id()` lookup. 🔴
+- [ ] **[S7]** Apply `db/migrations/001`–`006` (ties to #161), then run `db/tests/identity_indirection.sql` and check the query plans on `/my/tournaments` and checkout for regression from the `app_user_id()` lookup. 🔴
 - [x] **[S7]** Add `payments.fee_tier` and the `cancelled_at` consistency constraint (#502).
 - [ ] **[S7]** Run `db/maintenance/apply_ledger_integrity.sql` against staging and production; its check must return no rows before the constraint goes on (#502). 🟡
 - [ ] **[P15–P17]** Confirm the team is happy deferring dependents, claiming, and carts — and that one-checkout-per-player is acceptable for the first events. 🟢

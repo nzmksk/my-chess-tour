@@ -213,7 +213,7 @@ export interface DeclaredFunder {
 /**
  * Each funder's share: what the prizes naming them add up to, in the order
  * they first appear. The twin of declared_prize_funders
- * (007_payment_functions.sql), which decides what each funder is asked for;
+ * (006_payment_functions.sql), which decides what each funder is asked for;
  * prizes with no money or no named funder are left out, as there.
  */
 export function declaredFunders(

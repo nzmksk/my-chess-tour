@@ -23,7 +23,7 @@ import { prizeLabel } from "./notify";
 // as they pay; the payment that completes it lists the tournament.
 //
 // The split of work:
-//   * reconcile_prize_funding_requests (007) decides, under the tournament
+//   * reconcile_prize_funding_requests (006) decides, under the tournament
 //     lock, which requests should be open and records them as rows.
 //   * this module does the network half outside that transaction: cancels the
 //     CHIP purchases of superseded requests, creates the purchases of new ones,

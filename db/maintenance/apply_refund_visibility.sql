@@ -3,14 +3,14 @@
 -- refund outcome emails)
 --
 -- These issues edit the base migrations in place: refunds.failed_at in 001, the
--- player refunds SELECT policy in 004, and settle_refund in 007. A fresh build
+-- player refunds SELECT policy in 004, and settle_refund in 006. A fresh build
 -- gets all of it. A long-lived database (staging, production) needs these
 -- steps, in order:
 --
 --   1. APPLY  — adds the column and swaps the policy in one transaction. It
 --               ends in ROLLBACK, so it is a dry run until that line is changed
 --               to COMMIT.
---   2. Re-run db/migrations/007_payment_functions.sql in full. Every statement
+--   2. Re-run db/migrations/006_payment_functions.sql in full. Every statement
 --      in it is CREATE OR REPLACE / REVOKE / GRANT, so re-running is safe. It
 --      must come after step 1: the new settle_refund writes refunds.failed_at.
 --
@@ -48,5 +48,5 @@ ROLLBACK;
 
 
 -- -----------------------------------------------------------------------------
--- 2. Now re-run db/migrations/007_payment_functions.sql in full.
+-- 2. Now re-run db/migrations/006_payment_functions.sql in full.
 -- -----------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 name: Staging database migrations
 
-# Applies db/deltas/*.sql and replays 007 against the staging database (#631).
+# Applies db/deltas/*.sql and replays 006 against the staging database (#631).
 # A PR to staging gets a dry run against the real staging data (everything
 # rolled back); the merge applies it. See wiki/database-migrations.md.
 on:

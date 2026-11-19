@@ -9,8 +9,8 @@
 -- database) when the seeded tournaments have drifted into the past: the
 -- listing hides anything that ended more than 30 days ago.
 --
--- Prerequisites: migrations 001–005 and 007 must be applied first (the
--- registration amounts come from compute_registration_amounts in 007).
+-- Prerequisites: migrations 001–006 must be applied first (the
+-- registration amounts come from compute_registration_amounts in 006).
 -- Password for all seed accounts: Abcd!234
 --
 -- Identity note: inserting into auth.users fires on_auth_user_created, which
@@ -795,7 +795,7 @@ BEGIN
   -- ===========================================================================
   -- 4. REGISTRATIONS & PAYMENTS
   --
-  -- Shaped like what the payment functions in 007 produce, not hand-rolled:
+  -- Shaped like what the payment functions in 006 produce, not hand-rolled:
   --   * every registration has one payment attempt (payments is a per-attempt
   --     ledger) and points at it through registrations.current_payment_id;
   --   * amounts come from compute_registration_amounts on the tournament's own

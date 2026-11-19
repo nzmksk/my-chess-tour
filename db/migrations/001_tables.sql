@@ -385,7 +385,7 @@ CREATE TABLE organization_invitations (
 -- (prizes.distribution = 'platform') is published into this state, NOT into
 -- 'published'. It has its slug and its sponsors have their payment links, but
 -- it is invisible to the public and nobody can register until the prize pool
--- is fully funded; release_funded_tournament (007) then moves it to
+-- is fully funded; release_funded_tournament (006) then moves it to
 -- 'published'. A tournament whose organizer pays the winners goes straight to
 -- 'published'.
 CREATE TYPE tournament_status AS ENUM ('draft', 'pending_funding', 'published', 'cancelled');
@@ -588,7 +588,7 @@ CREATE TABLE payments (
 -- the pointer simply clears if its payment is ever removed (payments aren't
 -- deleted in practice; never cascade-delete the registration). Settlement only
 -- terminalizes the registration for its current attempt — see
--- 007_payment_functions.sql.
+-- 006_payment_functions.sql.
 ALTER TABLE registrations
   ADD COLUMN current_payment_id uuid REFERENCES payments(id) ON DELETE SET NULL;
 
@@ -636,7 +636,7 @@ CREATE TABLE refunds (
 -- reference returns the existing instruction instead of paying twice.
 --
 -- A failed payout is TERMINAL and a retry is a NEW row, linked from the failed one
--- via superseded_by. See the header of settle_payout (007_payment_functions.sql)
+-- via superseded_by. See the header of settle_payout (006_payment_functions.sql)
 -- for why this differs from refunds.
 -- =============================================
 CREATE TYPE payout_kind   AS ENUM ('automatic', 'early');
@@ -705,7 +705,7 @@ CREATE TABLE prize_funder_contacts (
 -- whose prizes.distribution is "platform". One row per contribution: a pool may
 -- have several sponsors, each paying through their own CHIP Collect purchase.
 -- Rows are created automatically, one open request per funder named in the
--- prizes, by reconcile_prize_funding_requests (007) when the tournament is
+-- prizes, by reconcile_prize_funding_requests (006) when the tournament is
 -- published and whenever its prizes change; the app then creates each CHIP
 -- purchase and emails the funder the link.
 --
@@ -882,7 +882,7 @@ CREATE TABLE bug_reports (
 --
 -- This view only knows the ledger, so it subtracts PAID payouts only. How much
 -- may leave right now, net of payouts still in flight, is available_payout_cents
--- (007_payment_functions.sql). Do not teach this view about the payouts table.
+-- (006_payment_functions.sql). Do not teach this view about the payouts table.
 -- =============================================
 
 -- Why view is preferred over materialized view:

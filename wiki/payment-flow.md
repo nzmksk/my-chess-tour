@@ -18,7 +18,7 @@ Two consequences of that three-value enum worth knowing before reading `payments
 
 ## Pricing (commission math)
 
-`compute_registration_amounts(amount, commission_rate, organizer_commission_pct)` (`db/migrations/007_payment_functions.sql`) is the single source of truth for what a player pays. It's used by both creation and resume so the two never drift:
+`compute_registration_amounts(amount, commission_rate, organizer_commission_pct)` (`db/migrations/006_payment_functions.sql`) is the single source of truth for what a player pays. It's used by both creation and resume so the two never drift:
 
 ```
 platform_fee         = floor(amount * commission_rate / 100)
@@ -31,10 +31,10 @@ net    = gross - platform_fee         -- what the organizer nets
 ## Happy path
 
 1. **Checkout** — `POST /api/v1/tournaments/[slug]/checkout` (`src/app/api/v1/tournaments/[slug]/checkout/route.ts`). Auth required. Validates tournament is `published`, registration deadline, fee-tier validity (incl. `valid_until`), and profile-based restrictions/eligibility.
-2. **Create** — if the user has no existing registration, calls `create_registration_with_payment()` (`007`): atomically inserts a `registrations` row (`pending_payment`) and a `payments` row (`pending`) with the computed amounts. The `check_tournament_capacity` INSERT trigger (`003_functions_triggers.sql`) enforces capacity inside Postgres.
+2. **Create** — if the user has no existing registration, calls `create_registration_with_payment()` (`006`): atomically inserts a `registrations` row (`pending_payment`) and a `payments` row (`pending`) with the computed amounts. The `check_tournament_capacity` INSERT trigger (`003_functions_triggers.sql`) enforces capacity inside Postgres.
 3. **Initiate CHIP** — `initiateChipPayment()` builds the CHIP purchase payload (typed `PurchasesRequest`, `src/services/chip/interfaces/`) — the MYR product line, `client.email`, `reference = payment.id`, success/failure redirects, a `cancel_redirect`, and a `due` (purchase expiry, see below) — and hands it to `createChipPurchase()` (`src/services/chip/chip.ts`), which injects `brand_id` from the environment. Stores the returned purchase id as `chip_transaction_id` and returns the `checkout_url`. The browser is sent to CHIP.
 4. **Settle (webhook)** — CHIP calls `POST /api/v1/webhooks/chip` (`src/app/api/v1/webhooks/chip/route.ts`). It verifies the RSA signature over the raw body, correlates the payment by `chip_transaction_id` (falling back to `reference`), maps the event to an outcome via `chipOutcome()`, and calls `settle_registration_payment()`.
-5. **Confirm** — `settle_registration_payment(payment_id, paid, amount_cents)` (`007`) locks the payment row, then:
+5. **Confirm** — `settle_registration_payment(payment_id, paid, amount_cents)` (`006`) locks the payment row, then:
   - `paid=true` → settles **any non-`paid` row** (idempotent: a row already `paid` is a no-op): payment `paid` (+`paid_at`), registration `confirmed` (+`confirmed_at`), pointing `current_payment_id` at the paid attempt — **but only if** `amount_cents` matches the recorded `gross_amount_cents` (guards a stale/re-priced purchase). A mismatch leaves it as-is and returns `amount_mismatch` for ops to reconcile. Honoring `paid` over a `failed` row is the **"real money wins"** guarantee: a late `paid` rescues a row that was marked `failed` by supersession or by a decline the payer then retried on the same purchase. See [Outcome mapping](#outcome-mapping).
   - `paid=false` → only terminalizes a still-`pending` row (never overrides a `paid` one): payment `failed`, and registration `failed_payment` **only if** this is its current attempt.
 6. **Confirmation email** — the result carries `newly_confirmed`, true only for the one call that actually flipped the registration to `confirmed`. Every settling path (the webhook, the return-page reconcile in `resolvePaymentState`, and `settleFreeRegistration` for a zero-gross tier) calls `notifyRegistrationConfirmed()` (`src/services/registrations/notify.ts`) when it sees it, so the player gets exactly one "You're registered" email (tournament, venue-local dates, venue, fee paid) however the settles race. The payment row lock serializes them. Best-effort: a failed send is logged and never fails the settle (#119).
@@ -68,7 +68,7 @@ When the user returns to checkout with an existing registration, the route branc
 - **Lapsed pending / `failed_payment` / `cancelled_payment`** → `resumeRegistration()` (a fresh start, any tier):
 
 1. **Cancels the prior CHIP purchase** (`cancelChipPurchase`) — best-effort double-charge guard.
-2. `start_new_payment_attempt()` (`007`): re-checks capacity _excluding this row_, **supersedes** the prior attempt (marks its still-`pending` payment `failed`), **appends a fresh `pending` payment row** for the chosen tier (the ledger is append-only — old rows are never reset/re-priced), points `current_payment_id` at it, and refreshes `registered_at` (a new hold window). Accepts `pending_payment`, `failed_payment`, **and `cancelled_payment`** (so an expired checkout can be re-registered).
+2. `start_new_payment_attempt()` (`006`): re-checks capacity _excluding this row_, **supersedes** the prior attempt (marks its still-`pending` payment `failed`), **appends a fresh `pending` payment row** for the chosen tier (the ledger is append-only — old rows are never reset/re-priced), points `current_payment_id` at it, and refreshes `registered_at` (a new hold window). Accepts `pending_payment`, `failed_payment`, **and `cancelled_payment`** (so an expired checkout can be re-registered).
 3. Initiates a fresh CHIP purchase.
 
 The checkout link is saved to `payments.checkout_url` in `initiateChipPayment` (alongside `chip_transaction_id`) so the live-resume path can reuse it.
@@ -86,7 +86,7 @@ The same count is the floor for capacity itself: `guard_tournament_seats_taken` 
 The 10-minute hold frees _capacity_ but never terminalizes the row, and CHIP emits **no `purchase.expired` event** (see [chip-webhook.md](./chip-webhook.md)), so expiry is **app-owned and time-based**:
 
 - **CHIP `due` + `due_strict`** — the checkout route sets `due = now + PAYMENT_TIMEOUT_MINUTES` (10 min) **and `purchase.due_strict: true`** on the purchase it creates, so the checkout link becomes unpayable when the hold lapses — closing the overbooking / double-charge window at the source. `due_strict` is load-bearing: without it CHIP merely flips the purchase to `overdue` and keeps accepting payment, leaving a live link against a released seat. With it the purchase reaches `expired`. Note `due` is top-level on the request while `due_strict` sits inside `purchase`.
-- **Terminalization** — `expire_stale_pending_payments(p_ttl, p_tournament_id, p_registration_id, p_user_id)` (`007`) moves `pending_payment` registrations older than the TTL to `cancelled_payment` (`cancellation_reason='payment_expired'`), using `FOR UPDATE SKIP LOCKED`. It **leaves the payment row `pending`** so a late `paid` webhook can still rescue it, and returns the affected `registration_id`s for best-effort CHIP cancel.
+- **Terminalization** — `expire_stale_pending_payments(p_ttl, p_tournament_id, p_registration_id, p_user_id)` (`006`) moves `pending_payment` registrations older than the TTL to `cancelled_payment` (`cancellation_reason='payment_expired'`), using `FOR UPDATE SKIP LOCKED`. It **leaves the payment row `pending`** so a late `paid` webhook can still rescue it, and returns the affected `registration_id`s for best-effort CHIP cancel.
 - **Single window** — one `PAYMENT_TIMEOUT_MINUTES` (10 min) constant in `src/services/chip/chip.ts` governs the CHIP `due`, the seat hold, resume "is-live", and this expiry TTL. There's no separate longer expiry buffer: even if a read path expires a registration the instant the hold lapses, the payment row is left `pending`, and a late `paid` (only possible before `due`) settles it to `confirmed` anyway — **real money wins** (see [Confirm](#happy-path)).
 - **Trigger = lazy on read** (no cron). The sweep runs, scoped, before the read:
   - per-registration in `resolvePaymentState` (after the CHIP reconcile, so a late payment is caught first; also best-effort cancels the CHIP purchase);
@@ -97,7 +97,7 @@ The 10-minute hold frees _capacity_ but never terminalizes the row, and CHIP emi
 
 ## Regression testing
 
-Three layers, cheapest first. Run **A** on every change; add **B** when touching the DB money functions (`007`/`003`); run **C** before a release or when changing the CHIP integration.
+Three layers, cheapest first. Run **A** on every change; add **B** when touching the DB money functions (`006`/`003`); run **C** before a release or when changing the CHIP integration.
 
 ### A. Automated suite — `npm run test` (vitest)
 
@@ -165,4 +165,4 @@ Drive a real checkout and inspect the two rows (`registrations.status`, `payment
 - `src/app/tournaments/[slug]/register/_lib/resolvePaymentState.ts` — return-page reconcile + lazy expiry.
 - `src/app/tournaments/[slug]/register/page.tsx` + `_components/PaymentInProgress.tsx` — Continue-payment screen for a live pending payment.
 - `db/tests/settle_registration_payment.sql` — transaction-wrapped DB money-state regression test (see [Regression testing](#regression-testing) §B).
-- DB functions are flattened into two files: `db/migrations/007_payment_functions.sql` (`compute_registration_amounts`, `create_registration_with_payment`, `start_new_payment_attempt`, `settle_registration_payment`, `expire_stale_pending_payments`) and `db/migrations/003_functions_triggers.sql` (`assert_tournament_capacity` + the `check_tournament_capacity` INSERT trigger). `payments.checkout_url` and the `cancelled_payment` resume path live in `001_tables.sql` / `007`.
+- DB functions are flattened into two files: `db/migrations/006_payment_functions.sql` (`compute_registration_amounts`, `create_registration_with_payment`, `start_new_payment_attempt`, `settle_registration_payment`, `expire_stale_pending_payments`) and `db/migrations/003_functions_triggers.sql` (`assert_tournament_capacity` + the `check_tournament_capacity` INSERT trigger). `payments.checkout_url` and the `cancelled_payment` resume path live in `001_tables.sql` / `006`.

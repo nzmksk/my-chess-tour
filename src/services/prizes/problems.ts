@@ -1,7 +1,7 @@
 import { formatRinggit, parseSentinel } from "@/services/payouts/format";
 
 // Plain-language versions of the prize award refusals raised by enter_prize_award
-// and review_prize_award (007_payment_functions.sql, #523), for organizers and
+// and review_prize_award (006_payment_functions.sql, #523), for organizers and
 // admins. Pure, so pages can use it too.
 
 const NOT_ALLOWED: Record<string, string> = {

@@ -919,7 +919,7 @@ CREATE TRIGGER guard_seats_taken BEFORE UPDATE ON tournaments
 -- Runs under the tournament row lock (BEFORE UPDATE), which the checkout RPCs
 -- take before their own pool check, so the two serialize. SECURITY DEFINER so
 -- the hold count isn't filtered by the caller's RLS. declared_prize_total_cents
--- lives in 007; plpgsql resolves it at call time.
+-- lives in 006; plpgsql resolves it at call time.
 --
 -- The PATCH route turns the PRIZES_IN_CHECKOUT sentinel into a readable 409.
 -- Named to fire after guard_paid_fields, so a change after payment reports the
@@ -1515,7 +1515,7 @@ $$;
 -- with a reason and the tournament stays published. The refund rows are only
 -- created here; the actual CHIP refund + type='refund' ledger row are executed
 -- afterwards by the app (the refund sweep, src/services/refunds/sweep.ts) and settled by
--- settle_refund (007_payment_functions.sql) — a network call can't run in this
+-- settle_refund (006_payment_functions.sql) — a network call can't run in this
 -- transaction.
 --
 -- Approve is refused (P0001, CANCELLATION_BLOCKED_BY_PAYOUT) once an organizer
@@ -2219,7 +2219,7 @@ $$;
 -- assert_tournament_capacity is revoked too. The enforce_tournament_capacity
 -- trigger calls it with the inserting role's rights, but clients can no longer
 -- insert registrations (004_rls.sql), so it only ever fires inside the
--- SECURITY DEFINER functions in 007, which run as the owner. count_taken_seats
+-- SECURITY DEFINER functions in 006, which run as the owner. count_taken_seats
 -- is not SECURITY DEFINER (a client call would only count what RLS shows it),
 -- but its callers are, so it is revoked with them.
 --

@@ -130,7 +130,7 @@ export async function PATCH(
     }
     if (error.code === "22023") {
       // Only review_payout_request's own RAISEs use 22023 (bad action, missing
-      // rejection reason; 007_payment_functions.sql), and their text is written
+      // rejection reason; 006_payment_functions.sql), and their text is written
       // for the reviewer.
       // eslint-disable-next-line no-restricted-syntax
       return errorResponse("VALIDATION_ERROR", error.message, 400);

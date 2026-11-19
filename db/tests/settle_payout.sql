@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DB money-state regression test for organizer payouts (#520, #521, #522):
---   * available_payout_cents, queue_payout, settle_payout (007_payment_functions.sql)
+--   * available_payout_cents, queue_payout, settle_payout (006_payment_functions.sql)
 --   * request_early_payout, early_payout_cap, early_payout_problem (#521)
 --   * the payouts unique indexes (002_indexes.sql)
 --   * tournament_payout_summary draining on a settled payout

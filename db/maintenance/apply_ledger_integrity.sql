@@ -3,7 +3,7 @@
 --
 -- #502 edits the base migrations in place: payments.fee_tier in 001, the
 -- registrations constraint chk_cancelled_fields_consistent in 001, and both
--- payment-creating functions in 007. A fresh build gets all of it. A
+-- payment-creating functions in 006. A fresh build gets all of it. A
 -- long-lived database (staging, production) needs these steps, in order:
 --
 --   1. CHECK  — read-only. Lists registrations that would violate the new
@@ -13,7 +13,7 @@
 --   2. APPLY  — adds the column and the constraint in one transaction. It ends
 --               in ROLLBACK, so it is a dry run until that line is changed to
 --               COMMIT.
---   3. Re-run db/migrations/007_payment_functions.sql in full. Every statement
+--   3. Re-run db/migrations/006_payment_functions.sql in full. Every statement
 --      in it is CREATE OR REPLACE / REVOKE / GRANT, so re-running is safe. It
 --      must come after step 2: the new function bodies write payments.fee_tier.
 --

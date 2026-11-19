@@ -6,7 +6,7 @@
 -- is reachable as POST /rest/v1/rpc/<name>. A SECURITY DEFINER function that
 -- trusts its arguments (org id, actor id, payment id) is then a way around the
 -- API route's permission checks. See the EXECUTE PRIVILEGES blocks at the end of
--- 003_functions_triggers.sql and 007_payment_functions.sql.
+-- 003_functions_triggers.sql and 006_payment_functions.sql.
 --
 -- Covers:
 --   P1  every server-only function exists and is executable by service_role

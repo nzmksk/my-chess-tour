@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 
 // Where a platform-distributed prize pool stands (#523), as prize_pool_position
-// (007_payment_functions.sql) computes it. Every surface that shows or checks
+// (006_payment_functions.sql) computes it. Every surface that shows or checks
 // the pool reads it from there rather than re-deriving it.
 
 export interface PrizePoolPosition {

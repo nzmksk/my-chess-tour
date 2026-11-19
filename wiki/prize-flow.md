@@ -144,4 +144,4 @@ Best-effort and after the response, following the `Promise.allSettled` disciplin
 - A tournament still waiting for funding when its registration deadline passes is listed once funded, but with registration already closed. The organizer should move the deadline or cancel.
 - An organizer can't withdraw an award awaiting review; an admin rejects it with a reason instead.
 - The winner must have a login: an award goes to a confirmed registrant's own `player_bank_accounts`. Guardians and managed players (#504) will widen `can_act_for`, not this flow.
-- Rolling out to an existing database: `db/maintenance/apply_prize_pool.sql`, then re-run 007. It adds the `pending_funding` status, and drops the old free-text player bank columns, so players re-enter their details.
+- Rolling out to an existing database: `db/maintenance/apply_prize_pool.sql`, then re-run 006. It adds the `pending_funding` status, and drops the old free-text player bank columns, so players re-enter their details.

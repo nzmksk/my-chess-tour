@@ -3,12 +3,12 @@
 --
 -- This issue edits the base migrations in place: refunds.last_fired_at in 001,
 -- and refund_fire_due / claim_refund_fire / list_stuck_refunds (plus their
--- REVOKE / GRANT lines) in 007. A fresh build gets all of it. A long-lived
+-- REVOKE / GRANT lines) in 006. A fresh build gets all of it. A long-lived
 -- database (staging, production) needs these steps, in order:
 --
 --   1. APPLY  — adds the column. It ends in ROLLBACK, so it is a dry run until
 --               that line is changed to COMMIT.
---   2. Re-run db/migrations/007_payment_functions.sql in full. Every statement
+--   2. Re-run db/migrations/006_payment_functions.sql in full. Every statement
 --      in it is CREATE OR REPLACE / REVOKE / GRANT, so re-running is safe. It
 --      must come after step 1: claim_refund_fire writes refunds.last_fired_at.
 --
@@ -39,5 +39,5 @@ ROLLBACK;
 
 
 -- -----------------------------------------------------------------------------
--- 2. Now re-run db/migrations/007_payment_functions.sql in full.
+-- 2. Now re-run db/migrations/006_payment_functions.sql in full.
 -- -----------------------------------------------------------------------------

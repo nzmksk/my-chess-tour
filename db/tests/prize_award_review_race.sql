@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Concurrency test for the prize pool sum guard (review_prize_award,
--- 007_payment_functions.sql): two admins approving two awards at the same time,
+-- 006_payment_functions.sql): two admins approving two awards at the same time,
 -- in two real sessions, when the pool can only cover one of them.
 --
 -- The guard reads the reservations committed before it and refuses an award

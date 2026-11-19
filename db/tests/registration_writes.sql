@@ -7,7 +7,7 @@
 -- could insert or patch their own row straight to 'confirmed' through
 -- PostgREST and hold a seat without paying. 004_rls.sql now revokes INSERT,
 -- UPDATE and DELETE from anon and authenticated; every write goes through the
--- service-role SECURITY DEFINER functions in 007_payment_functions.sql.
+-- service-role SECURITY DEFINER functions in 006_payment_functions.sql.
 --
 -- Covers:
 --   R1  anon and authenticated hold no INSERT/UPDATE/DELETE on registrations,

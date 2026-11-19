@@ -1,5 +1,5 @@
 -- =============================================================================
--- Regression test for settle_bank_account_verification (007_payment_functions.sql,
+-- Regression test for settle_bank_account_verification (006_payment_functions.sql,
 -- #519 / payout Phase 4).
 --
 -- The sync register response and the CHIP Send webhook can both settle the same

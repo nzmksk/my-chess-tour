@@ -280,7 +280,7 @@ USING (can_act_for(user_id));
 -- current attempt), so the capability is removed outright.
 --
 -- No application code needs it: every write goes through the SECURITY DEFINER
--- functions in 007_payment_functions.sql (create_registration_with_payment,
+-- functions in 006_payment_functions.sql (create_registration_with_payment,
 -- start_new_payment_attempt, settle_registration_payment,
 -- expire_stale_pending_payments), all service-role only. db/tests/registration_writes.sql checks this.
 REVOKE UPDATE, INSERT, DELETE ON registrations FROM anon, authenticated;
@@ -399,7 +399,7 @@ USING (has_global_permission(app_user_id(), 'platform.manage'));
 --   POST /rest/v1/payouts  {"kind": "automatic", "approval": "approved", ...}
 -- and create an already-approved payout, to any bank account, past every guard
 -- in queue_payout. payout.request is enforced by the API route instead; every
--- write goes through the service-role functions in 007_payment_functions.sql.
+-- write goes through the service-role functions in 006_payment_functions.sql.
 -- db/tests/settle_payout.sql checks this.
 REVOKE UPDATE, INSERT, DELETE ON payouts FROM anon, authenticated;
 
@@ -447,7 +447,7 @@ REVOKE UPDATE, INSERT, DELETE ON sensitive_data_consents FROM anon, authenticate
 -- read their own awards. No client writes on either, for the reason given on
 -- payouts: an INSERT policy can't check the row's columns, so it would let an
 -- org owner create an approved award, or a "paid" contribution, past every
--- guard in 007_payment_functions.sql. Every write goes through those
+-- guard in 006_payment_functions.sql. Every write goes through those
 -- functions via the service role.
 -- =============================================
 CREATE POLICY "Org payout viewers can view prize fundings"

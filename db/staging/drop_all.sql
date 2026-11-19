@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DROP ALL — full teardown of the MY Chess Tour schema
--- Reverses migrations 001–007 so you can re-apply them from scratch.
+-- Reverses migrations 001–006 so you can re-apply them from scratch.
 --
 -- Scope: drops everything this app owns in `public`, the avatars,
 -- oku-documents and organization-documents storage buckets and their policies,
@@ -10,7 +10,7 @@
 -- role grants / extensions stay intact).
 --
 -- DESTRUCTIVE. Intended for local/staging resets only. Run in the Supabase SQL
--- editor or psql, then re-run 001 → 007.
+-- editor or psql, then re-run 001 → 006.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -72,7 +72,7 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP VIEW IF EXISTS public.tournament_payout_summary CASCADE;
 
 -- -----------------------------------------------------------------------------
--- 4. Tables (migrations 001 / 007). CASCADE also removes their RLS policies,
+-- 4. Tables (migrations 001 / 006). CASCADE also removes their RLS policies,
 --    triggers, indexes, and foreign keys.
 -- -----------------------------------------------------------------------------
 DROP TABLE IF EXISTS public.audit_logs              CASCADE;
@@ -101,7 +101,7 @@ DROP TABLE IF EXISTS public.bug_reports             CASCADE;
 DROP TABLE IF EXISTS public.waitlist                CASCADE;
 
 -- -----------------------------------------------------------------------------
--- 5. Functions (migrations 003 / 007). Drops every function in `public`
+-- 5. Functions (migrations 003 / 006). Drops every function in `public`
 --    (all are app-owned), including any that backed the dropped trigger.
 --    This is what removes app_user_id() / can_act_for() / the identity guard
 --    (003) without needing to name them — the guard's own trigger went with
@@ -146,7 +146,7 @@ DROP TYPE IF EXISTS public.invitation_status    CASCADE;
 --
 --    ALL of them, not just the seed accounts (db/staging/seed.sql). public.users is
 --    dropped above, and on_auth_user_created only fires on INSERT, so any
---    account left here comes back from 001 → 007 with no users record linked
+--    account left here comes back from 001 → 006 with no users record linked
 --    to it. Such an account can still sign in but has no profile, and is
 --    invisible to every lookup keyed on public.users — e.g. inviting it to an
 --    organization fails with "already been registered" (#565). A teardown that

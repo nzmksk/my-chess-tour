@@ -6,15 +6,15 @@
 -- prize_awards in 001 (and the bank columns leave player_profiles), their
 -- indexes in 002, triggers (including the prize guard for live checkouts),
 -- audit redaction/anonymisation, set_player_bank_account and the agreement
--- version in 003, RLS in 004, and the money functions in 007. A fresh build
+-- version in 003, RLS in 004, and the money functions in 006. A fresh build
 -- gets all of it. 003 can't simply be re-run on a long-lived database
 -- (it creates triggers), so its part is repeated below, generated from those
--- files, in one transaction. 007 is CREATE OR REPLACE throughout and IS re-run.
+-- files, in one transaction. 006 is CREATE OR REPLACE throughout and IS re-run.
 --
 -- Order:
 --   1. Run this script. It ends in ROLLBACK, so it is a dry run until that line
 --      is changed to COMMIT.
---   2. Re-run db/migrations/007_payment_functions.sql in full: the prize
+--   2. Re-run db/migrations/006_payment_functions.sql in full: the prize
 --      functions, the registration gate (under the tournament lock) inside
 --      create_registration_with_payment and start_new_payment_attempt, and
 --      settle_bank_account_verification's player branch.

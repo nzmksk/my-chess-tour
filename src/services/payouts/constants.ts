@@ -1,6 +1,6 @@
 // The numbers that govern organizer payouts. MIN_PAYOUT_CENTS and
 // EARLY_PAYOUT_MAX_PCT are mirrored as constants inside the SQL functions
-// (007_payment_functions.sql), so the database enforces them even if a route is
+// (006_payment_functions.sql), so the database enforces them even if a route is
 // bypassed. Change them in both places.
 
 /** Days after the tournament's final scheduled session before it is paid out. */

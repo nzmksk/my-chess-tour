@@ -7,7 +7,7 @@
 # Applies, in ONE transaction:
 #   1. every db/deltas/*.sql not yet recorded in migrations.applied, in
 #      filename order, recording each one;
-#   2. the replayable base migrations (007, all CREATE OR REPLACE), whenever
+#   2. the replayable base migrations (006, all CREATE OR REPLACE), whenever
 #      one changed since it was last replayed or a delta was applied.
 #
 # Any error rolls the whole run back, so the database is never left half
@@ -42,7 +42,7 @@ cd "$ROOT"
 PSQL_ROOT="$(pwd -W 2>/dev/null || pwd)"
 
 # Base migrations that are safe to re-run in full on a live database.
-REPLAYABLE=(db/migrations/007_payment_functions.sql)
+REPLAYABLE=(db/migrations/006_payment_functions.sql)
 
 # YYYYMMDDHHMM_slug.sql. A fixed-width timestamp keeps filename order equal to
 # creation order, and two PRs written in parallel don't collide on a number.

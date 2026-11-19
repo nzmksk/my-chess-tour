@@ -2,7 +2,7 @@
 -- DB money-state regression test for the tournament-cancellation refund flow:
 --   * review_tournament_cancellation (003_functions_triggers.sql) queuing a
 --     pending refund per confirmed+paid registration on approve
---   * settle_refund (007_payment_functions.sql) booking the type='refund' ledger
+--   * settle_refund (006_payment_functions.sql) booking the type='refund' ledger
 --     row and stamping the refund (idempotent, "already processed" no-op)
 --   * the uniq_active_refund_per_registration guard (002_indexes.sql)
 --   * tournament_payout_summary reversing a fully-refunded tournament to zero

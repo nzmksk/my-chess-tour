@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DB money-state regression test for the registration/payment functions in
--- db/migrations/007_payment_functions.sql (+ the capacity trigger in 003).
+-- db/migrations/006_payment_functions.sql (+ the capacity trigger in 003).
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. The whole thing runs inside a transaction that
