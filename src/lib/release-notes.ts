@@ -74,6 +74,17 @@ function plainText(text: string): string {
     .trim();
 }
 
+/** Remove HTML comments repeatedly so nested/overlapping markers cannot survive. */
+function stripHtmlComments(text: string): string {
+  let previous: string;
+  let current = text;
+  do {
+    previous = current;
+    current = current.replace(/<!--[\s\S]*?-->/g, "");
+  } while (current !== previous);
+  return current;
+}
+
 function groupFor(heading: string): ChangeKey | null {
   const label = plainText(heading).toLowerCase();
   return (
@@ -100,7 +111,7 @@ export function parseReleaseNotes(
   // The item a wrapped line continues, until a blank line ends it.
   let open: { items: string[]; index: number } | null = null;
 
-  for (const line of text.replace(/<!--[\s\S]*?-->/g, "").split("\n")) {
+  for (const line of stripHtmlComments(text).split("\n")) {
     if (!line.trim()) {
       open = null;
       continue;
