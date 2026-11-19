@@ -83,7 +83,7 @@ bash supabase/tests/run.sh supabase/tests/settle_refund.sql # or some
 npx supabase@2.122.1 db stop --no-backup
 ```
 
-`run.sh` also takes `RACE_CONNINFO`, the connection string the race suites' second session uses from inside the database server. Its default works for `supabase db start` and for a local Postgres whose `postgres` password is `postgres`.
+`run.sh` also takes `RACE_CONNINFO`, the connection string the race suites' second session (dblink) uses from inside the database server. dblink only accepts a connection whose password was actually checked, and Supabase's image trusts `127.0.0.1`, so the default goes through the container's name, `supabase_db_my-chess-tour`. Against a local Postgres, set it to `host=localhost dbname=<db> user=postgres password=...`.
 
 ## Production
 

@@ -16,14 +16,18 @@
 #   DB_URL         where psql connects. Defaults to the database
 #                  `supabase db start` runs.
 #   RACE_CONNINFO  how the *_race.sql suites' second session (dblink) reaches
-#                  the same database, as seen from the database server. The
-#                  default suits both `supabase db start` (port 5432 inside its
-#                  container) and a local Postgres with password `postgres`.
+#                  the same database, as seen from the database server. dblink
+#                  only lets a non-superuser connect if the password is
+#                  actually checked, and the Supabase image trusts 127.0.0.1
+#                  without one, so the default goes through the container's
+#                  own name on its Docker network instead. For a local
+#                  Postgres that checks passwords on localhost, use
+#                  'host=localhost dbname=<db> user=postgres password=...'.
 
 set -uo pipefail
 
 DB_URL=${DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}
-RACE_CONNINFO=${RACE_CONNINFO:-host=127.0.0.1 port=5432 dbname=postgres user=postgres password=postgres}
+RACE_CONNINFO=${RACE_CONNINFO:-host=supabase_db_my-chess-tour port=5432 dbname=postgres user=postgres password=postgres}
 
 if [ "$#" -gt 0 ]; then
   suites=("$@")
