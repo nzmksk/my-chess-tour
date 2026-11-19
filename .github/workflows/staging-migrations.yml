@@ -1,42 +1,52 @@
 name: Staging database migrations
 
-# Applies db/deltas/*.sql and replays 006 against the staging database (#631).
-# A PR to staging gets a dry run against the real staging data (everything
-# rolled back); the merge applies it. See wiki/database-migrations.md.
+# Applies new files in db/migrations to the staging database with the
+# Supabase CLI (#631). A PR to staging gets its new migrations run against
+# staging and rolled back; the merge applies them. See
+# wiki/database-migrations.md.
 on:
   push:
     branches: ["staging"]
     paths:
-      - "db/**"
+      - "db/migrations/**"
       - ".github/workflows/staging-migrations.yml"
   pull_request:
     branches: ["staging"]
     paths:
-      - "db/**"
+      - "db/migrations/**"
       - ".github/workflows/staging-migrations.yml"
+  # Only available once this file is on the default branch.
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: "Dry run: apply, then roll back"
-        type: boolean
-        default: true
+      mode:
+        description: "dry-run lists pending migrations; apply pushes them"
+        type: choice
+        options: ["dry-run", "apply"]
+        default: "dry-run"
 
 permissions:
   contents: read
 
+env:
+  SUPABASE_CLI_VERSION: "2.122.1"
+  # 001-006 predate the CLI: staging got them by hand. The first apply
+  # records them as applied without running them. Never add to this list.
+  BASELINE_VERSIONS: "001 002 003 004 005 006"
+
 jobs:
-  apply:
+  migrate:
     name: Migrate staging
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    # Never cancel an apply halfway through. A newer push queued behind it
-    # replaces an older queued one, which is fine: the runner works from what
-    # the database has recorded, not from the diff.
+    # Never cancel a migration halfway through. A newer push queued behind it
+    # replaces an older queued one, which is fine: the CLI pushes whatever the
+    # database's history says is missing, not a diff.
     concurrency:
       group: staging-database-apply
       cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      MODE: ${{ github.event_name == 'push' && 'apply' || inputs.mode }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -48,21 +58,49 @@ jobs:
             exit 1
           fi
 
+      - name: Set up the Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
       - name: Migrate
         run: |
-          psql --version
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            db/migrate.sh --dry-run
-          else
-            db/migrate.sh
+          # The CLI only reads <workdir>/supabase/migrations; ours live in
+          # db/migrations.
+          WORKDIR="$RUNNER_TEMP/supabase-workdir"
+          mkdir -p "$WORKDIR/supabase/migrations"
+          cp db/migrations/*.sql "$WORKDIR/supabase/migrations/"
+          sb() { supabase "$@" --workdir "$WORKDIR" --db-url "$DATABASE_URL"; }
+
+          state="$(psql "$DATABASE_URL" -XAt -c "SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL, to_regclass('public.tournaments') IS NOT NULL")"
+          history="${state%%|*}"
+          schema="${state##*|}"
+
+          # Schema but no history: staging as it was before #631. Without a
+          # baseline the CLI would try to re-run 001 on top of it.
+          if [ "$schema" = "t" ] && [ "$history" != "t" ]; then
+            if [ "$MODE" = "apply" ]; then
+              echo "::notice::First run: recording $BASELINE_VERSIONS as applied (staging got them by hand before #631)."
+              sb migration repair --status applied $BASELINE_VERSIONS
+            else
+              echo "Staging has no migration history yet. The first apply records $BASELINE_VERSIONS as applied, then pushes:"
+              ls db/migrations | grep -vE "^($(echo $BASELINE_VERSIONS | tr ' ' '|'))_" || echo "  (nothing)"
+              exit 0
+            fi
           fi
 
-  dry-run:
-    name: Dry run against staging
+          if [ "$MODE" = "apply" ]; then
+            sb db push --include-all --yes
+          else
+            sb db push --include-all --dry-run
+          fi
+
+  check:
+    name: Check against staging
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     concurrency:
-      group: staging-database-dry-run-${{ github.event.pull_request.number }}
+      group: staging-database-check-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     env:
       # Empty for PRs from forks and Dependabot, which get no secrets.
@@ -74,20 +112,94 @@ jobs:
           # The PR's merge commit and its first parent, the base branch tip.
           fetch-depth: 2
 
-      - name: Base migration changed without a delta?
+      - name: Lint the migrations this PR adds or changes
         run: |
-          changed="$(git diff --name-only --diff-filter=AMR HEAD^1 HEAD)"
-          base="$(echo "$changed" | grep -E '^db/migrations/00[1-6]_' || true)"
-          deltas="$(echo "$changed" | grep -E '^db/deltas/.*\.sql$' || true)"
-          if [ -n "$base" ] && [ -z "$deltas" ]; then
-            echo "::warning::This PR changes $(echo $base | tr '\n' ' ')but adds no db/deltas file. Staging won't get the change unless it is comments only."
-          fi
+          fail=0
+          : > "$RUNNER_TEMP/touched"
+          while IFS=$'\t' read -r status old new; do
+            case "$status" in
+              A*) added="$old" ;;
+              R*) added="$new"; echo "$old" >> "$RUNNER_TEMP/touched" ;;
+              *)  added=""; echo "$old" >> "$RUNNER_TEMP/touched" ;;
+            esac
+            [ -n "$added" ] || continue
+            name="$(basename "$added")"
+            version="${name%%_*}"
+            if ! echo " $BASELINE_VERSIONS " | grep -q " $version " &&
+               ! echo "$name" | grep -qE '^[0-9]{14}_[a-z0-9_]+\.sql$'; then
+              echo "::error file=$added::Name new migrations YYYYMMDDHHMMSS_description.sql (UTC, lowercase)."
+              fail=1
+            fi
+            # The CLI runs each file in its own transaction. A file that ends
+            # it early is no longer all-or-nothing, and would commit during
+            # the rolled-back check below.
+            if grep -qiE '^[[:space:]]*(BEGIN|COMMIT|ROLLBACK|START[[:space:]]+TRANSACTION|ABORT)[[:space:]]*;' "$added"; then
+              echo "::error file=$added::Remove BEGIN/COMMIT/ROLLBACK: the CLI wraps every migration in its own transaction."
+              fail=1
+            fi
+            # psql meta-commands work in the check below but not in the CLI.
+            if grep -qE '^[[:space:]]*[\]' "$added"; then
+              echo "::error file=$added::Remove psql meta-commands (lines starting with a backslash): the Supabase CLI can't run them."
+              fail=1
+            fi
+          done < <(git diff --name-status -M HEAD^1 HEAD -- db/migrations)
+          exit $fail
 
-      - name: Dry run
+      - name: Set up the Supabase CLI
+        if: env.DATABASE_URL != ''
+        uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Run the pending migrations against staging, then roll back
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "::notice::No STAGING_DATABASE_URL secret for this PR; skipping the dry run."
+            echo "::notice::No STAGING_DATABASE_URL secret for this PR; skipping the checks against staging."
             exit 0
           fi
-          psql --version
-          db/migrate.sh --dry-run
+
+          has_history="$(psql "$DATABASE_URL" -XAt -c "SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL")"
+          if [ "$has_history" = "t" ]; then
+            # An applied migration never runs again: editing it changes
+            # nothing on staging, and a fresh build would no longer match.
+            versions="$(sed -E 's|.*/([0-9]+)_.*|\1|' "$RUNNER_TEMP/touched" | grep -E '^[0-9]+$' | tr '\n' ' ' || true)"
+            if [ -n "$versions" ]; then
+              applied="$(psql "$DATABASE_URL" -XAt -c "SELECT string_agg(version, ' ' ORDER BY version) FROM supabase_migrations.schema_migrations WHERE version = ANY (string_to_array(trim('$versions'), ' '))")"
+              if [ -n "$applied" ]; then
+                echo "::error::This PR edits, renames or deletes migrations staging has already applied ($applied). Add a new migration instead."
+                exit 1
+              fi
+            fi
+
+            WORKDIR="$RUNNER_TEMP/supabase-workdir"
+            mkdir -p "$WORKDIR/supabase/migrations"
+            cp db/migrations/*.sql "$WORKDIR/supabase/migrations/"
+            plan="$(supabase db push --dry-run --include-all --output-format json --workdir "$WORKDIR" --db-url "$DATABASE_URL")"
+            pending="$(jq -r '.migrations[]?' <<<"$plan")"
+          else
+            # Not baselined yet: the first apply will record 001-006 as
+            # applied and push everything after them.
+            pending="$(ls db/migrations | grep -vE "^($(echo $BASELINE_VERSIONS | tr ' ' '|'))_" || true)"
+          fi
+
+          if [ -z "$pending" ]; then
+            echo "Nothing pending: staging already has every migration in this PR."
+            exit 0
+          fi
+
+          # The CLI's own dry run only lists what it would push. Run those
+          # files for real, in one transaction that is rolled back, so a
+          # migration that doesn't apply to what staging holds fails here
+          # instead of after the merge.
+          {
+            echo "BEGIN;"
+            echo "SET LOCAL lock_timeout = '10s';"
+            for f in $pending; do
+              echo "\\echo '==> $f'"
+              echo "\\i '$GITHUB_WORKSPACE/db/migrations/$f'"
+            done
+            echo "ROLLBACK;"
+          } > "$RUNNER_TEMP/check.sql"
+          psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -f "$RUNNER_TEMP/check.sql"
+          echo "Pending migrations apply cleanly to staging (rolled back):"
+          echo "$pending" | sed 's/^/  /'
