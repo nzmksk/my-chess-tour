@@ -186,9 +186,11 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             You can withdraw either separate consent at any time in Settings.
             Withdrawing consent for your health data deletes your OKU card and
             removes your OKU verification. Removing your bank details withdraws
-            consent for your financial data. Records of prizes already paid are
-            kept as described under Data Retention. Date of birth and gender are
-            used as described above once you add them to your profile.
+            consent for your financial data and deletes them, except that for an
+            account a prize was sent to we keep the bank, account holder name
+            and last 4 digits of the account number as part of the payment
+            record, as described under Data Retention. Date of birth and gender
+            are used as described above once you add them to your profile.
           </p>
 
           <h3 className="modal-section-title">3. How We Use Your Data</h3>

@@ -168,7 +168,7 @@ export const SENSITIVE_DATA_CONSENT_HISTORY: Readonly<
     {
       version: "2026-11-19",
       statement:
-        "I consent to MY Chess Tour storing my bank name, account holder name and account number to pay me prizes, and sharing them with CHIP, its payment processor, to verify the account and make the transfer. Organisers never see them. I can withdraw this consent at any time by removing my bank details. Records of prizes already paid are kept for 7 years, as the law requires.",
+        "I consent to MY Chess Tour storing my bank name, account holder name and account number to pay me prizes, and sharing them with CHIP, its payment processor, to verify the account and make the transfer. Organisers never see them. I can withdraw this consent at any time by removing my bank details, which deletes them. For an account a prize was sent to, only the bank, account holder name and last 4 digits are kept, for 7 years, as the law requires.",
     },
   ],
 };

@@ -181,10 +181,11 @@ export default function BankingCard({
           {confirmingRemove ? (
             <div className="flex flex-col gap-3">
               <p className="font-lato text-text-secondary text-sm">
-                This removes your bank details and withdraws your consent to us
+                This deletes your bank details and withdraws your consent to us
                 storing them. Prizes paid through MY Chess Tour can&apos;t be
-                sent to you until you add them again. Records of prizes already
-                paid are kept for 7 years, as the law requires.
+                sent to you until you add them again. For an account a prize
+                was sent to, only the bank, account holder name and last 4
+                digits are kept, for 7 years, as the law requires.
               </p>
               {removeError && (
                 <p className="font-lato text-sm text-red-400">{removeError}</p>

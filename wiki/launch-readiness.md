@@ -177,7 +177,7 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 
 ### P7. Banking details — ✅ Built (#523)
 - **Entry:** `/settings` → `BankingCard` → `PATCH /api/v1/profile/banking`. The bank is chosen from the SWIFT list, and the account number is 5–20 digits, **never returned** (last 4 only). Stored in `player_bank_accounts`: superseded on change, so a change is verified again.
-- **Consent (#451):** bank details are held only with the player's financial-data consent: a checkbox on every save, recorded through `POST /api/v1/profile/consents` before the PATCH. `set_player_bank_account` refuses a save without it (`409 CONSENT_REQUIRED`). **Remove bank details** on the card clears them, which records the withdrawal in the same transaction.
+- **Consent (#451):** bank details are held only with the player's financial-data consent: a checkbox on every save, recorded through `POST /api/v1/profile/consents` before the PATCH. `set_player_bank_account` refuses a save without it (`409 CONSENT_REQUIRED`). **Remove bank details** on the card erases them (rows no prize award names are deleted; a row an award names keeps only bank, holder and last 4) and records the withdrawal in the same transaction.
 - **Use:** the destination for platform-distributed prizes (P14). Registered with CHIP Send the first time an approved prize needs it, never on save. The card shows the verification state, and a winner without a usable account is emailed to add or fix it.
 - **Gaps:** 🟡 not used for refunds (those go back through CHIP Collect to the original payment method).
 
