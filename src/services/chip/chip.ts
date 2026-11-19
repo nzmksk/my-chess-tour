@@ -9,7 +9,7 @@ const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 // us. A single window governs everything: the CHIP purchase `due` paired with
 // `purchase.due_strict` (which is what actually makes the link unpayable — `due`
 // on its own only marks it `overdue` and CHIP keeps accepting payment), the
-// reservation seat hold (db/migrations/003_functions_triggers.sql), "is this
+// reservation seat hold (supabase/migrations/003_functions_triggers.sql), "is this
 // pending attempt still live" on resume, and the threshold past which an
 // abandoned registration is terminalized. A payment made just before `due` whose
 // webhook lands late can still rescue a just-expired registration in

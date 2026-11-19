@@ -351,7 +351,7 @@ Refund records linked to a payment. Initiated by organizer or admin.
 > (not `payment_id`), the reviewer columns are `reviewed_by`/`reviewed_at` (not `approved_by`),
 > and `refund_status` is `pending | approved | rejected` (there is no `processed` — settlement is
 > recorded by `processed_at` plus a `type='refund'` row in `payments`). Authoritative:
-> `db/migrations/001_tables.sql` and [refund-flow.md](./refund-flow.md). In practice the only
+> `supabase/migrations/001_tables.sql` and [refund-flow.md](./refund-flow.md). In practice the only
 > initiator today is a platform admin approving a tournament cancellation; organizer-initiated
 > refunds are #510.
 

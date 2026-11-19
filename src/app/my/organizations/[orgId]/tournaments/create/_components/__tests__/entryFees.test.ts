@@ -85,7 +85,7 @@ describe("toPersistedEntryFees", () => {
 
 describe("fromPersistedEntryFees", () => {
   it("restores the criteria of a canonically stored tournament (#478)", () => {
-    // The shape written by db/migrations/006_seed.sql: `age_min`/`age_max` and
+    // The shape written by supabase/staging/seed.sql: `age_min`/`age_max` and
     // a full timestamp for `valid_until`.
     const stored: StoredEntryFees = {
       standard: { amount_cents: 5000 },

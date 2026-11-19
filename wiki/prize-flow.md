@@ -65,7 +65,7 @@ Taking distribution away from the platform is refused once any sponsor has paid 
 Once listed, a tournament can still have its prizes **raised** until the first paid registration freezes them. That reopens the gap. The reconcile asks the funders for the top-up, and registration is paused until it is paid. Three places enforce this:
 
 - the checkout route asks `prize_pool_blocks_registration` first and answers `422 PRIZE_POOL_NOT_FUNDED`;
-- `create_registration_with_payment` and `start_new_payment_attempt` refuse the same way, as the backstop. They check under the tournament row lock, so a checkout and a prize edit happening together always see each other (`db/tests/prize_pool_checkout_race.sql`);
+- `create_registration_with_payment` and `start_new_payment_attempt` refuse the same way, as the backstop. They check under the tournament row lock, so a checkout and a prize edit happening together always see each other (`supabase/tests/prize_pool_checkout_race.sql`);
 - the public page reads the gate live (outside the tournament cache) and shows "Opens Once Prizes Are Funded".
 
 **A player already paying is protected too.** The gate runs when a checkout starts, but `settle_registration_payment` doesn't run it again, since it can't refuse money already taken. Without a further rule, a player holding a live CHIP link could pay after the prizes were raised and be confirmed against a pool that no longer covers them. So while any checkout hold is live (the 10-minute window, after which CHIP's `due_strict` makes the link unpayable), `guard_tournament_prizes_in_checkout` (003) refuses a prize change that would leave the pool short. The edit route answers `409` and asks the organizer to try again in 10 minutes. A change the money already paid in still covers is allowed, and organizer-paid tournaments are never held.
@@ -79,7 +79,7 @@ One case is left uncovered. A payment made just before its link lapsed may have 
    ```
    amount <= available_prize_pool_cents(tournament, this award)
    ```
-   Every approval takes the same lock and reads the reservations committed before it, so concurrent approvals can't together exceed the collected pool (`db/tests/prize_award_review_race.sql` runs two at once). Approving reserves the money and emails the winner (`prize-awarded`): the account it will go to, or a request to add or fix their bank details.
+   Every approval takes the same lock and reads the reservations committed before it, so concurrent approvals can't together exceed the collected pool (`supabase/tests/prize_award_review_race.sql` runs two at once). Approving reserves the money and emails the winner (`prize-awarded`): the account it will go to, or a request to add or fix their bank details.
 3. **Send.** `executePrizeAward` (`src/services/prizes/execute.ts`) is the `executePayout` twin. It has the same outcomes (`sent`, `paid`, `failed`, `awaiting_budget`, `blocked`, `skipped`, `error`), the same claim discipline (`claim_prize_award_send` re-checks the tournament and the pool under the lock and snapshots the winner's verified account), the same retry rules (`src/services/payouts/send-errors.ts`) and the same budget parking. `reference` is the award id.
 4. **Settle.** `settle_prize_award` books one `type='player_prize'` row (`user_id` = the winner, `chip_transaction_id` = `send_<instruction id>`), from the synchronous response or the Send webhook, whichever comes first. The winner gets `prize-paid` with CHIP's receipt. An over-settled award is booked anyway and logged at error level, as for payouts.
 
@@ -144,4 +144,3 @@ Best-effort and after the response, following the `Promise.allSettled` disciplin
 - A tournament still waiting for funding when its registration deadline passes is listed once funded, but with registration already closed. The organizer should move the deadline or cancel.
 - An organizer can't withdraw an award awaiting review; an admin rejects it with a reason instead.
 - The winner must have a login: an award goes to a confirmed registrant's own `player_bank_accounts`. Guardians and managed players (#504) will widen `can_act_for`, not this flow.
-- Rolling out to an existing database: `db/maintenance/apply_prize_pool.sql`, then re-run 007. It adds the `pending_funding` status, and drops the old free-text player bank columns, so players re-enter their details.

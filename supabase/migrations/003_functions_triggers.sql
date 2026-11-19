@@ -1,0 +1,2267 @@
+-- =============================================
+-- UPDATED_AT TRIGGER
+-- =============================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'update_updated_at_column failed on %: % (SQLSTATE: %)', TG_TABLE_NAME, SQLERRM, SQLSTATE
+      USING ERRCODE = 'P0001';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_profiles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON organizations
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON organization_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON tournament_cancellation_requests
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON payouts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON player_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_fundings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_funder_contacts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_awards
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================
+-- AUTH SIGNUP TRIGGER
+-- Creates user + player_profile on auth signup.
+-- SECURITY DEFINER to bypass RLS.
+-- =============================================
+-- Self-signup keeps users.id = auth.users.id so no existing id changes meaning;
+-- auth_user_id is written explicitly and is what every lookup goes through.
+-- The two being equal here is an implementation detail of self-signup, NOT an
+-- invariant — a record created for someone without a login (see #504) will have
+-- a generated id and a NULL auth_user_id until it is claimed.
+-- terms_version comes through raw_user_meta_data the same way the names do, but
+-- the signup route puts it there from a server constant (src/lib/reference/legal.ts), not
+-- from the request body. Writing it here rather than in a follow-up UPDATE keeps
+-- the acceptance in the same statement that creates the account, so there is no
+-- window in which a user exists with no record of what they agreed to.
+-- The timestamp is derived, never taken from metadata, and stays NULL when no
+-- version was supplied so chk_terms_shape holds for rows created outside signup.
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_terms_version varchar(20) := NULLIF(NEW.raw_user_meta_data->>'terms_version', '');
+BEGIN
+  INSERT INTO public.users (
+    id, auth_user_id, email, first_name, last_name,
+    terms_version, terms_accepted_at
+  )
+  VALUES (
+    NEW.id,
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
+    v_terms_version,
+    CASE WHEN v_terms_version IS NULL THEN NULL ELSE now() END
+  );
+
+  INSERT INTO public.player_profiles (user_id)
+  VALUES (NEW.id);
+
+  RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'handle_new_user failed: % (SQLSTATE: %)', SQLERRM, SQLSTATE
+      USING ERRCODE = 'P0001';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- =============================================
+-- IDENTITY RESOLUTION
+-- The single bridge between Supabase Auth and public.users. Every RLS policy
+-- and every helper below takes a public.users.id — auth.uid() must not be
+-- passed to any of them directly.
+-- =============================================
+
+-- Resolve the caller's public.users.id from their auth session.
+-- STABLE so Postgres evaluates it once per statement rather than once per row;
+-- that is what keeps the added lookup off the hot path in policies that scan
+-- registrations/payments.
+-- Returns NULL when unauthenticated or when no users row is linked yet, which
+-- makes every "= app_user_id()" comparison fail closed.
+CREATE OR REPLACE FUNCTION app_user_id()
+RETURNS uuid AS $$
+  SELECT id FROM public.users WHERE auth_user_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- Can the caller act on behalf of p_user_id?
+--
+-- Today this is exactly the self check, so it is a pure rename of
+-- "app_user_id() = user_id" with no behaviour change. It exists as a seam: when
+-- guardianships arrive (#504) this function body grows an OR and every policy
+-- using it widens at once, instead of another sweep across every policy.
+--
+-- DO NOT use this for organization_memberships, user_global_roles, or any
+-- admin-scoped policy. Those are deliberately self-only and must NOT widen when
+-- this body changes — see the comments at each of those policies in 004_rls.sql.
+CREATE OR REPLACE FUNCTION can_act_for(p_user_id uuid)
+RETURNS boolean AS $$
+  SELECT p_user_id = app_user_id();
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- =============================================
+-- IDENTITY COLUMN GUARD
+--
+-- auth_user_id is the only bridge between Supabase Auth and this schema, and id
+-- is the value every other table's FK points at. Neither may be rewritten by an
+-- end-user session: nulling auth_user_id orphans the record (app_user_id() then
+-- resolves to NULL forever), and repointing it is an account-takeover primitive
+-- the moment managed records exist (#504/#505).
+--
+-- 004_rls.sql already revokes client UPDATE on users, so this is defence in
+-- depth — it holds even if a policy or grant is re-added carelessly later. RLS
+-- and grants are the door; this is the lock on the specific thing that matters.
+--
+-- auth.uid() IS NOT NULL means a user JWT is driving the statement. The
+-- service-role client and SECURITY DEFINER functions (handle_new_user, and the
+-- future claim flow) have no `sub`, so legitimate server-side writes pass.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_users_identity_columns()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.id IS DISTINCT FROM OLD.id AND auth.uid() IS NOT NULL THEN
+    RAISE EXCEPTION 'users.id is immutable'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF NEW.auth_user_id IS DISTINCT FROM OLD.auth_user_id AND auth.uid() IS NOT NULL THEN
+    RAISE EXCEPTION 'users.auth_user_id cannot be changed by a client session'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER guard_identity_columns
+  BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION guard_users_identity_columns();
+
+-- =============================================
+-- RBAC HELPER FUNCTIONS
+-- All SECURITY DEFINER to bypass RLS when called from policies.
+-- All take a public.users.id — pass app_user_id(), never auth.uid().
+-- =============================================
+
+-- Check if user has a global-scope permission (e.g. platform admin)
+CREATE OR REPLACE FUNCTION has_global_permission(p_user_id uuid, p_permission varchar(50))
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM user_global_roles ugr
+    JOIN role_permissions rp ON rp.role_id = ugr.role_id
+    JOIN permissions p ON p.id = rp.permission_id
+    WHERE ugr.user_id = p_user_id
+      AND p.key = p_permission
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- Who to alert when something needs a platform admin (an early payout to review,
+-- a payout parked on CHIP Send budget): every live account holding the given
+-- global permission. Server-only, see the privileges block at the end.
+CREATE OR REPLACE FUNCTION list_global_permission_holders(p_permission varchar(50))
+RETURNS TABLE (user_id uuid, email varchar(255), first_name varchar(255)) AS $$
+  SELECT DISTINCT u.id, u.email, u.first_name
+  FROM user_global_roles ugr
+  JOIN role_permissions rp ON rp.role_id = ugr.role_id
+  JOIN permissions p ON p.id = rp.permission_id
+  JOIN users u ON u.id = ugr.user_id
+  WHERE p.key = p_permission
+    AND u.deleted_at IS NULL;
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- Check if user has permission within a specific organization
+CREATE OR REPLACE FUNCTION has_org_permission(p_user_id uuid, p_org_id uuid, p_permission text)
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM organization_memberships om
+    JOIN role_permissions rp ON rp.role_id = om.role_id
+    JOIN permissions p ON p.id = rp.permission_id
+    WHERE om.user_id = p_user_id
+      AND om.organization_id = p_org_id
+      AND p.key = p_permission
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- Check if user is a member of an organization (any role).
+-- Used for RLS on organization_memberships to avoid infinite recursion.
+CREATE OR REPLACE FUNCTION is_org_member(p_user_id uuid, p_org_id uuid)
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM organization_memberships
+    WHERE user_id = p_user_id AND organization_id = p_org_id
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- Check if an organization is approved (and not soft-deleted). Used by the
+-- tournament INSERT policy so the database enforces approval, not just the API.
+CREATE OR REPLACE FUNCTION is_org_approved(p_org_id uuid)
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM organizations
+    WHERE id = p_org_id
+      AND approval_status = 'approved'
+      AND deleted_at IS NULL
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+
+-- =============================================
+-- AUDIT SNAPSHOT REDACTION
+-- audit_logs stores full row snapshots, so any sensitive column is copied
+-- verbatim into a table that outlives the row it came from. This masks the
+-- listed keys down to a last-4 suffix, keeping the snapshot useful for
+-- "did this value change?" without retaining the secret itself.
+-- Keys absent from the row are ignored; NULL values stay NULL so the audit
+-- trail still distinguishes "cleared" from "set to something".
+--
+-- Idempotent: a value already in masked form ('****' plus at most 4 characters)
+-- is left alone, so re-applying it to rows that are already redacted changes
+-- nothing. Without that, a short value would gain stars on every pass
+-- ('****ab' -> '******ab').
+-- The shape test cannot be used to smuggle a raw value past redaction: anything
+-- that passes it already shows no more than the 4 characters masking would keep.
+-- =============================================
+CREATE OR REPLACE FUNCTION redact_jsonb_columns(p_data jsonb, p_cols text[])
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_data IS NULL THEN NULL
+    ELSE (
+      SELECT jsonb_object_agg(
+        e.key,
+        CASE
+          WHEN e.key = ANY(p_cols) AND jsonb_typeof(e.value) = 'string'
+               AND (e.value #>> '{}') !~ '^\*{4}.{0,4}$'
+            THEN to_jsonb('****' || right(e.value #>> '{}', 4))
+          ELSE e.value
+        END
+      )
+      FROM jsonb_each(p_data) AS e(key, value)
+    )
+  END;
+$$;
+
+-- Filenames and storage paths need their own rule. Keeping the last 4
+-- characters is only "just the extension" when the name ends in one: an upload
+-- called "MyKad 880101-14-5678" would keep the last four IC digits, and
+-- everything after the users/<id>/ prefix of a path is chosen by the client.
+-- So the only thing that survives is an extension the buckets actually accept
+-- (png/jpg/jpeg/webp/pdf, the allowed_mime_types in 005), lower-cased;
+-- anything else masks to a bare '****'.
+-- Idempotent by construction: the output depends only on that extension, and
+-- the masked value still carries it.
+CREATE OR REPLACE FUNCTION redact_jsonb_filenames(p_data jsonb, p_cols text[])
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_data IS NULL THEN NULL
+    ELSE (
+      SELECT jsonb_object_agg(
+        e.key,
+        CASE
+          WHEN e.key = ANY(p_cols) AND jsonb_typeof(e.value) = 'string'
+            THEN to_jsonb('****' || COALESCE(
+              '.' || substring(lower(e.value #>> '{}') FROM '\.(png|jpe?g|webp|pdf)$'),
+              ''))
+          ELSE e.value
+        END
+      )
+      FROM jsonb_each(p_data) AS e(key, value)
+    )
+  END;
+$$;
+
+-- What gets redacted in each audited table's snapshot: the one place that
+-- decides it, called by audit_trigger_func on the way in. Tables not listed come
+-- back unchanged. Any new sensitive column belongs here in the same PR that
+-- adds the column.
+--   player_profiles.bank_account_number (a column since moved to
+--     player_bank_accounts, kept for rows written before), organization_bank_accounts.
+--     account_number, player_bank_accounts.account_number: masked to the last 4 digits.
+--   player_profiles.oku_document_path, organization_documents.storage_path:
+--     capability-bearing; anyone holding one can be issued a signed URL to a
+--     private-bucket document. Filename rule: only the extension survives.
+--   organization_documents.original_filename: whatever the uploader called the
+--     file, which for an identity document is often the IC number or full name
+--     ("MyKad_880101-14-5678.pdf"). Filename rule.
+CREATE OR REPLACE FUNCTION redact_audit_snapshot(p_table_name text, p_data jsonb)
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE p_table_name
+    WHEN 'player_profiles' THEN
+      redact_jsonb_filenames(
+        redact_jsonb_columns(p_data, ARRAY['bank_account_number']),
+        ARRAY['oku_document_path'])
+    WHEN 'organization_bank_accounts' THEN
+      redact_jsonb_columns(p_data, ARRAY['account_number'])
+    WHEN 'player_bank_accounts' THEN
+      redact_jsonb_columns(p_data, ARRAY['account_number'])
+    WHEN 'organization_documents' THEN
+      redact_jsonb_filenames(p_data, ARRAY['storage_path', 'original_filename'])
+    ELSE p_data
+  END;
+$$;
+
+-- =============================================
+-- AUDIT TRAIL TRIGGER
+-- Generic trigger for all audited tables.
+-- TG_ARGV[0]: column name for record_id (defaults to 'id')
+-- Resolves organization_id from source table for RLS scoping.
+-- Reads app.audit_context session var for context tagging.
+-- Sensitive columns are redacted per-table before the snapshot is written.
+-- =============================================
+CREATE OR REPLACE FUNCTION audit_trigger_func()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_record_id  text;
+  v_org_id     uuid;
+  v_old        jsonb;
+  v_new        jsonb;
+  v_changed_by uuid;
+  v_pk_col     text := COALESCE(TG_ARGV[0], 'id');
+BEGIN
+  -- Build row snapshots
+  IF TG_OP IN ('UPDATE', 'DELETE') THEN
+    v_old := row_to_json(OLD)::jsonb;
+  END IF;
+  IF TG_OP IN ('INSERT', 'UPDATE') THEN
+    v_new := row_to_json(NEW)::jsonb;
+  END IF;
+
+  -- Extract record_id from the appropriate column
+  v_record_id := COALESCE(v_new, v_old) ->> v_pk_col;
+
+  -- Redact sensitive columns before the snapshot is persisted. Done after
+  -- record_id extraction so a redacted column can never be the PK. Without this
+  -- every bank-account write is copied verbatim into audit_logs, which is
+  -- retained far longer than the row itself.
+  -- What to redact per table lives in redact_audit_snapshot. Unlisted tables
+  -- pass through untouched.
+  v_old := redact_audit_snapshot(TG_TABLE_NAME, v_old);
+  v_new := redact_audit_snapshot(TG_TABLE_NAME, v_new);
+
+  -- Resolve organization_id based on source table
+  IF TG_TABLE_NAME = 'organizations' THEN
+    v_org_id := v_record_id::uuid;
+  ELSIF TG_TABLE_NAME IN (
+    'organization_memberships', 'tournaments', 'payments', 'payouts',
+    'organization_bank_accounts', 'organization_documents', 'prize_awards'
+  ) THEN
+    v_org_id := (COALESCE(v_new, v_old) ->> 'organization_id')::uuid;
+  ELSIF TG_TABLE_NAME IN ('registrations', 'prize_fundings') THEN
+    SELECT t.organization_id INTO v_org_id
+    FROM tournaments t
+    WHERE t.id = (COALESCE(v_new, v_old) ->> 'tournament_id')::uuid;
+  ELSIF TG_TABLE_NAME = 'refunds' THEN
+    SELECT t.organization_id INTO v_org_id
+    FROM registrations r JOIN tournaments t ON t.id = r.tournament_id
+    WHERE r.id = (COALESCE(v_new, v_old) ->> 'registration_id')::uuid;
+  END IF;
+  -- users, player_profiles, player_bank_accounts, user_global_roles → v_org_id stays NULL
+
+  -- changed_by is a FK to users(id), but the JWT carries the AUTH id, so it has
+  -- to be resolved through users.auth_user_id. Reading the claim directly would
+  -- write an id that only coincidentally resolves while self-signup keeps the
+  -- two equal, and would violate the FK the moment they diverge.
+  -- Not app_user_id(): this trigger also fires under the service role and from
+  -- SECURITY DEFINER functions, where auth.uid() is NULL — reading the claim
+  -- keeps attribution working in those paths, and NULL means "no user acted".
+  SELECT u.id INTO v_changed_by
+  FROM public.users u
+  WHERE u.auth_user_id =
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
+
+  INSERT INTO public.audit_logs (table_name, record_id, action, changed_by, organization_id, context, old_data, new_data)
+  VALUES (
+    TG_TABLE_NAME,
+    v_record_id,
+    TG_OP,
+    v_changed_by,
+    v_org_id,
+    COALESCE(NULLIF(current_setting('app.audit_context', true), ''), 'trigger'),
+    v_old,
+    v_new
+  );
+
+  RETURN COALESCE(NEW, OLD);
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'audit_trigger_func failed on % (%): % (SQLSTATE: %)', TG_TABLE_NAME, TG_OP, SQLERRM, SQLSTATE
+      USING ERRCODE = 'P0001';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Strictly required: personal data, financial, access control
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON users
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON player_profiles
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organizations
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_memberships
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_documents
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON user_global_roles
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func('user_id');
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON payments
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON refunds
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON payouts
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON player_bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON prize_fundings
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON prize_awards
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+-- Good practice: status transitions
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON registrations
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancellation_requests
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+-- =============================================
+-- ACCOUNT DELETION: AUDIT-LOG ANONYMISATION (#503)
+--
+-- Deleting or anonymising a users / player_profiles row does not reach
+-- audit_logs: every write to those tables left a full snapshot behind (email,
+-- name, DOB, gender, nationality, FIDE/MCF ids, bank holder, OKU status and the
+-- admin's free-text rejection reason). /privacy promises personal data is gone
+-- within 30 days of a deletion request, so the deletion runbook
+-- (wiki/account-deletion.md) ends by calling this.
+--
+-- What it does, for one user:
+--   1. In that user's own users / player_profiles / player_bank_accounts audit
+--      rows, every snapshot key
+--      except an allowlist of ids, flags and timestamps becomes '[anonymised]'.
+--      The rows stay, so the history of WHEN the account changed survives.
+--      An allowlist rather than a list of PII columns: a column added later is
+--      anonymised by default instead of leaking until someone remembers it.
+--   2. Rows the user authored (changed_by) keep everything except the
+--      reference, which is set to NULL. The FK is ON DELETE SET NULL, so a
+--      hard delete of the users row does this by itself; this covers a soft
+--      delete, where the row survives.
+--
+-- What it deliberately leaves alone: payments, refunds, payouts, prize awards,
+-- prize fundings and registrations audit rows, including their changed_by. They are financial
+-- records under the 7-year obligation, which overrides the deletion request.
+-- Their snapshots hold ids and amounts, not profile data, and once the account
+-- is deleted a changed_by there resolves to nothing personal.
+--
+-- Run it LAST, in the same transaction as the delete/anonymise. Any later write
+-- to the user's rows writes a fresh snapshot, and the delete itself writes one
+-- carrying the full pre-delete row. It refuses an account that still has
+-- deleted_at NULL, so it cannot strip the history of a live account by mistake.
+-- Re-running it is safe; a second call reports zero rows.
+-- =============================================
+CREATE OR REPLACE FUNCTION anonymise_jsonb_except(p_data jsonb, p_keep text[])
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_data IS NULL THEN NULL
+    ELSE (
+      SELECT jsonb_object_agg(
+        e.key,
+        CASE WHEN e.key = ANY(p_keep) THEN e.value ELSE to_jsonb('[anonymised]'::text) END
+      )
+      FROM jsonb_each(p_data) AS e(key, value)
+    )
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION anonymise_user_audit_logs(p_user_id uuid)
+RETURNS TABLE (snapshots_anonymised integer, changed_by_cleared integer)
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  c_keep_users           constant text[] := ARRAY[
+    'id', 'is_verified', 'verified_at', 'terms_version', 'terms_accepted_at',
+    'created_at', 'updated_at', 'deleted_at'
+  ];
+  c_keep_player_profiles constant text[] := ARRAY['user_id', 'created_at', 'updated_at'];
+  -- The account number is already masked to its last 4 on the way in; the
+  -- holder's name and the bank are what is left to strip.
+  c_keep_player_bank     constant text[] := ARRAY[
+    'id', 'user_id', 'status', 'is_active', 'verified_at', 'created_at', 'updated_at'
+  ];
+  c_financial            constant text[] := ARRAY[
+    'payments', 'refunds', 'payouts', 'registrations', 'prize_awards', 'prize_fundings'
+  ];
+  v_bank_rows            integer;
+BEGIN
+  IF p_user_id IS NULL THEN
+    RAISE EXCEPTION 'USER_ID_REQUIRED' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM users WHERE id = p_user_id AND deleted_at IS NULL) THEN
+    RAISE EXCEPTION 'USER_NOT_DELETED'
+      USING ERRCODE = 'P0001',
+            DETAIL  = 'Delete the users row, or set deleted_at, before anonymising its audit history.';
+  END IF;
+
+  UPDATE audit_logs a
+  SET old_data = anonymise_jsonb_except(a.old_data, k.keep),
+      new_data = anonymise_jsonb_except(a.new_data, k.keep)
+  FROM (VALUES ('users', c_keep_users), ('player_profiles', c_keep_player_profiles)) AS k(table_name, keep)
+  WHERE a.table_name = k.table_name
+    AND a.record_id  = p_user_id::text
+    AND (   a.old_data IS DISTINCT FROM anonymise_jsonb_except(a.old_data, k.keep)
+         OR a.new_data IS DISTINCT FROM anonymise_jsonb_except(a.new_data, k.keep));
+  GET DIAGNOSTICS snapshots_anonymised = ROW_COUNT;
+
+  -- A player bank account's audit rows are keyed by the account's own id, so
+  -- they are found by the owner recorded inside the snapshot.
+  UPDATE audit_logs a
+  SET old_data = anonymise_jsonb_except(a.old_data, c_keep_player_bank),
+      new_data = anonymise_jsonb_except(a.new_data, c_keep_player_bank)
+  WHERE a.table_name = 'player_bank_accounts'
+    AND COALESCE(a.new_data, a.old_data) ->> 'user_id' = p_user_id::text
+    AND (   a.old_data IS DISTINCT FROM anonymise_jsonb_except(a.old_data, c_keep_player_bank)
+         OR a.new_data IS DISTINCT FROM anonymise_jsonb_except(a.new_data, c_keep_player_bank));
+  GET DIAGNOSTICS v_bank_rows = ROW_COUNT;
+  snapshots_anonymised := snapshots_anonymised + v_bank_rows;
+
+  UPDATE audit_logs
+  SET changed_by = NULL
+  WHERE changed_by = p_user_id
+    AND table_name <> ALL (c_financial);
+  GET DIAGNOSTICS changed_by_cleared = ROW_COUNT;
+
+  RETURN NEXT;
+END;
+$$;
+
+-- =============================================
+-- TOURNAMENT EDIT FREEZE (paid-registration stage)
+-- Once anyone has paid, the fields that define what they paid for lock:
+-- what it costs and what can be won (entry_fees, prizes, the commission
+-- split), who receives the money (the beneficiary pair), when and
+-- where it runs (dates, venue country/state and the timezone derived from
+-- them), and what kind of event it is and who may enter (format, time_control,
+-- rating flags, restrictions). Changing any of them rewrites a concluded
+-- transaction. max_participants is the exception: it may still go up (more
+-- places harms nobody who paid), but not down (fewer could leave a paid player
+-- without a seat). src/lib/tournaments/edit-policy.ts is the full policy, and
+-- this column list is its "paid" stage.
+--
+-- The PATCH route returns the readable 409 (naming the rejected fields); this
+-- trigger is the authority, so the rule holds for any writer including the
+-- service role and the SQL editor. Same belt-and-braces posture as
+-- settle_registration_payment's amount guard.
+--
+-- The date-based stages (started, ended) are NOT enforced here: they depend
+-- on today-in-the-venue-timezone, and pinning that in the DB would duplicate
+-- getTodayInTimeZone() with a second, drifting definition. They live in the
+-- route only.
+--
+-- Deliberately allows the write when the value is unchanged, so a client that
+-- re-submits the whole form without touching these fields still succeeds.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_paid_fields()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_changed text[] := ARRAY[]::text[];
+BEGIN
+  -- What it costs and what can be won.
+  IF NEW.entry_fees IS DISTINCT FROM OLD.entry_fees THEN
+    v_changed := array_append(v_changed, 'entry_fees');
+  END IF;
+  IF NEW.prizes IS DISTINCT FROM OLD.prizes THEN
+    v_changed := array_append(v_changed, 'prizes');
+  END IF;
+  -- Increase-only: a raise opens more places and is allowed. (NOT NULL, so a
+  -- plain comparison is enough.)
+  IF NEW.max_participants < OLD.max_participants THEN
+    v_changed := array_append(v_changed, 'max_participants (can only increase)');
+  END IF;
+  IF NEW.commission_rate IS DISTINCT FROM OLD.commission_rate THEN
+    v_changed := array_append(v_changed, 'commission_rate');
+  END IF;
+  IF NEW.organizer_commission_pct IS DISTINCT FROM OLD.organizer_commission_pct THEN
+    v_changed := array_append(v_changed, 'organizer_commission_pct');
+  END IF;
+  -- Who the money goes to. Players who paid did so knowing who was running the
+  -- event, so a nomination still unaccepted at the first payment simply lapses:
+  -- the payout stays with the organizing org.
+  IF NEW.beneficiary_organization_id IS DISTINCT FROM OLD.beneficiary_organization_id THEN
+    v_changed := array_append(v_changed, 'beneficiary_organization_id');
+  END IF;
+  IF NEW.beneficiary_accepted_at IS DISTINCT FROM OLD.beneficiary_accepted_at THEN
+    v_changed := array_append(v_changed, 'beneficiary_accepted_at');
+  END IF;
+  -- When and where. A tournament that has to move after taking payment is a
+  -- cancellation with refunds, not an edit.
+  IF NEW.start_date IS DISTINCT FROM OLD.start_date THEN
+    v_changed := array_append(v_changed, 'start_date');
+  END IF;
+  IF NEW.end_date IS DISTINCT FROM OLD.end_date THEN
+    v_changed := array_append(v_changed, 'end_date');
+  END IF;
+  IF NEW.venue_country IS DISTINCT FROM OLD.venue_country THEN
+    v_changed := array_append(v_changed, 'venue_country');
+  END IF;
+  IF NEW.venue_state IS DISTINCT FROM OLD.venue_state THEN
+    v_changed := array_append(v_changed, 'venue_state');
+  END IF;
+  IF NEW.timezone IS DISTINCT FROM OLD.timezone THEN
+    v_changed := array_append(v_changed, 'timezone');
+  END IF;
+  -- What kind of event, and who may enter.
+  IF NEW.format IS DISTINCT FROM OLD.format THEN
+    v_changed := array_append(v_changed, 'format');
+  END IF;
+  IF NEW.time_control IS DISTINCT FROM OLD.time_control THEN
+    v_changed := array_append(v_changed, 'time_control');
+  END IF;
+  IF NEW.is_fide_rated IS DISTINCT FROM OLD.is_fide_rated THEN
+    v_changed := array_append(v_changed, 'is_fide_rated');
+  END IF;
+  IF NEW.is_mcf_rated IS DISTINCT FROM OLD.is_mcf_rated THEN
+    v_changed := array_append(v_changed, 'is_mcf_rated');
+  END IF;
+  IF NEW.restrictions IS DISTINCT FROM OLD.restrictions THEN
+    v_changed := array_append(v_changed, 'restrictions');
+  END IF;
+
+  IF array_length(v_changed, 1) IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM payments p
+    WHERE p.tournament_id = NEW.id
+      AND p.type = 'registration'
+      AND p.status = 'paid'
+  ) THEN
+    RAISE EXCEPTION
+      'tournament % has paid registrations; these fields are locked: %',
+      NEW.id, array_to_string(v_changed, ', ')
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_paid_fields BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_paid_fields();
+
+-- =============================================
+-- TOURNAMENT BENEFICIARY GUARD
+-- 004_rls.sql lets anyone with tournament.edit update a tournament row through
+-- PostgREST, with no column restriction. Without this, an org admin could
+--   PATCH /rest/v1/tournaments?id=eq.<own>
+--     {"beneficiary_organization_id": <any org>, "beneficiary_accepted_at": "now"}
+-- and redirect the payout with no acceptance, past both functions below.
+--
+-- Same test as guard_users_identity_columns: auth.uid() IS NOT NULL means a user
+-- JWT is driving the statement. nominate_payout_beneficiary,
+-- accept_payout_nomination and decline_payout_nomination run through the
+-- service role, which has no `sub`.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_beneficiary_columns()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.beneficiary_organization_id IS NOT NULL OR NEW.beneficiary_accepted_at IS NOT NULL THEN
+      RAISE EXCEPTION 'tournaments.beneficiary_* cannot be set by a client session'
+        USING ERRCODE = 'P0001';
+    END IF;
+  ELSIF NEW.beneficiary_organization_id IS DISTINCT FROM OLD.beneficiary_organization_id
+     OR NEW.beneficiary_accepted_at IS DISTINCT FROM OLD.beneficiary_accepted_at THEN
+    RAISE EXCEPTION 'tournaments.beneficiary_* cannot be set by a client session'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_beneficiary_columns BEFORE INSERT OR UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_beneficiary_columns();
+
+-- =============================================
+-- TOURNAMENT CAPACITY ENFORCEMENT
+-- Prevents over-registration via a row-level lock. A pending_payment seat is
+-- only held for a limited window (the payment timeout); after it lapses the seat
+-- stops counting toward capacity, so abandoned checkouts free their slot without
+-- a scheduler. Enforced purely in Postgres so the lock guarantee holds.
+-- =============================================
+
+-- The seats a tournament has given out: confirmed registrations plus
+-- pending_payment holds still inside the 10-minute window. The one definition
+-- of "taken", shared by the capacity guard below and the capacity floor
+-- (guard_tournament_seats_taken). p_exclude_registration_id lets a resume
+-- ignore its own row.
+--
+-- Counts without locking: callers must hold the tournament row lock first, or
+-- a hold can land between the count and whatever they decide from it.
+CREATE OR REPLACE FUNCTION count_taken_seats(
+  p_tournament_id           uuid,
+  p_exclude_registration_id uuid DEFAULT NULL
+)
+RETURNS integer
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT COUNT(*)::integer
+  FROM registrations
+  WHERE tournament_id = p_tournament_id
+    AND (
+      status = 'confirmed'
+      OR (
+        status = 'pending_payment'
+        AND registered_at > now() - interval '10 minutes'
+      )
+    )
+    AND (p_exclude_registration_id IS NULL OR id <> p_exclude_registration_id);
+$$;
+
+-- Shared capacity guard. Locks the tournament row, counts the seats taken, and
+-- raises if at capacity. p_exclude_registration_id lets a resume ignore its own
+-- row.
+CREATE OR REPLACE FUNCTION assert_tournament_capacity(
+  p_tournament_id           uuid,
+  p_exclude_registration_id uuid DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_max     integer;
+  v_current integer;
+BEGIN
+  SELECT max_participants INTO v_max
+  FROM tournaments
+  WHERE id = p_tournament_id
+  FOR UPDATE;
+
+  v_current := count_taken_seats(p_tournament_id, p_exclude_registration_id);
+
+  IF v_current >= v_max THEN
+    RAISE EXCEPTION 'Tournament is full (% / % participants)', v_current, v_max
+      USING ERRCODE = 'P0001';
+  END IF;
+END;
+$$;
+
+-- INSERT-time capacity trigger delegates to the shared guard.
+CREATE OR REPLACE FUNCTION check_tournament_capacity()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM assert_tournament_capacity(NEW.tournament_id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER enforce_tournament_capacity
+  BEFORE INSERT ON registrations
+  FOR EACH ROW EXECUTE FUNCTION check_tournament_capacity();
+
+-- =============================================
+-- CAPACITY FLOOR
+-- Capacity may not drop below the seats already taken. Settlement doesn't
+-- re-check capacity (a player mid-checkout was promised the seat when the hold
+-- was taken), so without this an organizer could lower capacity under live
+-- holds and every one of them would still settle: 5 confirmed against a
+-- capacity of 3. Once anyone has paid, guard_tournament_paid_fields makes
+-- capacity increase-only anyway; this covers the window before that.
+--
+-- Race with a hold: the UPDATE has already locked this tournament row (FOR NO
+-- KEY UPDATE) by the time a BEFORE ROW trigger fires, and that conflicts with
+-- the FOR UPDATE in assert_tournament_capacity. Whichever comes second waits
+-- for the first to commit, then sees its result: a hold that got in first is
+-- counted here (each statement in this function takes a fresh snapshot), and a
+-- hold that comes after reads the lowered capacity. No separate lock needed.
+--
+-- Only a decrease is checked. Raising capacity, or saving it unchanged, is
+-- always allowed, even on a row that is somehow already over capacity.
+--
+-- SECURITY DEFINER so the count isn't filtered by the caller's RLS: an org
+-- admin updating through PostgREST can't see other players' registrations, and
+-- would otherwise get a floor of zero.
+--
+-- The PATCH route turns the CAPACITY_BELOW_TAKEN sentinel into a readable 422.
+-- Named to fire after guard_paid_fields (same-event triggers run in name
+-- order), so a decrease after payment reports the paid lock, not this.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_seats_taken()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_taken integer;
+BEGIN
+  IF NEW.max_participants >= OLD.max_participants THEN
+    RETURN NEW;
+  END IF;
+
+  v_taken := count_taken_seats(NEW.id);
+
+  IF NEW.max_participants < v_taken THEN
+    RAISE EXCEPTION
+      'CAPACITY_BELOW_TAKEN: % places are already taken; tournament % cannot drop to %',
+      v_taken, NEW.id, NEW.max_participants
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_seats_taken BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_seats_taken();
+
+-- =============================================
+-- PRIZE POOL HELD FOR LIVE CHECKOUTS (#523)
+-- A platform-distributed prize pool must be fully funded before anyone can
+-- enter. The checkout RPCs check that under the tournament row lock, but prizes
+-- only freeze at the first PAID registration (guard_tournament_paid_fields). A
+-- player who has a live CHIP link and then pays would otherwise be confirmed
+-- against prizes raised while they were paying, which the pool no longer
+-- covers: settle_registration_payment never re-checks the pool, and can't
+-- refuse money already taken.
+--
+-- So while any checkout hold is live (the same 10-minute window as
+-- count_taken_seats, which is also when CHIP's due_strict makes the link
+-- unpayable), a prize change that would leave the pool short is refused. A
+-- change the money already paid in still covers is allowed, as is any change on
+-- an organizer-paid tournament. The organizer can retry once the checkouts
+-- finish.
+--
+-- Not covered: a payment made just before the link lapsed whose webhook lands
+-- after a raise saved once the window had passed. That player paid while the
+-- pool covered the prizes; the raise still asks the funders for the top-up and
+-- pauses further registration.
+--
+-- Runs under the tournament row lock (BEFORE UPDATE), which the checkout RPCs
+-- take before their own pool check, so the two serialize. SECURITY DEFINER so
+-- the hold count isn't filtered by the caller's RLS. declared_prize_total_cents
+-- lives in 006; plpgsql resolves it at call time.
+--
+-- The PATCH route turns the PRIZES_IN_CHECKOUT sentinel into a readable 409.
+-- Named to fire after guard_paid_fields, so a change after payment reports the
+-- paid lock instead.
+-- =============================================
+CREATE OR REPLACE FUNCTION guard_tournament_prizes_in_checkout()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_live integer;
+BEGIN
+  IF NEW.prizes IS NOT DISTINCT FROM OLD.prizes
+     OR COALESCE(NEW.prizes->>'distribution', 'organizer') <> 'platform' THEN
+    RETURN NEW;
+  END IF;
+
+  IF declared_prize_total_cents(NEW.prizes) <= COALESCE((
+       SELECT SUM(s.total_prize_funding_cents)
+       FROM tournament_payout_summary s
+       WHERE s.tournament_id = NEW.id
+     ), 0) THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT COUNT(*)::integer INTO v_live
+  FROM registrations
+  WHERE tournament_id = NEW.id
+    AND status = 'pending_payment'
+    AND registered_at > now() - interval '10 minutes';
+
+  IF v_live > 0 THEN
+    RAISE EXCEPTION
+      'PRIZES_IN_CHECKOUT: % checkouts are live; tournament % cannot raise its prizes beyond the funded pool',
+      v_live, NEW.id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER guard_prizes_in_checkout BEFORE UPDATE ON tournaments
+  FOR EACH ROW EXECUTE FUNCTION guard_tournament_prizes_in_checkout();
+
+-- =============================================
+-- BULK PARTICIPANT COUNTS
+-- Used by the tournaments list API.
+-- =============================================
+CREATE OR REPLACE FUNCTION get_participant_counts(tournament_ids uuid[])
+RETURNS TABLE(tournament_id uuid, count bigint) AS $$
+  SELECT tournament_id, COUNT(*)
+  FROM registrations
+  WHERE tournament_id = ANY(tournament_ids)
+    AND status = 'confirmed'
+  GROUP BY tournament_id;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+-- =============================================
+-- SET ORGANIZATION BANK ACCOUNT
+-- The ONLY write path for organization_bank_accounts (004_rls.sql revokes
+-- INSERT/UPDATE/DELETE from anon and authenticated).
+--
+-- Changing payout details must force re-verification, so this SUPERSEDES rather
+-- than updates: the current active row is deactivated and a fresh 'pending' row
+-- is inserted, in one transaction under a lock on the organization row. That
+-- pairing is what guarantees uniq_active_bank_account_per_org (002_indexes.sql)
+-- never sees two active rows, and it leaves the superseded row intact so a
+-- payout can still name the account it was actually sent to.
+--
+-- A re-save that changes nothing is a no-op, returning {"changed": false} and
+-- the existing row. Two states qualify:
+--   'verified' — re-inserting would destroy a completed verification.
+--   'pending'  — the row's own id is the CHIP Send `reference` for an
+--                in-flight registration; superseding it orphans that attempt.
+-- 'rejected' deliberately does NOT qualify: an unchanged re-save there is an
+-- organizer retrying after fixing something at their bank, and they need a new
+-- row (and therefore a new CHIP reference) to retry against.
+--
+-- A uniq_active_bank_destination collision raises 23505 uncaught, on purpose —
+-- callers translate it, because "this account is already another organization's
+-- payout destination" is a 409, not a failure of this function.
+-- =============================================
+CREATE OR REPLACE FUNCTION set_organization_bank_account(
+  p_org_id         uuid,
+  p_bank_code      varchar(11),
+  p_bank_name      varchar(100),
+  p_account_holder varchar(255),
+  p_account_number varchar(50),
+  p_actor_id       uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_current organization_bank_accounts;
+  v_row     organization_bank_accounts;
+  v_changed boolean := true;
+BEGIN
+  -- Lock the organization so concurrent saves serialize; without it two
+  -- requests could both deactivate and both insert.
+  PERFORM 1 FROM organizations
+    WHERE id = p_org_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'organization % not found', p_org_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_current
+    FROM organization_bank_accounts
+    WHERE organization_id = p_org_id AND is_active;
+
+  IF FOUND
+     AND v_current.bank_code      = p_bank_code
+     AND v_current.bank_name      = p_bank_name
+     AND v_current.account_holder = p_account_holder
+     AND v_current.account_number = p_account_number
+     AND v_current.status <> 'rejected'
+  THEN
+    v_changed := false;
+    v_row     := v_current;
+  ELSE
+    UPDATE organization_bank_accounts
+      SET is_active = false
+      WHERE organization_id = p_org_id AND is_active;
+
+    INSERT INTO organization_bank_accounts (
+      organization_id, bank_name, bank_code, account_holder, account_number, created_by
+    ) VALUES (
+      p_org_id, p_bank_name, p_bank_code, p_account_holder, p_account_number, p_actor_id
+    )
+    RETURNING * INTO v_row;
+  END IF;
+
+  -- Masked, like every other surface that touches this value. The full account
+  -- number does not leave the table.
+  RETURN jsonb_build_object(
+    'changed',              v_changed,
+    'id',                   v_row.id,
+    'bank_name',            v_row.bank_name,
+    'bank_code',            v_row.bank_code,
+    'account_holder',       v_row.account_holder,
+    'account_number_last4', right(v_row.account_number, 4),
+    'status',               v_row.status,
+    'rejection_reason',     v_row.rejection_reason,
+    'verified_at',          v_row.verified_at
+  );
+END;
+$$;
+
+-- =============================================
+-- SENSITIVE DATA CONSENT (#451)
+-- has_sensitive_data_consent answers "may we hold this kind of data for this
+-- user right now?": true only when their newest row for the category is a
+-- grant. Deliberately NOT SECURITY DEFINER, so it sees only what the caller's
+-- RLS allows: the storage policy on oku-documents calls it as the uploading
+-- user, who can read their own rows (004), and the service-role functions
+-- bypass RLS. As a definer function anyone could ask it about anyone, and
+-- whether a stranger has agreed to share health data is itself health data.
+--
+-- record_sensitive_data_consent is the only write path for the log. It locks
+-- the users row (as set_player_bank_account does, so a save and a withdrawal
+-- cannot interleave) and writes a row only when the position changes:
+-- re-granting the same wording, or withdrawing what was never granted, is a
+-- no-op that returns false. A grant of NEWER wording is written, so the log
+-- shows the user agreed to it. p_version must come from legal.ts on the
+-- server, never the request.
+-- =============================================
+CREATE OR REPLACE FUNCTION has_sensitive_data_consent(
+  p_user_id  uuid,
+  p_category sensitive_data_category
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT COALESCE((
+    SELECT granted
+      FROM sensitive_data_consents
+      WHERE user_id = p_user_id AND category = p_category
+      ORDER BY id DESC
+      LIMIT 1
+  ), false);
+$$;
+
+CREATE OR REPLACE FUNCTION record_sensitive_data_consent(
+  p_user_id  uuid,
+  p_category sensitive_data_category,
+  p_granted  boolean,
+  p_version  varchar(20) DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_latest sensitive_data_consents;
+BEGIN
+  IF p_granted IS NULL THEN
+    RAISE EXCEPTION 'p_granted is required' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_granted AND p_version IS NULL THEN
+    RAISE EXCEPTION 'a consent grant must name the version agreed to'
+      USING ERRCODE = '22023';
+  END IF;
+
+  PERFORM 1 FROM users
+    WHERE id = p_user_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'user % not found', p_user_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_latest
+    FROM sensitive_data_consents
+    WHERE user_id = p_user_id AND category = p_category
+    ORDER BY id DESC
+    LIMIT 1;
+
+  IF p_granted THEN
+    IF FOUND AND v_latest.granted AND v_latest.version = p_version THEN
+      RETURN false;
+    END IF;
+  ELSIF NOT FOUND OR NOT v_latest.granted THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO sensitive_data_consents (user_id, category, granted, version)
+    VALUES (p_user_id, p_category, p_granted,
+            CASE WHEN p_granted THEN p_version END);
+
+  RETURN true;
+END;
+$$;
+
+-- A consent row is evidence. Correcting one would rewrite what the user agreed
+-- to; a change of mind is a new row. ON DELETE CASCADE from users still works:
+-- this guards UPDATE only.
+CREATE OR REPLACE FUNCTION guard_consent_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'sensitive_data_consents rows are immutable; record a new grant or withdrawal instead'
+    USING ERRCODE = '55000';
+END;
+$$;
+
+CREATE TRIGGER guard_consent_immutable
+  BEFORE UPDATE ON sensitive_data_consents
+  FOR EACH ROW EXECUTE FUNCTION guard_consent_immutable();
+
+-- =============================================
+-- SET PLAYER BANK ACCOUNT
+-- The ONLY write path for player_bank_accounts (004_rls.sql revokes client
+-- writes), and set_organization_bank_account for a person: supersede rather
+-- than update, under a lock on the users row, with the same no-op rule for an
+-- unchanged 'verified' or 'pending' row and the same masked return.
+--
+-- Clearing (all-NULL details) deactivates the active row and inserts nothing,
+-- returning {"changed": true, "id": null}. A prize award that already
+-- snapshotted the old account keeps it; one not yet sent waits for a new one.
+--
+-- Bank details are held only with the player's financial-data consent (#451),
+-- so saving them without a current grant is refused with CONSENT_REQUIRED.
+-- The route records the grant first, from the checkbox the player ticked.
+-- Clearing is how a player withdraws that consent, so it erases the details
+-- and records the withdrawal in the same transaction: there is no moment
+-- where the log says withdrawn while the details are still held, or the
+-- reverse. Erasing covers EVERY row the player has, active and superseded:
+--   * a row no prize award names is deleted;
+--   * a row a prize award names is kept as the record of where that money
+--     went (or is going: an award in flight sends by chip_bank_account_id, not
+--     the number), but its number is cut to '****' plus the last 4 digits and
+--     redacted_at is stamped. Bank and holder stay.
+-- Nothing reads a full number off an inactive row: CHIP registration skips
+-- them, and emails show the last 4 only.
+-- =============================================
+CREATE OR REPLACE FUNCTION set_player_bank_account(
+  p_user_id        uuid,
+  p_bank_code      varchar(11),
+  p_bank_name      varchar(100),
+  p_account_holder varchar(255),
+  p_account_number varchar(50)
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_current player_bank_accounts;
+  v_row     player_bank_accounts;
+  v_changed boolean := true;
+  v_clear   boolean := p_bank_code IS NULL AND p_bank_name IS NULL
+                       AND p_account_holder IS NULL AND p_account_number IS NULL;
+BEGIN
+  PERFORM 1 FROM users
+    WHERE id = p_user_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'user % not found', p_user_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_current
+    FROM player_bank_accounts
+    WHERE user_id = p_user_id AND is_active;
+
+  IF v_clear THEN
+    UPDATE player_bank_accounts
+      SET is_active = false
+      WHERE user_id = p_user_id AND is_active;
+    v_changed := FOUND;
+
+    DELETE FROM player_bank_accounts b
+      WHERE b.user_id = p_user_id
+        AND NOT EXISTS (SELECT 1 FROM prize_awards a WHERE a.bank_account_id = b.id);
+
+    UPDATE player_bank_accounts
+      SET account_number = '****' || right(account_number, 4),
+          redacted_at    = now()
+      WHERE user_id = p_user_id AND redacted_at IS NULL;
+
+    PERFORM record_sensitive_data_consent(p_user_id, 'financial', false);
+    RETURN jsonb_build_object('changed', v_changed, 'id', NULL);
+  END IF;
+
+  IF NOT has_sensitive_data_consent(p_user_id, 'financial') THEN
+    RAISE EXCEPTION 'CONSENT_REQUIRED: bank details need the player''s financial data consent'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF FOUND
+     AND v_current.bank_code      = p_bank_code
+     AND v_current.bank_name      = p_bank_name
+     AND v_current.account_holder = p_account_holder
+     AND v_current.account_number = p_account_number
+     AND v_current.status <> 'rejected'
+  THEN
+    v_changed := false;
+    v_row     := v_current;
+  ELSE
+    UPDATE player_bank_accounts
+      SET is_active = false
+      WHERE user_id = p_user_id AND is_active;
+
+    INSERT INTO player_bank_accounts (
+      user_id, bank_name, bank_code, account_holder, account_number
+    ) VALUES (
+      p_user_id, p_bank_name, p_bank_code, p_account_holder, p_account_number
+    )
+    RETURNING * INTO v_row;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'changed',              v_changed,
+    'id',                   v_row.id,
+    'bank_name',            v_row.bank_name,
+    'bank_code',            v_row.bank_code,
+    'account_holder',       v_row.account_holder,
+    'account_number_last4', right(v_row.account_number, 4),
+    'status',               v_row.status,
+    'rejection_reason',     v_row.rejection_reason,
+    'verified_at',          v_row.verified_at
+  );
+END;
+$$;
+
+-- =============================================
+-- CREATE ORGANIZATION APPLICATION
+-- Creates the organization, its payout bank account, its KYB document rows and
+-- its agreement stamp in ONE transaction.
+--
+-- This replaced a read-then-insert in the API route. Two things were wrong with
+-- that: the ILIKE name pre-check lost a concurrent race, and once bank details
+-- and documents were added, a failure partway through would leave the
+-- organization created — and its name taken — with no way for the applicant to
+-- retry. All or nothing is the only correct shape here.
+--
+-- The entity rule is enforced HERE, not only in the route, so it cannot be
+-- bypassed by calling the RPC directly.
+--
+-- Failures RAISE with a stable sentinel prefix so the route can map them to
+-- distinct HTTP codes; same approach as the "Tournament is full" message the
+-- checkout route matches on.
+-- =============================================
+CREATE OR REPLACE FUNCTION create_organization_application(
+  p_created_by          uuid,
+  p_name                varchar(255),
+  p_email               varchar(255),
+  p_entity_type         org_entity_type,
+  p_agreement_version   varchar(20),
+  p_bank_code           varchar(11),
+  p_bank_name           varchar(100),
+  p_account_holder      varchar(255),
+  p_account_number      varchar(50),
+  p_documents           jsonb,
+  p_description         text    DEFAULT NULL,
+  p_links               jsonb   DEFAULT NULL,
+  p_phone               varchar(20) DEFAULT NULL,
+  p_past_tournament_refs text   DEFAULT NULL,
+  p_registration_number varchar(100) DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org_id    uuid;
+  v_docs      jsonb := COALESCE(p_documents, '[]'::jsonb);
+  v_reg_no    varchar(100);
+  v_accepted  timestamptz := now();
+BEGIN
+  IF p_entity_type IS NULL THEN
+    RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: an entity type is required'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_entity_type IN ('company', 'society') THEN
+    v_reg_no := NULLIF(btrim(p_registration_number), '');
+
+    IF v_reg_no IS NULL THEN
+      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: a % must supply its registration number', p_entity_type
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    -- The registry that matches the entity, not either one: a company is
+    -- registered with SSM and a society with ROS, so the other registry's
+    -- extract is not evidence for it.
+    IF NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_docs) d
+      WHERE d->>'doc_type' =
+        CASE p_entity_type WHEN 'company' THEN 'ssm' ELSE 'ros' END
+    ) THEN
+      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: a % must supply an % document',
+        p_entity_type,
+        CASE p_entity_type WHEN 'company' THEN 'SSM' ELSE 'ROS' END
+        USING ERRCODE = 'P0001';
+    END IF;
+  ELSE
+    -- An individual has no registry entry to cite. Normalised to NULL rather
+    -- than rejected, so the column means exactly one thing.
+    v_reg_no := NULL;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(v_docs) d
+      WHERE d->>'doc_type' IN ('identity_document', 'authorization_letter')
+    ) THEN
+      RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: an individual organizer must supply an identity document or authorization letter'
+        USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  BEGIN
+    INSERT INTO organizations (
+      name, description, links, email, phone, past_tournament_refs,
+      entity_type, registration_number, created_by,
+      agreement_version, agreement_accepted_at, agreement_accepted_by
+    ) VALUES (
+      p_name, p_description, p_links, p_email, p_phone, p_past_tournament_refs,
+      p_entity_type, v_reg_no, p_created_by,
+      p_agreement_version, v_accepted, p_created_by
+    )
+    RETURNING id INTO v_org_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      -- idx_organizations_name_active (002_indexes.sql). Catching the index
+      -- rather than pre-checking is what makes this race-free.
+      RAISE EXCEPTION 'NAME_TAKEN: an organization with this name already exists'
+        USING ERRCODE = 'P0001';
+  END;
+
+  BEGIN
+    PERFORM set_organization_bank_account(
+      v_org_id, p_bank_code, p_bank_name, p_account_holder, p_account_number, p_created_by
+    );
+  EXCEPTION
+    WHEN unique_violation THEN
+      -- uniq_active_bank_destination (002_indexes.sql).
+      RAISE EXCEPTION 'BANK_ACCOUNT_IN_USE: this bank account is already the payout destination for another organization'
+        USING ERRCODE = 'P0001';
+  END;
+
+  INSERT INTO organization_documents (
+    organization_id, doc_type, storage_path, original_filename, uploaded_by
+  )
+  SELECT
+    v_org_id,
+    (d->>'doc_type')::org_document_type,
+    d->>'storage_path',
+    NULLIF(d->>'original_filename', ''),
+    p_created_by
+  FROM jsonb_array_elements(v_docs) d;
+
+  RETURN jsonb_build_object(
+    'id',                    v_org_id,
+    'name',                  p_name,
+    'approval_status',       'pending',
+    'entity_type',           p_entity_type,
+    'registration_number',   v_reg_no,
+    'agreement_version',     p_agreement_version,
+    'agreement_accepted_at', v_accepted
+  );
+END;
+$$;
+
+-- =============================================
+-- REVIEW ORGANIZATION APPLICATION
+-- Called by the admin applications handler (service_role) to approve or reject
+-- an organization application. Performs the status update and, on approval, the
+-- creation of the applicant's owner membership atomically in one transaction:
+--   p_action = 'approve' -> approval_status 'approved' + owner membership row
+--   p_action = 'reject'  -> approval_status 'rejected' + rejection_reason set
+-- Re-approving is idempotent: the owner membership is created at most once.
+-- =============================================
+CREATE OR REPLACE FUNCTION review_organization_application(
+  p_org_id            uuid,
+  p_reviewer_id       uuid,
+  p_action            text,
+  p_rejection_reason  text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org           organizations;
+  v_owner_role_id integer;
+  v_new_status    approval_status;
+  v_reviewed_at   timestamptz := now();
+BEGIN
+  -- Lock the organization row so concurrent reviews serialize.
+  SELECT * INTO v_org
+    FROM organizations
+    WHERE id = p_org_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'organization % not found', p_org_id USING ERRCODE = 'P0002';
+  END IF;
+
+  v_new_status := CASE p_action WHEN 'approve' THEN 'approved' ELSE 'rejected' END;
+
+  UPDATE organizations
+    SET approval_status  = v_new_status,
+        reviewed_by      = p_reviewer_id,
+        reviewed_at      = v_reviewed_at,
+        rejection_reason = CASE WHEN p_action = 'reject' THEN p_rejection_reason ELSE NULL END
+    WHERE id = p_org_id;
+
+  IF p_action = 'approve' THEN
+    SELECT id INTO v_owner_role_id
+      FROM roles
+      WHERE name = 'owner' AND scope = 'organization';
+
+    IF v_owner_role_id IS NULL THEN
+      RAISE EXCEPTION 'owner role not found';
+    END IF;
+
+    INSERT INTO organization_memberships (organization_id, user_id, role_id)
+      VALUES (p_org_id, v_org.created_by, v_owner_role_id)
+      ON CONFLICT (organization_id, user_id) DO NOTHING;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'id', v_org.id,
+    'name', v_org.name,
+    'approval_status', v_new_status,
+    'reviewed_at', v_reviewed_at
+  );
+END;
+$$;
+
+-- =============================================
+-- REVIEW TOURNAMENT CANCELLATION
+-- Platform admin approves/rejects an organizer's request to cancel a published
+-- tournament. Approve → the request is marked 'approved', the tournament is
+-- flipped to 'cancelled', AND a pending refund row is created for every confirmed
+-- (paid) registration — all atomically, so the refund to-do list is durable the
+-- instant the cancellation commits. Reject → the request is marked 'rejected'
+-- with a reason and the tournament stays published. The refund rows are only
+-- created here; the actual CHIP refund + type='refund' ledger row are executed
+-- afterwards by the app (the refund sweep, src/services/refunds/sweep.ts) and settled by
+-- settle_refund (006_payment_functions.sql) — a network call can't run in this
+-- transaction.
+--
+-- Approve is refused (P0001, CANCELLATION_BLOCKED_BY_PAYOUT) once an organizer
+-- payout has been paid or is being sent: see the guard in the body.
+-- =============================================
+CREATE OR REPLACE FUNCTION review_tournament_cancellation(
+  p_request_id        uuid,
+  p_reviewer_id       uuid,
+  p_action            text,
+  p_rejection_reason  text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_request      tournament_cancellation_requests;
+  v_new_status   approval_status;
+  v_reviewed_at  timestamptz := now();
+  v_paid_out     bigint;
+  v_refunds_due  bigint;
+  v_held         bigint;
+BEGIN
+  -- Lock the request row so concurrent reviews serialize.
+  SELECT * INTO v_request
+    FROM tournament_cancellation_requests
+    WHERE id = p_request_id
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'cancellation request % not found', p_request_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_request.status <> 'pending' THEN
+    RAISE EXCEPTION 'cancellation request % already reviewed', p_request_id USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Money already sent to the organizer makes the refunds unfundable: every
+  -- confirmed player gets their full GROSS back from the Collect balance, but the
+  -- organizer's NET has left through CHIP Send, and there is no automated
+  -- claw-back. So approval is refused, with the shortfall, until ops have
+  -- recovered it (a payment_type='adjustment' row). A payout still being sent
+  -- may complete at any moment, so it blocks too. Locking the tournament
+  -- serializes this with queue_payout, request_early_payout and
+  -- claim_payout_send, which marks a payout 'processing' before CHIP is called.
+  IF p_action = 'approve' THEN
+    PERFORM 1 FROM tournaments WHERE id = v_request.tournament_id FOR UPDATE;
+
+    SELECT COALESCE(SUM(p.gross_amount_cents), 0) INTO v_paid_out
+      FROM payments p
+      WHERE p.tournament_id = v_request.tournament_id
+        AND p.type = 'organizer_payout'
+        AND p.status = 'paid';
+
+    IF v_paid_out > 0 THEN
+      -- Shortfall = refunds this approval would queue - what the platform still
+      -- holds for the tournament (gross collected, net of refunds and payouts).
+      SELECT COALESCE(SUM(p.gross_amount_cents), 0) INTO v_refunds_due
+        FROM registrations r
+        JOIN payments p ON p.id = r.current_payment_id
+        WHERE r.tournament_id = v_request.tournament_id
+          AND r.status = 'confirmed'
+          AND p.type = 'registration'
+          AND p.status = 'paid';
+      SELECT COALESCE(SUM(s.net_collected_cents), 0) - v_paid_out INTO v_held
+        FROM tournament_payout_summary s
+        WHERE s.tournament_id = v_request.tournament_id;
+
+      RAISE EXCEPTION 'CANCELLATION_BLOCKED_BY_PAYOUT: % cents paid out, % cents short of the refunds',
+        v_paid_out, GREATEST(v_refunds_due - v_held, 0)
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM payouts po
+      WHERE po.tournament_id = v_request.tournament_id AND po.status = 'processing'
+    ) THEN
+      RAISE EXCEPTION 'CANCELLATION_BLOCKED_BY_PAYOUT: a payout is being sent'
+        USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  v_new_status := CASE p_action WHEN 'approve' THEN 'approved' ELSE 'rejected' END;
+
+  UPDATE tournament_cancellation_requests
+    SET status           = v_new_status,
+        reviewed_by      = p_reviewer_id,
+        reviewed_at      = v_reviewed_at,
+        rejection_reason = CASE WHEN p_action = 'reject' THEN p_rejection_reason ELSE NULL END
+    WHERE id = p_request_id;
+
+  IF p_action = 'approve' THEN
+    UPDATE tournaments
+      SET status = 'cancelled'
+      WHERE id = v_request.tournament_id;
+
+    -- Queue a full refund for every confirmed (paid) player. The amount is the
+    -- gross the player actually paid, sourced from their current (paid)
+    -- registration payment. pending_payment/failed/cancelled players never paid,
+    -- and forfeited players explicitly get no refund — so they're excluded.
+    -- ON CONFLICT makes this idempotent against uniq_active_refund_per_registration
+    -- (002_indexes.sql): a live refund already exists → leave it untouched.
+    INSERT INTO refunds (
+      registration_id, refund_amount_cents, reason, status, requested_by, requested_at
+    )
+    SELECT r.id, p.gross_amount_cents, 'tournament_cancelled', 'pending', p_reviewer_id, v_reviewed_at
+    FROM registrations r
+    JOIN payments p ON p.id = r.current_payment_id
+    WHERE r.tournament_id = v_request.tournament_id
+      AND r.status = 'confirmed'
+      AND p.type = 'registration'
+      AND p.status = 'paid'
+    ON CONFLICT (registration_id) WHERE (status <> 'rejected') DO NOTHING;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'id', v_request.id,
+    'tournament_id', v_request.tournament_id,
+    'status', v_new_status,
+    'reviewed_at', v_reviewed_at
+  );
+END;
+$$;
+
+-- =============================================
+-- CURRENT ORGANIZER AGREEMENT VERSION
+-- The database has to refuse a stale agreement itself, even if a route is
+-- bypassed, and the money functions take no version argument to trust. This is
+-- the SQL twin of ORGANIZER_AGREEMENT_VERSION in src/lib/reference/legal.ts; bumping that
+-- constant means changing this too, and src/lib/__tests__/legal.test.ts fails
+-- until the two match.
+-- =============================================
+CREATE OR REPLACE FUNCTION current_organizer_agreement_version()
+RETURNS varchar(20)
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT '2026-11-18'::varchar(20);
+$$;
+
+-- =============================================
+-- PAYOUT RECIPIENT ELIGIBILITY
+-- Why money cannot be sent to this organization right now, or NULL if it can.
+-- One definition shared by nomination and queue_payout, and returned to the
+-- dashboards so a lapsed recipient is shown rather than failing silently.
+-- A chip_bank_account_id is part of the check: without it there is nothing to
+-- put in a send instruction.
+-- =============================================
+CREATE OR REPLACE FUNCTION payout_recipient_problem(p_org_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org organizations;
+BEGIN
+  SELECT * INTO v_org FROM organizations WHERE id = p_org_id AND deleted_at IS NULL;
+
+  IF NOT FOUND OR v_org.approval_status <> 'approved' THEN
+    RETURN 'organization_not_approved';
+  END IF;
+  IF v_org.entity_type IS NULL THEN
+    RETURN 'entity_type_missing';
+  END IF;
+  IF v_org.agreement_version IS DISTINCT FROM current_organizer_agreement_version() THEN
+    RETURN 'agreement_not_current';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM organization_bank_accounts b
+    WHERE b.organization_id = p_org_id
+      AND b.is_active
+      AND b.status = 'verified'
+      AND b.chip_bank_account_id IS NOT NULL
+  ) THEN
+    RETURN 'bank_account_not_verified';
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+-- =============================================
+-- PAYOUT BENEFICIARY NOMINATION
+-- A tournament may nominate another approved organization to receive its payout.
+-- Money is never wired to an unvetted party: the nominee must already pass
+-- payout_recipient_problem, and it takes an acceptance from someone holding
+-- payout.request on the NOMINEE, so a one-sided nomination cannot redirect money.
+-- The organizing org stays liable for any claw-back regardless of who is paid.
+--
+-- p_beneficiary_org_id NULL withdraws the nomination. Nominating again resets any
+-- earlier acceptance, because that acceptance was for a different organization.
+--
+-- Both functions check the actor themselves, unlike the review functions above:
+-- the permission is on an org the route can't otherwise infer. The paid-registration
+-- freeze is left to guard_tournament_paid_fields, the single authority on it.
+-- Failures RAISE with a stable sentinel prefix for the route to map.
+-- =============================================
+CREATE OR REPLACE FUNCTION nominate_payout_beneficiary(
+  p_tournament_id      uuid,
+  p_beneficiary_org_id uuid,
+  p_user_id            uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+  v_problem    text;
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, v_tournament.organization_id, 'payout.request') THEN
+    RAISE EXCEPTION 'NOMINATION_FORBIDDEN: payout.request is required on the organizing organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_tournament.status = 'cancelled' THEN
+    RAISE EXCEPTION 'NOMINATION_CLOSED: this tournament is cancelled' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_beneficiary_org_id IS NOT NULL THEN
+    IF p_beneficiary_org_id = v_tournament.organization_id THEN
+      RAISE EXCEPTION 'NOMINATION_SELF: an organization cannot nominate itself' USING ERRCODE = 'P0001';
+    END IF;
+
+    v_problem := payout_recipient_problem(p_beneficiary_org_id);
+    IF v_problem IS NOT NULL THEN
+      RAISE EXCEPTION 'NOMINEE_INELIGIBLE: %', v_problem USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  UPDATE tournaments
+    SET beneficiary_organization_id = p_beneficiary_org_id,
+        beneficiary_accepted_at     = NULL
+    WHERE id = p_tournament_id;
+
+  RETURN jsonb_build_object(
+    'tournament_id',               p_tournament_id,
+    'beneficiary_organization_id', p_beneficiary_org_id,
+    'beneficiary_accepted_at',     NULL
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION accept_payout_nomination(
+  p_tournament_id uuid,
+  p_user_id       uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+  v_problem    text;
+  v_accepted   timestamptz := now();
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_tournament.beneficiary_organization_id IS NULL THEN
+    RAISE EXCEPTION 'NOMINATION_NOT_FOUND: this tournament has no pending nomination' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, v_tournament.beneficiary_organization_id, 'payout.request') THEN
+    RAISE EXCEPTION 'NOMINATION_FORBIDDEN: payout.request is required on the nominated organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- Idempotent: a double-click or a retried request is not an error.
+  IF v_tournament.beneficiary_accepted_at IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'tournament_id',               p_tournament_id,
+      'beneficiary_organization_id', v_tournament.beneficiary_organization_id,
+      'beneficiary_accepted_at',     v_tournament.beneficiary_accepted_at,
+      'already_accepted',            true
+    );
+  END IF;
+
+  IF v_tournament.status = 'cancelled' THEN
+    RAISE EXCEPTION 'NOMINATION_CLOSED: this tournament is cancelled' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Re-checked: the nominee may have lapsed since it was nominated.
+  v_problem := payout_recipient_problem(v_tournament.beneficiary_organization_id);
+  IF v_problem IS NOT NULL THEN
+    RAISE EXCEPTION 'NOMINEE_INELIGIBLE: %', v_problem USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE tournaments SET beneficiary_accepted_at = v_accepted WHERE id = p_tournament_id;
+
+  RETURN jsonb_build_object(
+    'tournament_id',               p_tournament_id,
+    'beneficiary_organization_id', v_tournament.beneficiary_organization_id,
+    'beneficiary_accepted_at',     v_accepted,
+    'already_accepted',            false
+  );
+END;
+$$;
+
+-- The nominee turning a pending nomination down. Clears it, so the payout stays
+-- with the organizing org exactly as if it had never been made. Only a pending
+-- nomination can be declined: once accepted the organizer is relying on it, and
+-- unwinding it is the organizer's call (nominate NULL). Same actor check as
+-- accept_payout_nomination, and the paid-registration freeze still applies.
+CREATE OR REPLACE FUNCTION decline_payout_nomination(
+  p_tournament_id uuid,
+  p_user_id       uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tournament tournaments;
+BEGIN
+  SELECT * INTO v_tournament FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_tournament.beneficiary_organization_id IS NULL THEN
+    RAISE EXCEPTION 'NOMINATION_NOT_FOUND: this tournament has no pending nomination' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, v_tournament.beneficiary_organization_id, 'payout.request') THEN
+    RAISE EXCEPTION 'NOMINATION_FORBIDDEN: payout.request is required on the nominated organization'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_tournament.beneficiary_accepted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'NOMINATION_ACCEPTED: an accepted nomination can only be withdrawn by the organizer'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE tournaments
+    SET beneficiary_organization_id = NULL,
+        beneficiary_accepted_at     = NULL
+    WHERE id = p_tournament_id;
+
+  RETURN jsonb_build_object(
+    'tournament_id',            p_tournament_id,
+    'declined_organization_id', v_tournament.beneficiary_organization_id
+  );
+END;
+$$;
+
+-- =============================================
+-- ORGANIZATION INVITATIONS
+-- See the table comment in 001. Each function locks the row it changes, so an
+-- accept racing a revoke (or a second accept) settles one way, and each takes
+-- the expiry from expires_at at the moment it runs.
+-- =============================================
+
+-- Invites p_email to p_org_id as p_role, or refreshes the pending invitation the
+-- address already has there: new token, role and inviter, and a fresh 30 days.
+-- Refuses an address that already belongs to a member. p_token_hash is the
+-- SHA-256 of the token the caller will email; the token itself never arrives.
+CREATE OR REPLACE FUNCTION create_organization_invitation(
+  p_org_id     uuid,
+  p_email      text,
+  p_role       text,
+  p_invited_by uuid,
+  p_token_hash text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_email   text := lower(btrim(p_email));
+  v_role_id integer;
+  v_id      uuid;
+  v_created timestamptz;
+  v_expires timestamptz;
+  v_resent  boolean;
+BEGIN
+  IF NOT has_org_permission(p_invited_by, p_org_id, 'org.invite') THEN
+    RAISE EXCEPTION 'INVITATION_FORBIDDEN: org.invite is required' USING ERRCODE = '42501';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM organizations
+     WHERE id = p_org_id AND approval_status = 'approved' AND deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'INVITATION_ORG_UNAVAILABLE: organization % is not approved', p_org_id
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Owner is never offered by invitation.
+  SELECT id INTO v_role_id FROM roles
+   WHERE name = p_role AND scope = 'organization' AND name IN ('admin', 'member');
+  IF v_role_id IS NULL THEN
+    RAISE EXCEPTION 'INVITATION_INVALID_ROLE: % cannot be offered by invitation', p_role
+      USING ERRCODE = '22023';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM organization_memberships m
+      JOIN users u ON u.id = m.user_id
+     WHERE m.organization_id = p_org_id
+       AND u.email = v_email
+       AND u.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'INVITATION_ALREADY_MEMBER: % is already a member', v_email
+      USING ERRCODE = '23505';
+  END IF;
+
+  INSERT INTO organization_invitations AS i
+    (organization_id, email, role_id, token_hash, invited_by, expires_at)
+  VALUES
+    (p_org_id, v_email, v_role_id, p_token_hash, p_invited_by, now() + interval '30 days')
+  ON CONFLICT (organization_id, email) WHERE status = 'pending'
+  DO UPDATE SET
+    role_id    = EXCLUDED.role_id,
+    token_hash = EXCLUDED.token_hash,
+    invited_by = EXCLUDED.invited_by,
+    created_at = now(),
+    expires_at = EXCLUDED.expires_at
+  -- xmax is non-zero on the row an ON CONFLICT update rewrote, zero on a fresh insert.
+  RETURNING i.id, i.created_at, i.expires_at, (i.xmax <> 0)
+    INTO v_id, v_created, v_expires, v_resent;
+
+  RETURN jsonb_build_object(
+    'id',         v_id,
+    'email',      v_email,
+    'role',       p_role,
+    'created_at', v_created,
+    'expires_at', v_expires,
+    'resent',     v_resent
+  );
+END;
+$$;
+
+-- The invitee accepting. p_user_id must be signed in with the invited address:
+-- whoever reached the invitation (by the emailed link, or from their own list
+-- of invitations), the address match proves it is the person it was sent to, so
+-- a forwarded link is not enough. Inserts the membership with the offered role.
+-- Accepting twice is not an error, and an invitee who has meanwhile become a
+-- member keeps the role they already hold.
+CREATE OR REPLACE FUNCTION accept_organization_invitation_by_id(
+  p_invitation_id uuid,
+  p_user_id       uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_inv    organization_invitations;
+  v_email  text;
+  v_joined boolean;
+BEGIN
+  SELECT * INTO v_inv FROM organization_invitations
+   WHERE id = p_invitation_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: invitation % not found', p_invitation_id
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT email INTO v_email FROM users WHERE id = p_user_id AND deleted_at IS NULL;
+  IF v_email IS NULL OR lower(v_email) <> v_inv.email THEN
+    RAISE EXCEPTION 'INVITATION_WRONG_ACCOUNT: this invitation was sent to a different address'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_inv.status = 'accepted' THEN
+    RETURN jsonb_build_object(
+      'invitation_id',    v_inv.id,
+      'organization_id',  v_inv.organization_id,
+      'already_accepted', true
+    );
+  END IF;
+
+  IF v_inv.status <> 'pending' THEN
+    RAISE EXCEPTION 'INVITATION_CLOSED: this invitation was %', v_inv.status USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_inv.expires_at <= now() THEN
+    RAISE EXCEPTION 'INVITATION_EXPIRED: this invitation expired at %', v_inv.expires_at
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM organizations
+     WHERE id = v_inv.organization_id AND approval_status = 'approved' AND deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'INVITATION_ORG_UNAVAILABLE: the organization is no longer available'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  INSERT INTO organization_memberships (organization_id, user_id, role_id)
+  VALUES (v_inv.organization_id, p_user_id, v_inv.role_id)
+  ON CONFLICT (organization_id, user_id) DO NOTHING;
+  v_joined := FOUND;
+
+  UPDATE organization_invitations
+     SET status = 'accepted', responded_at = now(), responded_by = p_user_id
+   WHERE id = v_inv.id;
+
+  RETURN jsonb_build_object(
+    'invitation_id',    v_inv.id,
+    'organization_id',  v_inv.organization_id,
+    'already_accepted', false,
+    'already_member',   NOT v_joined
+  );
+END;
+$$;
+
+-- Accepting from the emailed link: the token finds the invitation, and
+-- accept_organization_invitation_by_id does the rest (including the address check).
+CREATE OR REPLACE FUNCTION accept_organization_invitation(
+  p_token_hash text,
+  p_user_id    uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_id uuid;
+BEGIN
+  SELECT id INTO v_id FROM organization_invitations WHERE token_hash = p_token_hash;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: no invitation for this link' USING ERRCODE = 'P0002';
+  END IF;
+  RETURN accept_organization_invitation_by_id(v_id, p_user_id);
+END;
+$$;
+
+-- The invitee turning it down. From their own list of invitations
+-- (p_require_invitee, the default) p_user_id must be signed in with the invited
+-- address. From the emailed link (decline_organization_invitation) holding the
+-- token is enough: declining grants nothing, and someone who never wants an
+-- account should not need one to say no. p_user_id records who declined when
+-- they were signed in (NULL otherwise). Declining twice is not an error.
+CREATE OR REPLACE FUNCTION decline_organization_invitation_by_id(
+  p_invitation_id   uuid,
+  p_user_id         uuid,
+  p_require_invitee boolean DEFAULT true
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_inv   organization_invitations;
+  v_email text;
+BEGIN
+  SELECT * INTO v_inv FROM organization_invitations
+   WHERE id = p_invitation_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: invitation % not found', p_invitation_id
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF p_require_invitee THEN
+    SELECT email INTO v_email FROM users WHERE id = p_user_id AND deleted_at IS NULL;
+    IF v_email IS NULL OR lower(v_email) <> v_inv.email THEN
+      RAISE EXCEPTION 'INVITATION_WRONG_ACCOUNT: this invitation was sent to a different address'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+
+  IF v_inv.status = 'declined' THEN
+    RETURN jsonb_build_object(
+      'invitation_id',    v_inv.id,
+      'organization_id',  v_inv.organization_id,
+      'already_declined', true
+    );
+  END IF;
+
+  IF v_inv.status <> 'pending' THEN
+    RAISE EXCEPTION 'INVITATION_CLOSED: this invitation was %', v_inv.status USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_inv.expires_at <= now() THEN
+    RAISE EXCEPTION 'INVITATION_EXPIRED: this invitation expired at %', v_inv.expires_at
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE organization_invitations
+     SET status = 'declined', responded_at = now(), responded_by = p_user_id
+   WHERE id = v_inv.id;
+
+  RETURN jsonb_build_object(
+    'invitation_id',    v_inv.id,
+    'organization_id',  v_inv.organization_id,
+    'already_declined', false
+  );
+END;
+$$;
+
+-- Declining from the emailed link: the token is the proof, so no address check.
+CREATE OR REPLACE FUNCTION decline_organization_invitation(
+  p_token_hash text,
+  p_user_id    uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_id uuid;
+BEGIN
+  SELECT id INTO v_id FROM organization_invitations WHERE token_hash = p_token_hash;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: no invitation for this link' USING ERRCODE = 'P0002';
+  END IF;
+  RETURN decline_organization_invitation_by_id(v_id, p_user_id, false);
+END;
+$$;
+
+-- An inviter withdrawing a pending invitation (expired or not), so its link stops
+-- working at once rather than at expiry, e.g. one sent to a mistyped address.
+CREATE OR REPLACE FUNCTION revoke_organization_invitation(
+  p_invitation_id uuid,
+  p_org_id        uuid,
+  p_user_id       uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_inv organization_invitations;
+BEGIN
+  SELECT * INTO v_inv FROM organization_invitations
+   WHERE id = p_invitation_id AND organization_id = p_org_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: invitation % not found', p_invitation_id
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT has_org_permission(p_user_id, p_org_id, 'org.invite') THEN
+    RAISE EXCEPTION 'INVITATION_FORBIDDEN: org.invite is required' USING ERRCODE = '42501';
+  END IF;
+
+  IF v_inv.status <> 'pending' THEN
+    RAISE EXCEPTION 'INVITATION_CLOSED: this invitation was %', v_inv.status USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE organization_invitations
+     SET status = 'revoked', responded_at = now(), responded_by = p_user_id
+   WHERE id = v_inv.id;
+
+  RETURN jsonb_build_object('id', v_inv.id, 'email', v_inv.email);
+END;
+$$;
+
+-- =============================================
+-- EXECUTE PRIVILEGES — SERVER-ONLY FUNCTIONS
+-- Postgres grants EXECUTE on every new function to PUBLIC, and Supabase's
+-- default privileges grant it to anon and authenticated as well. With the
+-- public schema exposed through PostgREST, that makes every function above
+-- callable as POST /rest/v1/rpc/<name> by any client, and a SECURITY DEFINER
+-- function then runs with the owner's rights.
+--
+-- The functions below take the acting user, organization or reviewer as plain
+-- arguments and check none of it themselves; the API routes do that before
+-- calling them through the service role. Left callable, a client could replace
+-- any organization's payout account, file an application as someone else, or
+-- approve its own organization. So EXECUTE is revoked from every client role
+-- (PUBLIC alone is not enough: anon and authenticated hold their own grants)
+-- and granted to service_role only.
+--
+-- Nested calls are unaffected: create_organization_application calls
+-- set_organization_bank_account as the function owner, not as the client.
+--
+-- Deliberately still callable by clients: app_user_id, can_act_for,
+-- has_global_permission, has_org_permission, is_org_member, is_org_approved
+-- (RLS policies and the user-session permission checks depend on them) and
+-- get_participant_counts (read-only, public counts).
+--
+-- anonymise_user_audit_logs is not SECURITY DEFINER, and audit_logs has no
+-- UPDATE policy, so a client call would change nothing. It is revoked anyway:
+-- it is an operator tool for the deletion runbook, not something a client has
+-- any reason to reach.
+--
+-- assert_tournament_capacity is revoked too. The enforce_tournament_capacity
+-- trigger calls it with the inserting role's rights, but clients can no longer
+-- insert registrations (004_rls.sql), so it only ever fires inside the
+-- SECURITY DEFINER functions in 006, which run as the owner. count_taken_seats
+-- is not SECURITY DEFINER (a client call would only count what RLS shows it),
+-- but its callers are, so it is revoked with them.
+--
+-- supabase/tests/function_privileges.sql fails if a SECURITY DEFINER function is
+-- executable by anon or authenticated without being on that list.
+-- =============================================
+REVOKE EXECUTE ON FUNCTION set_organization_bank_account   FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION set_player_bank_account         FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION record_sensitive_data_consent   FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION create_organization_application FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_organization_application FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_tournament_cancellation  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION assert_tournament_capacity      FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION count_taken_seats               FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION payout_recipient_problem        FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION nominate_payout_beneficiary     FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION accept_payout_nomination        FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION decline_payout_nomination       FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION create_organization_invitation  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION accept_organization_invitation  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION accept_organization_invitation_by_id  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION decline_organization_invitation FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION decline_organization_invitation_by_id FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION revoke_organization_invitation  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
+GRANT EXECUTE ON FUNCTION set_player_bank_account         TO service_role;
+GRANT EXECUTE ON FUNCTION record_sensitive_data_consent   TO service_role;
+GRANT EXECUTE ON FUNCTION create_organization_application TO service_role;
+GRANT EXECUTE ON FUNCTION review_organization_application TO service_role;
+GRANT EXECUTE ON FUNCTION review_tournament_cancellation  TO service_role;
+GRANT EXECUTE ON FUNCTION assert_tournament_capacity      TO service_role;
+GRANT EXECUTE ON FUNCTION count_taken_seats               TO service_role;
+GRANT EXECUTE ON FUNCTION payout_recipient_problem        TO service_role;
+GRANT EXECUTE ON FUNCTION nominate_payout_beneficiary     TO service_role;
+GRANT EXECUTE ON FUNCTION accept_payout_nomination        TO service_role;
+GRANT EXECUTE ON FUNCTION decline_payout_nomination       TO service_role;
+GRANT EXECUTE ON FUNCTION create_organization_invitation  TO service_role;
+GRANT EXECUTE ON FUNCTION accept_organization_invitation  TO service_role;
+GRANT EXECUTE ON FUNCTION accept_organization_invitation_by_id  TO service_role;
+GRANT EXECUTE ON FUNCTION decline_organization_invitation TO service_role;
+GRANT EXECUTE ON FUNCTION decline_organization_invitation_by_id TO service_role;
+GRANT EXECUTE ON FUNCTION revoke_organization_invitation  TO service_role;
+GRANT EXECUTE ON FUNCTION anonymise_user_audit_logs       TO service_role;
+GRANT EXECUTE ON FUNCTION list_global_permission_holders  TO service_role;

@@ -1,5 +1,5 @@
 // The codes payout_recipient_problem, tournament_payout_block_reason and
-// early_payout_problem return (003/007 migrations), in words. Pure, so both routes and client components can
+// early_payout_problem return (003/006 migrations), in words. Pure, so both routes and client components can
 // use it. An unknown code still reads as a sentence rather than a raw identifier.
 
 const RECIPIENT_PROBLEMS: Record<string, string> = {

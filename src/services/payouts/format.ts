@@ -10,7 +10,7 @@ export function formatRinggit(cents: number): string {
 }
 
 /**
- * The payout functions raise "SENTINEL: detail" (007_payment_functions.sql).
+ * The payout functions raise "SENTINEL: detail" (006_payment_functions.sql).
  * Returns both halves, or null for a message without a sentinel.
  */
 export function parseSentinel(

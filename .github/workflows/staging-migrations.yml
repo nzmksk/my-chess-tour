@@ -1,0 +1,44 @@
+name: Staging database migrations
+
+# Applies the migrations in supabase/migrations that the staging database
+# hasn't run yet (#631). See wiki/database-migrations.md.
+#
+# No pull_request trigger: a PR runs the workflow file from its own branch, so
+# it could be edited to leak the database URL. The URL is a secret of the
+# "staging" environment, which only the staging branch can use.
+on:
+  push:
+    branches: ["staging"]
+    paths:
+      - "supabase/migrations/**"
+      - ".github/workflows/staging-migrations.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel a migration halfway through.
+concurrency:
+  group: staging-database
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migrate staging
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up the Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+
+      # --include-all also applies a migration older than the newest one
+      # applied, as when two PRs merge in the opposite order they were written.
+      - name: Apply pending migrations
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: supabase db push --db-url "$DATABASE_URL" --include-all --yes
