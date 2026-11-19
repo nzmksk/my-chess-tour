@@ -1,6 +1,5 @@
 {
   "name": "my-chess-tour",
-  "version": "0.8.1-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",
