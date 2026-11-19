@@ -248,9 +248,9 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 -- trail still distinguishes "cleared" from "set to something".
 --
 -- Idempotent: a value already in masked form ('****' plus at most 4 characters)
--- is left alone, so re-applying it to rows that are already redacted (see
--- db/maintenance/scrub_pre_redaction_audit_rows.sql) changes nothing. Without
--- that, a short value would gain stars on every pass ('****ab' -> '******ab').
+-- is left alone, so re-applying it to rows that are already redacted changes
+-- nothing. Without that, a short value would gain stars on every pass
+-- ('****ab' -> '******ab').
 -- The shape test cannot be used to smuggle a raw value past redaction: anything
 -- that passes it already shows no more than the 4 characters masking would keep.
 -- =============================================
@@ -309,9 +309,7 @@ AS $$
 $$;
 
 -- What gets redacted in each audited table's snapshot: the one place that
--- decides it, called by both audit_trigger_func (on the way in) and
--- db/maintenance/scrub_pre_redaction_audit_rows.sql (rows written before a
--- column was covered), so the two cannot drift apart. Tables not listed come
+-- decides it, called by audit_trigger_func on the way in. Tables not listed come
 -- back unchanged. Any new sensitive column belongs here in the same PR that
 -- adds the column.
 --   player_profiles.bank_account_number (a column since moved to
