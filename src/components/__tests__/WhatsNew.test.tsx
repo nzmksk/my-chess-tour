@@ -15,7 +15,12 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname.current,
 }));
 
-import { LAST_SEEN_KEY, WhatsNew, isQuietPath } from "../WhatsNew";
+import {
+  LAST_SEEN_KEY,
+  WhatsNew,
+  fetchMissedReleases,
+  isQuietPath,
+} from "../WhatsNew";
 
 const ENTRIES: ChangelogEntry[] = [
   {
@@ -28,9 +33,11 @@ const ENTRIES: ChangelogEntry[] = [
   { version: "v0.9.6-alpha", date: "2026-11-15", improved: ["Safer edits."] },
 ];
 
+const load = vi.fn<(after: string) => Promise<readonly ChangelogEntry[]>>();
+
 function renderAt(pathname: string, version = "v0.11.0-alpha") {
   mockPathname.current = pathname;
-  return render(<WhatsNew version={version} entries={ENTRIES} />);
+  return render(<WhatsNew version={version} loadEntries={load} />);
 }
 
 function dialog() {
@@ -40,6 +47,7 @@ function dialog() {
 describe("WhatsNew", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    load.mockReset().mockResolvedValue(ENTRIES);
   });
 
   afterEach(() => {
@@ -129,17 +137,76 @@ describe("WhatsNew", () => {
     expect(dialog()).toBeNull();
   });
 
-  it("skips a silent release but still remembers it", () => {
+  it("skips a silent release but still remembers it", async () => {
     window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
-    mockPathname.current = "/";
-    render(
-      <WhatsNew
-        version="v0.11.0-alpha"
-        entries={[{ ...ENTRIES[0], silent: true }, ...ENTRIES.slice(1)]}
-      />,
+    load.mockResolvedValue([{ ...ENTRIES[0], silent: true }]);
+    renderAt("/");
+    await waitFor(() =>
+      expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.11.0-alpha"),
     );
     expect(dialog()).toBeNull();
-    expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.11.0-alpha");
+  });
+
+  it("fetches only the releases since the last one seen", async () => {
+    window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
+    renderAt("/");
+    await screen.findByRole("dialog");
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith("v0.10.0-alpha");
+  });
+
+  it("fetches nothing on a first visit or when up to date", () => {
+    renderAt("/");
+    cleanup();
+    renderAt("/");
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet and stores nothing when the releases can't be loaded", async () => {
+    window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
+    load.mockRejectedValue(new Error("503"));
+    renderAt("/");
+    await waitFor(() => expect(load).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(dialog()).toBeNull();
+    expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.10.0-alpha");
+  });
+
+  it("tries again on the next page after the releases failed to load", async () => {
+    window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
+    load.mockRejectedValueOnce(new Error("503"));
+    const { rerender } = renderAt("/");
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(dialog()).toBeNull();
+
+    mockPathname.current = "/my";
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("decides again later when the visitor leaves for checkout mid-load", async () => {
+    window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
+    let resolveFirst: (entries: readonly ChangelogEntry[]) => void = () => {};
+    load.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    const { rerender } = renderAt("/tournaments/kl-open");
+
+    mockPathname.current = "/tournaments/kl-open/register";
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
+    resolveFirst(ENTRIES);
+    await Promise.resolve();
+    expect(dialog()).toBeNull();
+    expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.10.0-alpha");
+
+    mockPathname.current = "/my";
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(load).toHaveBeenCalledTimes(2);
   });
 
   it("does nothing on a build without a release version", () => {
@@ -155,16 +222,16 @@ describe("WhatsNew", () => {
     expect(dialog()).toBeNull();
 
     mockPathname.current = "/tournaments/kl-open/register";
-    rerender(<WhatsNew version="v0.11.0-alpha" entries={ENTRIES} />);
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
     expect(dialog()).toBeNull();
     expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.10.0-alpha");
 
     mockPathname.current = "/tournaments/kl-open/register/success";
-    rerender(<WhatsNew version="v0.11.0-alpha" entries={ENTRIES} />);
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
     expect(dialog()).toBeNull();
 
     mockPathname.current = "/my";
-    rerender(<WhatsNew version="v0.11.0-alpha" entries={ENTRIES} />);
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
     expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 
@@ -175,7 +242,7 @@ describe("WhatsNew", () => {
     expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.10.0-alpha");
 
     mockPathname.current = "/my";
-    rerender(<WhatsNew version="v0.11.0-alpha" entries={ENTRIES} />);
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
     expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 
@@ -188,14 +255,43 @@ describe("WhatsNew", () => {
       expect(dialog()).toBeNull();
     });
 
-    it("shows nothing when the version can't be saved", () => {
+    it("shows nothing when the version can't be saved", async () => {
       window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
       vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
         throw new Error("QuotaExceededError");
       });
       renderAt("/");
+      await waitFor(() => expect(load).toHaveBeenCalled());
+      await Promise.resolve();
       expect(dialog()).toBeNull();
     });
+  });
+});
+
+describe("fetchMissedReleases", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("asks the API for the releases after the given one", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: { entries: ENTRIES } })),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await fetchMissedReleases("v0.10.0-alpha")).toEqual(ENTRIES);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/changelog?after=v0.10.0-alpha",
+    );
+  });
+
+  it("throws when the API fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 503 })),
+    );
+    await expect(fetchMissedReleases("v0.10.0-alpha")).rejects.toThrow("503");
   });
 });
 

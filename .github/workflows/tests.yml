@@ -5,10 +5,6 @@ on:
     branches: ["staging", "master"]
   pull_request:
     branches: ["staging", "master"]
-  # A release tag must have a changelog entry (#622). The tag is cut after its
-  # PR merges, so this run on the tag is what catches one cut without it.
-  release:
-    types: [published]
 
 jobs:
   test:
@@ -20,10 +16,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
-        with:
-          # Full history with tags: the changelog test checks every release
-          # tag reachable from this commit has an entry.
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -45,8 +37,6 @@ jobs:
   # production, so it needs no secrets and is safe on PRs.
   db-test:
     name: Run database tests
-    # A release reruns only for the changelog check above.
-    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

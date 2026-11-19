@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   compareVersions,
+  hasMissedRelease,
   isReleaseVersion,
+  paginateEntries,
+  parsePageParam,
   pickAnnouncement,
   releasedEntries,
   type ChangelogEntry,
@@ -147,5 +150,84 @@ describe("pickAnnouncement", () => {
     expect(
       pickAnnouncement("v0.10.0-alpha", "v0.11.0-alpha", withSilent),
     ).toEqual({ kind: "remember" });
+  });
+});
+
+describe("parsePageParam", () => {
+  it("defaults to the first page", () => {
+    expect(parsePageParam(undefined)).toBe(1);
+  });
+
+  it.each([
+    ["1", 1],
+    ["2", 2],
+    ["40", 40],
+  ])("reads %j as page %i", (value, page) => {
+    expect(parsePageParam(value)).toBe(page);
+  });
+
+  it.each(["", "0", "-1", "1.5", "01", "abc", "2abc", " 2", "1e3", "9999999"])(
+    "rejects %j",
+    (value) => {
+      expect(parsePageParam(value)).toBeNull();
+    },
+  );
+
+  it("rejects a repeated parameter", () => {
+    expect(parsePageParam(["1", "2"])).toBeNull();
+  });
+});
+
+describe("paginateEntries", () => {
+  const entries = Array.from({ length: 23 }, (_, i) =>
+    entry(`v0.${23 - i}.0-alpha`),
+  );
+
+  it("splits the entries into pages of ten", () => {
+    const first = paginateEntries(entries, 1);
+    expect(first?.entries.map((e) => e.version)).toEqual(
+      entries.slice(0, 10).map((e) => e.version),
+    );
+    expect(first?.pageCount).toBe(3);
+  });
+
+  it("returns the remainder on the last page", () => {
+    const last = paginateEntries(entries, 3);
+    expect(last?.entries).toEqual(entries.slice(20));
+    expect(last).toMatchObject({ page: 3, pageCount: 3 });
+  });
+
+  it("returns null past the last page", () => {
+    expect(paginateEntries(entries, 4)).toBeNull();
+    expect(paginateEntries(entries, 0)).toBeNull();
+  });
+
+  it("treats an empty changelog as one empty page", () => {
+    expect(paginateEntries([], 1)).toEqual({
+      entries: [],
+      page: 1,
+      pageCount: 1,
+    });
+    expect(paginateEntries([], 2)).toBeNull();
+  });
+
+  it("takes another page size", () => {
+    expect(paginateEntries(entries, 2, 20)?.entries).toHaveLength(3);
+  });
+});
+
+describe("hasMissedRelease", () => {
+  it("is true when the last release seen is older than this build", () => {
+    expect(hasMissedRelease("v0.10.0-alpha", "v0.11.0-alpha")).toBe(true);
+  });
+
+  it.each([
+    ["a first visit", null, "v0.11.0-alpha"],
+    ["something unreadable stored", "garbage", "v0.11.0-alpha"],
+    ["an up-to-date visitor", "v0.11.0-alpha", "v0.11.0-alpha"],
+    ["a visitor ahead of this build", "v0.12.0-alpha", "v0.11.0-alpha"],
+    ["a build without a release version", "v0.10.0-alpha", "dev"],
+  ])("is false for %s", (_, lastSeen, current) => {
+    expect(hasMissedRelease(lastSeen, current)).toBe(false);
   });
 });

@@ -148,7 +148,7 @@ Organizer payouts (#519–#522) and the platform prize pool (#523) moved from �
 - **Scenarios:** rate-limited (5/h per user, 3/h per IP signed out); Redis down fails closed; if GitHub refuses, the saved row is kept and the reporter still gets the reference (502), so support can file it by hand. The reporter's text is fenced so it can't @mention, link or hide content (`src/services/bug-reports/format.ts`).
 
 ### V5. Footer, release version and changelog — ✅ Built (#617, #621, #622)
-- The footer links the legal pages and support address, and shows the release version (from the git tag at build time). `/changelogs` lists every release written for users, and a "What's new" dialog appears once per browser after a new release. How a release is cut: [releases.md](./releases.md).
+- The footer links the legal pages and support address, and shows the release version (from the git tag at build time). `/changelogs` lists every release from its GitHub release notes, written for users, 10 per page (#640), and a "What's new" dialog appears once per browser after a new release. How a release is cut: [releases.md](./releases.md).
 
 ---
 

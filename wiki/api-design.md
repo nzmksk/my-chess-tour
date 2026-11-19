@@ -170,12 +170,19 @@ Admin **pages** with no route of their own read through the server (e.g. `/admin
 | -- | -- | -- | -- |
 | POST | `/feedback` | Public (tighter limit signed out) | In-app bug report (#616). Saved to `bug_reports`, then filed as a GitHub issue on the public repo labelled `bug` + `user-reported`, without the reporter's identity. |
 
+### Changelog
+
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| GET | `/changelog` | Public | `?after=v0.10.0-alpha`: the releases after that one that this build carries, newest first, from the cached GitHub release notes (#640). Used by the "What's new" dialog. 503 when GitHub can't be read. |
+
 ### Webhooks and crons (machine callers)
 
 | Method | Path | Auth | What |
 | -- | -- | -- | -- |
 | POST | `/webhooks/chip` | RSA-SHA256 `X-Signature` (`CHIP_WEBHOOK_PUBLIC_KEY`) | CHIP Collect: registration payments, sponsor prize-pool payments, refunds. |
 | POST | `/webhooks/chip/send` | RSA-SHA512 `X-Signature` (`CHIP_SEND_WEBHOOK_PUBLIC_KEY`) | CHIP Send: bank account verdicts, budget allocations, payout and prize-award transfers. |
+| POST | `/webhooks/github` | HMAC-SHA256 `X-Hub-Signature-256` (`GITHUB_WEBHOOK_SECRET`) | GitHub release events: invalidate the cached changelog (#640). |
 | POST | `/cron/refunds` | `CRON_SECRET` | Fire queued cancellation refunds. Every 5 minutes (`.github/workflows/cancellation-refunds.yml`). |
 | POST | `/cron/payouts` | `CRON_SECRET` | Bank registrations, payout and prize sweeps. Daily at 01:00 UTC (`organizer-payouts.yml`). |
 | POST | `/cron/fide-ratings` | `CRON_SECRET` | Refresh every player's FIDE ratings. Monthly (`fide-ratings.yml`). |

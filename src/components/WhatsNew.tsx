@@ -12,8 +12,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ChangelogChanges } from "@/components/ChangelogChanges";
-import { CHANGELOG } from "@/content/changelog";
-import { pickAnnouncement, type ChangelogEntry } from "@/lib/changelog";
+import {
+  hasMissedRelease,
+  pickAnnouncement,
+  type Announcement,
+  type ChangelogEntry,
+} from "@/lib/changelog";
 import { formatLegalVersion } from "@/lib/reference/legal";
 
 /** The last release this browser was told about. Works signed out too. */
@@ -59,19 +63,40 @@ function writeLastSeen(version: string): boolean {
 type Shown = { entry: ChangelogEntry; missed: number; open: boolean };
 
 /**
+ * The releases newer than `after` that this build carries, from the GitHub
+ * release notes (#640). Throws when they can't be loaded.
+ */
+export async function fetchMissedReleases(
+  after: string,
+): Promise<readonly ChangelogEntry[]> {
+  const response = await fetch(
+    `/api/v1/changelog?after=${encodeURIComponent(after)}`,
+  );
+  if (!response.ok) {
+    throw new Error(`Changelog request failed with ${response.status}`);
+  }
+  const body: { data: { entries: ChangelogEntry[] } } = await response.json();
+  return body.data.entries;
+}
+
+/**
  * "What's new" (#622): the first ordinary page view after a new release shows
  * that release's changelog entry, once. A first-ever visit stores the version
  * quietly instead, and several skipped releases still mean one dialog, for
  * the newest. Decided in an effect, so nothing renders during SSR or
  * hydration. Radix's dialog traps focus, closes on Esc, returns focus where
  * it was, and labels itself by its title.
+ *
+ * The releases are only fetched when this browser has missed one (#640). If
+ * that fails, nothing is stored or shown, and the next ordinary page tries
+ * again.
  */
 export function WhatsNew({
   version = process.env.APP_VERSION ?? "",
-  entries = CHANGELOG,
+  loadEntries = fetchMissedReleases,
 }: {
   version?: string;
-  entries?: readonly ChangelogEntry[];
+  loadEntries?: (after: string) => Promise<readonly ChangelogEntry[]>;
 }) {
   const pathname = usePathname();
   const decided = useRef(false);
@@ -87,28 +112,55 @@ export function WhatsNew({
     const lastSeen = readLastSeen();
     if (lastSeen === undefined) return;
 
-    const announcement = pickAnnouncement(lastSeen, version, entries);
-    if (announcement.kind === "none") return;
+    const act = (announcement: Announcement) => {
+      if (announcement.kind === "none") return;
 
-    // Stored as soon as it's decided, so neither closing nor reloading brings
-    // it back. Storage that won't keep it means no dialog at all, rather than
-    // the same one on every page.
-    if (!writeLastSeen(version)) return;
+      // Stored as soon as it's decided, so neither closing nor reloading
+      // brings it back. Storage that won't keep it means no dialog at all,
+      // rather than the same one on every page.
+      if (!writeLastSeen(version)) return;
 
-    if (announcement.kind === "show") {
-      returnFocus.current =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
-      // localStorage only exists after hydration, so this has to be an effect.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShown({
-        entry: announcement.entry,
-        missed: announcement.missed,
-        open: true,
-      });
+      if (announcement.kind === "show") {
+        returnFocus.current =
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+        setShown({
+          entry: announcement.entry,
+          missed: announcement.missed,
+          open: true,
+        });
+      }
+    };
+
+    if (lastSeen === null || !hasMissedRelease(lastSeen, version)) {
+      act(pickAnnouncement(lastSeen, version, []));
+      return;
     }
-  }, [pathname, version, entries]);
+
+    let settled = false;
+    let cancelled = false;
+    loadEntries(lastSeen)
+      .then((entries) => {
+        settled = true;
+        if (!cancelled) act(pickAnnouncement(lastSeen, version, entries));
+      })
+      .catch(() => {
+        // Already logged on the server. Stay quiet, and try again on the next
+        // ordinary page: client-side navigation keeps this component mounted.
+        settled = true;
+        decided.current = false;
+      });
+
+    return () => {
+      // Navigated away before the releases arrived, possibly into checkout:
+      // drop the answer and decide again on the next ordinary page.
+      if (!settled) {
+        cancelled = true;
+        decided.current = false;
+      }
+    };
+  }, [pathname, version, loadEntries]);
 
   if (!shown) return null;
   const { entry, missed, open } = shown;

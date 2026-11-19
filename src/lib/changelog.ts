@@ -1,7 +1,9 @@
 /**
  * The user-facing changelog (#622): types and the pure rules for which
- * releases to list and which one to announce. The entries themselves live in
- * src/content/changelog.ts. Safe for client components: no Node APIs.
+ * releases to list and which one to announce. The entries themselves are the
+ * GitHub release notes (#640): src/lib/release-notes.ts parses them and
+ * src/services/github/releases.ts fetches them. Safe for client components:
+ * no Node APIs.
  */
 
 export interface ChangelogEntry {
@@ -107,6 +109,44 @@ export function releasedEntries(
   );
 }
 
+/** Releases per page on /changelogs (#640). */
+const CHANGELOG_PAGE_SIZE = 10;
+
+/**
+ * The `page` query parameter of /changelogs: 1 when it's absent, null when
+ * it isn't a whole number from 1 up (the page answers 404).
+ */
+export function parsePageParam(
+  value: string | string[] | undefined,
+): number | null {
+  if (value === undefined) return 1;
+  if (typeof value !== "string" || !/^[1-9]\d{0,5}$/.test(value)) return null;
+  return Number(value);
+}
+
+export interface ChangelogPage {
+  entries: ChangelogEntry[];
+  page: number;
+  /** At least 1: an empty changelog is one empty page. */
+  pageCount: number;
+}
+
+/** One page of entries, or null for a page past the last one. */
+export function paginateEntries(
+  entries: readonly ChangelogEntry[],
+  page: number,
+  pageSize = CHANGELOG_PAGE_SIZE,
+): ChangelogPage | null {
+  const pageCount = Math.max(1, Math.ceil(entries.length / pageSize));
+  if (page < 1 || page > pageCount) return null;
+  const start = (page - 1) * pageSize;
+  return {
+    entries: entries.slice(start, start + pageSize),
+    page,
+    pageCount,
+  };
+}
+
 export type Announcement =
   /** Leave storage alone and show nothing. */
   | { kind: "none" }
@@ -114,6 +154,24 @@ export type Announcement =
   | { kind: "remember" }
   /** Show `entry`; `missed` counts every release since the last one seen. */
   | { kind: "show"; entry: ChangelogEntry; missed: number };
+
+/**
+ * Whether this browser has missed a release since its last visit, and so
+ * whether the "What's new" dialog needs the releases to decide (#640). False
+ * on a first visit, when it is up to date, and on a build without a release
+ * version: pickAnnouncement decides those without any entries.
+ */
+export function hasMissedRelease(
+  lastSeen: string | null,
+  currentVersion: string,
+): boolean {
+  return (
+    isReleaseVersion(currentVersion) &&
+    lastSeen !== null &&
+    isReleaseVersion(lastSeen) &&
+    compareVersions(lastSeen, currentVersion) < 0
+  );
+}
 
 /**
  * Decides what the "What's new" dialog does on this visit.
