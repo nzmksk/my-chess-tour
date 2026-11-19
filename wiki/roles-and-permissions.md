@@ -163,17 +163,21 @@ tournament-INSERT policy so the DB — not just the API — enforces org approva
 > ⚠️ **Not every route checks a permission *key*.** Several
 > organizer/tournament routes gate on the **role name directly** (owner/admin)
 > rather than a permission key — e.g. `publish`, `PATCH` (edit),
-> `close-registration`, and `cancel` all require `roles.name IN ('owner','admin')`.
+> `close-registration`, `cancel` and `participants/export` all require
+> `roles.name IN ('owner','admin')` (inline in publish/PATCH, the others through
+> `authorizeTournamentManager` in `tournaments/[id]/_lib/authorize.ts`).
 > This is why an org **admin can cancel/close a tournament via the API even
 > though they lack `tournament.delete`**: the permission key only governs the
 > cancellation-request **RLS** policy (a defense-in-depth layer), while the
 > primary API path is role-name gated. If cancel should be owner-only, tighten
 > those routes to check `tournament.delete`.
 
-At the app layer, only a subset of keys are actually consulted (`platform.manage`,
-`org.manage`, `org.invite`, `tournament.create`, `tournament.edit`); the rest
-(`tournament.view`, `tournament.delete`, `registration.view`, `payment.view`,
-`refund.manage`) are enforced primarily through **RLS**.
+At the app layer, these keys are consulted: `platform.manage`, `org.manage`,
+`org.invite`, `tournament.create`, `tournament.edit`, `tournament.view` (the
+prize-funder contacts route), `refund.manage` (whether the manage page shows the
+tournament's refunds), `bank_account.manage`, `payout.view` and
+`payout.request`. The rest (`tournament.delete`, `registration.view`,
+`payment.view`) are enforced only through **RLS**.
 
 ## Whose id is being checked (#501)
 
@@ -247,15 +251,17 @@ is **not assignable** through the members UI (it's set only by the approval RPC)
   per-table "full access" RLS policy + app-layer checks — not as a role that
   literally holds all other keys. Adding a new table means adding its own admin
   policy; there is no automatic inheritance.
-- **`admin` ≠ `owner`.** The two differences are `org.manage` (org settings +
-  role management) and `tournament.delete` (cancel/close). Everything else is
-  identical.
+- **`admin` ≠ `owner`.** The four differences are `org.manage` (org settings +
+  role management), `tournament.delete` (cancel/close, at the RLS layer),
+  `bank_account.manage` (the payout account) and `payout.request` (anything that
+  moves money). Everything else is identical.
 - **`member` is genuinely read-only** — it cannot create, edit, invite, or see
   payments; only tournaments (incl. drafts) and rosters.
 - **One global role only.** There is no finer-grained platform staff role (e.g. a
   read-only auditor); `platform_admin` is all-or-nothing.
-- **`refund.manage` is seeded but never checked by application code.** It gates the
-  refund RLS policies, yet the one path that actually moves money back —
+- **`refund.manage` only decides what the manage page shows.** It gates the
+  refund RLS policies, and the manage page checks it before listing a
+  tournament's refunds (#511). Yet the one path that actually moves money back —
   cancellation refunds ([refund-flow.md](./refund-flow.md)) — is authorised as a
   *platform* admin approving a cancellation and executes through `supabaseAdmin`
   (service role), which bypasses RLS entirely. Its first real consumer would be an

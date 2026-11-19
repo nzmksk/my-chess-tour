@@ -25,7 +25,8 @@
 
 - **Server code: use `getAuthClaims()`** from `@/services/supabase/permission`.
   It validates the JWT locally (no auth-server round trip) and is deduped per
-  request. Returns `{ id, email, userMetadata, role }` or `null`.
+  request. Returns `{ id, authUserId, email, userMetadata, role }` or `null`,
+  where `id` is the `public.users.id`, not the Supabase Auth id (see §5).
 - **Do NOT use `supabase.auth.getUser()` in new server code** unless you have a
   specific reason to catch *mid-session revocation* immediately (see §6). It
   costs a network round trip to the Supabase Auth server on every call.
@@ -84,9 +85,9 @@ Key point: **the middleware is what keeps the session fresh.** On every matched
 request it calls `supabase.auth.getClaims()`, which (a) verifies the current
 access token locally and (b) refreshes it via `getSession()` under the hood when
 expired, writing the new cookies back through the `setAll` cookie adapter. The
-comment in `src/proxy.ts:35-40` flags this as load-bearing — don't remove it.
+comment in `src/proxy.ts:46-51` flags this as load-bearing — don't remove it.
 
-The matcher (`src/proxy.ts:115`) covers essentially everything except static
+The matcher (`src/proxy.ts:117`) covers essentially everything except static
 assets, so both pages and `/api/*` are refreshed.
 
 ---
@@ -133,7 +134,7 @@ round trip to the Auth server**.
 | Latency | ~0 (no round trip) | One auth-server round trip per call |
 | Detects revocation mid-session | No — only at token expiry (≤ TTL) | **Yes, immediately** |
 | Per-request dedupe | Yes (React `cache()`) | No |
-| Returns | `{ id, email, userMetadata, role }` \| `null` | full Supabase `User` \| `null` |
+| Returns | `{ id, authUserId, email, userMetadata, role }` \| `null` | full Supabase `User` \| `null` |
 | Availability | **Server only** | Server or browser client |
 
 `getAuthClaims()` is defined in `src/services/supabase/permission.ts`:
@@ -147,8 +148,11 @@ async function resolveAuthClaims(): Promise<AuthIdentity | null> {
   const { data } = await supabase.auth.getClaims(); // local JWT verification
   const claims = data?.claims;
   if (!claims) return null;
+  const appUserId = await lookupAppUserId(claims.sub); // auth id → users.id
+  if (!appUserId) return null;                         // fail closed
   return {
-    id: claims.sub,                                   // note: sub → id
+    id: appUserId,                                     // public.users.id
+    authUserId: claims.sub,                            // Supabase Auth id
     email: claims.email ?? "",
     userMetadata: (claims.user_metadata ?? {}),
     role: claims.role,
@@ -175,20 +179,25 @@ if (!claims) {
 // use claims.id  (claims.email / claims.role as needed)
 ```
 
-> Gotcha: claims expose the user id as **`sub`**, but `getAuthClaims()` already
-> maps it to `id`. Use `claims.id`. Don't reach for `claims.sub` yourself.
+> Gotcha: the JWT's **`sub`** is the *Supabase Auth* id, not the application's
+> user id. `getAuthClaims()` resolves it through `lookupAppUserId`
+> (`src/services/supabase/identity.ts`) and returns the `public.users.id` as
+> `id`. Use `claims.id` for anything that touches an application table, and
+> `claims.authUserId` only for Supabase Auth calls. Don't read `claims.sub`
+> yourself.
 
 ---
 
 ## 6. Where getUser() is still used, and why
 
-`getUser()` is retained in exactly **two** places. Everything else was migrated
+`getUser()` is retained in exactly **three** places. Everything else was migrated
 to `getAuthClaims()`.
 
 | File | Reason it keeps `getUser()` |
 | --- | --- |
-| `src/app/api/v1/tournaments/[id]/checkout/route.ts` | **Payment initiation.** Needs an immediate server-side **revocation check** right before taking money — the ~1h local-verification window is unacceptable here. Worth the round trip. |
+| `src/app/api/v1/tournaments/[slug]/checkout/route.ts` | **Payment initiation.** Needs an immediate server-side **revocation check** right before taking money — the ~1h local-verification window is unacceptable here. Worth the round trip. |
 | `src/app/settings/_components/ProfileClient.tsx` | **Client component.** `getAuthClaims()` is server-only; this needs the live browser session. |
+| `src/app/organizations/apply/_components/ApplyForm.tsx` | **Client component.** Uploads KYB documents browser→storage before the POST, and needs the live session to confirm it is still signed in. |
 
 If you're adding a money-movement or account-takeover-sensitive server action,
 consider `getUser()` for the immediate revocation guarantee. Otherwise default to
@@ -227,14 +236,14 @@ check has passed.
   the bare `/organizations` landing is public), `/settings`. Unauthenticated →
   redirect to `/auth/login?redirectTo=…`.
 - **Guest-only:** `/auth/login`, `/auth/signup`, `/auth/forgot-password`,
-  `/auth/logout` — authenticated users are bounced to `/tournaments`.
+  `/auth/logout` — authenticated users are bounced to `/`.
 - **Signup step gating:** a `SIGNUP_STEP_COOKIE` (`verify`) prevents reaching the verify step by URL before an account exists; it's cleared once verified.
 - **Password reset:** `/auth/update-password` requires a *recovery* session —
   checked via the JWT's `amr` containing an `otp` method.
 - **Signup return path:** a page that sends someone to signup (the organization
   invitation page) can leave a same-site path in sessionStorage
   (`rememberSignupReturnTo`); the verify step follows it once instead of
-  `/tournaments`. Login's detour through the verify step carries `redirectTo`
+  `/`. Login's detour through the verify step carries `redirectTo`
   the same way.
 
 > Middleware runs on the **Node** runtime here (Next 16 `src/proxy.ts`), not edge.
@@ -267,7 +276,7 @@ state in a Zustand store:
 - Calls `supabase.auth.signInWithPassword({ email, password })`.
 - Blocks unverified accounts (`users.is_verified`): signs out locally, re-sends a
   verification code, and routes into the verify step.
-- On success, redirects to a sanitized `redirectTo` (defaults to `/tournaments`).
+- On success, redirects to a sanitized `redirectTo` (defaults to `/`, the tournament list).
 
 **"Keep me signed in"** controls cookie persistence:
 - Unchecked → `createClient({ sessionOnly: true })` writes the `sb-*` cookies

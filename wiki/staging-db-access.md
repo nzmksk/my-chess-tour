@@ -39,7 +39,7 @@ The default privileges cover tables added by later migrations, so step 1 never n
 
 3. Send the tester the connection details below, with the password over a separate channel.
 
-The login gets `BYPASSRLS` because every table in `public` has RLS enabled, and every policy matches through `auth.uid()`. Without it, every query would return zero rows. It is set on each login rather than on `qa_readonly` because Postgres doesn't pass role attributes down through membership.
+The login gets `BYPASSRLS` because every table in `public` has RLS enabled, and every policy matches the caller through `app_user_id()` (their JWT), which a database login doesn't have. Without it, every query would return zero rows. It is set on each login rather than on `qa_readonly` because Postgres doesn't pass role attributes down through membership.
 
 Supabase's `postgres` isn't a superuser. It can only create a `BYPASSRLS` role on Postgres 16 or later (check with `SHOW server_version;`). On an older version, step 1 fails with a permission error.
 

@@ -93,11 +93,11 @@ The 10-minute hold frees _capacity_ but never terminalizes the row, and CHIP emi
   - per-tournament in `getTournamentManageData` (organizer roster);
   - per-user in `GET /api/v1/me/registrations` (My Tournaments list). Bulk sweeps skip the per-row CHIP cancel — `due` already makes links unpayable.
 
-`expire_stale_pending_payments` called with no scoping args sweeps everything, so it doubles as a future **pg_cron backstop** for rows never read again. None is scheduled today — there is no scheduler in this project (Netlify, plain `next build`/`start`).
+`expire_stale_pending_payments` called with no scoping args sweeps everything, so it doubles as a future backstop for rows never read again. None is scheduled today. The project's only schedulers are GitHub Actions workflows that POST cron routes (refunds, payouts, FIDE ratings); there is no `pg_cron`, and no workflow calls this sweep.
 
 ## Regression testing
 
-Three layers, cheapest first. Run **A** on every change; add **B** when touching the DB money functions (`006`/`003`); run **C** before a release or when changing the CHIP integration.
+Three layers, cheapest first. **A** and **B** both run in CI on every PR into `staging` or `master` (`.github/workflows/tests.yml`); run them locally when touching the money paths. Run **C** before a release or when changing the CHIP integration.
 
 ### A. Automated suite — `npm run test` (vitest)
 
@@ -111,7 +111,7 @@ Key files and what each pins down:
 
 ### B. DB money-state scenarios — `supabase/tests/settle_registration_payment.sql`
 
-The vitest layer can't reach the settlement/supersession/expiry SQL (it mocks the RPCs), so the money-loss-critical paths are covered here. Paste the script into the **Supabase SQL editor** (service role) after applying the migrations. It builds throwaway fixtures and is wrapped in `BEGIN … ROLLBACK`, so it **persists nothing**; it prints `ALL SCENARIOS PASSED` or `RAISE`s on the first failure. Scenarios:
+The vitest layer can't reach the settlement/supersession/expiry SQL (it mocks the RPCs), so the money-loss-critical paths are covered here. CI's **Run database tests** job builds a database from `supabase/migrations` and runs it with the other suites (#633). To run it locally, see [database-migrations.md](./database-migrations.md#tests). It builds throwaway fixtures and is wrapped in `BEGIN … ROLLBACK`, so it **persists nothing**; it prints `ALL SCENARIOS PASSED` or `RAISE`s on the first failure. Scenarios:
 
 - **S1** decline (`paid=false`) then retry-success on the **same** payment → `confirmed`/`paid` (the "real money wins" fix).
 - **S2** supersede A with B via `start_new_payment_attempt`, then a late `paid` for A → `confirmed`, `current_payment_id` points at A.
@@ -164,5 +164,5 @@ Drive a real checkout and inspect the two rows (`registrations.status`, `payment
 - `src/app/api/v1/webhooks/chip/route.ts` — signature verify + settle.
 - `src/app/tournaments/[slug]/register/_lib/resolvePaymentState.ts` — return-page reconcile + lazy expiry.
 - `src/app/tournaments/[slug]/register/page.tsx` + `_components/PaymentInProgress.tsx` — Continue-payment screen for a live pending payment.
-- `supabase/tests/settle_registration_payment.sql` — transaction-wrapped DB money-state regression test (see [Regression testing](#regression-testing) §B).
+- `supabase/tests/settle_registration_payment.sql` — transaction-wrapped DB money-state regression test, run in CI (see [Regression testing](#regression-testing) §B).
 - DB functions are flattened into two files: `supabase/migrations/006_payment_functions.sql` (`compute_registration_amounts`, `create_registration_with_payment`, `start_new_payment_attempt`, `settle_registration_payment`, `expire_stale_pending_payments`) and `supabase/migrations/003_functions_triggers.sql` (`assert_tournament_capacity` + the `check_tournament_capacity` INSERT trigger). `payments.checkout_url` and the `cancelled_payment` resume path live in `001_tables.sql` / `006`.

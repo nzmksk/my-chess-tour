@@ -1,1245 +1,208 @@
-# MY Chess Tour — API Design
+# MY Chess Tour — API Reference
+
+What the HTTP API under `src/app/api/v1` actually is: every route, who may call it, and the conventions they share. The route files are the source of truth. Request and response shapes are documented in each route's header comment and its `__tests__`, and the money flows are walked through end to end in their own pages:
+
+- [authentication-flow.md](./authentication-flow.md): sessions, `getAuthClaims()` vs `getUser()`, the proxy
+- [roles-and-permissions.md](./roles-and-permissions.md): the roles and permission keys referenced below
+- [payment-flow.md](./payment-flow.md), [refund-flow.md](./refund-flow.md), [payout-flow.md](./payout-flow.md), [prize-flow.md](./prize-flow.md): the money paths
+- [chip-webhook.md](./chip-webhook.md): the two CHIP webhooks
 
 ## Table of Contents
 
-1. Authentication & Authorization
-2. Role-Based Access Control
-3. API Conventions
-4. Endpoints
-   - Auth
-   - Player Profile
-   - Tournaments (Public)
-   - Registration & Payments
-   - Organizer Applications
-   - Organizer Dashboard
-   - Organizer Tournaments
-   - Organizer Members
-   - Organizer Payouts
-   - Admin: Dashboard
-   - Admin: Applications
-   - Admin: Tournaments
-   - Admin: Transactions
-5. Webhooks (CHIP)
-6. Error Handling
+1. [Authentication & authorization](#1-authentication--authorization)
+2. [Conventions](#2-conventions)
+3. [Endpoints](#3-endpoints)
+4. [Errors](#4-errors)
+5. [Rate limiting](#5-rate-limiting)
+6. [CORS and origin policy](#6-cors-and-origin-policy)
 
 ---
 
-## 1. Authentication & Authorization
+## 1. Authentication & authorization
 
-**Provider:** Supabase Auth (built into the stack)
-
-**Methods supported for MVP:**
-
-- Email + password (primary)
-- Magic link (passwordless email)
-- Google OAuth (optional, low effort with Supabase)
-
-**Session management:**
-
-- Supabase issues a JWT on login, refreshed automatically by the Supabase client SDK.
-- The JWT contains `user_id` and is verified server-side on every API request via Supabase's `getUser()`.
-- No custom token management needed for MVP.
-
-**Auth flow:**
-
-1. User signs up or logs in via Supabase Auth (client-side SDK).
-2. Supabase returns a JWT stored in an HTTP-only cookie (Next.js middleware).
-3. Every API route extracts the user from the cookie using `createServerClient()`.
-4. If the route requires a specific role, the API checks the user's role(s) before proceeding.
+- **Sessions** are Supabase Auth cookies (`sb-*`), email + password only. The proxy (`src/proxy.ts`) verifies and refreshes the JWT on every matched request, including `/api`. Routes read the caller with `getAuthClaims()`, which returns the `public.users.id` as `id`. The one exception is checkout, which also calls `getUser()` for an immediate revocation check before taking money.
+- **Sign-in, sign-out and password reset are server actions, not API routes:** `src/app/auth/login/_actions/login.ts`, `logout/_actions/logout.ts`, `forgot-password/_actions/forgotPassword.ts` and `update-password/_actions/updatePassword.ts`. Only signup (three steps) and the email-link callback are routes.
+- **Authorization** is data-driven: roles map to permission keys (`roles`, `permissions`, `role_permissions`), checked with `has_org_permission` / `has_global_permission`. In a route that is `hasOrgPermission`, `authorizeOrgPermission`, or `hasGlobalPermission(…, "platform.manage")`. RLS enforces the same keys underneath.
+- **Some organizer routes check the role name**, not a key: tournament create, edit, publish, close registration, cancel and participant export require an `owner` or `admin` membership of an **approved** organization (`authorizeTournamentManager` in `organizations/[orgId]/tournaments/[id]/_lib/authorize.ts`, or the same check inline). See the warning in [roles-and-permissions.md](./roles-and-permissions.md) §5.2.
+- **Machine callers:** the CHIP webhooks verify an RSA signature, and the cron routes require `Authorization: Bearer $CRON_SECRET`.
 
 ---
 
-## 2. Role-Based Access Control
+## 2. Conventions
 
-A single user can hold multiple roles simultaneously. Roles are not stored on the `users` table — they are derived from the existence of related records.
+**Base URL:** `/api/v1`.
 
-| Role                   | How it's determined                                                                 | Capabilities                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Player**             | Has a row in `player_profiles`                                                      | Browse, register, pay, view own registrations                                              |
-| **Organizer (owner)**  | Has a row in `organizer_members` with `role = 'owner'` for an approved organization | Full org management, create/edit tournaments, manage members, view payouts                 |
-| **Organizer (admin)**  | Has a row in `organizer_members` with `role = 'admin'`                              | Create/edit tournaments, view participants and payouts                                     |
-| **Organizer (member)** | Has a row in `organizer_members` with `role = 'member'`                             | View tournaments and participants only                                                     |
-| **Platform Admin**     | `users.role = 'admin'`                                                              | Full platform access: approve/reject organizers, view all tournaments, transactions, users |
+**Format:** JSON bodies. Instants are ISO 8601. Money is integer **sen** (`*_cents`). A tournament's calendar dates (`start_date`, `end_date`) are dates at the venue, in `tournaments.timezone`, and "today" for a tournament is today there (see [tournament-editing.md](./tournament-editing.md#stages)).
 
-**Permission check helper (server-side):**
-
-```typescript
-// lib/permissions.ts
-
-type OrgRole = "owner" | "admin" | "member";
-
-async function getUserOrgRole(
-  userId: string,
-  organizerId: string,
-): Promise<OrgRole | null> {
-  const { data } = await supabase
-    .from("organizer_members")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("organizer_id", organizerId)
-    .single();
-  return data?.role ?? null;
-}
-
-async function requireOrgRole(
-  userId: string,
-  organizerId: string,
-  minRole: OrgRole,
-): Promise<void> {
-  const role = await getUserOrgRole(userId, organizerId);
-  const hierarchy: OrgRole[] = ["member", "admin", "owner"];
-  if (!role || hierarchy.indexOf(role) < hierarchy.indexOf(minRole)) {
-    throw new ForbiddenError("Insufficient permissions");
-  }
-}
-
-async function requireAdmin(userId: string): Promise<void> {
-  const { data } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", userId)
-    .single();
-  if (data?.role !== "admin") {
-    throw new ForbiddenError("Admin access required");
-  }
-}
-```
-
----
-
-## 3. API Conventions
-
-**Base URL:** `/api/v1`
-
-**Format:** JSON request and response bodies. All timestamps in ISO 8601 UTC. All money values in **sen** (integer cents).
-
-**Pagination:** Cursor-based for lists. Returns `data[]`, `next_cursor`, and `has_more`.
+**Envelope:**
 
 ```json
-{
-  "data": [...],
-  "next_cursor": "abc123",
-  "has_more": true
-}
-```
-
-Query params: `?cursor=abc123&limit=20` (default limit: 20, max: 100).
-
-**Filtering:** Query parameters with comma-separated values for multi-select. Example: `?status=published,draft&search=penang`
-
-**Sorting:** `?sort=start_date&order=asc` (default varies by endpoint).
-
-**Standard response envelope:**
-
-```json
-// Success
+// Success: most routes
 { "data": { ... } }
 
-// Success (list)
-{ "data": [...], "next_cursor": "...", "has_more": true }
-
-// Error
+// Error: every route
 { "error": { "code": "VALIDATION_ERROR", "message": "...", "details": [...] } }
 ```
 
+A few routes answer success with a flat object instead of `data`: the signup steps and `/profile/oku` (`{ message }`), `PATCH /profile` (`{ success }`), `/tournaments/name-check` (`{ available }`) and `/feedback` (`{ reference }`). Check the route's tests before relying on a shape.
+
+**No pagination or server-side filtering on public lists.** `GET /tournaments` returns every published tournament, ordered by start date, with live participant counts. The home page filters and searches it in the browser.
+
+**Validation** is hand-written per route (no schema library), returning `400 VALIDATION_ERROR`, with `details[]` naming the fields where there is more than one (e.g. publish).
+
+**Database errors are never shown to users.** `internalErrorResponse()` (`src/lib/http/internal-error.ts`) logs the real error and answers `500 INTERNAL_ERROR` with a generic message (#487).
+
 **Notification emails go out after the response.** A route never waits for Resend: it schedules its `notify*` call with `afterResponse(task)` from `src/lib/http/after-response.ts`, which wraps Next's `after()` so the platform keeps the function alive until the email is sent. This also applies to emails sent from services a route calls (`settlePayout`, `fireRefund`, bank verification). When the reader would notice the order of emails, wrap the work in `inOrderAfterResponse(fn)`: every task `fn` schedules, at any depth, then runs one at a time in scheduling order. Examples are the admin payout review ("approved" before "processed") and cancellation approval (the cancellation notice before "refund completed"). The exceptions are emails whose result goes back to the user: verification codes, password resets, and member invitations (`email_sent`). In tests, the setup file holds `after()` callbacks until `runAfterCallbacks()` from `src/test/after.ts` is called.
+
+**Routes that read email templates from disk** declare `export const runtime = "nodejs"`.
 
 ---
 
-## 4. Endpoints
+## 3. Endpoints
+
+Paths are relative to `/api/v1`. "Signed in" means any authenticated user; a key in backticks is the permission checked on the organization in the path.
 
 ### Auth
 
-These are handled primarily by Supabase's client-side SDK. The API layer provides a few helpers.
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| POST | `/auth/signup/create-account` | Public | Create the account (`handle_new_user` creates `users` + `player_profiles`) and email a 6-character code. Rolls the account back if the code can't be stored or sent. |
+| POST | `/auth/signup/verify-code` | Public | Check the code (15-minute TTL, attempt-limited), mark the account verified and sign in. |
+| POST | `/auth/signup/request-code` | Public | Send a new code. Always a generic 200, so it can't be used to find accounts. |
+| GET | `/auth/callback` | Public | Email-link landing: `verifyOtp` on `token_hash` + `type` (password recovery), then redirect to `next`. |
 
-| Method | Path                            | Auth          | Description                                            |
-| ------ | ------------------------------- | ------------- | ------------------------------------------------------ |
-| POST   | `/auth/signup/create-account`   | Public        | Step 1: Create the account and send a 6-character code |
-| POST   | `/auth/signup/verify-code`      | Public        | Step 2: Verify the code, mark verified, and sign in    |
-| POST   | `/auth/signup/request-code`     | Public        | Request a new verification code                        |
-| POST   | `/auth/login`                   | Public        | Supabase login. Returns `user_id`.                     |
-| POST   | `/auth/logout`                  | Authenticated | Destroys session.                                      |
-| GET    | `/auth/me`                      | Authenticated | Returns current user with all roles.                   |
+The verify step is gated by the `SIGNUP_STEP_COOKIE`. Details in [authentication-flow.md](./authentication-flow.md).
 
-> **Note:** Signup is a two-step flow: (1) create the account, which provisions the Supabase auth user (the `handle_new_user` DB trigger creates the `users` + `player_profiles` rows) and emails a verification code; (2) verify the code, which marks the account verified and signs the user in, then lands them in the app. Profile details (gender, DOB, nationality, FIDE/MCF IDs, OKU, avatar) are completed later in `/settings`. A per-IP rate limit and a per-email resend cooldown guard the code-sending endpoints.
+### Profile (the signed-in player)
 
-#### `POST /auth/signup/create-account`
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| GET, PATCH | `/profile` | Signed in | Read or update the player profile. DOB, gender, nationality, `fide_id` and `mcf_id` are set-once. A new `fide_id` is checked against FIDE and backfills ratings and title. |
+| PATCH | `/profile/banking` | Signed in | Save or remove the player's bank account (prize payouts). Needs a current financial-data consent (`409 CONSENT_REQUIRED`). The full number is never returned. |
+| POST | `/profile/consents` | Signed in | Record a grant of health or financial data consent (#451). Called before the OKU upload or a bank save. |
+| POST, DELETE | `/profile/oku` | Signed in | Submit the uploaded OKU card for review (`oku_status = 'pending'`), or withdraw it, which deletes the files. |
+| GET | `/me/registrations` | Signed in | The player's registrations with tournament, payment and live refund state. Runs the lazy payment-expiry sweep first. |
+| POST | `/me/invitations/:id/accept` | Signed in (invitee) | Accept one of your own organization invitations, by id. |
+| POST | `/me/invitations/:id/decline` | Signed in (invitee) | Decline one, by id. |
 
-Validates the inputs (email format, password complexity, names), checks the email is not already registered, creates the Supabase auth user (with `email_confirm: true`) — the `handle_new_user` DB trigger then creates the `users` + `player_profiles` rows — and emails a 6-character verification code (stored in Redis with a TTL). If storing or sending the code fails, the just-created account is rolled back. Sets the `signup_step=verify` cookie.
+### Tournaments (public) and checkout
 
-**Request:**
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| GET | `/tournaments` | Public | Every published tournament with participant counts (`get_participant_counts`). |
+| GET | `/tournaments/:slug` | Public | One published tournament's details. |
+| GET | `/tournaments/name-check` | Public | `?name=…&excludeId=…`: whether a tournament name is free (wizard). |
+| POST | `/tournaments/:slug/checkout` | Signed in | **The only register-and-pay entry point.** Checks deadline, eligibility, fee tier, capacity and the prize-pool gate; creates or resumes the registration and its payment attempt; returns `{ data: { checkout_url, registration_id } }`. A zero-fee tier confirms without CHIP. See [payment-flow.md](./payment-flow.md). |
 
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword",
-  "firstName": "Wei Hao",
-  "lastName": "Lee"
-}
-```
+There is no player cancellation route yet (#509).
 
-Password must be ≥8 chars and include uppercase, lowercase, a number, and a symbol.
+### Invitations (by link)
 
-**Response `201`:**
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| POST | `/invitations/:token/accept` | Signed in as the invited address | Accept: inserts the membership with the offered role. |
+| POST | `/invitations/:token/decline` | Anyone with the link | Decline. No account needed. |
 
-```json
-{ "message": "Account created. Verification code sent." }
-```
+Only the token's SHA-256 is stored. Invitations expire 30 days after they were sent.
 
-**Error responses:**
+### Organizations
 
-- `400` — `{ "error": { "code": "VALIDATION_ERROR", "message": "..." } }` (missing/invalid email, weak password, invalid name)
-- `409` — `{ "error": { "code": "EMAIL_EXISTS", "message": "An account with this email already exists" } }`
-- `429` — `RATE_LIMITED` with `Retry-After`, per IP (see [Rate limiting](#rate-limiting))
-- `500` — Failed to create the account / store / send the code
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| GET, POST | `/organizations/applications` | Signed in | List your own applications, or apply. Apply creates the organization (pending), its bank account, KYB documents and agreement stamp in one transaction (`create_organization_application`). |
+| GET | `/organizations/search` | Signed in | Approved organizations by name (id + name), for picking a payout beneficiary. |
+| PATCH | `/organizations/:orgId` | `org.manage` | Edit the organization profile. |
+| GET | `/organizations/:orgId/dashboard` | Member of an approved org | Dashboard stats, tournaments, agreement and bank-account notices. |
+| POST | `/organizations/:orgId/agreement` | `org.manage` | Accept the current Organizer Agreement version. |
+| GET, PUT | `/organizations/:orgId/bank-account` | `bank_account.manage` | Masked payout account, or replace it (supersedes the row; re-verified with CHIP Send). |
+| GET | `/organizations/:orgId/members` | Member of an approved org | Members with roles. |
+| POST | `/organizations/:orgId/members/invite` | `org.invite` | Invite by email with a role (`admin`/`member`). Creates an invitation, grants nothing. |
+| PATCH, DELETE | `/organizations/:orgId/members/:id` | `org.manage` | Change a member's role, or remove them. Not yourself, never `owner`. |
+| GET | `/organizations/:orgId/invitations` | `org.invite` | Pending and unanswered expired invitations. |
+| DELETE | `/organizations/:orgId/invitations/:id` | `org.invite` | Revoke one. Re-inviting the address resends it. |
 
-#### `POST /auth/signup/verify-code`
+### Organizer tournaments
 
-Verifies the submitted code against the Redis-stored value. On success it marks the account verified (`users.is_verified`), signs the user in (writing the session cookies), consumes the code, and clears the `signup_step` cookie — the client then redirects into the app. After 5 incorrect attempts the address is locked out until the code window expires.
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| POST | `/organizations/:orgId/tournaments` | Owner/admin | Create a draft. |
+| GET, PATCH | `/organizations/:orgId/tournaments/:id` | Owner/admin | Read for editing, or update. What may change depends on the stage: [tournament-editing.md](./tournament-editing.md). |
+| POST | `/organizations/:orgId/tournaments/:id/publish` | Owner/admin | Validate and publish a draft (slug on first publish). A platform-distributed prize pool goes to `pending_funding` instead. |
+| POST | `/organizations/:orgId/tournaments/:id/close-registration` | Owner/admin | Close registration now. Irreversible. |
+| POST | `/organizations/:orgId/tournaments/:id/cancel` | Owner/admin | File a cancellation request with a reason. A platform admin approves it. |
+| GET | `/organizations/:orgId/tournaments/:id/participants/export` | Owner/admin | `?format=csv\|xlsx`: the roster for pairing software (#90). |
+| PUT | `/organizations/:orgId/tournaments/:id/beneficiary` | `payout.request` | Nominate another organization to receive the payout, or withdraw (`null`). |
+| GET, PUT | `/organizations/:orgId/tournaments/:id/prize-funder-contacts` | `tournament.view` / `tournament.edit` | Sponsors' email addresses for a platform-distributed pool (kept out of the public `prizes` document). |
+| GET, POST | `/organizations/:orgId/tournaments/:id/prize-funding` | `payout.view` / `payout.request` | The pool's funding position, or retry the sponsor links. |
+| GET, POST | `/organizations/:orgId/tournaments/:id/prize-awards` | `payout.view` / `payout.request` | List awards, or enter a winner (from the last day of play). |
 
-**Request:**
+### Organizer payouts
 
-```json
-{
-  "email": "user@example.com",
-  "code": "A3K7XZ",
-  "password": "securepassword"
-}
-```
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| GET, POST | `/organizations/:orgId/payouts` | `payout.view` / `payout.request` | Per-tournament payout position and history (including as beneficiary), or request an early payout. |
+| GET | `/organizations/:orgId/nominations` | `payout.request` | Payout nominations waiting on this organization. |
+| POST, DELETE | `/organizations/:orgId/nominations/:tournamentId` | `payout.request` | Accept or decline a nomination. |
 
-**Response `200`:**
+### Admin (`platform.manage`)
 
-```json
-{ "message": "Email verified successfully" }
-```
+| Method | Path | What |
+| -- | -- | -- |
+| GET | `/admin/dashboard` | Platform stats (users, organizations, tournaments, registrations, platform fees), recent tournaments, and the stuck-refund count. |
+| GET | `/admin/applications` | Organizer applications. |
+| GET, PATCH | `/admin/applications/:id` | One application (last 4 of the account, signed document URLs), or approve/reject it. Approval creates the owner membership. |
+| PATCH | `/admin/oku/:userId` | Approve or reject a pending OKU verification. |
+| PATCH | `/admin/tournament-cancellations/:id` | Approve (cancels, queues a refund per paid player) or reject a cancellation request. |
+| GET | `/admin/refunds` | Refunds stuck in `pending`. |
+| POST | `/admin/refunds/:id/refire` | Retry one, reconciling with CHIP first. |
+| GET, POST | `/admin/payouts` | The payout queue and what could be paid now, or queue and send a payout. |
+| PATCH | `/admin/payouts/:id` | Approve or reject an early payout request. |
+| POST | `/admin/payouts/:id/send` | Retry sending an approved payout. |
+| GET | `/admin/prize-awards` | Prize awards across tournaments. |
+| PATCH | `/admin/prize-awards/:id` | Approve or reject an award. |
+| POST | `/admin/prize-awards/:id/send` | Retry sending an approved award. |
 
-**Error responses:**
+Admin **pages** with no route of their own read through the server (e.g. `/admin/tournaments/[id]`, the read-only manage view, #557). There is no tournaments list, transactions or users API (#110).
 
-- `400` — Missing `email`, `code`, or `password`
-- `410` — `{ "error": { "code": "CODE_EXPIRED", "message": "Code has expired. Please request a new one." } }`
-- `422` — `{ "error": { "code": "CODE_INVALID", "message": "Incorrect code. N attempts remaining." } }`
-- `429` — `{ "error": { "code": "TOO_MANY_ATTEMPTS", "message": "Too many incorrect attempts. Please request a new code." } }`
-- `500` — Failed to verify the account or sign in
+### Feedback
 
-#### `POST /auth/signup/request-code`
+| Method | Path | Who | What |
+| -- | -- | -- | -- |
+| POST | `/feedback` | Public (tighter limit signed out) | In-app bug report (#616). Saved to `bug_reports`, then filed as a GitHub issue on the public repo labelled `bug` + `user-reported`, without the reporter's identity. |
 
-Requests (resends) a verification code. The response is intentionally generic for every account state (missing, already verified, or unverified) so it can't be used to discover whether an email is registered. A code is only actually sent for an existing, unverified account, subject to a per-email cooldown that throttles sends silently.
+### Webhooks and crons (machine callers)
 
-**Request:**
-
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-**Response `200`:**
-
-```json
-{ "message": "If your account needs verification, a new code has been sent." }
-```
-
-**Error responses:**
-
-- `400` — Email missing or invalid format
-- `429` — `RATE_LIMITED` with `Retry-After`, per IP (see [Rate limiting](#rate-limiting))
-- `500` — Failed to store or send the code
-
-#### `POST /auth/login`
-
-**Request:**
-
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
-
-**Response `200`:**
-
-```json
-{
-  "message": "Login successful",
-  "user_id": "uuid"
-}
-```
-
-Session is set via HTTP-only cookie by Supabase SSR.
-
-**Error responses:**
-
-- `401` — Invalid email or password
-- `403` — Email not confirmed
-
-#### `POST /auth/logout`
-
-No request body required.
-
-**Response `200`:**
-
-```json
-{ "message": "Logged out successfully" }
-```
-
-#### `GET /auth/me`
-
-Returns the current user's profile and all associated roles.
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "first_name": "Wei Hao",
-    "last_name": "Lee",
-    "role": "user",
-    "player_profile": {
-      "fide_id": "5834567",
-      "mcf_id": null,
-      "fide_rating": 1923,
-      "national_rating": null,
-      "date_of_birth": "1995-06-15",
-      "gender": "male",
-      "state": "Penang",
-      "nationality": "Malaysian"
-    },
-    "organizations": [
-      {
-        "organizer_id": "uuid",
-        "organization_name": "Penang Chess Club",
-        "role": "owner",
-        "approval_status": "approved"
-      }
-    ],
-    "is_platform_admin": false
-  }
-}
-```
+| Method | Path | Auth | What |
+| -- | -- | -- | -- |
+| POST | `/webhooks/chip` | RSA-SHA256 `X-Signature` (`CHIP_WEBHOOK_PUBLIC_KEY`) | CHIP Collect: registration payments, sponsor prize-pool payments, refunds. |
+| POST | `/webhooks/chip/send` | RSA-SHA512 `X-Signature` (`CHIP_SEND_WEBHOOK_PUBLIC_KEY`) | CHIP Send: bank account verdicts, budget allocations, payout and prize-award transfers. |
+| POST | `/cron/refunds` | `CRON_SECRET` | Fire queued cancellation refunds. Every 5 minutes (`.github/workflows/cancellation-refunds.yml`). |
+| POST | `/cron/payouts` | `CRON_SECRET` | Bank registrations, payout and prize sweeps. Daily at 01:00 UTC (`organizer-payouts.yml`). |
+| POST | `/cron/fide-ratings` | `CRON_SECRET` | Refresh every player's FIDE ratings. Monthly (`fide-ratings.yml`). |
 
 ---
 
-### Player Profile
+## 4. Errors
 
-| Method | Path              | Auth   | Description               |
-| ------ | ----------------- | ------ | ------------------------- |
-| GET    | `/player/profile` | Player | Get own player profile    |
-| PATCH  | `/player/profile` | Player | Update own player profile |
+Every error has the `{ "error": { "code", "message", "details"? } }` shape. The common codes:
 
-#### `PATCH /player/profile`
+| HTTP | Code | When |
+| -- | -- | -- |
+| 400 | `VALIDATION_ERROR` | The request fails validation |
+| 400 | `INVALID_JSON` | The body isn't JSON |
+| 401 | `UNAUTHORIZED` | No session |
+| 403 | `FORBIDDEN` | Missing role or permission, or the organization isn't approved |
+| 403 | `FORBIDDEN_ORIGIN` | A write or preflight from an origin the API doesn't allow ([§6](#6-cors-and-origin-policy)) |
+| 404 | `NOT_FOUND` | No such resource, or not visible to the caller |
+| 409 | `CONFLICT` | State conflict (e.g. a locked field changed, a duplicate) |
+| 429 | `RATE_LIMITED` | Over a rate limit ([§5](#5-rate-limiting)) |
+| 500 | `INTERNAL_ERROR` | Anything unexpected; details are logged, never returned |
 
-**Request:**
-
-```json
-{
-  "fide_id": "5834567",
-  "mcf_id": "MCF1234",
-  "fide_rating": 1923,
-  "national_rating": 1850,
-  "date_of_birth": "1995-06-15",
-  "gender": "male",
-  "state": "Penang",
-  "nationality": "Malaysian"
-}
-```
-
-All fields optional — only provided fields are updated.
-
-**Response `200`:** Returns the full updated `player_profile` object.
+Domain-specific codes are returned where the UI acts on them, for example `ALREADY_REGISTERED`, `CAPACITY_FULL`, `REGISTRATION_CLOSED`, `ELIGIBILITY_ERROR`, `INVALID_FEE_TIER`, `PAYMENT_IN_PROGRESS` (409, with `unlock_at`), `PRIZE_POOL_NOT_FUNDED` (422) and `PAYMENT_GATEWAY_ERROR` (503) at checkout; `EMAIL_EXISTS`, `CODE_INVALID`, `CODE_EXPIRED` and `TOO_MANY_ATTEMPTS` at signup; `CONSENT_REQUIRED`, `BANK_ACCOUNT_IN_USE` and `NAME_TAKEN` elsewhere. Grep the route for the full set.
 
 ---
 
-### Tournaments (Public)
-
-Public endpoints for browsing and viewing tournaments. No authentication required.
-
-| Method | Path               | Auth   | Description                  |
-| ------ | ------------------ | ------ | ---------------------------- |
-| GET    | `/tournaments`     | Public | Browse published tournaments |
-| GET    | `/tournaments/:id` | Public | Get tournament details       |
-
-#### `GET /tournaments`
-
-Returns all published tournaments ordered by `start_date` ascending. No query parameters accepted.
-
-**Response `200`:**
-
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "name": "KL Open Rapid Championship 2026",
-      "venue_name": "Kuala Lumpur Convention Centre",
-      "state": "Kuala Lumpur",
-      "start_date": "2026-03-15",
-      "end_date": "2026-03-16",
-      "registration_deadline": "2026-03-10T23:59:59Z",
-      "format": { "type": "rapid", "system": "swiss", "rounds": 7 },
-      "time_control": { "base_minutes": 10, "increment_seconds": 5, "delay_seconds": 0 },
-      "is_fide_rated": true,
-      "is_mcf_rated": false,
-      "entry_fees": { "standard": { "amount_cents": 5000 }, "additional": [...] },
-      "max_participants": 120,
-      "current_participants": 78,
-      "poster_url": "https://...",
-      "status": "published",
-      "organizer": {
-        "id": "uuid",
-        "organization_name": "KL Chess Association",
-        "links": [...]
-      }
-    }
-  ]
-}
-```
-
-Note: `current_participants` is a live count of confirmed registrations queried from the database. `state` maps to the `venue_state` column in the database.
-
-#### `GET /tournaments/:id`
-
-Returns full tournament detail including prizes, restrictions, and time control.
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "id": "uuid",
-    "name": "KL Open Rapid Championship 2026",
-    "description": "Full Markdown description...",
-    "venue_name": "Kuala Lumpur Convention Centre",
-    "venue_address": "Jalan Pinang, 50088 KL",
-    "start_date": "2026-03-15",
-    "end_date": "2026-03-16",
-    "registration_deadline": "2026-03-10T23:59:59Z",
-    "format": { "type": "rapid", "system": "swiss", "rounds": 7 },
-    "time_control": { "base_minutes": 10, "increment_seconds": 5, "delay_seconds": 0 },
-    "is_fide_rated": true,
-    "is_mcf_rated": false,
-    "entry_fees": {
-      "standard": { "amount_cents": 5000 },
-      "additional": [
-        { "type": "early_bird", "amount_cents": 3500, "valid_until": "2026-03-01" },
-        { "type": "titled_players", "amount_cents": 0, "titles": ["GM", "IM", "FM"] }
-      ]
-    },
-    "prizes": { "categories": [...], "special": [...] },
-    "restrictions": [
-      { "type": "max_rating", "value": 1500 }
-    ],
-    "max_participants": 120,
-    "current_participants": 78,
-    "poster_url": "https://...",
-    "status": "published",
-    "organizer": {
-      "id": "uuid",
-      "organization_name": "KL Chess Association",
-      "description": "...",
-      "links": [...],
-      "contact_email": "info@klchess.org"
-    },
-    "commission_rate": 0.10
-  }
-}
-```
-
-The `commission_rate` is included so the client can compute and display "Player pays" amounts.
-
----
-
-### Registration & Payments
-
-| Method | Path                               | Auth   | Description                           |
-| ------ | ---------------------------------- | ------ | ------------------------------------- |
-| POST   | `/tournaments/:id/sign-up`         | Player | Start registration + initiate payment |
-| GET    | `/player/registrations`            | Player | List own registrations                |
-| GET    | `/player/registrations/:id`        | Player | Get single registration detail        |
-| POST   | `/player/registrations/:id/cancel` | Player | Cancel a registration                 |
-
-#### `POST /tournaments/:id/sign-up`
-
-Creates a registration and initiates a CHIP payment session. The client redirects the player to the CHIP payment URL.
-
-**Request:**
-
-```json
-{
-  "fee_tier": "early_bird"
-}
-```
-
-Valid `fee_tier` values: `"standard"`, `"early_bird"`, `"titled_players"`, `"rating_based"`, `"age_based"`. The server validates that the player qualifies for the selected tier.
-
-**Server-side logic:**
-
-1. Validate tournament is published and registration is open (not past deadline, not full).
-2. Validate player doesn't already have an active registration.
-3. Validate player qualifies for the selected fee tier (check title, rating, age, date).
-4. Calculate amounts: `entry_fee` (organizer's amount) + `commission` (10%) = `total`.
-5. Create `registration` (status: `pending_payment`).
-6. Create `payment` (status: `pending`).
-7. Call CHIP API to create a purchase with `total` amount and callback URLs.
-8. Return CHIP's payment URL for client redirect.
-
-**Response `201`:**
-
-```json
-{
-  "data": {
-    "registration_id": "uuid",
-    "payment_id": "uuid",
-    "fee_tier": "early_bird",
-    "entry_fee_cents": 3500,
-    "commission_cents": 350,
-    "total_cents": 3850,
-    "payment_url": "https://gate.chip-in.asia/...",
-    "expires_at": "2026-02-22T15:30:00Z"
-  }
-}
-```
-
-#### `GET /player/registrations`
-
-**Query parameters:** `?status=confirmed,pending_payment&sort=registered_at&order=desc`
-
-**Response `200`:**
-
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "tournament": {
-        "id": "uuid",
-        "name": "KL Open Rapid Championship 2026",
-        "start_date": "2026-03-15",
-        "venue_name": "KLCC",
-        "status": "published"
-      },
-      "fee_tier": "early_bird",
-      "entry_fee_cents": 3500,
-      "total_paid_cents": 3850,
-      "status": "confirmed",
-      "registered_at": "2026-02-22T12:00:00Z",
-      "confirmed_at": "2026-02-22T12:01:30Z"
-    }
-  ],
-  "next_cursor": null,
-  "has_more": false
-}
-```
-
-#### `POST /player/registrations/:id/cancel`
-
-**Request:**
-
-```json
-{
-  "reason": "Schedule conflict"
-}
-```
-
-**Server-side logic:** Only allowed if registration status is `confirmed` or `pending_payment`. If `pending_payment`, simply cancels. If `confirmed`, marks for refund (organizer or admin reviews).
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "id": "uuid",
-    "status": "cancelled",
-    "refund_status": "pending_review",
-    "cancelled_at": "2026-02-23T09:00:00Z"
-  }
-}
-```
-
----
-
-### Organizer Applications
-
-| Method | Path                     | Auth          | Description                     |
-| ------ | ------------------------ | ------------- | ------------------------------- |
-| POST   | `/organizer/apply`       | Authenticated | Submit an organizer application |
-| GET    | `/organizer/application` | Authenticated | Check own application status    |
-
-#### `POST /organizer/apply`
-
-**Request:**
-
-```json
-{
-  "organization_name": "Penang Chess Club",
-  "description": "Community chess club in Georgetown since 2015...",
-  "links": [
-    { "type": "website", "url": "https://penangchess.org" },
-    { "type": "facebook", "url": "https://facebook.com/penangchessclub" }
-  ],
-  "email": "penangchess@gmail.com",
-  "phone": "+60123456789",
-  "past_tournament_refs": "Penang Monthly Rapid #1-12 (2025)..."
-}
-```
-
-**Server-side logic:**
-
-1. Validate user doesn't already have a pending or approved application.
-2. Create `organizer_profiles` row with `approval_status: 'pending'`.
-3. Create `organizer_members` row linking the user as `role: 'owner'`.
-4. Notify admins (email or in-app).
-
-**Response `201`:**
-
-```json
-{
-  "data": {
-    "organizer_id": "uuid",
-    "organization_name": "Penang Chess Club",
-    "approval_status": "pending",
-    "created_at": "2026-02-22T14:34:00Z"
-  }
-}
-```
-
-#### `GET /organizer/application`
-
-Returns the current user's organizer application status. Returns `null` if they haven't applied.
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "organizer_id": "uuid",
-    "organization_name": "Penang Chess Club",
-    "approval_status": "pending",
-    "rejection_reason": null,
-    "created_at": "2026-02-22T14:34:00Z"
-  }
-}
-```
-
----
-
-### Organizer Dashboard
-
-| Method | Path                          | Auth        | Description     |
-| ------ | ----------------------------- | ----------- | --------------- |
-| GET    | `/organizer/:orgId/dashboard` | Org member+ | Dashboard stats |
-
-#### `GET /organizer/:orgId/dashboard`
-
-**Permission:** Any `organizer_members` role (member, admin, owner) for the given `orgId`. Organization must be approved.
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "organization": {
-      "id": "uuid",
-      "name": "KL Chess Association",
-      "approval_status": "approved"
-    },
-    "stats": {
-      "active_tournaments": 2,
-      "total_registrations": 110,
-      "total_revenue_cents": 442000,
-      "pending_payout_cents": 346000
-    },
-    "recent_tournaments": [
-      {
-        "id": "uuid",
-        "name": "KL Open Rapid Championship 2026",
-        "start_date": "2026-03-15",
-        "current_participants": 78,
-        "max_participants": 120,
-        "status": "published"
-      }
-    ]
-  }
-}
-```
-
----
-
-### Organizer Tournaments
-
-| Method | Path                                                    | Auth        | Description                             |
-| ------ | ------------------------------------------------------- | ----------- | --------------------------------------- |
-| POST   | `/organizer/:orgId/upload`                              | Org admin+  | Upload a file (poster image)            |
-| GET    | `/organizer/:orgId/tournaments`                         | Org member+ | List org's tournaments                  |
-| POST   | `/organizer/:orgId/tournaments`                         | Org admin+  | Create tournament                       |
-| GET    | `/organizer/:orgId/tournaments/:id`                     | Org member+ | Get tournament detail (management view) |
-| PATCH  | `/organizer/:orgId/tournaments/:id`                     | Org admin+  | Update tournament                       |
-| POST   | `/organizer/:orgId/tournaments/:id/publish`             | Org admin+  | Publish a draft tournament              |
-| POST   | `/organizer/:orgId/tournaments/:id/close-registration`  | Org admin+  | Close registration early                |
-| POST   | `/organizer/:orgId/tournaments/:id/cancel`              | Org owner   | Cancel the tournament                   |
-| GET    | `/organizer/:orgId/tournaments/:id/participants`        | Org member+ | List registered players                 |
-| GET    | `/organizer/:orgId/tournaments/:id/participants/export` | Org admin+  | Export participants as CSV or Excel     |
-| GET    | `/organizer/:orgId/tournaments/:id/stats`               | Org member+ | Registration stats                      |
-
-#### `POST /organizer/:orgId/upload`
-
-**Permission:** `admin` or `owner` role.
-
-Uploads a file to Supabase Storage and returns a public URL. Used for tournament poster images.
-
-**Request:** `multipart/form-data` with a `file` field. Max 5MB. Accepted types: `image/jpeg`, `image/png`, `image/webp`.
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "url": "https://your-project.supabase.co/storage/v1/object/public/posters/uuid.jpg"
-  }
-}
-```
-
-#### `POST /organizer/:orgId/tournaments`
-
-**Permission:** `admin` or `owner` role. Organization must be approved.
-
-**Request:**
-
-```json
-{
-  "name": "KL Open Rapid Championship 2026",
-  "description": "Annual open rapid tournament...",
-  "venue_name": "Kuala Lumpur Convention Centre",
-  "venue_address": "Jalan Pinang, 50088 KL",
-  "state": "Kuala Lumpur",
-  "start_date": "2026-03-15",
-  "end_date": "2026-03-16",
-  "registration_deadline": "2026-03-10T23:59:59Z",
-  "format": { "type": "rapid", "system": "swiss", "rounds": 7 },
-  "time_control": { "base_minutes": 10, "increment_seconds": 5, "delay_seconds": 0 },
-  "is_fide_rated": true,
-  "is_mcf_rated": false,
-  "entry_fees": {
-    "standard": { "amount_cents": 5000 },
-    "additional": [
-      { "type": "early_bird", "amount_cents": 3500, "valid_until": "2026-03-01" },
-      { "type": "titled_players", "amount_cents": 0, "titles": ["GM", "IM", "FM"] }
-    ]
-  },
-  "prizes": { "categories": [...], "special": [...] },
-  "restrictions": [],
-  "max_participants": 120,
-  "poster_url": "https://...",
-  "status": "draft"
-}
-```
-
-**Response `201`:** Returns the full tournament object.
-
-#### `PATCH /organizer/:orgId/tournaments/:id`
-
-Same shape as POST, but all fields optional. Only provided fields are updated. If tournament is `published`, only certain fields can be changed (description, poster, registration deadline, max participants).
-
-#### `POST /organizer/:orgId/tournaments/:id/publish`
-
-**Permission:** `admin` or `owner`. Tournament must be in `draft` status and pass validation (all required fields present, dates in the future, at least one fee tier).
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "id": "uuid",
-    "status": "published",
-    "published_at": "2026-02-22T16:00:00Z"
-  }
-}
-```
-
-#### `GET /organizer/:orgId/tournaments/:id/participants`
-
-**Permission:** Any org role.
-
-**Query parameters:** `?search=ahmad&status=confirmed,pending_payment&sort=registered_at&order=desc`
-
-**Response `200`:**
-
-```json
-{
-  "data": [
-    {
-      "registration_id": "uuid",
-      "player": {
-        "id": "uuid",
-        "first_name": "Ahmad",
-        "last_name": "Hassan",
-        "fide_id": "5801234",
-        "fide_rating": 1756,
-        "state": "Selangor"
-      },
-      "fee_tier": "early_bird",
-      "entry_fee_cents": 3500,
-      "total_paid_cents": 3850,
-      "status": "confirmed",
-      "registered_at": "2026-02-20T10:00:00Z"
-    }
-  ],
-  "next_cursor": "...",
-  "has_more": true
-}
-```
-
-#### `GET /organizer/:orgId/tournaments/:id/participants/export`
-
-**Permission:** `admin` or `owner` role. Implemented at `/api/v1/organizations/:orgId/tournaments/:id/participants/export`.
-
-**Query parameters:** `?format=csv` (default) or `?format=xlsx`. Anything else → `400 VALIDATION_ERROR`.
-
-Downloads the roster the manage page shows (confirmed and pending-payment registrations, in registration order) for seeding pairing software. The response is an attachment named `<slug>-participants.csv|xlsx`, sent `Cache-Control: private, no-store`.
-
-**Columns:** `#`, Title, First name, Last name, Gender, Date of birth (`YYYY-MM-DD`), Nationality, OKU (`Yes` only when admin-verified; pending and rejected read `No`), FIDE ID, FIDE rating (for the tournament's format, falling back to slower time controls), MCF ID, National rating, Fee tier, Status, Registered (wall-clock in the venue's timezone, e.g. `Registered (MYT)`). Exactly what `/privacy` ("Sharing of Data") says organisers receive — never the OKU card, a pending or rejected OKU application, or contact details. Adding a column means updating the policy first.
-
-CSV is RFC 4180 with a UTF-8 BOM; text a spreadsheet would read as a formula (`=`, `+`, `-`, `@`) is prefixed with `'`. The workbook holds no formulas.
-
-#### `GET /organizer/:orgId/tournaments/:id/stats`
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "total_registered": 78,
-    "confirmed": 72,
-    "pending_payment": 4,
-    "cancelled": 2,
-    "total_revenue_cents": 346000,
-    "total_commission_cents": 34600,
-    "by_fee_tier": [
-      { "tier": "standard", "count": 40, "revenue_cents": 200000 },
-      { "tier": "early_bird", "count": 25, "revenue_cents": 87500 },
-      { "tier": "titled_players", "count": 5, "revenue_cents": 0 },
-      { "tier": "rating_based", "count": 8, "revenue_cents": 24000 }
-    ]
-  }
-}
-```
-
----
-
-### Organizer Members
-
-| Method | Path                                  | Auth        | Description         |
-| ------ | ------------------------------------- | ----------- | ------------------- |
-| GET    | `/organizer/:orgId/members`           | Org member+ | List members        |
-| POST   | `/organizer/:orgId/members/invite`    | Org owner   | Invite a new member |
-| PATCH  | `/organizer/:orgId/members/:memberId` | Org owner   | Change member role  |
-| DELETE | `/organizer/:orgId/members/:memberId` | Org owner   | Remove a member     |
-| GET    | `/organizer/:orgId/invitations`       | `org.invite` | List pending invitations |
-| DELETE | `/organizer/:orgId/invitations/:id`   | `org.invite` | Revoke an invitation |
-| POST   | `/invitations/:token/accept`          | Invitee     | Accept an invitation |
-| POST   | `/invitations/:token/decline`         | Anyone with the link | Decline an invitation |
-| POST   | `/me/invitations/:id/accept`          | Invitee (session) | Accept one of your own invitations |
-| POST   | `/me/invitations/:id/decline`         | Invitee (session) | Decline one of your own invitations |
-
-#### `POST /organizer/:orgId/members/invite`
-
-**Permission:** `org.invite` (owner and admin).
-
-**Request:**
-
-```json
-{
-  "email": "colleague@example.com",
-  "role": "admin"
-}
-```
-
-**Server-side logic:**
-
-1. `create_organization_invitation` writes a pending invitation that expires in 30 days, storing the SHA-256 of a random token. An address that already belongs to a member is refused (409). Inviting an address that already has a pending invitation refreshes it (new token, role and expiry) and reports `resent: true`.
-2. Email the invitee a link to `/invitations/{token}` (best-effort). `email_sent` reports whether it went out.
-3. Nothing is granted until the invitee accepts, signed in as the invited address: from the link (`POST /invitations/:token/accept`) or from their dashboard (`POST /me/invitations/:id/accept`). Accept and decline answer `410` once the invitation has expired, and `409` once it was answered or revoked. A fresh answer emails the inviter.
-
-**Response `201`:**
-
-```json
-{
-  "data": {
-    "id": "uuid",
-    "email": "colleague@example.com",
-    "role": "admin",
-    "status": "pending",
-    "invited_at": "2026-02-22T16:00:00Z",
-    "expires_at": "2026-03-24T16:00:00Z",
-    "days_left": 30,
-    "resent": false,
-    "email_sent": true
-  }
-}
-```
-
-#### `PATCH /organizer/:orgId/members/:memberId`
-
-**Request:**
-
-```json
-{
-  "role": "member"
-}
-```
-
-Cannot change the `owner` role. Cannot promote someone to `owner`.
-
----
-
-### Organizer Payouts
-
-| Method | Path                            | Auth       | Description       |
-| ------ | ------------------------------- | ---------- | ----------------- |
-| GET    | `/organizer/:orgId/payouts`     | Org admin+ | List payouts      |
-| GET    | `/organizer/:orgId/payouts/:id` | Org admin+ | Get payout detail |
-
-#### `GET /organizer/:orgId/payouts`
-
-**Response `200`:**
-
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "tournament": {
-        "id": "uuid",
-        "name": "New Year Blitz Bash 2026",
-        "start_date": "2026-01-18"
-      },
-      "total_collected_cents": 138000,
-      "total_refunded_cents": 6000,
-      "net_payout_cents": 132000,
-      "status": "published",
-      "paid_at": "2026-01-25T10:00:00Z"
-    },
-    {
-      "id": "uuid",
-      "tournament": {
-        "id": "uuid",
-        "name": "KL Open Rapid Championship 2026",
-        "start_date": "2026-03-15"
-      },
-      "total_collected_cents": 346000,
-      "total_refunded_cents": 0,
-      "net_payout_cents": 346000,
-      "status": "pending",
-      "paid_at": null
-    }
-  ]
-}
-```
-
-Note: `total_commission_cents` is not shown to organizers in payouts (commission is charged to the player, not deducted from the organizer). The organizer sees only their revenue.
-
----
-
-### Admin: Dashboard
-
-| Method | Path               | Auth           | Description     |
-| ------ | ------------------ | -------------- | --------------- |
-| GET    | `/admin/dashboard` | Platform admin | Dashboard stats |
-
-**Permission:** `users.role = 'admin'`
-
-#### `GET /admin/dashboard`
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "total_players": 1247,
-    "active_organizers": 18,
-    "total_tournaments": 42,
-    "tournaments_breakdown": { "published": 40, "draft": 2 },
-    "commission_earned_cents": 842000,
-    "total_volume_cents": 9262000,
-    "net_revenue_cents": 757800,
-    "pending_applications": 3,
-    "registrations_30d": [
-      { "date": "2026-01-24", "count": 12 },
-      { "date": "2026-01-25", "count": 18 }
-    ]
-  }
-}
-```
-
----
-
-### Admin: Applications
-
-| Method | Path                              | Auth           | Description                 |
-| ------ | --------------------------------- | -------------- | --------------------------- |
-| GET    | `/admin/applications`             | Platform admin | List organizer applications |
-| GET    | `/admin/applications/:id`         | Platform admin | Get application detail      |
-| POST   | `/admin/applications/:id/approve` | Platform admin | Approve application         |
-| POST   | `/admin/applications/:id/reject`  | Platform admin | Reject application          |
-
-#### `GET /admin/applications`
-
-**Query parameters:** `?status=pending&search=penang&sort=created_at&order=desc`
-
-**Response `200`:**
-
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "organization_name": "Penang Chess Club",
-      "description": "Community chess club...",
-      "email": "penangchess@gmail.com",
-      "phone": "+60123456789",
-      "approval_status": "pending",
-      "applicant": {
-        "id": "uuid",
-        "first_name": "Wei Hao",
-        "last_name": "Lee",
-        "email": "weihao.lee@gmail.com"
-      },
-      "created_at": "2026-02-22T14:34:00Z"
-    }
-  ]
-}
-```
-
-#### `GET /admin/applications/:id`
-
-Returns the full application detail including organization info, links, past tournament references, and the applicant's account and player profile.
-
-#### `POST /admin/applications/:id/approve`
-
-**Server-side logic:**
-
-1. Set `organizer_profiles.approval_status = 'approved'`.
-2. Set `approved_by` and `approved_at`.
-3. Send approval notification email to the applicant.
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "id": "uuid",
-    "approval_status": "approved",
-    "approved_at": "2026-02-22T17:00:00Z"
-  }
-}
-```
-
-#### `POST /admin/applications/:id/reject`
-
-**Request:**
-
-```json
-{
-  "reason": "Insufficient tournament history. Please reapply with more references."
-}
-```
-
-**Server-side logic:**
-
-1. Set `organizer_profiles.approval_status = 'rejected'`.
-2. Set `rejection_reason`, `approved_by`, `approved_at`.
-3. Send rejection notification email with the reason.
-
----
-
-### Admin: Tournaments
-
-| Method | Path                     | Auth           | Description                        |
-| ------ | ------------------------ | -------------- | ---------------------------------- |
-| GET    | `/admin/tournaments`     | Platform admin | List all tournaments               |
-| GET    | `/admin/tournaments/:id` | Platform admin | Get tournament detail (admin view) |
-
-#### `GET /admin/tournaments`
-
-**Query parameters:** `?search=klchess&status=published,draft&sort=start_date&order=desc`
-
-The `search` parameter indexes both tournament name and organizer name.
-
-**Response `200`:**
-
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "name": "KL Open Rapid Championship 2026",
-      "format": { "type": "rapid", "system": "swiss", "rounds": 7 },
-      "is_fide_rated": true,
-      "is_mcf_rated": false,
-      "organizer": {
-        "id": "uuid",
-        "organization_name": "KL Chess Association"
-      },
-      "start_date": "2026-03-15",
-      "current_participants": 78,
-      "max_participants": 120,
-      "revenue_cents": 346000,
-      "commission_cents": 34600,
-      "status": "published"
-    }
-  ],
-  "next_cursor": "...",
-  "has_more": true
-}
-```
-
----
-
-### Admin: Transactions
-
-| Method | Path                        | Auth           | Description               |
-| ------ | --------------------------- | -------------- | ------------------------- |
-| GET    | `/admin/transactions`       | Platform admin | List all transactions     |
-| GET    | `/admin/transactions/stats` | Platform admin | Transaction summary stats |
-
-#### `GET /admin/transactions`
-
-**Query parameters:** `?search=ahmad&sort=created_at&order=desc`
-
-The `search` parameter indexes player name and CHIP reference.
-
-**Response `200`:**
-
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "date": "2026-02-22T14:15:00Z",
-      "player": {
-        "id": "uuid",
-        "first_name": "Ahmad",
-        "last_name": "Hassan"
-      },
-      "tournament": {
-        "id": "uuid",
-        "name": "KL Open Rapid Championship 2026"
-      },
-      "fee_tier": "early_bird",
-      "amount_cents": 3850,
-      "net_amount_cents": 3500,
-      "commission_cents": 350,
-      "payment_method": "fpx",
-      "status": "published",
-      "chip_purchase_id": "CHIP-8X4K2M"
-    }
-  ],
-  "next_cursor": "...",
-  "has_more": true
-}
-```
-
-#### `GET /admin/transactions/stats`
-
-**Response `200`:**
-
-```json
-{
-  "data": {
-    "total_count": 312,
-    "total_volume_cents": 9262000,
-    "total_commission_cents": 842000,
-    "total_refunds_cents": 48000,
-    "refund_count": 8
-  }
-}
-```
-
----
-
-## 5. Webhooks (CHIP)
-
-CHIP sends payment status updates via webhooks to a public endpoint on our server.
-
-| Method | Path             | Auth           | Description             |
-| ------ | ---------------- | -------------- | ----------------------- |
-| POST   | `/webhooks/chip` | CHIP signature | Payment status callback |
-
-#### `POST /webhooks/chip`
-
-**Verification:** CHIP signs every webhook with an HMAC SHA-256 signature in the `X-Signature` header. The server verifies this signature using the CHIP webhook secret before processing.
-
-**Payload (from CHIP):**
-
-```json
-{
-  "id": "purchase_id",
-  "status": "paid",
-  "payment": {
-    "method": "fpx",
-    "amount": 3850,
-    "currency": "MYR"
-  },
-  "reference": "our_payment_uuid"
-}
-```
-
-**Server-side logic on `status: "paid"`:**
-
-1. Verify webhook signature.
-2. Look up `payment` by `chip_purchase_id`.
-3. Idempotency check: if payment already `completed`, return `200` and do nothing.
-4. Update `payment.status = 'completed'`, set `paid_at`.
-5. Update `registration.status = 'confirmed'`, set `confirmed_at`.
-6. Invalidate the Redis participant count cache for the tournament.
-7. Send confirmation email to the player.
-8. Return `200`.
-
-**On `status: "failed"` or `status: "expired"`:**
-
-1. Update `payment.status = 'failed'`.
-2. Update `registration.status = 'cancelled'`.
-3. Return `200`.
-
----
-
-## 6. Error Handling
-
-**Standard error codes:**
-
-| HTTP | Code               | Description                                                       |
-| ---- | ------------------ | ----------------------------------------------------------------- |
-| 400  | `VALIDATION_ERROR` | Request body fails validation                                     |
-| 401  | `UNAUTHORIZED`     | Missing or invalid auth token                                     |
-| 403  | `FORBIDDEN`        | User lacks required permission                                    |
-| 403  | `FORBIDDEN_ORIGIN` | Write or preflight from an origin the API doesn't allow           |
-| 404  | `NOT_FOUND`        | Resource does not exist                                           |
-| 409  | `CONFLICT`         | Duplicate registration, application already exists, etc.          |
-| 422  | `UNPROCESSABLE`    | Business logic violation (tournament full, deadline passed, etc.) |
-| 429  | `RATE_LIMITED`     | Too many requests                                                 |
-| 500  | `INTERNAL_ERROR`   | Unexpected server error                                           |
-
-**Error response shape:**
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Entry fee tier 'early_bird' is no longer valid.",
-    "details": [
-      {
-        "field": "fee_tier",
-        "message": "Early bird deadline has passed (was 2026-03-01)"
-      }
-    ]
-  }
-}
-```
-
-**Validation library:** Zod for all request body and query parameter validation. Schemas are defined adjacent to route handlers and reused between client and server via a shared `types/` package.
-
-### Rate limiting
+## 5. Rate limiting
 
 Every limit lives in `src/services/rate-limit/limits.ts` (#613). A rule counts each request in a fixed window (Upstash Redis) against every bucket that applies: per user, per client IP, and/or per IP only when signed out. A request over any bucket gets:
 
@@ -1281,7 +244,9 @@ The message is written for the user and the UI shows it as is.
 - **No signed-out baseline:** server components fetch the app's own API from the server's address (e.g. the home page's tournament list), so an IP-keyed baseline would throttle every visitor together.
 - The per-email auth counters (login lockout, verify-code attempts, resend cooldown) use the same primitive, in `src/services/rate-limit/auth.ts`, but answer with their own UX rather than this 429.
 
-### CORS and origin policy
+---
+
+## 6. CORS and origin policy
 
 Every `/api` route authenticates with the Supabase session cookies, which the browser attaches wherever the calling page came from. The proxy (`src/proxy.ts`, policy in `src/lib/http/origin-policy.ts`, #614) runs this check before any session work:
 
@@ -1311,25 +276,3 @@ Deploy previews are not trusted to call _another_ deployment's API. The repo is 
 - Browsers with older or no `SameSite` support.
 
 The two layers are independent; neither is relied on alone.
-
----
-
-## Endpoint Summary
-
-| Area                    | Endpoints | Auth Level                   |
-| ----------------------- | --------- | ---------------------------- |
-| Auth                    | 5         | Public / Authenticated       |
-| Player Profile          | 2         | Player                       |
-| Tournaments (Public)    | 2         | Public                       |
-| Registration & Payments | 4         | Player                       |
-| Organizer Applications  | 2         | Authenticated                |
-| Organizer Dashboard     | 1         | Org member+                  |
-| Organizer Tournaments   | 11        | Org member+ / admin+ / owner |
-| Organizer Members       | 4         | Org member+ / owner          |
-| Organizer Payouts       | 2         | Org admin+                   |
-| Admin Dashboard         | 1         | Platform admin               |
-| Admin Applications      | 4         | Platform admin               |
-| Admin Tournaments       | 2         | Platform admin               |
-| Admin Transactions      | 2         | Platform admin               |
-| Webhooks                | 1         | CHIP signature               |
-| **Total**               | **43**    |                              |

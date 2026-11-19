@@ -1,3 +1,14 @@
+# CHIP webhooks
+
+Two routes receive CHIP webhooks, one per CHIP product:
+
+| Route                             | Product                     | Carries                                                                                               | Key                                                                   | Bad signature       |
+| --------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------- |
+| `POST /api/v1/webhooks/chip`      | CHIP **Collect** (money in) | Registration payments, sponsor prize-pool payments, refunds                                           | `CHIP_WEBHOOK_PUBLIC_KEY`, RSA over SHA-256                           | 401                 |
+| `POST /api/v1/webhooks/chip/send` | CHIP **Send** (money out)   | Bank account verification, budget allocations, send instructions (organizer payouts and prize awards) | `CHIP_SEND_WEBHOOK_PUBLIC_KEY`, RSA over SHA-512, one key per webhook | 200 (acked, logged) |
+
+The rest of this page is about the Collect webhook. The Send webhook is described in its route's header comment and in [payout-flow.md](./payout-flow.md).
+
 ## Signature verification & key formatting
 
 Webhook deliveries are signed with the **webhook's own Public Key** (CHIP Merchant Portal → Developers → Webhooks), set as `CHIP_WEBHOOK_PUBLIC_KEY`.

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 // Profile, plus the "Become an Organizer" affordance) wrapping the section
 // content. The pages under /my (and the owner's /profile) render their existing
 // view inside this shell so the personal surfaces read as one dashboard with
-// tabs, per wireframes/player.html.
+// tabs.
 const NAV = [
   {
     href: "/my",

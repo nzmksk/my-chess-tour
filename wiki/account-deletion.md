@@ -17,7 +17,7 @@ How support deletes a player's account when they ask. There is no self-serve del
 | `registrations`, `payments`, `refunds`, `payouts` and their audit rows | Kept, `user_id` set to NULL by the foreign key | Financial records, kept 7 years (Income Tax Act). This overrides the deletion request |
 | Organisation documents the user uploaded | Kept | Business verification documents, kept 7 years after the organiser relationship ends |
 | Bug reports they sent (`bug_reports`) | Kept, `user_id` set to NULL by the foreign key | The report itself was written for publication on GitHub and names no one; only the link to the account is personal |
-| `waitlist` entry for their email | Deleted | Pre-launch email capture |
+| `waitlist` entry for their email | Deleted | Pre-launch email capture (the form was removed in #615; older entries remain) |
 | `organization_invitations` addressed to their email | Deleted | An invitation holds the invitee's address, whether or not they ever had an account |
 
 Every foreign key to `users` is `ON DELETE SET NULL` or `ON DELETE CASCADE`, so the whole thing is one `DELETE` plus the audit-log step. The audit-log step is the part that is easy to forget: deleting the rows does **not** reach `audit_logs`, which still holds full copies of them (#503).

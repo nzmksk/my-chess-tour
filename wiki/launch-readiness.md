@@ -7,10 +7,10 @@
 > [authentication-flow.md](./authentication-flow.md), [chip-webhook.md](./chip-webhook.md), and
 > the original intent in [mvp.md](./mvp.md) §"User Flows & Wireframes".
 >
-> **Snapshot:** 2026-07-29 · app `0.8.1-alpha` (refund/cancellation rows refreshed; the rest is
-> from the original 2026-07-06 · `0.6.1-alpha` pass). The public site is still a "Coming Soon"
-> waitlist; the full app is built behind it. This doc reflects the code at that snapshot —
-> re-verify the ❌/⚠️ items before acting on them, they are the ones most likely to change.
+> **Snapshot:** 2026-11-19 · app `v0.11.0-alpha`, refreshed against `staging` (earlier passes:
+> 2026-07-29 · `0.8.1-alpha`, 2026-07-06 · `0.6.1-alpha`). The waitlist page is gone: `/` is the
+> live tournament list (#615). This doc reflects the code at that snapshot — re-verify the ❌/⚠️
+> items before acting on them, they are the ones most likely to change.
 
 ## Table of Contents
 
@@ -51,11 +51,10 @@ Each flow is tagged with an implementation **status** and each gap with a **laun
 Payment and auth internals are **summarized here and linked** to their deep-dive docs rather than
 duplicated.
 
-> **Review item #0 — launch gating.** There is **no global waitlist gate**. `src/proxy.ts` only
-> auth-protects `/admin`, `/my`, `/organizations/`, `/settings`. `/tournaments` and `/auth/*` are
-> already reachable by anyone, even though the landing page and metadata say "Coming Soon". Decide
-> whether the app should stay behind the waitlist until launch, or open now. Everything below
-> assumes the app *is* live.
+> **Review item #0 — launch gating: decided (#615).** The app is open. `/` is the tournament list
+> (the old `/tournaments` 301-redirects there) and the waitlist form is gone. `src/proxy.ts`
+> auth-protects only `/admin`, `/my`, `/organizations/` and `/settings`. Everything below assumes
+> the app is live.
 
 ---
 
@@ -67,23 +66,24 @@ CHIP → confirm is built and genuinely well-tested (route tests + a DB money-st
 organizer application→publish→manage path, and platform admin review (applications, OKU) are all
 built.
 
-**Money-out has opened, but only along one path.** Cancelling a published tournament is built
-(organizer requests → admin approves) and approval now **refunds every paid player through CHIP**,
-end-to-end and tested — see [refund-flow.md](./refund-flow.md). What is still schema/view only:
-organizer payouts and platform-distributed prizes (both built, unverified on staging), and any refund
-*not* triggered by a cancellation — a player or organizer cannot request one (#509, #510). Players
-and organizers can now see where a refund stands (#511), and the player is emailed when it lands or
-fails (#512). **Communications** now cover registration confirmation, application and OKU results,
-cancellations, refunds and payouts, but some of the MVP's "we'll email you" promises are still
-absent. And there is **no production error monitoring**.
+**Money-out is built along all three paths, but only one is proven.** Cancelling a published
+tournament (organizer requests → admin approves) **refunds every paid player through CHIP**,
+end-to-end and tested — see [refund-flow.md](./refund-flow.md). Organizer payouts (automatic 3 days
+after the event, plus admin-approved early payouts) and platform-distributed prizes go out through
+CHIP Send, but **neither has been run end to end on staging** (O9, P14). Any refund *not*
+triggered by a cancellation is still unbuilt — a player or organizer cannot request one (#509,
+#510). **Communications** cover registration confirmation, application and OKU results, invites,
+cancellations, refunds, payouts and prizes; tournament reminders are the gap. **Error monitoring
+is built but not switched on** (S6).
 
-**Two non-feature items also belong on the pre-launch list.** `audit_logs` is accumulating
-**unredacted PII** — bank account numbers, DOB, OKU status, and the path to the uploaded OKU
-document — which the published `/privacy` retention table does not cover, so the platform is
-currently out of step with a commitment it made itself (#503). The **identity indirection** that
-sat next to it (`users.auth_user_id` + `app_user_id()` + `can_act_for()`) is now **built** (#501) —
-no behaviour change, but `users.id` is finally decoupled from `auth.uid()`, which is what keeps the
-deferred P15–P17 cluster cheap. Its migration still has to be applied (#161).
+**Two schema items also belong on the pre-launch list, both built and waiting on the database
+rebuild.** Audit snapshots are now **redacted** on the way in and anonymised on account deletion,
+and `/privacy` lists them (#503); staging and production may still hold rows written before that.
+The **identity indirection** (`users.auth_user_id` + `app_user_id()` + `can_act_for()`) is built
+(#501) — no behaviour change, but `users.id` is decoupled from `auth.uid()`, which is what keeps
+the deferred P15–P17 cluster cheap. Both arrive with the one-time rebuild of staging and production
+from `supabase/migrations` agreed in #631; after that, databases are only migrated forward
+([database-migrations.md](./database-migrations.md)), and production's first migration is #161.
 
 ### Gap table
 
@@ -92,16 +92,16 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Feature | Flow(s) | Status | Priority | Interim option |
 |---|---|---|---|---|
 | Production error monitoring / alerting | S6 | ⚠️ code built, account not set up | 🔴 | Sentry SDK is wired in and inert until configured: follow [error-monitoring.md](./error-monitoring.md) §Setup (#125). Uptime monitor still needed (#572). |
-| Audit-log PII redaction + privacy-policy alignment | S3, P5 | ⚠️ built, wording not reviewed | 🟡 | Get the `/privacy` wording reviewed (#503). Rows written before redaction go away when staging and production are rebuilt from `supabase/migrations` (#631). |
-| Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | Code landed (#501); migration `009` still needs applying (#161). Follow-on #513. |
+| Audit-log PII redaction + privacy-policy alignment | S3, P5 | ⚠️ built, wording not reviewed | 🟡 | Get the `/privacy` wording reviewed (#503). Rows written before redaction go away with the one-time rebuild from `supabase/migrations` (#631). |
+| Identity indirection (`auth_user_id`, `can_act_for`) | S7 | ✅ built, not applied | 🟡 | In the base migrations (`001`/`003`/`004`); arrives with the one-time rebuild (#631) and production's first migration (#161). Follow-on #513. |
 | Organizer payout disbursement | O9, P7 | ⚠️ built, unverified on staging | 🟡 | CHIP Send payouts go out automatically 3 days after a tournament ends in its own timezone (#522), or when a platform admin triggers one; organizers can request admin-approved early payouts (#521). |
 | Prize disbursement to players | P14, P7 | ⚠️ built, unverified on staging | 🟡 | Opt-in per tournament (#523): sponsors pay the pool in through CHIP Collect, registration opens once it is fully funded, organizers enter winners, admins approve, and CHIP Send pays verified player accounts. Residual return is manual. See [prize-flow.md](./prize-flow.md). Organizer-distributed prizes stay off-platform. |
-| Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ✅ built, not applied | 🟡 | Lands when staging and production are rebuilt from `supabase/migrations` (#502, #631). |
+| Ledger integrity (`payments.fee_tier`, cancelled-state constraint) | S7, P10 | ✅ built, not applied | 🟡 | Arrives with the one-time rebuild from `supabase/migrations` (#502, #631). |
 | Refund request & processing | P13, O8 | ⚠️ cancellation refunds ✅ (visible to player + organizer, outcome emailed); player/organizer-initiated ❌ | 🟡 | Cancellation refunds are automatic ([refund-flow.md](./refund-flow.md)). Any other refund is still manual via the CHIP dashboard — **define that process** (#509, #510). |
 | Participant CSV / Excel export | O8 | ✅ | — | Export CSV / Export Excel on the manage page (#90): name, title, gender, date of birth, nationality, verified OKU, FIDE/MCF IDs and ratings, fee tier, status, registration time. |
 | Non-auth transactional emails | S4, O1, O3, P6, P9 | ⚠️ most ship | 🟡 | Registration confirmation (#119), application result (#120), member invite (#121), OKU result (#449), cancellation, refund outcome (#512), payout and nomination emails ship. Still missing: tournament reminders. |
 | Player-initiated registration cancellation | P12 | ❌ | 🟡 | Player forfeits; support handles case-by-case. |
-| Admin tournaments / transactions / users pages | A4, A5, A6 | ❌ | 🟡 | Use the Supabase dashboard directly. |
+| Admin tournaments list / transactions / users pages | A4, A5, A6 | ⚠️ per-tournament view only | 🟡 | `/admin/tournaments/[id]` is a read-only manage view (#557), reached from other admin pages. No list (#108 not planned), transactions (#110) or users page: use the Supabase dashboard. |
 | Self-serve correction of set-once fields / account changes | P5 | ❌ | 🟡 | Support-routed; monitor support load. |
 | Support-email inconsistency | V1 | ✅ | — | One shared `SUPPORT_EMAIL` in `src/lib/reference/contact.ts`; the email templates hard-code it and a test fails if one names anything else (#618). |
 | Member-invite acceptance / resend / expiry | O3 | ✅ | — | Shipped in #121: accept/decline page, 30-day expiry, resend and revoke on the members page. |
@@ -113,28 +113,42 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | In-app notifications / SMS / push | S5 | ❌ | 🟢 | Not needed for launch. |
 | Payment history / receipts screen | P11 | ❌ | 🟢 | CHIP emails the receipt. |
 | OAuth / magic-link login | P2 | ❌ | 🟢 | Email + password works. |
+| Uptime monitoring | S6 | ❌ | 🟡 | Sentry only fires while the app runs (#572). |
 | Dashboard charts | A1 | ❌ | 🟢 | Stats are shown as numbers. |
 
 **Closed since the 2026-07-06 pass:** *Cancel / close a published tournament* (O7, A4) — was 🔴
 "no cancel action anywhere". Now built end-to-end, and approving a cancellation refunds every paid
 player automatically, which is what dropped *Refund request & processing* from 🔴 to 🟡.
 
+**Closed since the 2026-07-29 pass:** launch gating (#615, the waitlist is gone), the support-email
+inconsistency (#618), member-invite acceptance (#121), participant export (#90), most transactional
+emails (#119, #120, #449, #512, #562), API rate limits and an origin policy (#613, #614), in-app bug
+reports (#616), the footer, release version and changelog (#617, #621, #622), read-only staging
+database access for QA (#468), and automated staging migrations and database tests (#631, #633).
+Organizer payouts (#519–#522) and the platform prize pool (#523) moved from ❌ to built-but-unverified.
+
 ---
 
 ## 3. Visitor / public flows
 
-### V1. Waitlist signup — ⚠️ Partial
-- **Entry:** `/` landing (`src/app/page.tsx`) → `src/components/WaitlistForm.tsx` → server action `src/app/_actions/joinWaitlist.ts` → `waitlist` table.
-- **Happy path:** enter email + pick `user_type` (player/organizer) → insert → form swaps to "You're on the list. We'll be in touch."
-- **Scenarios:** empty email → blocked client-side (`required`) and server-side; **duplicate** email → Postgres unique-violation (`23505`) is swallowed as an idempotent success (no error shown); other DB error → generic message citing support.
-- **Gaps:** ❌ **no confirmation/welcome email** despite "we'll be in touch" copy — a submitter has no proof it worked beyond the UI swap, and the address is never validated. Support-email **inconsistency**: this flow cites `mychesstour@gmail.com`, the rest of the app cites `support@mychesstour.com` 🟡.
+### V1. Waitlist — removed (#615)
+- The "Coming Soon" page and its form are gone; `/` is now the tournament list (V2). The `waitlist` table stays, so earlier entries survive, and the deletion runbook still clears a user's entry ([account-deletion.md](./account-deletion.md)). Nothing writes to it.
 
 ### V2. Browse & discover tournaments — ✅ Built
-- **Entry:** `/tournaments` (`src/app/tournaments/`) → `GET /api/v1/tournaments` (returns `status='published'` only); live spot counts via RPC `get_participant_counts`.
-- **Scenarios:** full tournaments show a "Full" badge/disabled state; filters by format/state/rating/date.
+- **Entry:** `/` (`src/app/page.tsx`, list components under `src/app/tournaments/_components/`) → `GET /api/v1/tournaments` (returns `status='published'` only, revalidated daily and on change); live spot counts via RPC `get_participant_counts`. `/tournaments` 301-redirects to `/`, keeping filter query strings.
+- **Scenarios:** full tournaments show a "Full" badge/disabled state; filters by format/state/rating/date, applied in the browser; a signed-in player with an incomplete profile sees a nudge.
+- **Gaps:** no archive of past tournaments yet (#620) 🟢.
 
 ### V3. View tournament details — ✅ Built
 - **Entry:** `/tournaments/[slug]`. Fee tiers, prizes, eligibility, capacity, deadline; "Register" CTA.
+
+### V4. Bug report — ✅ Built (#616)
+- **Entry:** the bug-report button on every page (`src/components/BugReport.tsx`) → `POST /api/v1/feedback`. Signed in or not.
+- **Happy path:** the report is saved to `bug_reports` (who sent it, kept private), then filed as an issue on the **public** GitHub repo labelled `bug` + `user-reported`, carrying the page, browser, app version and Sentry event id but no identity. The reporter gets a reference for the report (201).
+- **Scenarios:** rate-limited (5/h per user, 3/h per IP signed out); Redis down fails closed; if GitHub refuses, the saved row is kept and the reporter still gets the reference (502), so support can file it by hand. The reporter's text is fenced so it can't @mention, link or hide content (`src/services/bug-reports/format.ts`).
+
+### V5. Footer, release version and changelog — ✅ Built (#617, #621, #622)
+- The footer links the legal pages and support address, and shows the release version (from the git tag at build time). `/changelogs` lists every release written for users, and a "What's new" dialog appears once per browser after a new release. How a release is cut: [releases.md](./releases.md).
 
 ---
 
@@ -146,13 +160,13 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 
 ### P1. Signup — ✅ Built
 - **Entry:** `/auth/signup`. Three endpoints under `/api/v1/auth/signup/`: `create-account` → `verify-code` → `request-code` (resend).
-- **Happy path:** submit name/email/password → account created with a 6-char code emailed via Resend → enter code (15-min TTL) → verified → routed to `/tournaments`. Profile details come later (progressive).
+- **Happy path:** submit name/email/password → account created with a 6-char code emailed via Resend → enter code (15-min TTL) → verified → routed to `/` (or back to the invitation page that sent them). Profile details come later (progressive).
 - **Scenarios:** per-IP rate-limit (429); existing email (409); code expiry (410); brute-force guard on verify (429); resend is enumeration-safe (always generic 200); the verify step is URL-gated by a `SIGNUP_STEP_COOKIE`. **Rollback:** if code storage/email fails, both `public.users` and `auth.users` are deleted so a retry isn't blocked.
 - **Gaps:** hard dependency on Resend — if it's down, signup fully rolls back (can't create an account).
 
 ### P2. Login — ✅ Built
 - **Entry:** `/auth/login` → `_actions/login.ts`. Redis lockout **5 attempts / 15 min** per email. "Keep me signed in" toggles session-only cookies (see [authentication-flow.md](./authentication-flow.md) §10).
-- **Scenarios:** correct password on an **unverified** account → local sign-out + resend code + carried into the verify step (not dead-ended); redirect sanitized (defaults `/tournaments`).
+- **Scenarios:** correct password on an **unverified** account → local sign-out + resend code + carried into the verify step (not dead-ended); redirect sanitized (defaults `/`).
 - **Gaps:** 🟢 no OAuth/magic-link.
 
 ### P3. Logout — ✅ Built
@@ -180,6 +194,10 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 - **Consent (#451):** bank details are held only with the player's financial-data consent: a checkbox on every save, recorded through `POST /api/v1/profile/consents` before the PATCH. `set_player_bank_account` refuses a save without it (`409 CONSENT_REQUIRED`). **Remove bank details** on the card erases them (rows no prize award names are deleted; a row an award names keeps only bank, holder and last 4) and records the withdrawal in the same transaction.
 - **Use:** the destination for platform-distributed prizes (P14). Registered with CHIP Send the first time an approved prize needs it, never on save. The card shows the verification state, and a winner without a usable account is emailed to add or fix it.
 - **Gaps:** 🟡 not used for refunds (those go back through CHIP Collect to the original payment method).
+
+---
+
+## 5. Player — tournament participation
 
 ### P8. Eligibility check — ✅ Built
 - **Two layers.** Server (authoritative, at checkout) in `.../tournaments/[slug]/registrations/validators.ts`: `checkRestrictions` (gender/nationality/title/rating/**age as of the tournament start date**), `checkFeeTierEligibility` (female-only, **verified-OKU-only**, titled, age bands), `checkRatedRequirements` (FIDE/MCF id present). Client mirror in `RegisterForm.tsx` → inline `CompleteProfilePrompt` that PATCHes the profile and re-runs eligibility **without leaving checkout**.
@@ -254,7 +272,7 @@ RBAC is data-driven (roles `owner`/`admin`/`member` + permission keys), not enum
 ### O2. Organizer dashboard + settings — ✅ Built
 - **Entry:** `/my/organizations/[orgId]` → dashboard route. Stats include a **"Pending Payout"** figure computed from the `tournament_payout_summary` view (display only — see O9). Two blocking notices render above the stats: the agreement re-acceptance gate, and a bank-account notice with three states (missing / awaiting verification / rejected).
 - **Settings (#518):** `/my/organizations/[orgId]/settings`, gated on `org.manage`. Organization profile (logo, name, description, links, contact) via `PATCH /api/v1/organizations/[orgId]` — until this shipped there was **no way to edit an organization after creation at all**. Payout bank account (masked view + replace) via `GET`/`PUT .../bank-account`, gated on the narrower `bank_account.manage`. Business verification is **read-only**: changing entity type or registration number would invalidate the admin's KYB decision.
-- **Gaps:** ❌ nothing moves a bank account out of `pending` until CHIP Send lands (Phase 4, #519) — deliberate, see O9.
+- **Bank verification (#519, #555):** an approved organization's account is registered with CHIP Send after the response, and CHIP's verdict (webhook, or the daily run's re-check) moves it to `verified` or `rejected`, emailing the organization either way. See [payout-flow.md](./payout-flow.md#the-daily-run).
 
 ### O3. Team / member management — ⚠️ Partial
 - **Entry:** members page → `POST /api/v1/organizations/[orgId]/members/invite` (needs `org.invite`). Role change/remove via `PATCH`/`DELETE .../members/[id]` (needs `org.manage`); you cannot change/remove yourself; owner is not assignable here.
@@ -307,11 +325,12 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 - See **P6**. The player is emailed the decision (#449).
 
 ### A4. Admin tournament moderation — ⚠️ Partial
-- MVP lists an `/admin/tournaments` panel; **no such page exists** (#107, #108) — admins cannot browse or moderate tournaments in-app. Interim: Supabase dashboard. 🟡
-- What *does* exist: **`/admin/cancellations`**, where admins review organizer cancellation requests (approve → cancel + refund, or reject with a reason). See O7. And **`/admin/refunds`**, where admins retry refunds stuck in `pending` (#497).
+- **`/admin/tournaments/[id]`** (#557) is the organizer's manage page in read-only form, for any tournament in any status: roster, drafts, refunds, prize pool. It is reached from the dashboard's recent tournaments and the cancellations, refunds and prizes pages.
+- **No list or search** of all tournaments: the MVP's panel was closed as not planned (#107 duplicate, #108). Interim: Supabase dashboard. 🟡
+- Operational admin pages: **`/admin/cancellations`** (approve → cancel + refund, or reject with a reason; see O7), **`/admin/refunds`** (retry refunds stuck in `pending`, #497), **`/admin/payouts`** (queue, early-request review, retry; see O9) and **`/admin/prizes`** (approve winners, retry sends; see P14).
 
 ### A5. Admin transactions view — ❌ Not built
-- MVP lists `/admin/transactions`; **no route/page exists** (#109, #110). No cross-tournament view of payments **or refunds**: an admin can see one tournament's refunds on its read-only manage page (#511). The exception is refunds stuck in `pending`, which have their own page, `/admin/refunds`, with a retry each and a dashboard banner (#497). Interim: Supabase dashboard. 🟡
+- MVP lists `/admin/transactions`; **no route/page exists** (#109 closed as not planned; the page is #110). No cross-tournament view of payments **or refunds**: an admin can see one tournament's refunds on its read-only manage page (#511). The exception is refunds stuck in `pending`, which have their own page, `/admin/refunds`, with a retry each and a dashboard banner (#497). Interim: Supabase dashboard. 🟡
 
 ### A6. Admin users management — ❌ Not built
 - MVP sidebar lists "Users"; **no page exists**. 🟢
@@ -323,11 +342,11 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 ### S1. FIDE ratings sync — ✅ Built
 - **Two paths sharing one code path** (so they can't drift): **on-save** when a player sets/edits their `fide_id` (profile PATCH), and a **monthly cron** — GitHub Actions `.github/workflows/fide-ratings.yml` (2nd of each month) → `POST /api/v1/cron/fide-ratings` (bearer `CRON_SECRET`), paging all players with a `fide_id`.
 - **Mechanism:** FIDE has no API, so `src/services/fide/fide.ts` **scrapes the HTML profile** and parses ratings/title with lenient name-matching.
-- **Gaps:** the scrape is brittle — a FIDE markup change silently breaks sync; worth monitoring 🟡. (This is the **only** scheduled job; `tests.yml`/`claude.yml` are CI, not crons.)
+- **Gaps:** the scrape is brittle — a FIDE markup change silently breaks sync; worth monitoring 🟡. (One of three scheduled jobs, all GitHub Actions: `fide-ratings.yml` monthly, `organizer-payouts.yml` daily, `cancellation-refunds.yml` every 5 minutes. `tests.yml`, `staging-migrations.yml` and `claude.yml` are CI, not crons.)
 
 ### S2. Payment-expiry sweep — ⚠️ Partial (lazy, no schedule)
 - `expire_stale_pending_payments` runs **on read** in three paths (return-page resolver, organizer roster, `GET /me/registrations`). Capacity self-frees after 10 min and the CHIP `due` makes stale links unpayable, so impact is low; but a `pending_payment` row never read again is never terminalized.
-- **Gaps:** 🟢 no `pg_cron` backstop (there is no scheduler in the Netlify/`next start` deploy). The unscoped RPC call already exists for when one is added. **Audit-log pruning (S3, #507) needs the same scheduler** — standing `pg_cron` up once covers both, so sequence them together.
+- **Gaps:** 🟢 no scheduled backstop. There is no `pg_cron`, and none of the GitHub Actions crons (S1) calls this sweep. The unscoped RPC call already exists for when one is added. **Audit-log pruning (S3, #507) needs the same scheduler** — standing `pg_cron` up once covers both, so sequence them together.
 
 ### S3. Audit logging — ⚠️ Partial (redacted, but unbounded)
 - **Built:** `audit_trigger_func` writes to `audit_logs` on inserts/updates/deletes of the sensitive tables, storing full `old_data`/`new_data` jsonb snapshots.
@@ -339,7 +358,7 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 - **Gap — retention 🟢 (#507).** No retention policy and no pruning. `FOR EACH ROW` on INSERT/UPDATE/DELETE across nine tables with two snapshots each means this will be the largest table by row count long before `payments` is. Not urgent (no volume yet), but it needs `prune_audit_logs` with dry-run + batched deletes, an index on `(table_name, created_at)`, and a schedule — which needs `pg_cron`, the **same missing prerequisite as S2**. Land them together.
 
 ### S4. Transactional email — ⚠️ Partial
-- Provider Resend (`src/services/email/email.ts`), templates in `templates/` (a test checks each is complete). Beyond auth (`sendVerificationEmail`, `sendPasswordResetEmail`) it sends: registration confirmation (#119, once per confirmation via `settle_registration_payment`'s `newly_confirmed`), organizer application result (#120), member invitation and the inviter's accepted/declined notice (#121), OKU result (#449), tournament cancellation and cancellation review, bank verification, payout sent/failed/early-request review, admin payout alerts, payout nomination plus the nominee's accept/decline (#562), and refund completed/failed (#512, once per outcome via `settle_refund`'s `newly_settled`/`newly_failed`). Fan-out is best-effort and never fails the action (`services/email/recipients.ts`). The change-email, reauthentication, magic-link and invite-user templates are Supabase-dashboard copies, **not wired to app code** (member invites no longer go through Supabase's invite email at all).
+- Provider Resend (`src/services/email/email.ts`), templates in `src/services/email/templates/` (a test checks each is complete). Beyond auth (`sendVerificationEmail`, `sendPasswordResetEmail`) it sends: registration confirmation (#119, once per confirmation via `settle_registration_payment`'s `newly_confirmed`), organizer application result (#120), member invitation and the inviter's accepted/declined notice (#121), OKU result (#449), tournament cancellation and cancellation review, bank verification, payout sent/failed/early-request review, admin payout alerts, payout nomination plus the nominee's accept/decline (#562), refund completed/failed (#512, once per outcome via `settle_refund`'s `newly_settled`/`newly_failed`), and the prize pool's sponsor funding request, "tournament is open", prize awarded and prize paid (#523). All are sent after the response (#583). Fan-out is best-effort and never fails the action (`services/email/recipients.ts`). The change-email, reauthentication, magic-link and invite-user templates are Supabase-dashboard copies, **not wired to app code** (member invites no longer go through Supabase's invite email at all).
 - **Gaps:** ❌ tournament reminders. See the **Communications** gap in §9. 🟡
 
 ### S5. Notifications (in-app / SMS / push) — ❌ Not built
@@ -350,28 +369,38 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 - **Gaps:** no uptime monitor (#572); no analytics (Plausible/Umami), which is 🟢.
 - **Priority:** 🔴 (operational) — complete the Sentry setup + add an uptime check before launch.
 
-### S7. Schema groundwork (identity indirection + ledger integrity) — ❌ Not built
+### S7. Schema groundwork (identity indirection + ledger integrity) — ✅ Built, not yet applied
 Not a user flow — two schema items whose cost depends on *when* they're done, which is why they sit
 on the pre-launch list despite being invisible to users. Neither changes behaviour.
 
 - **Identity indirection — ✅ Built, not yet applied (#501).** `users.auth_user_id` is now the only link to Supabase Auth; `app_user_id()` resolves a JWT `sub` to a `users.id` and **every** RLS policy and storage policy goes through it (`auth.uid()` appears nowhere else). `can_act_for()` is in place as a seam — currently the bare self check, used by the `player_profiles` / `registrations` / `payments` / `refunds` policies so P15 changes one function body instead of sweeping every policy again. `users`, `user_global_roles`, `organization_memberships`, and the own-account `audit_logs` policy deliberately do **not** use it and are commented as such at each site. App side: `AuthIdentity.id` is now the `users.id` (with `authUserId` alongside for Supabase Auth calls), so the ~59 call sites that read `claims.id` became correct without individual edits; `lookupAppUserId` (`src/services/supabase/identity.ts`) is the single bridge. **One route needed a separate fix:** `tournaments/[slug]/checkout` authenticates with `getUser()` rather than `getAuthClaims()` — the deliberate exception from #363, kept for an immediate revocation check before taking money — so it never appeared in a `claims.id` sweep and was still passing the raw auth id into `player_profiles`, `registrations`, and `create_registration_with_payment`. It now resolves through `lookupAppUserId` and fails closed (401) on an unlinked session. A full re-audit of every identity source and every `user_id` / `p_user_id` argument confirms it was the only one. Because `handle_new_user` writes `auth_user_id = id` for self-signup, **nothing changes behaviour** — verified by the full suite (1519 green) and `supabase/tests/identity_indirection.sql`, which uses deliberately divergent ids so a policy still comparing `auth.uid()` fails loudly.
   - **Hardening found while reviewing this:** `users` had a blanket client UPDATE policy with no column restriction, so anyone holding a user's JWT could `PATCH /rest/v1/users` to null their own `auth_user_id` (orphaning the record permanently) or set `is_verified: true` (skipping the emailed code — a pre-existing hole, unrelated to #501). No application code needed the policy: every `users` write goes through the service-role client. Client UPDATE/INSERT/DELETE is now revoked outright, with `guard_users_identity_columns` as a trigger-level backstop on `id`/`auth_user_id`. See [roles-and-permissions.md](./roles-and-permissions.md).
   - **Test-suite guard:** `src/test/setup.ts` now stubs the identity lookup so the auth and app id spaces **differ across the whole suite** (`appIdFor`). Previously they matched, which is exactly why a route passing a raw auth id was indistinguishable from a correct one and survived a full sweep — reintroducing the checkout bug now fails ordinary route tests, not just bespoke ones.
-  - **Outstanding:** the schema has not been applied to any environment (ties to #161), and the query-plan check the issue asked for (`app_user_id()` is `STABLE`, but confirm no regression on `/my/tournaments` and checkout) needs a live database. The array-shaped checkout response — #501 part 3 — was split out to **#513** as speculative and, unlike the rest, no more expensive later.
+  - **Outstanding:** the schema reaches staging and production with the one-time rebuild agreed in #631 (production's first migration is #161), and the query-plan check the issue asked for (`app_user_id()` is `STABLE`, but confirm no regression on `/my/tournaments` and checkout) needs a live database. The array-shaped checkout response — #501 part 3 — was split out to **#513** as speculative and, unlike the rest, no more expensive later.
 - **Ledger integrity — ✅ Built, not yet applied (#502).** (a) Each payment row records the fee tier it was charged under (`payments.fee_tier`), written by `create_registration_with_payment` and `start_new_payment_attempt`. `registrations.fee_tier` is now plainly the tier of the current attempt, and counting tiers ("how many juniors paid") should read the ledger. Rows written before the column exist keep `NULL` rather than a guessed backfill. (b) `chk_cancelled_fields_consistent` requires `cancelled_at` exactly when a registration is `cancelled_payment` or `forfeited`, so each new path that cancels (P12, refunds, cart expiry) fails loudly if it forgets the timestamp or a revival forgets to clear it. `failed_payment` is retryable, so it is outside the constraint.
-  - **Outstanding:** lands when staging and production are rebuilt from `supabase/migrations` (#631), with no separate rollout.
+  - **Outstanding:** arrives with the one-time rebuild from `supabase/migrations` (#631), with no separate rollout.
+
+### S8. API rate limits and origin policy — ✅ Built (#613, #614)
+- Every `/api` route has a signed-in baseline (120/min per user) in `src/proxy.ts`, and the routes with side effects have tighter per-user and per-IP rules (`src/services/rate-limit/limits.ts`), answering `429 RATE_LIMITED` with a message the UI shows as is. Writes from an origin other than the site, its `admin.` subdomain or the serving origin get `403 FORBIDDEN_ORIGIN`. Webhooks and crons are exempt from both. Full tables: [api-design.md](./api-design.md#5-rate-limiting).
+- **Gaps:** limits fail open when Redis is down (except signup and feedback), so an Upstash outage removes them; that failure is logged to Sentry (S6).
+
+### S9. CI, migrations and QA database access — ✅ Built (#631, #633, #468)
+- **Tests:** `.github/workflows/tests.yml` runs lint, the vitest suite and every SQL suite in `supabase/tests` (against a database built from `supabase/migrations`) on each PR into `staging` or `master`.
+- **Migrations:** a merge to `staging` that touches `supabase/migrations` applies the new files to staging (`staging-migrations.yml`); production is migrated by hand before `staging` is merged into `master`. See [database-migrations.md](./database-migrations.md).
+- **QA:** external testers get a read-only, expiring Postgres login on staging ([staging-db-access.md](./staging-db-access.md)).
+- **Gaps:** the one-time rebuild of staging and production from the migrations is still to do (S7).
 
 ---
 
 ## 9. Cross-cutting gaps (prioritized)
 
-1. **Money-out — 🔴/🟡.** Organizer payouts (O9, #375) and prize disbursement (P14) are unbuilt and captured banking (P7) is unused — those remain 🔴 and manual. Refunds are **no longer blocked**: the cancellation path moves money automatically (P13), leaving 🟡 gaps for player/organizer-initiated refunds (#509, #510). *Interim for payouts/prizes:* manual disbursement + a tracking sheet, but **define and record the process** before taking real money.
+1. **Money-out — 🔴/🟡.** Organizer payouts (O9) and platform-distributed prizes (P14) are built on CHIP Send but **unverified on staging**: run both end to end in the sandbox before the first real tournament ends 🔴. Returning a prize pool's residual to sponsors is manual (#610). Refunds are **no longer blocked**: the cancellation path moves money automatically (P13), leaving 🟡 gaps for player/organizer-initiated refunds (#509, #510).
 2. **Observability — 🔴 (operational).** Sentry is built but not switched on (S6). Until the [setup](./error-monitoring.md#setup) is done, a failed asynchronous refund settlement is still silent (#499). *Interim:* none — finish the Sentry setup + add an uptime check before launch.
 3. **Data protection — 🟡 (compliance).** Sensitive columns are redacted on the way into `audit_logs` (#516/#518/#503), account deletion anonymises the user's audit history ([runbook](./account-deletion.md)), and `/privacy` now lists audit records in its retention table (S3, #503). Left: run the pre-redaction check against staging and production, and have a second person review the retention wording. Retention/pruning (#507) is the 🟢 follow-on.
 4. **Cheap-now, expensive-later schema — 🟡.** Identity indirection (#501) and ledger integrity (#502) are both **built** while there is still little data to migrate. Left: apply them to staging and production (S7).
 5. **Communications — 🟡.** Registration confirmation, application/OKU results, member invite, cancellation and payout emails exist (S4). Still missing: reminders.
 6. **Organizer event-running tooling — ✅.** Participant CSV/Excel export ships (O8, #90), so rosters can seed pairing software.
-7. **Admin tooling — 🟡.** No admin tournaments/transactions/users pages (A4–A6); `/admin/cancellations` is the one operational admin screen beyond applications/OKU. *Interim:* Supabase dashboard.
+7. **Admin tooling — 🟡.** No admin tournaments list, transactions or users pages (A4–A6). Operational screens exist for cancellations, stuck refunds, payouts and prizes, plus a read-only view of any one tournament. *Interim:* Supabase dashboard.
 8. **Support-load risks — 🟡.** Set-once profile fields with no self-serve correction, and no self-serve email/name change or account deletion (P5). These convert small user mistakes into support tickets. Deletion is support-run through [account-deletion.md](./account-deletion.md) until a self-serve flow exists, and P16 would make the missing correction path more visible.
 9. **Auth niceties — 🟢.** No OAuth/magic-link (email+password is fine); no logout-everywhere.
 10. **Deferred platform capabilities — 🟢.** Dependent accounts (P15, #504), account claiming (P16, #505), and multi-participant checkout (P17, #506). Sequenced and costed; unstarted on purpose. *Interim:* one account and one checkout per player — ship it that way and let real demand decide.
@@ -388,28 +417,29 @@ Grouped by actor; each item is a decision to make, a happy path to test, or a ga
 Flow IDs in brackets point back to the detail above.
 
 **Gating & cross-cutting**
-- [ ] **[#0]** Decide launch gating — keep the app behind the waitlist, or open `/tournaments` + `/auth/*`? (`src/proxy.ts`)
+- [x] **[#0]** Decide launch gating. Opened: `/` is the tournament list and the waitlist is gone (#615).
 - [ ] **[S6]** Stand up error monitoring + an uptime check. 🔴
 - [ ] **[P13]** Run one **real CHIP sandbox refund** end to end and confirm both response shapes and the `related_to` webhook payload against [refund-flow.md](./refund-flow.md) §Open risks 1–2. 🔴 (the whole path is modelled from docs, not observed traffic)
 - [ ] **[P13]** Decide the **non-cancellation** refund policy — window, full vs partial, who approves — before #509/#510 get built. 🟡
-- [ ] **[O9/P14]** Define how organizer payouts and player prizes are disbursed and recorded. 🔴
+- [x] **[O9/P14]** Define how organizer payouts and player prizes are disbursed and recorded. Built on CHIP Send (#519–#523); see [payout-flow.md](./payout-flow.md) and [prize-flow.md](./prize-flow.md).
+- [ ] **[O9/P14]** Run a payout and a prize award end to end on staging (CHIP Send sandbox): send instruction → `paid` → ledger row → email, then a re-run. 🔴
 - [x] **[S3]** Publish an audit-log row in the `/privacy` retention table, and anonymise audit history on account deletion (#503).
 - [ ] **[S3]** Get the retention wording reviewed by a second person before it ships — it amends a published compliance commitment.
 - [x] **[S7]** Identity indirection (#501) — landed pre-launch, so the sweep never had to touch live payment records.
-- [ ] **[S7]** Rebuild staging and production from `supabase/migrations` (#631, see [database-migrations.md](./database-migrations.md); ties to #161). This also lands #502's ledger columns and clears #503's pre-redaction audit rows. Then run `supabase/tests/identity_indirection.sql` and check the query plans on `/my/tournaments` and checkout for regression from the `app_user_id()` lookup. 🔴
+- [ ] **[S7]** Do the one-time rebuild of staging and production from `supabase/migrations` agreed in #631 (afterwards they are only migrated forward, see [database-migrations.md](./database-migrations.md); production ties to #161). This also lands #502's ledger columns and clears #503's pre-redaction audit rows. Then run `supabase/tests/identity_indirection.sql` and check the query plans on `/my/tournaments` and checkout for regression from the `app_user_id()` lookup. 🔴
 - [x] **[S7]** Add `payments.fee_tier` and the `cancelled_at` consistency constraint (#502).
 - [ ] **[P15–P17]** Confirm the team is happy deferring dependents, claiming, and carts — and that one-checkout-per-player is acceptable for the first events. 🟢
 
 **Visitor**
 - [x] **[V1]** Fix the support-email inconsistency (`mychesstour@gmail.com` → `support@mychesstour.com`) (#618).
-- [ ] **[V1]** Decide whether the waitlist needs a confirmation email.
+- [x] **[V1]** Waitlist confirmation email — moot, the waitlist was removed (#615).
 - [ ] **[V2/V3]** Verify browse, filters, full-badge, and detail render for a published tournament.
 
 **Player — account & profile**
 - [ ] **[P1–P4]** Smoke-test signup → verify → login → logout → password reset end to end (real Resend delivery).
 - [ ] **[P1]** Confirm the Resend-down rollback (no half-provisioned account blocks retry).
 - [ ] **[P5]** Decide on a correction path for mistyped set-once fields (admin tool vs support).
-- [ ] **[P6]** Decide whether OKU approve/reject needs an email (else players wait blind).
+- [x] **[P6]** OKU approve/reject emails the player (#449).
 - [x] **[P7]** Decide when/where banking details get collected from actual prize winners. Settings, prompted by the prize-awarded email; verified the first time a prize needs it (#523).
 
 **Player — participation**
@@ -419,7 +449,7 @@ Flow IDs in brackets point back to the detail above.
 - [ ] **[P11]** Verify My Tournaments listing + lazy expiry.
 
 **Organizer**
-- [ ] **[O1]** Test apply → admin approve → owner membership appears; decide on the approval email.
+- [ ] **[O1]** Test apply → admin approve → owner membership appears, and the applicant gets the decision email (#120).
 - [ ] **[O4/O5]** Test the create wizard → publish (validation + slug) happy path.
 - [x] **[O6]** Decide whether editing a *published* tournament (dates/fees) after registrations is allowed. Decided in #536, see [tournament-editing.md](./tournament-editing.md).
 - [ ] **[O7]** Test cancel end to end: organizer files → admin approves → tournament `cancelled`, players emailed, refunds settle. Then re-run approve to confirm it's idempotent.
@@ -435,4 +465,5 @@ Flow IDs in brackets point back to the detail above.
 - [ ] **[S1]** Trigger the FIDE cron manually (`workflow_dispatch`) once against production; confirm counts.
 - [ ] **[S2/S3]** Accept lazy expiry for launch, or stand up `pg_cron` — which also unblocks audit-log pruning (#507); do both at once if you do either.
 - [ ] **[S3]** Measure actual `audit_logs` growth against the Supabase plan's storage ceiling and record the real figure (#507).
-- [ ] **[S4]** Confirm only the four wired emails (verification, password reset, tournament cancellation, cancellation review) are expected to send at launch.
+- [ ] **[S4]** Send every template once on staging with real Resend delivery (S4 lists them) and check the links point at staging (`NEXT_PUBLIC_SITE_URL`, [site-url.md](./site-url.md)).
+- [ ] **[S6]** Check `/api/v1/feedback` files an issue on staging, and that the `user-reported` label exists on the repo (V4).
