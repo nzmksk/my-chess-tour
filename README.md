@@ -121,6 +121,97 @@ wiki/                Design docs and runbooks (index below)
 
 **Scheduled jobs** (GitHub Actions, calling `/api/v1/cron/*` with `CRON_SECRET`): cancellation refunds every 5 minutes, organizer payouts and prize sends daily at 01:00 UTC, FIDE ratings monthly.
 
+## Pre-launch checklists
+
+These assume nothing is configured yet: no services, no Netlify variables, no GitHub secrets. Do staging first; production repeats most of it with live credentials. The details live in the linked pages. The product-level checklist (flows to test, decisions still open) is §10 of [launch-readiness.md](wiki/launch-readiness.md).
+
+Netlify stores values verbatim: paste every value **without quotes**, and PEM keys as raw multi-line text. Generate each `CRON_SECRET` with `openssl rand -hex 32`, separately per environment.
+
+### Staging
+
+**Services**
+
+- [ ] **Supabase** project for staging, Postgres 16 or later (the QA role needs it). Auth → JWT signing keys must be **asymmetric**, which is what lets the proxy and `getAuthClaims()` verify sessions locally. The app sends its own signup and password-reset emails through Resend, so Supabase's email templates aren't used.
+- [ ] **Upstash Redis** database for staging.
+- [ ] **Resend:** verify the sending domain and choose `RESEND_FROM_EMAIL`.
+- [ ] **CHIP Collect (sandbox):** API key and brand id. Under Developers → Webhooks, add `https://staging.mychesstour.com/api/v1/webhooks/chip` subscribed to `purchase.paid`, `purchase.captured`, `purchase.payment_failure`, `purchase.cancelled`, `payment.refunded`, `purchase.refund_failure` and `purchase.pending_refund`. Copy **that webhook's** public key (not the account key) into `CHIP_WEBHOOK_PUBLIC_KEY`. See [chip-webhook.md](wiki/chip-webhook.md).
+- [ ] **CHIP Send (sandbox,** `CHIP_SEND_API_URL=https://staging-api.chip-in.asia/api`**):** API key and secret. Register the webhook with `POST /webhooks` (callback `https://staging.mychesstour.com/api/v1/webhooks/chip/send`, hooks `bank_account_status`, `send_instruction_status`, `budget_allocation_status`). `source chip_send.sh` gives you a signed `chip_send` helper for it. Copy the returned `public_key` into `CHIP_SEND_WEBHOOK_PUBLIC_KEY`.
+- [ ] **GitHub token for bug reports:** fine-grained, this repository only, Issues read and write, as `GITHUB_TOKEN`. Create the `user-reported` label on the repo.
+- [ ] **Sentry** (optional on staging, needed before launch): steps 1–7 of [error-monitoring.md](wiki/error-monitoring.md#setup).
+
+**Netlify (staging site)**
+
+- [ ] The site builds `staging` and serves `staging.mychesstour.com`.
+- [ ] Every variable from [Environment](#environment), with `NEXT_PUBLIC_SITE_URL=https://staging.mychesstour.com`, `NEXT_PUBLIC_ENVIRONMENT=staging` and staging's own `CRON_SECRET`. Set `SENTRY_AUTH_TOKEN` to the Builds scope only.
+- [ ] A release tag (`v…`) is reachable from `staging`. Without one the build fails ([releases.md](wiki/releases.md)).
+
+**Database**
+
+- [ ] GitHub → Settings → Environments → `staging` (deployment branch `staging` only), secret `STAGING_DATABASE_URL` set to the session pooler string with `?sslmode=require`. See [database-migrations.md](wiki/database-migrations.md#setup-admin-once).
+- [ ] Apply the migrations: run **Staging database migrations** from the Actions tab.
+- [ ] Optionally load test data with `supabase/staging/seed.sql`.
+- [ ] Make yourself a platform admin after signing up:
+  ```sql
+  INSERT INTO user_global_roles (user_id, role_id)
+  SELECT u.id, r.id FROM users u, roles r
+  WHERE lower(u.email) = lower('<your email>') AND r.name = 'platform_admin';
+  ```
+- [ ] Optionally give QA read-only access: [staging-db-access.md](wiki/staging-db-access.md).
+
+**Verify end to end**
+
+The scheduled jobs only ever call production (`PRODUCTION_URL`), so on staging you trigger the cron routes by hand:
+
+```sh
+curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
+  https://staging.mychesstour.com/api/v1/cron/refunds   # or /payouts, /fide-ratings
+```
+
+- [ ] Sign up → code email arrives → log in → reset the password.
+- [ ] Apply as an organizer → approve in `/admin/applications` → the bank account turns verified (CHIP Send webhook).
+- [ ] Create and publish a tournament, register and pay in the CHIP sandbox, and confirm the webhook settled it, not only the return page. Run the scenarios in [payment-flow.md](wiki/payment-flow.md#c-end-to-end-manual-chip-sandbox).
+- [ ] Cancel a paid tournament → approve in `/admin/cancellations` → call `/cron/refunds` → the refund settles and the player is emailed.
+- [ ] Payout: once a tournament is 3 days past its end, call `/cron/payouts` → send instruction → `paid` → email. Do the same for a platform-distributed prize award.
+- [ ] A bug report from the site files an issue.
+- [ ] Sentry: step 9 of [error-monitoring.md](wiki/error-monitoring.md#9-verify-on-staging).
+
+### Production
+
+**Services** (separate from staging's)
+
+- [ ] **Supabase** project for production, with the same auth settings. No seed data and no QA role, ever.
+- [ ] **Upstash** database, **Resend** sender (the same verified domain is fine) and **Sentry** (the same project; `NEXT_PUBLIC_SENTRY_ENVIRONMENT=production`).
+- [ ] **CHIP Collect live** keys (#123) and a webhook to `https://www.mychesstour.com/api/v1/webhooks/chip` with the same events and its own public key.
+- [ ] **CHIP Send production** (`CHIP_SEND_API_URL=https://api.chip-in.asia/api`), webhook registered to the production callback, and the Send balance funded with budget approvers in place.
+- [ ] **Uptime monitor** on `https://www.mychesstour.com` (#572).
+
+**Netlify (production site)**
+
+- [ ] The site builds `master` and serves `www.mychesstour.com`.
+- [ ] Every variable with production values, `NEXT_PUBLIC_SITE_URL=https://www.mychesstour.com`, `NEXT_PUBLIC_ENVIRONMENT=production` and its own `CRON_SECRET`.
+
+**GitHub**
+
+- [ ] Repository secrets for the scheduled jobs: `CRON_SECRET` (production's value) and `PRODUCTION_URL=https://www.mychesstour.com`.
+- [ ] Optionally `CLAUDE_CODE_OAUTH_TOKEN` for `claude.yml`.
+
+**Database**
+
+- [ ] Migrate by hand, dry run first ([database-migrations.md](wiki/database-migrations.md#production), #161):
+  ```sh
+  npx supabase@2.122.1 db push --db-url "$PROD_DB_URL" --include-all --dry-run
+  npx supabase@2.122.1 db push --db-url "$PROD_DB_URL" --include-all
+  ```
+- [ ] Grant the admin account `platform_admin` with the SQL above (#127).
+
+**Go live**
+
+- [ ] Add the changelog entry, tag the release on `staging`, then **merge** (not squash) `staging` into `master` ([releases.md](wiki/releases.md)).
+- [ ] Run each scheduled workflow once from the Actions tab (refunds, payouts, FIDE ratings) and check it succeeds.
+- [ ] Smoke-test with a real small payment, then refund it (#129).
+- [ ] Sentry: repeat step 9.1 against production.
+- [ ] Close the remaining items in [launch-readiness.md](wiki/launch-readiness.md#10-pre-launch-review-checklist) §10 (privacy wording review, the CHIP Send sandbox run, the one-time database rebuild).
+
 ## Docs
 
 | Topic                                                           | Page                                                                                                                                                                                                |
