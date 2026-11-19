@@ -37,16 +37,8 @@ type ChangeKey = (typeof CHANGE_GROUPS)[number]["key"];
 /** The part of a release's notes the site shows. */
 export type ReleaseNotes = Omit<ChangelogEntry, "version" | "date">;
 
-/** Where the notes for users end and the notes for developers begin. */
-export const DEVELOPER_NOTES_MARKER = "<!-- developer notes -->";
-
-/**
- * Lists the release on /changelogs without announcing it in the "What's new"
- * dialog. A release with no items is silent without it.
- */
-export const SILENT_MARKER = "<!-- silent -->";
-
 const END_OF_USER_NOTES = [
+  // <!-- developer notes -->: where the notes for users end.
   /<!--\s*developer notes\s*-->/i,
   // GitHub's "Generate release notes" output.
   /^#{1,6}[ \t]+What's Changed[ \t]*$/im,
@@ -54,17 +46,21 @@ const END_OF_USER_NOTES = [
   /^\*\*Full Changelog\*\*/m,
 ];
 
+// <!-- silent -->: list the release on /changelogs, but never announce it in
+// the "What's new" dialog. A release with no items is silent without it.
 const SILENT_PATTERN = /<!--\s*silent\s*-->/i;
 const HEADING = /^ {0,3}#{1,6}[ \t]+(.*?)[ \t#]*$/;
 const LIST_ITEM = /^ {0,3}[-*+][ \t]+(.*)$/;
 
-function userPart(body: string): string {
-  let end = body.length;
+/** The notes up to where the developer notes begin, with \n line endings. */
+function userNotes(body: string | null | undefined): string {
+  const text = (body ?? "").replace(/\r\n?/g, "\n");
+  let end = text.length;
   for (const pattern of END_OF_USER_NOTES) {
-    const match = pattern.exec(body);
+    const match = pattern.exec(text);
     if (match && match.index < end) end = match.index;
   }
-  return body.slice(0, end);
+  return text.slice(0, end);
 }
 
 /** Markdown inline formatting → the plain text the site renders. */
@@ -89,7 +85,7 @@ function groupFor(heading: string): ChangeKey | null {
 export function parseReleaseNotes(
   body: string | null | undefined,
 ): ReleaseNotes {
-  const text = userPart((body ?? "").replace(/\r\n?/g, "\n"));
+  const text = userNotes(body);
   const silent = SILENT_PATTERN.test(text);
 
   const headline: string[] = [];
@@ -148,6 +144,18 @@ export function parseReleaseNotes(
   }
   if (silent || count === 0) notes.silent = true;
   return notes;
+}
+
+/**
+ * Whether the notes have something for users, or say on purpose that they
+ * don't with the silent marker. CI requires one or the other of every
+ * release, so one published with only GitHub's PR list is caught.
+ */
+export function hasUserNotes(body: string | null | undefined): boolean {
+  const { new: added, improved, fixed } = parseReleaseNotes(body);
+  return (
+    Boolean(added || improved || fixed) || SILENT_PATTERN.test(userNotes(body))
+  );
 }
 
 /** The fields of a GitHub release the changelog reads. */

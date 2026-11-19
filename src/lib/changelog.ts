@@ -1,7 +1,9 @@
 /**
  * The user-facing changelog (#622): types and the pure rules for which
- * releases to list and which one to announce. The entries themselves live in
- * src/content/changelog.ts. Safe for client components: no Node APIs.
+ * releases to list and which one to announce. The entries themselves are the
+ * GitHub release notes (#640): src/lib/release-notes.ts parses them and
+ * src/services/github/releases.ts fetches them. Safe for client components:
+ * no Node APIs.
  */
 
 export interface ChangelogEntry {
@@ -108,7 +110,7 @@ export function releasedEntries(
 }
 
 /** Releases per page on /changelogs (#640). */
-export const CHANGELOG_PAGE_SIZE = 10;
+const CHANGELOG_PAGE_SIZE = 10;
 
 /**
  * The `page` query parameter of /changelogs: 1 when it's absent, null when
