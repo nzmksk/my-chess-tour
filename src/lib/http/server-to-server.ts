@@ -1,7 +1,7 @@
 // API routes called by other servers, never by a browser, and authenticated on
-// their own: CHIP calls the webhooks (RSA-signed) and the scheduler calls cron
-// with CRON_SECRET. Browser-facing policies (the baseline rate limit, the
-// origin check) skip them.
+// their own: CHIP (RSA-signed) and GitHub (HMAC-signed) call the webhooks, and
+// the scheduler calls cron with CRON_SECRET. Browser-facing policies (the
+// baseline rate limit, the origin check) skip them.
 const SERVER_TO_SERVER_API_PREFIXES = ["/api/v1/webhooks/", "/api/v1/cron/"];
 
 /** Whether this path is a server-to-server API route (webhooks, cron). */
