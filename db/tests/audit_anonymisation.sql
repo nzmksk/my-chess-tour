@@ -60,6 +60,8 @@ BEGIN
   );
   -- A prize bank account (#523): its audit rows are keyed by the account id,
   -- not the user id, and must be anonymised all the same.
+  -- Bank details are held only with financial-data consent (#451).
+  PERFORM record_sensitive_data_consent(v_a, 'financial', true, '2026-11-19');
   PERFORM set_player_bank_account(v_a, 'MBBEMYKL', 'Maybank', 'Aisyah Rahmanova', '514100009999');
 
   INSERT INTO users (auth_user_id, email, first_name, last_name)

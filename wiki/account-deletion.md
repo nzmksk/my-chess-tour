@@ -11,6 +11,7 @@ How support deletes a player's account when they ask. There is no self-serve del
 | `users` row, `player_profiles` row | Deleted | Personal profile data |
 | Auth account (`auth.users`), sign-in identities | Deleted | Holds the email and the name given at signup |
 | Avatar, OKU card (storage) | Deleted | Personal files |
+| `sensitive_data_consents` (health and financial consent history) | Deleted, by the foreign key cascade | It records consent to hold data that is now gone |
 | `users` / `player_profiles` audit history | Kept as rows, every personal field replaced with `[anonymised]` | The history of *when* the account changed survives; the content does not |
 | Other audit rows the user wrote (`changed_by`) | Kept, `changed_by` cleared | They record changes to other records, not to the user |
 | `registrations`, `payments`, `refunds`, `payouts` and their audit rows | Kept, `user_id` set to NULL by the foreign key | Financial records, kept 7 years (Income Tax Act). This overrides the deletion request |
@@ -86,7 +87,8 @@ BEGIN;
 DELETE FROM waitlist WHERE lower(email) = lower('<their email>');
 DELETE FROM organization_invitations WHERE email = lower('<their email>');
 
--- Cascades to player_profiles, player_bank_accounts, organization_memberships
+-- Cascades to player_profiles, player_bank_accounts, sensitive_data_consents,
+-- organization_memberships
 -- and user_global_roles;
 -- sets user_id / *_by to NULL everywhere else.
 DELETE FROM users WHERE id = '<users.id>';

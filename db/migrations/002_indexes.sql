@@ -35,6 +35,12 @@ CREATE UNIQUE INDEX uniq_active_bank_account_per_player
 CREATE INDEX idx_player_bank_accounts_chip_id ON player_bank_accounts (chip_bank_account_id)
   WHERE chip_bank_account_id IS NOT NULL;
 
+-- Sensitive data consents: a user's current position for a category is their
+-- newest row, read by has_sensitive_data_consent on every bank-detail save and
+-- OKU upload.
+CREATE INDEX idx_sensitive_data_consents_latest
+  ON sensitive_data_consents (user_id, category, id DESC);
+
 -- Organization documents (fetched as a set per application/organization)
 CREATE INDEX idx_org_documents_org ON organization_documents (organization_id);
 

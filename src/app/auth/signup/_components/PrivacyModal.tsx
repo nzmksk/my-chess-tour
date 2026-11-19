@@ -126,10 +126,17 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             <li>Payment records (amounts, dates, transaction IDs)</li>
           </ul>
 
-          <h3 className="modal-section-title">2. Sensitive Personal Data</h3>
+          <h3 className="modal-section-title">
+            2. Sensitive Personal Data and Separate Consent
+          </h3>
           <p className="modal-paragraph">
-            Under the PDPA, certain data requires your explicit consent before
-            collection:
+            Some personal data needs more than your agreement to this policy.
+            Health data (your OKU card and the disability status it proves) and
+            financial data (your bank details) are each collected only with
+            their own explicit consent: a separate checkbox, shown when you give
+            us that data, never pre-ticked and never combined with accepting
+            these terms. We record when you consented and to which wording. The
+            table below lists the data that needs this kind of care:
           </p>
           <table className="modal-table">
             <thead>
@@ -140,12 +147,23 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             </thead>
             <tbody>
               <tr>
-                <td>OKU (disability) status</td>
+                <td>OKU (disability) status and OKU card</td>
                 <td>
-                  Event accessibility; FIDE Special Needs registration; OKU
-                  categories and special prizes. Whether you are verified OKU is
-                  shared with the organisers of tournaments you enter — never
-                  your card or the outcome of a pending or rejected application
+                  Health data, collected only with your separate consent. Used
+                  for event accessibility, FIDE Special Needs registration, and
+                  OKU categories and special prizes. Your card is seen only by
+                  our reviewers. Whether you are verified OKU is shared with the
+                  organisers of tournaments you enter, but never your card or
+                  the outcome of a pending or rejected application
+                </td>
+              </tr>
+              <tr>
+                <td>Bank details (bank, account holder, account number)</td>
+                <td>
+                  Financial data, collected only with your separate consent.
+                  Used to pay you prizes distributed through MY Chess Tour, and
+                  shared with CHIP, our payment processor, to verify the account
+                  and make the transfer. Never shared with organisers
                 </td>
               </tr>
               <tr>
@@ -165,8 +183,14 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             </tbody>
           </table>
           <p className="modal-paragraph">
-            By providing this data, you give explicit consent for its use as
-            described above.
+            You can withdraw either separate consent at any time in Settings.
+            Withdrawing consent for your health data deletes your OKU card and
+            removes your OKU verification. Removing your bank details withdraws
+            consent for your financial data and deletes them, except that for an
+            account a prize was sent to we keep the bank, account holder name
+            and last 4 digits of the account number as part of the payment
+            record, as described under Data Retention. Date of birth and gender
+            are used as described above once you add them to your profile.
           </p>
 
           <h3 className="modal-section-title">3. How We Use Your Data</h3>
@@ -290,8 +314,10 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             </li>
             <li>
               <strong>Withdrawal of consent</strong> — withdraw consent for the
-              processing of sensitive personal data at any time (note: this may
-              affect your ability to participate in certain events).
+              processing of your health or financial data at any time, in
+              Settings or by contacting us. Withdrawing may affect your ability
+              to enter OKU categories or receive prizes paid through MY Chess
+              Tour.
             </li>
             <li>
               <strong>Data deletion</strong> — request deletion of your account

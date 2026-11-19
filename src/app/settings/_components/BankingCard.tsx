@@ -37,6 +37,10 @@ const STATUS_COPY: Record<BankAccountStatus, { label: string; note: string; clas
 // these fields are freely editable (not set-once) and sensitive: the account
 // number is masked on display and re-entered in full to change. Mirrors the
 // self-contained OkuVerificationCard shape.
+//
+// Removing the details is how a player withdraws their financial-data consent
+// (#451): PATCH with every field null deactivates the account and records the
+// withdrawal in the same transaction.
 export default function BankingCard({
   bankName: initialBankName,
   bankCode: initialBankCode,
@@ -57,6 +61,9 @@ export default function BankingCard({
     ? STATUS_COPY[display.bank_account_status]
     : null;
   const [editing, setEditing] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const hasDetails = Boolean(
     display.bank_name ||
@@ -67,6 +74,42 @@ export default function BankingCard({
   function handleSaved(masked: BankingDisplay) {
     setDisplay(masked);
     setEditing(false);
+  }
+
+  async function handleRemove() {
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      const res = await fetch("/api/v1/profile/banking", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bank_code: null,
+          account_holder: null,
+          account_number: null,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setRemoveError(
+          json?.error?.message ?? "Removal failed. Please try again.",
+        );
+        return;
+      }
+      setDisplay({
+        bank_name: null,
+        bank_code: null,
+        bank_account_holder: null,
+        bank_account_number_last4: null,
+        bank_account_status: null,
+        bank_account_rejection_reason: null,
+      });
+      setConfirmingRemove(false);
+    } catch {
+      setRemoveError("A network error occurred. Please try again.");
+    } finally {
+      setRemoving(false);
+    }
   }
 
   return (
@@ -135,13 +178,58 @@ export default function BankingCard({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className="btn-secondary w-fit rounded-md"
-            onClick={() => setEditing(true)}
-          >
-            Edit
-          </button>
+          {confirmingRemove ? (
+            <div className="flex flex-col gap-3">
+              <p className="font-lato text-text-secondary text-sm">
+                This deletes your bank details and withdraws your consent to us
+                storing them. Prizes paid through MY Chess Tour can&apos;t be
+                sent to you until you add them again. For an account a prize
+                was sent to, only the bank, account holder name and last 4
+                digits are kept, for 7 years, as the law requires.
+              </p>
+              {removeError && (
+                <p className="font-lato text-sm text-red-400">{removeError}</p>
+              )}
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  className="btn-secondary w-fit rounded-md"
+                  onClick={() => {
+                    setConfirmingRemove(false);
+                    setRemoveError(null);
+                  }}
+                  disabled={removing}
+                >
+                  Keep my details
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary w-fit rounded-md"
+                  onClick={handleRemove}
+                  disabled={removing}
+                >
+                  {removing ? "Removing…" : "Remove and withdraw consent"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                className="btn-secondary w-fit rounded-md"
+                onClick={() => setEditing(true)}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="font-lato text-text-muted hover:text-text-secondary w-fit text-sm underline"
+                onClick={() => setConfirmingRemove(true)}
+              >
+                Remove bank details and withdraw consent
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-3">

@@ -237,6 +237,12 @@ CREATE TABLE organization_bank_accounts (
 -- it is saved: most players never win a platform-distributed prize, and each
 -- registration is a verification CHIP charges for. It is registered once the
 -- player has an approved prize award waiting on it.
+--
+-- redacted_at: when the player withdrew their financial-data consent (#451)
+-- and this row had to outlive it because a prize award names it. The account
+-- number is then cut down to '****' plus its last 4 digits; the bank and the
+-- holder stay, as the record of where prize money went. Rows no award names
+-- are deleted outright instead (set_player_bank_account).
 -- =============================================
 CREATE TABLE player_bank_accounts (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -250,11 +256,53 @@ CREATE TABLE player_bank_accounts (
   verified_at          timestamptz,
   rejection_reason     text,
   is_active            boolean NOT NULL DEFAULT true,
+  redacted_at          timestamptz,
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT chk_player_bank_account_number_digits CHECK (account_number ~ '^[0-9]{5,20}$'),
+  -- Full digits while live; only the masked form, and never active, once
+  -- redacted.
+  CONSTRAINT chk_player_bank_account_number_digits CHECK (
+    CASE WHEN redacted_at IS NULL
+      THEN account_number ~ '^[0-9]{5,20}$'
+      ELSE account_number ~ '^\*{4}[0-9]{4}$' AND NOT is_active
+    END
+  ),
   CONSTRAINT chk_player_bank_code_format  CHECK (bank_code ~ '^[A-Z0-9]{8}([A-Z0-9]{3})?$'),
   CONSTRAINT chk_player_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified')
+);
+
+-- =============================================
+-- SENSITIVE DATA CONSENTS (#451)
+-- Separate, explicit consent for the two kinds of data that need more than
+-- the Terms of Service: health data (an OKU card and the disability status it
+-- proves) and financial data (a player's bank details). Accepting the Terms at
+-- signup is not consent to either. Each is asked for on its own, at the moment
+-- the data is collected, and recorded here.
+--
+-- An append-only log, not a pair of columns: every grant and every withdrawal
+-- is its own row, so "what had this person agreed to on date X, and to which
+-- wording?" can be answered after the fact. A user's current position for a
+-- category is their newest row (highest id; created_at can tie inside one
+-- transaction). No row at all means never asked.
+--
+-- version is the wording the user was shown, written server-side from
+-- src/lib/reference/legal.ts and never from the request body. A withdrawal
+-- carries none: it withdraws whatever was granted.
+--
+-- Written only by record_sensitive_data_consent (003); clients cannot write
+-- (004) and no one can UPDATE a row (guard_consent_immutable, 003).
+-- =============================================
+CREATE TYPE sensitive_data_category AS ENUM ('health', 'financial');
+
+CREATE TABLE sensitive_data_consents (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category   sensitive_data_category NOT NULL,
+  granted    boolean NOT NULL,
+  version    varchar(20),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  -- A grant names the wording agreed to; a withdrawal names none.
+  CONSTRAINT chk_consent_version CHECK (granted = (version IS NOT NULL))
 );
 
 -- =============================================

@@ -162,6 +162,32 @@ describe("PATCH /api/v1/profile/banking", () => {
     expect(res.status).toBe(404);
   });
 
+  it("409 CONSENT_REQUIRED when the player hasn't consented (#451)", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "CONSENT_REQUIRED: bank details need the player's financial data consent",
+      },
+    });
+    const res = await PATCH(makeReq(VALID));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error.code).toBe("CONSENT_REQUIRED");
+    // The database's wording stays server-side.
+    expect(json.error.message).not.toContain("financial data consent");
+    expect(mockSendAwaiting).not.toHaveBeenCalled();
+  });
+
+  it("500 for any other P0001 refusal", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "something else" },
+    });
+    const res = await PATCH(makeReq(VALID));
+    expect(res.status).toBe(500);
+  });
+
   it("500 when the RPC fails", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: "db down" } });
     const res = await PATCH(makeReq(VALID));

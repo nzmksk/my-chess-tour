@@ -32,6 +32,7 @@ DECLARE
   -- Called only through supabaseAdmin. Keep in sync with the REVOKE blocks.
   v_server_only text[] := ARRAY[
     'set_organization_bank_account',
+    'record_sensitive_data_consent',
     'create_organization_application',
     'review_organization_application',
     'review_tournament_cancellation',

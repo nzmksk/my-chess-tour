@@ -169,13 +169,15 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 - **Deletion runbook:** [account-deletion.md](./account-deletion.md). Support deletes the rows and then calls `anonymise_user_audit_logs` in the same transaction, because deleting `users`/`player_profiles` alone leaves full copies in `audit_logs` (S3, #503). Financial audit rows (`payments`, `refunds`, `payouts`, `registrations`) are deliberately left alone under the 7-year obligation. A self-serve deletion flow should call the same function.
 
 ### P6. OKU (disability) verification — ⚠️ Partial
-- **Entry (player):** `/settings` → `OkuVerificationCard` → upload doc (≤5 MB) to the **private** `oku-documents` bucket → `POST /api/v1/profile/oku` sets `oku_status='pending'`.
+- **Entry (player):** `/settings` → `OkuVerificationCard` → tick the health-data consent box → `POST /api/v1/profile/consents` → upload doc (≤5 MB) to the **private** `oku-documents` bucket → `POST /api/v1/profile/oku` sets `oku_status='pending'`.
+- **Consent (#451):** the card is health data, held only with its own explicit consent, recorded in the append-only `sensitive_data_consents` log with the statement version from `legal.ts`. The bucket's upload policy and the route both refuse a card without it. **Withdraw** (any state but `none`): `DELETE /api/v1/profile/oku` deletes everything under the player's `users/{id}/` prefix in the bucket (paged and recursive, `removeAllUnder`), resets the status, then records the withdrawal.
 - **Entry (admin):** `/admin/oku/[userId]` (signed 300s URL to the doc) → `PATCH /api/v1/admin/oku/[userId]` approve/reject (guarded on `pending`, rejection reason required).
 - **Scenarios:** re-upload allowed only in `none`/`rejected`; double-review prevented (404 if already actioned).
 - **Notification:** ✅ approve/reject emails the player (`notifyOkuReviewed`, #449): verified, or rejected with the reason and a link back to Settings to re-upload.
 
 ### P7. Banking details — ✅ Built (#523)
 - **Entry:** `/settings` → `BankingCard` → `PATCH /api/v1/profile/banking`. The bank is chosen from the SWIFT list, and the account number is 5–20 digits, **never returned** (last 4 only). Stored in `player_bank_accounts`: superseded on change, so a change is verified again.
+- **Consent (#451):** bank details are held only with the player's financial-data consent: a checkbox on every save, recorded through `POST /api/v1/profile/consents` before the PATCH. `set_player_bank_account` refuses a save without it (`409 CONSENT_REQUIRED`). **Remove bank details** on the card erases them (rows no prize award names are deleted; a row an award names keeps only bank, holder and last 4) and records the withdrawal in the same transaction.
 - **Use:** the destination for platform-distributed prizes (P14). Registered with CHIP Send the first time an approved prize needs it, never on save. The card shows the verification state, and a winner without a usable account is emailed to add or fix it.
 - **Gaps:** 🟡 not used for refunds (those go back through CHIP Collect to the original payment method).
 

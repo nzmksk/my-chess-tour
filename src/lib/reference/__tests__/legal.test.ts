@@ -4,10 +4,13 @@ import { describe, it, expect } from "vitest";
 import {
   ORGANIZER_AGREEMENT_HISTORY,
   ORGANIZER_AGREEMENT_VERSION,
+  SENSITIVE_DATA_CONSENT_HISTORY,
   TERMS_HISTORY,
   TERMS_VERSION,
   changesSince,
+  currentConsent,
   formatLegalVersion,
+  isSensitiveDataCategory,
 } from "../legal";
 
 const VERSIONS = {
@@ -173,5 +176,61 @@ describe("changesSince", () => {
     expect(
       changesSince(ORGANIZER_AGREEMENT_HISTORY, ORGANIZER_AGREEMENT_VERSION),
     ).toEqual([]);
+  });
+});
+
+describe("sensitive data consent statements", () => {
+  it.each(Object.entries(SENSITIVE_DATA_CONSENT_HISTORY))(
+    "%s is newest first, with date-shaped unique versions",
+    (_category, history) => {
+      // The version is stored with every grant (varchar(20)) and must name the
+      // statement the user actually saw.
+      const versions = history.map((entry) => entry.version);
+      expect(versions.length).toBeGreaterThan(0);
+      expect(versions).toEqual([...versions].sort().reverse());
+      expect(new Set(versions).size).toBe(versions.length);
+      for (const entry of history) {
+        expect(entry.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(formatLegalVersion(entry.version)).not.toBe(entry.version);
+        expect(entry.statement.trim().length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it("currentConsent returns the newest statement", () => {
+    expect(currentConsent("health")).toBe(
+      SENSITIVE_DATA_CONSENT_HISTORY.health[0],
+    );
+    expect(currentConsent("financial")).toBe(
+      SENSITIVE_DATA_CONSENT_HISTORY.financial[0],
+    );
+  });
+
+  it("each statement says how to withdraw", () => {
+    // PDPA consent must be withdrawable, and the user should learn that before
+    // agreeing, not from the privacy policy afterwards.
+    expect(currentConsent("health").statement).toMatch(/withdraw/i);
+    expect(currentConsent("financial").statement).toMatch(/withdraw/i);
+  });
+
+  it("isSensitiveDataCategory accepts exactly the database enum values", () => {
+    expect(isSensitiveDataCategory("health")).toBe(true);
+    expect(isSensitiveDataCategory("financial")).toBe(true);
+    expect(isSensitiveDataCategory("terms")).toBe(false);
+    expect(isSensitiveDataCategory(undefined)).toBe(false);
+  });
+
+  it("categories match the sensitive_data_category enum", () => {
+    const sql = fs.readFileSync(
+      path.join(process.cwd(), "db/migrations/001_tables.sql"),
+      "utf-8",
+    );
+    const match = sql.match(
+      /CREATE TYPE sensitive_data_category AS ENUM \(([^)]*)\)/,
+    );
+    const values = match?.[1].match(/'([^']+)'/g)?.map((v) => v.slice(1, -1));
+    expect(values?.sort()).toEqual(
+      Object.keys(SENSITIVE_DATA_CONSENT_HISTORY).sort(),
+    );
   });
 });

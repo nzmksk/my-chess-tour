@@ -379,6 +379,8 @@ BEGIN
     RAISE EXCEPTION 'C1 FAIL: a winner with no bank account gave %', claim_prize_award_send(v_award1);
   END IF;
 
+  -- Bank details are held only with financial-data consent (#451).
+  PERFORM record_sensitive_data_consent(v_p[1], 'financial', true, '2026-11-19');
   v_bank1 := (set_player_bank_account(v_p[1], 'MBBEMYKL', 'Maybank', 'Player One', '514100000101') ->> 'id')::uuid;
   IF claim_prize_award_send(v_award1) IS DISTINCT FROM 'bank_account_not_verified' THEN
     RAISE EXCEPTION 'C1 FAIL: a pending bank account was accepted';
@@ -441,6 +443,7 @@ BEGIN
 
   -- ===== S2: a failed award is terminal and the winner can be re-entered =====
   PERFORM review_prize_award(v_award2, v_admin, 'approve', NULL);
+  PERFORM record_sensitive_data_consent(v_p[2], 'financial', true, '2026-11-19');
   v_bank2 := (set_player_bank_account(v_p[2], 'CIBBMYKL', 'CIMB Bank', 'Player Two', '800000000202') ->> 'id')::uuid;
   PERFORM settle_bank_account_verification(v_bank2, 930202, true);
   IF claim_prize_award_send(v_award2) IS NOT NULL THEN
@@ -503,16 +506,28 @@ BEGIN
     RAISE EXCEPTION 'B1 FAIL: superseding moved a paid award off its account';
   END IF;
 
+  -- A verdict on a superseded account is recorded but reported inactive.
+  PERFORM set_player_bank_account(v_p[1], 'MBBEMYKL', 'Maybank', 'Player One', '514100000888');
+  v_res := settle_bank_account_verification((SELECT id FROM player_bank_accounts
+    WHERE user_id = v_p[1] AND account_number = '514100000999'), NULL, false, NULL);
+  IF (v_res->>'is_active')::boolean OR (v_res->>'already_processed')::boolean THEN
+    RAISE EXCEPTION 'B1 FAIL: verdict on a superseded account: %', v_res;
+  END IF;
+
+  -- Clearing withdraws consent and erases (#451): rows no award names go, and
+  -- the account the paid award went to keeps only bank, holder and last 4.
   v_res := set_player_bank_account(v_p[1], NULL, NULL, NULL, NULL);
   IF NOT (v_res->>'changed')::boolean
      OR EXISTS (SELECT 1 FROM player_bank_accounts WHERE user_id = v_p[1] AND is_active) THEN
     RAISE EXCEPTION 'B1 FAIL: clearing left an active account: %', v_res;
   END IF;
-  -- A verdict on a superseded account is recorded but reported inactive.
-  v_res := settle_bank_account_verification((SELECT id FROM player_bank_accounts
-    WHERE user_id = v_p[1] AND account_number = '514100000999'), NULL, false, NULL);
-  IF (v_res->>'is_active')::boolean OR (v_res->>'already_processed')::boolean THEN
-    RAISE EXCEPTION 'B1 FAIL: verdict on a superseded account: %', v_res;
+  IF EXISTS (SELECT 1 FROM player_bank_accounts WHERE user_id = v_p[1] AND id <> v_bank1) THEN
+    RAISE EXCEPTION 'B1 FAIL: accounts no award names survived clearing';
+  END IF;
+  IF (SELECT account_number FROM player_bank_accounts WHERE id = v_bank1) <> '****0101'
+     OR (SELECT redacted_at FROM player_bank_accounts WHERE id = v_bank1) IS NULL
+     OR (SELECT bank_account_id FROM prize_awards WHERE id = v_award1) <> v_bank1 THEN
+    RAISE EXCEPTION 'B1 FAIL: the paid award''s account was not kept masked';
   END IF;
   RAISE NOTICE 'B1 PASS — player accounts supersede, no-op when unchanged, clear, and never return the number';
 
