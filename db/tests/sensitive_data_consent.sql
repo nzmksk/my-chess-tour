@@ -26,9 +26,12 @@
 --   B1  set_player_bank_account refuses bank details without financial consent
 --       (CONSENT_REQUIRED, P0001) and stores nothing
 --   B2  with consent, the details save
---   B3  clearing the details records the withdrawal in the same call
+--   B3  clearing the details records the withdrawal in the same call, and
+--       erases every row the player has: superseded rows too, not just the
+--       active one (no prize award names them, so they are deleted)
 --   B4  after withdrawing, saving is refused again until consent is re-granted
 --   B5  clearing when there was nothing to clear still leaves consent withdrawn
+--   B6  a redacted row can hold only the masked number and can't be active
 --   H1  the oku-documents upload policy refuses a card from a user without
 --       health consent, even into their own folder
 --   H2  with health consent the same upload is allowed
@@ -241,13 +244,15 @@ BEGIN
   RAISE NOTICE 'B2 PASS — details save once consent is granted';
 
   -- ===== B3 ===============================================================
+  -- A second account supersedes the first, so there is an inactive row too.
+  PERFORM set_player_bank_account(v_b, 'CIBBMYKL', 'CIMB Bank', 'Consent B', '800000004512');
   v_res := set_player_bank_account(v_b, NULL, NULL, NULL, NULL);
   IF NOT (v_res->>'changed')::boolean
-     OR EXISTS (SELECT 1 FROM player_bank_accounts WHERE user_id = v_b AND is_active)
+     OR EXISTS (SELECT 1 FROM player_bank_accounts WHERE user_id = v_b)
      OR has_sensitive_data_consent(v_b, 'financial') THEN
-    RAISE EXCEPTION 'B3 FAIL: clearing did not deactivate and withdraw: %', v_res;
+    RAISE EXCEPTION 'B3 FAIL: clearing did not erase every row and withdraw: %', v_res;
   END IF;
-  RAISE NOTICE 'B3 PASS — clearing deactivates the details and withdraws consent';
+  RAISE NOTICE 'B3 PASS — clearing erases active and superseded details and withdraws consent';
 
   -- ===== B4 ===============================================================
   BEGIN
@@ -267,6 +272,25 @@ BEGIN
     RAISE EXCEPTION 'B5 FAIL: clearing nothing must still withdraw: %', v_res;
   END IF;
   RAISE NOTICE 'B5 PASS — clearing with no active details still withdraws consent';
+
+  -- ===== B6 ===============================================================
+  BEGIN
+    INSERT INTO player_bank_accounts (user_id, bank_name, bank_code, account_holder,
+                                      account_number, is_active, redacted_at)
+      VALUES (v_b, 'Maybank', 'MBBEMYKL', 'Consent B', '514100004511', false, now());
+    RAISE EXCEPTION 'B6 FAIL: a redacted row kept the full number';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+  BEGIN
+    INSERT INTO player_bank_accounts (user_id, bank_name, bank_code, account_holder,
+                                      account_number, is_active, redacted_at)
+      VALUES (v_b, 'Maybank', 'MBBEMYKL', 'Consent B', '****4511', true, now());
+    RAISE EXCEPTION 'B6 FAIL: a redacted row was active';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+  RAISE NOTICE 'B6 PASS — redacted rows are masked and inactive';
 
   -- ===== H1 ===============================================================
   -- v_a withdrew health consent in C7.

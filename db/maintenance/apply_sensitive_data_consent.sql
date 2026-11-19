@@ -2,11 +2,12 @@
 -- ONE-OFF: bring an existing database up to #451 (separate consent for health
 -- and financial data)
 --
--- #451 edits the base migrations in place: sensitive_data_consents in 001, its
--- index in 002, has_sensitive_data_consent / record_sensitive_data_consent /
--- the immutability trigger and the consent gate in set_player_bank_account in
--- 003, RLS in 004, and the consent check on the oku-documents upload policy in
--- 005. A fresh build gets all of it. 003 can't simply be re-run on a
+-- #451 edits the base migrations in place: sensitive_data_consents and
+-- player_bank_accounts.redacted_at in 001, an index in 002,
+-- has_sensitive_data_consent / record_sensitive_data_consent / the
+-- immutability trigger and the consent gate and erase-on-withdrawal in
+-- set_player_bank_account in 003, RLS in 004, and the consent check on the
+-- oku-documents upload policy in 005. A fresh build gets all of it. 003 can't simply be re-run on a
 -- long-lived database (it creates triggers), so everything this issue adds is
 -- repeated below, generated from those files, in one transaction.
 --
@@ -35,6 +36,18 @@
 BEGIN;
 
 -- 001 -------------------------------------------------------------------------
+-- player_bank_accounts.redacted_at: rows a prize award names outlive a
+-- withdrawal with only the masked number (see the table comment in 001).
+-- A fresh build has the column before created_at; here it is appended.
+ALTER TABLE player_bank_accounts ADD COLUMN redacted_at timestamptz;
+ALTER TABLE player_bank_accounts DROP CONSTRAINT chk_player_bank_account_number_digits;
+ALTER TABLE player_bank_accounts ADD CONSTRAINT chk_player_bank_account_number_digits CHECK (
+    CASE WHEN redacted_at IS NULL
+      THEN account_number ~ '^[0-9]{5,20}$'
+      ELSE account_number ~ '^\*{4}[0-9]{4}$' AND NOT is_active
+    END
+  );
+
 -- =============================================
 -- SENSITIVE DATA CONSENTS (#451)
 -- Separate, explicit consent for the two kinds of data that need more than
@@ -197,9 +210,17 @@ CREATE TRIGGER guard_consent_immutable
 -- Bank details are held only with the player's financial-data consent (#451),
 -- so saving them without a current grant is refused with CONSENT_REQUIRED.
 -- The route records the grant first, from the checkbox the player ticked.
--- Clearing is how a player withdraws that consent, so it records the
--- withdrawal in the same transaction: there is no moment where the log says
--- withdrawn while the details are still active, or the reverse.
+-- Clearing is how a player withdraws that consent, so it erases the details
+-- and records the withdrawal in the same transaction: there is no moment
+-- where the log says withdrawn while the details are still held, or the
+-- reverse. Erasing covers EVERY row the player has, active and superseded:
+--   * a row no prize award names is deleted;
+--   * a row a prize award names is kept as the record of where that money
+--     went (or is going: an award in flight sends by chip_bank_account_id, not
+--     the number), but its number is cut to '****' plus the last 4 digits and
+--     redacted_at is stamped. Bank and holder stay.
+-- Nothing reads a full number off an inactive row: CHIP registration skips
+-- them, and emails show the last 4 only.
 -- =============================================
 CREATE OR REPLACE FUNCTION set_player_bank_account(
   p_user_id        uuid,
@@ -237,6 +258,16 @@ BEGIN
       SET is_active = false
       WHERE user_id = p_user_id AND is_active;
     v_changed := FOUND;
+
+    DELETE FROM player_bank_accounts b
+      WHERE b.user_id = p_user_id
+        AND NOT EXISTS (SELECT 1 FROM prize_awards a WHERE a.bank_account_id = b.id);
+
+    UPDATE player_bank_accounts
+      SET account_number = '****' || right(account_number, 4),
+          redacted_at    = now()
+      WHERE user_id = p_user_id AND redacted_at IS NULL;
+
     PERFORM record_sensitive_data_consent(p_user_id, 'financial', false);
     RETURN jsonb_build_object('changed', v_changed, 'id', NULL);
   END IF;

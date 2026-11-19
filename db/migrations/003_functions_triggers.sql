@@ -1195,9 +1195,17 @@ CREATE TRIGGER guard_consent_immutable
 -- Bank details are held only with the player's financial-data consent (#451),
 -- so saving them without a current grant is refused with CONSENT_REQUIRED.
 -- The route records the grant first, from the checkbox the player ticked.
--- Clearing is how a player withdraws that consent, so it records the
--- withdrawal in the same transaction: there is no moment where the log says
--- withdrawn while the details are still active, or the reverse.
+-- Clearing is how a player withdraws that consent, so it erases the details
+-- and records the withdrawal in the same transaction: there is no moment
+-- where the log says withdrawn while the details are still held, or the
+-- reverse. Erasing covers EVERY row the player has, active and superseded:
+--   * a row no prize award names is deleted;
+--   * a row a prize award names is kept as the record of where that money
+--     went (or is going: an award in flight sends by chip_bank_account_id, not
+--     the number), but its number is cut to '****' plus the last 4 digits and
+--     redacted_at is stamped. Bank and holder stay.
+-- Nothing reads a full number off an inactive row: CHIP registration skips
+-- them, and emails show the last 4 only.
 -- =============================================
 CREATE OR REPLACE FUNCTION set_player_bank_account(
   p_user_id        uuid,
@@ -1235,6 +1243,16 @@ BEGIN
       SET is_active = false
       WHERE user_id = p_user_id AND is_active;
     v_changed := FOUND;
+
+    DELETE FROM player_bank_accounts b
+      WHERE b.user_id = p_user_id
+        AND NOT EXISTS (SELECT 1 FROM prize_awards a WHERE a.bank_account_id = b.id);
+
+    UPDATE player_bank_accounts
+      SET account_number = '****' || right(account_number, 4),
+          redacted_at    = now()
+      WHERE user_id = p_user_id AND redacted_at IS NULL;
+
     PERFORM record_sensitive_data_consent(p_user_id, 'financial', false);
     RETURN jsonb_build_object('changed', v_changed, 'id', NULL);
   END IF;
