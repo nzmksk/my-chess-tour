@@ -5,8 +5,24 @@ import {
   LinkedInIcon,
 } from "@/app/components/Icons";
 
+/**
+ * The release this build belongs to, so testers can say which one they were on
+ * when they report a bug (#621). Both values are inlined at build time by
+ * next.config.ts. Outside production the short commit is appended, so builds
+ * between two releases can be told apart.
+ */
+function releaseLabel(): string | null {
+  const version = process.env.APP_VERSION;
+  if (!version) return null;
+  const commit = process.env.APP_COMMIT;
+  const showCommit =
+    commit && process.env.NEXT_PUBLIC_ENVIRONMENT !== "production";
+  return showCommit ? `${version} · ${commit}` : version;
+}
+
 export default function Footer() {
   const year = new Date().getFullYear();
+  const release = releaseLabel();
 
   return (
     <footer className="bg-bg-sunken border-border border-t-2">
@@ -75,6 +91,7 @@ export default function Footer() {
         <p className="text--meta text-center">
           &copy; {year} MY Chess Tour. All rights reserved.
         </p>
+        {release && <p className="text--meta mt-1 text-center">{release}</p>}
       </div>
     </footer>
   );
