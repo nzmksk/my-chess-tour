@@ -65,7 +65,11 @@ jobs:
 
       # Only Postgres: Supabase's image with its auth and storage schemas, and
       # every migration applied in order, as `db push` applies them to staging.
+      # Images come from GitHub's registry: the CLI's default, AWS's public
+      # one, rate-limits GitHub's runners and only falls back after retries.
       - name: Build the database from supabase/migrations
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
         run: supabase db start
 
       # What staging has on top of the migrations. qa_readonly_access.sql
