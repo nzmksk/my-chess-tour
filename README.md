@@ -32,7 +32,7 @@ npm run dev        # http://localhost:3000
 
 ### Environment
 
-`.env*` files are git-ignored except [`.env.example`](.env.example): copy it to `.env.local` and get the values from a maintainer. Local development uses the **staging** Supabase project and CHIP's sandbox, so treat staging data as shared. Netlify holds each site's real values, stored verbatim: paste them without quotes.
+`.env*` files are git-ignored except [`.env.example`](.env.example): copy it to `.env.local` and get the values from a maintainer. Local development uses the **staging** Supabase project and CHIP's sandbox, so treat staging data as shared. Netlify holds each site's real values; [On Netlify](#on-netlify) says how to set them.
 
 | Variable                                                                                                        | Used for                                                                                                                                      |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -49,7 +49,25 @@ npm run dev        # http://localhost:3000
 | `GITHUB_WEBHOOK_SECRET`                                                                                         | Signature of the GitHub release webhook that refreshes the cached changelog. See [wiki/releases.md](wiki/releases.md#how-the-site-reads-them) |
 | `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Optional. Leave the DSN unset locally and nothing is sent. See [wiki/error-monitoring.md](wiki/error-monitoring.md)                           |
 
-`NEXT_PUBLIC_*` values are inlined at build time, so changing one on Netlify needs a redeploy.
+`APP_VERSION` and `APP_COMMIT` aren't set anywhere: the build works them out from git.
+
+### On Netlify
+
+Staging and production are separate Netlify sites, each with its own values, so every variable is added on both. Go to **Project configuration → Environment variables → Add a variable → Add a single variable** (older Netlify screens call it Site configuration). Netlify stores values verbatim: paste them **without quotes**, and PEM keys as raw multi-line text.
+
+| Variables                                                                                                                                                                                | Contains secret values                                                              | Scopes               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------- |
+| `SUPABASE_SECRET_KEY`, `CHIP_API_KEY`, `CHIP_SEND_API_KEY`, `CHIP_SEND_API_SECRET`, `RESEND_API_KEY`, `UPSTASH_REDIS_REST_TOKEN`, `CRON_SECRET`, `GITHUB_TOKEN`, `GITHUB_WEBHOOK_SECRET` | **Yes**                                                                             | Builds and Functions |
+| `SENTRY_AUTH_TOKEN`                                                                                                                                                                      | **Yes**                                                                             | Builds only          |
+| Every `NEXT_PUBLIC_*` variable                                                                                                                                                           | No. They end up in the browser's JavaScript, so a secret one fails the secrets scan | All scopes           |
+| `CHIP_BRAND_ID`, `CHIP_WEBHOOK_PUBLIC_KEY`, `CHIP_SEND_API_URL`, `CHIP_SEND_WEBHOOK_PUBLIC_KEY`, `RESEND_FROM_EMAIL`, `UPSTASH_REDIS_REST_URL`, `SENTRY_ORG`, `SENTRY_PROJECT`           | No: ids, URLs and public keys                                                       | All scopes           |
+
+- **Secret values** are write-only: once saved, nobody can read them back from Netlify, so keep the originals in a password manager. Netlify then scans every build and fails it if one of them turns up in the code or the build output.
+- **Scopes.** Functions covers the server: Netlify runs the Next.js server, its route handlers and `src/proxy.ts` as functions and edge functions. Builds covers `next build`. A secret can't have the Post processing scope, so "All scopes" isn't offered for one. Runtime only covers Netlify Forms and signed proxy redirects, which the app doesn't use. Choosing scopes needs a Pro plan; on other plans every variable has every scope, which works too.
+- **Deploy contexts on the staging site.** Non-secret variables: "Same value for all deploy contexts". Secrets have to name their contexts: tick Production, Deploy Previews and Branch deploys. On this site, Production means the `staging` branch at `staging.mychesstour.com`. Leave Local development and Preview server empty: developers use `.env.local`, and Netlify doesn't hide secret values in the local development context.
+- **Deploy contexts on the production site.** Secrets: Production only. Then, under **Project configuration → Build & deploy → Continuous deployment → Branches and deploy contexts**, set Deploy Previews to "Don't deploy pull requests" and Branch deploys to "Deploy only the production branch". That way the live CHIP keys and the production database are only used by builds of `master`.
+- **Pull requests from forks.** The repo is public, so a fork's pull request into `staging` gets a deploy preview built from code nobody has reviewed. Keep Netlify's untrusted deploys policy from passing sensitive variables to those builds. Variables marked secret always count as sensitive.
+- **Changes take effect on the next deploy**, for server variables as well as `NEXT_PUBLIC_*` ones: **Deploys → Trigger deploy → Deploy site**.
 
 ### Local quirks
 
@@ -142,7 +160,7 @@ There is no `pg_cron` and no Netlify scheduler. Each job is a GitHub Actions wor
 
 These assume nothing is configured yet: no services, no Netlify variables, no GitHub secrets. Do staging first; production repeats most of it with live credentials. The details live in the linked pages. The product-level checklist (flows to test, decisions still open) is §10 of [launch-readiness.md](wiki/launch-readiness.md).
 
-Netlify stores values verbatim: paste every value **without quotes**, and PEM keys as raw multi-line text. Generate each `CRON_SECRET` with `openssl rand -hex 32`, separately per environment.
+Set every Netlify variable as described in [On Netlify](#on-netlify): secret or not, its scopes, and its deploy contexts. Generate each `CRON_SECRET` and `GITHUB_WEBHOOK_SECRET` with `openssl rand -hex 32`, separately per environment.
 
 ### Staging
 
@@ -160,7 +178,7 @@ Netlify stores values verbatim: paste every value **without quotes**, and PEM ke
 **Netlify (staging site)**
 
 - [ ] The site builds `staging` and serves `staging.mychesstour.com`.
-- [ ] Every variable from [Environment](#environment), with `NEXT_PUBLIC_SITE_URL=https://staging.mychesstour.com`, `NEXT_PUBLIC_ENVIRONMENT=staging` and staging's own `CRON_SECRET`. Set `SENTRY_AUTH_TOKEN` to the Builds scope only.
+- [ ] Every variable from [Environment](#environment), set as in [On Netlify](#on-netlify) (secrets for Production, Deploy Previews and Branch deploys), with `NEXT_PUBLIC_SITE_URL=https://staging.mychesstour.com`, `NEXT_PUBLIC_ENVIRONMENT=staging` and staging's own `CRON_SECRET`.
 - [ ] A release tag (`v…`) is reachable from `staging`. Without one the build fails ([releases.md](wiki/releases.md)).
 
 **Database**
@@ -206,7 +224,8 @@ curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
 **Netlify (production site)**
 
 - [ ] The site builds `master` and serves `www.mychesstour.com`.
-- [ ] Every variable with production values, `NEXT_PUBLIC_SITE_URL=https://www.mychesstour.com`, `NEXT_PUBLIC_ENVIRONMENT=production` and its own `CRON_SECRET`.
+- [ ] Deploy Previews off and branch deploys limited to `master` ([On Netlify](#on-netlify)).
+- [ ] Every variable with production values, set as in [On Netlify](#on-netlify) (secrets for Production only), with `NEXT_PUBLIC_SITE_URL=https://www.mychesstour.com`, `NEXT_PUBLIC_ENVIRONMENT=production` and its own `CRON_SECRET`.
 
 **GitHub**
 
