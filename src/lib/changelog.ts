@@ -107,6 +107,44 @@ export function releasedEntries(
   );
 }
 
+/** Releases per page on /changelogs (#640). */
+export const CHANGELOG_PAGE_SIZE = 10;
+
+/**
+ * The `page` query parameter of /changelogs: 1 when it's absent, null when
+ * it isn't a whole number from 1 up (the page answers 404).
+ */
+export function parsePageParam(
+  value: string | string[] | undefined,
+): number | null {
+  if (value === undefined) return 1;
+  if (typeof value !== "string" || !/^[1-9]\d{0,5}$/.test(value)) return null;
+  return Number(value);
+}
+
+export interface ChangelogPage {
+  entries: ChangelogEntry[];
+  page: number;
+  /** At least 1: an empty changelog is one empty page. */
+  pageCount: number;
+}
+
+/** One page of entries, or null for a page past the last one. */
+export function paginateEntries(
+  entries: readonly ChangelogEntry[],
+  page: number,
+  pageSize = CHANGELOG_PAGE_SIZE,
+): ChangelogPage | null {
+  const pageCount = Math.max(1, Math.ceil(entries.length / pageSize));
+  if (page < 1 || page > pageCount) return null;
+  const start = (page - 1) * pageSize;
+  return {
+    entries: entries.slice(start, start + pageSize),
+    page,
+    pageCount,
+  };
+}
+
 export type Announcement =
   /** Leave storage alone and show nothing. */
   | { kind: "none" }
