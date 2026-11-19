@@ -63,7 +63,7 @@ BEGIN
   SELECT id INTO v_admin_role  FROM roles WHERE name = 'admin'  AND scope = 'organization';
   SELECT id INTO v_member_role FROM roles WHERE name = 'member' AND scope = 'organization';
   IF v_owner_role IS NULL OR v_admin_role IS NULL OR v_member_role IS NULL THEN
-    RAISE EXCEPTION 'SETUP FAIL: organization roles missing — apply db/migrations/007_rbac.sql first';
+    RAISE EXCEPTION 'SETUP FAIL: organization roles missing — apply supabase/migrations/007_rbac.sql first';
   END IF;
 
   INSERT INTO users (email, first_name, last_name) VALUES ('inv-owner@test.local', 'O', 'T')    RETURNING id INTO v_owner;

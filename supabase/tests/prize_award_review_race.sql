@@ -7,7 +7,7 @@
 -- beyond what is left. That is only safe because every approval first locks the
 -- tournament row: without the lock, both approvals could read the same
 -- available balance and both commit, together exceeding the collected pool.
--- db/tests/prize_pool.sql can only run approvals one after the other; this runs
+-- supabase/tests/prize_pool.sql can only run approvals one after the other; this runs
 -- them at once.
 --
 -- Covers:
@@ -21,7 +21,7 @@
 --
 --   psql -d <db> \
 --     -c "SET capacity_race.conninfo = 'host=localhost dbname=<db> user=postgres password=...'" \
---     -f db/tests/prize_award_review_race.sql
+--     -f supabase/tests/prize_award_review_race.sql
 --
 -- It reads the same setting as tournament_capacity_floor_race.sql. Without it,
 -- it tries 'dbname=<current database>', which works when the server trusts local

@@ -1,6 +1,6 @@
 name: Staging database migrations
 
-# Applies new files in db/migrations to the staging database with the
+# Applies new files in supabase/migrations to the staging database with the
 # Supabase CLI (#631). A PR to staging gets its new migrations run against
 # staging and rolled back; the merge applies them. See
 # wiki/database-migrations.md.
@@ -8,12 +8,12 @@ on:
   push:
     branches: ["staging"]
     paths:
-      - "db/migrations/**"
+      - "supabase/migrations/**"
       - ".github/workflows/staging-migrations.yml"
   pull_request:
     branches: ["staging"]
     paths:
-      - "db/migrations/**"
+      - "supabase/migrations/**"
       - ".github/workflows/staging-migrations.yml"
   # Only available once this file is on the default branch.
   workflow_dispatch:
@@ -66,10 +66,10 @@ jobs:
       - name: Migrate
         run: |
           # The CLI only reads <workdir>/supabase/migrations; ours live in
-          # db/migrations.
+          # supabase/migrations.
           WORKDIR="$RUNNER_TEMP/supabase-workdir"
           mkdir -p "$WORKDIR/supabase/migrations"
-          cp db/migrations/*.sql "$WORKDIR/supabase/migrations/"
+          cp supabase/migrations/*.sql "$WORKDIR/supabase/migrations/"
           sb() { supabase "$@" --workdir "$WORKDIR" --db-url "$DATABASE_URL"; }
 
           state="$(psql "$DATABASE_URL" -XAt -c "SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL, to_regclass('public.tournaments') IS NOT NULL")"
@@ -79,7 +79,7 @@ jobs:
           # Schema but no history: a database built by hand before #631. The
           # CLI would try to run 001 on top of it. It has to be rebuilt.
           if [ "$schema" = "t" ] && [ "$history" != "t" ]; then
-            echo "::error::Staging has the app schema but no migration history: it was built by hand before #631. Run db/staging/drop_all.sql on it, then re-run this job, then load db/staging/seed.sql (wiki/database-migrations.md)."
+            echo "::error::Staging has the app schema but no migration history: it was built by hand before #631. Run supabase/staging/drop_all.sql on it, then re-run this job, then load supabase/staging/seed.sql (wiki/database-migrations.md)."
             exit 1
           fi
 
@@ -136,7 +136,7 @@ jobs:
               echo "::error file=$added::Remove psql meta-commands (lines starting with a backslash): the Supabase CLI can't run them."
               fail=1
             fi
-          done < <(git diff --name-status -M HEAD^1 HEAD -- db/migrations)
+          done < <(git diff --name-status -M HEAD^1 HEAD -- supabase/migrations)
           exit $fail
 
       - name: Set up the Supabase CLI
@@ -175,13 +175,13 @@ jobs:
 
             WORKDIR="$RUNNER_TEMP/supabase-workdir"
             mkdir -p "$WORKDIR/supabase/migrations"
-            cp db/migrations/*.sql "$WORKDIR/supabase/migrations/"
+            cp supabase/migrations/*.sql "$WORKDIR/supabase/migrations/"
             plan="$(supabase db push --dry-run --include-all --output-format json --workdir "$WORKDIR" --db-url "$DATABASE_URL")"
             pending="$(jq -r '.migrations[]?' <<<"$plan")"
           else
             # An empty database (just reset): the next apply builds it from
             # every migration, so check exactly that.
-            pending="$(cd db/migrations && ls *.sql)"
+            pending="$(cd supabase/migrations && ls *.sql)"
           fi
 
           if [ -z "$pending" ]; then
@@ -198,7 +198,7 @@ jobs:
             echo "SET LOCAL lock_timeout = '10s';"
             for f in $pending; do
               echo "\\echo '==> $f'"
-              echo "\\i '$GITHUB_WORKSPACE/db/migrations/$f'"
+              echo "\\i '$GITHUB_WORKSPACE/supabase/migrations/$f'"
             done
             echo "ROLLBACK;"
           } > "$RUNNER_TEMP/check.sql"

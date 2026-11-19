@@ -9,7 +9,7 @@
 -- qa_readonly itself cannot log in. It gets:
 --   - USAGE on schema public and SELECT on every table and view in it
 --   - SELECT on every table postgres creates in public from now on (default
---     privileges), so a table added by a later migration or maintenance script
+--     privileges), so a table added by a later migration
 --     is readable without re-running this file
 -- and nothing more: no INSERT/UPDATE/DELETE/TRUNCATE, no sequences, no CREATE
 -- on the schema, and no access to the auth or storage schemas (password hashes,
@@ -17,7 +17,7 @@
 --
 -- Server-only SECURITY DEFINER functions are already revoked from PUBLIC (the
 -- EXECUTE PRIVILEGES blocks in 003 and 006), so a member of this role cannot
--- write through them either. db/tests/qa_readonly_access.sql checks all of the
+-- write through them either. supabase/tests/qa_readonly_access.sql checks all of the
 -- above; run it after committing this.
 --
 -- NOT for production. Roles are per database cluster and nothing here is in
@@ -25,7 +25,7 @@
 -- run there. Everything a member can read includes users' emails and bank
 -- account numbers, so staging must only ever hold test data.
 --
--- Idempotent: safe to re-run. db/staging/drop_all.sql does not drop roles, and the
+-- Idempotent: safe to re-run. supabase/staging/drop_all.sql does not drop roles, and the
 -- default privileges survive a teardown, so after drop_all + a rebuild the new
 -- tables are readable again without re-running this.
 --
@@ -45,7 +45,7 @@ BEGIN
 END $$;
 
 COMMENT ON ROLE qa_readonly IS
-  'Read-only access to public for external QA on staging (#468). Group role: testers log in as members made by db/maintenance/add_qa_tester.sql.';
+  'Read-only access to public for external QA on staging (#468). Group role: testers log in as members made by supabase/staging/add_qa_tester.sql.';
 
 GRANT USAGE ON SCHEMA public TO qa_readonly;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO qa_readonly;

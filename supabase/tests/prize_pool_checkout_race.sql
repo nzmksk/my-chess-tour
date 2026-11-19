@@ -11,7 +11,7 @@
 --     commit, then take a hold against a pool that no longer covers them.
 --   * guard_tournament_prizes_in_checkout runs on the tournament UPDATE, which
 --     holds the same lock, and counts the live holds.
--- db/tests/prize_pool_checkout_hold.sql covers the guard one statement at a
+-- supabase/tests/prize_pool_checkout_hold.sql covers the guard one statement at a
 -- time; this runs the two at once.
 --
 -- Covers:
@@ -27,7 +27,7 @@
 --
 --   psql -d <db> \
 --     -c "SET capacity_race.conninfo = 'host=localhost dbname=<db> user=postgres password=...'" \
---     -f db/tests/prize_pool_checkout_race.sql
+--     -f supabase/tests/prize_pool_checkout_race.sql
 --
 -- It reads the same setting as tournament_capacity_floor_race.sql. Without it,
 -- it tries 'dbname=<current database>', which works when the server trusts local

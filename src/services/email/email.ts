@@ -688,7 +688,7 @@ export async function sendOrganizerApplicationReviewEmail(
 export type MemberInvitationRole = "admin" | "member";
 
 // What each assignable role can do, written to finish "you'd be able to …". Mirrors the
-// role_permissions rows in db/migrations/007_rbac.sql.
+// role_permissions rows in supabase/migrations/007_rbac.sql.
 const MEMBER_ROLE_COPY: Record<
   MemberInvitationRole,
   { label: string; summary: string }

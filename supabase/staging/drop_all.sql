@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DROP ALL — full teardown of the MY Chess Tour schema
--- Reverses every migration in db/migrations so you can re-apply them from
+-- Reverses every migration in supabase/migrations so you can re-apply them from
 -- scratch.
 --
 -- Scope: drops everything this app owns in `public`, the avatars,
@@ -13,7 +13,7 @@
 --
 -- DESTRUCTIVE. Intended for local/staging resets only. Run in the Supabase SQL
 -- editor or psql, then rebuild with `supabase db push` and load
--- db/staging/seed.sql (wiki/database-migrations.md).
+-- supabase/staging/seed.sql (wiki/database-migrations.md).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -149,7 +149,7 @@ DROP TYPE IF EXISTS public.sensitive_data_category CASCADE;
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
 --
---    ALL of them, not just the seed accounts (db/staging/seed.sql).
+--    ALL of them, not just the seed accounts (supabase/staging/seed.sql).
 --    public.users is dropped above, and on_auth_user_created only fires on
 --    INSERT, so any account left here comes back from a rebuild with no users
 --    record linked to it. Such an account can still sign in but has no profile, and is

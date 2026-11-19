@@ -13,7 +13,7 @@
 --   * no client writes on the new tables
 --
 -- The concurrent-approval case of the sum guard needs two sessions; it is in
--- db/tests/prize_award_review_race.sql.
+-- supabase/tests/prize_award_review_race.sql.
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. The whole thing runs inside a transaction that

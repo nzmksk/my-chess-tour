@@ -57,7 +57,7 @@ describe("current_organizer_agreement_version()", () => {
     // this module. Bump both together: if they drift, every payout is refused
     // (SQL older) or stale organizations are paid (SQL newer than nothing).
     const sql = fs.readFileSync(
-      path.join(process.cwd(), "db/migrations/003_functions_triggers.sql"),
+      path.join(process.cwd(), "supabase/migrations/003_functions_triggers.sql"),
       "utf-8",
     );
     const match = sql.match(
@@ -222,7 +222,7 @@ describe("sensitive data consent statements", () => {
 
   it("categories match the sensitive_data_category enum", () => {
     const sql = fs.readFileSync(
-      path.join(process.cwd(), "db/migrations/001_tables.sql"),
+      path.join(process.cwd(), "supabase/migrations/001_tables.sql"),
       "utf-8",
     );
     const match = sql.match(

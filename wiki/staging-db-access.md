@@ -17,18 +17,18 @@ The grants are what enforce this. Logins also default to read-only transactions,
 
 A tester sees users' emails and bank account numbers, so **staging must only ever hold test data**.
 
-`db/tests/qa_readonly_access.sql` checks all of the above. Run it after setup and after any migration that adds grants or functions.
+`supabase/tests/qa_readonly_access.sql` checks all of the above. Run it after setup and after any migration that adds grants or functions.
 
 ## Setup (admin, once per staging database)
 
-1. In the Supabase SQL editor for **staging**, run `db/maintenance/apply_qa_readonly_role.sql` with its final `ROLLBACK` changed to `COMMIT`. It is idempotent.
-2. Run `db/tests/qa_readonly_access.sql`. It should print `ALL SCENARIOS PASSED`.
+1. In the Supabase SQL editor for **staging**, run `supabase/staging/apply_qa_readonly_role.sql` with its final `ROLLBACK` changed to `COMMIT`. It is idempotent.
+2. Run `supabase/tests/qa_readonly_access.sql`. It should print `ALL SCENARIOS PASSED`.
 
-`db/staging/drop_all.sql` doesn't drop roles, and the default privileges stay in place. After a teardown and rebuild, the role can read the new tables without re-running step 1.
+`supabase/staging/drop_all.sql` doesn't drop roles, and the default privileges stay in place. After a teardown and rebuild, the role can read the new tables without re-running step 1.
 
 ## Adding a tester (admin)
 
-1. In `db/maintenance/add_qa_tester.sql`, set `v_login` to `qa_<name>` (and `v_valid_days` if 90 days is wrong). Change `ROLLBACK` to `COMMIT`, then run it on staging.
+1. In `supabase/staging/add_qa_tester.sql`, set `v_login` to `qa_<name>` (and `v_valid_days` if 90 days is wrong). Change `ROLLBACK` to `COMMIT`, then run it on staging.
 2. Set the password from `psql`, connected to staging as `postgres`:
 
    ```

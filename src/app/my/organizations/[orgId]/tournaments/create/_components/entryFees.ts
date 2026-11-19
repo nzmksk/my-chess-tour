@@ -2,7 +2,7 @@
 // `tournaments.entry_fees` JSON.
 //
 // The canonical shape is the one every consumer already reads — the schema
-// comment in db/migrations/001_tables.sql, the seed, EntryFees in
+// comment in supabase/migrations/001_tables.sql, the seed, EntryFees in
 // src/app/tournaments/types.ts, the public detail page, RegisterForm, checkout
 // and the registration eligibility validators: bounds are `age_min`/`age_max`
 // and `valid_until` is a full timestamp.

@@ -79,4 +79,4 @@ Production builds `master`, and shows the nearest tag reachable from `master`. B
 
 The tag must already exist when production builds. If it was created afterwards, redeploy production too.
 
-**Migrate production's database first** if the release adds files to `db/migrations`: run `supabase db push --include-all --dry-run` and then without `--dry-run` against production, before merging. Staging is migrated automatically; production isn't. See [database-migrations.md](database-migrations.md#production).
+**Migrate production's database first** if the release adds files to `supabase/migrations`: run `supabase db push --include-all --dry-run` and then without `--dry-run` against production, before merging. Staging is migrated automatically; production isn't. See [database-migrations.md](database-migrations.md#production).

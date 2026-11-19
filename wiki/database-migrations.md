@@ -1,16 +1,16 @@
 # Database migrations
 
-How schema changes reach staging and production (#631). Every database is built and migrated by the Supabase CLI from `db/migrations`: staging automatically, production by hand.
+How schema changes reach staging and production (#631). Every database is built and migrated by the Supabase CLI from `supabase/migrations`: staging automatically, production by hand.
 
 ## Layout
 
 | Path                              | What                                                                                                                      |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `db/migrations/001`–`007`         | The original migrations, from before #631: the whole schema (001–006) and the RBAC roles and permissions (007).           |
-| `db/migrations/<14 digits>_*.sql` | Every change since, one file each, applied in filename order.                                                             |
-| `db/staging/seed.sql`             | Test data for staging and local databases: accounts, organizations, tournaments, registrations. Never run on production.  |
-| `db/staging/drop_all.sql`         | Teardown for a staging or local reset.                                                                                    |
-| `db/maintenance/`                 | Staging QA access, run by hand: the read-only role and a login per tester ([staging-db-access.md](staging-db-access.md)). |
+| `supabase/migrations/001`–`007`         | The original migrations, from before #631: the whole schema (001–006) and the RBAC roles and permissions (007).           |
+| `supabase/migrations/<14 digits>_*.sql` | Every change since, one file each, applied in filename order.                                                             |
+| `supabase/staging/seed.sql`             | Test data for staging and local databases: accounts, organizations, tournaments, registrations. Never run on production.  |
+| `supabase/staging/drop_all.sql`         | Teardown for a staging or local reset.                                                                                    |
+| `supabase/staging/`                 | Staging QA access, run by hand: the read-only role and a login per tester ([staging-db-access.md](staging-db-access.md)). |
 
 **The migrations are append-only.** Once a migration has run against staging, it never runs again, so editing it changes nothing on staging and makes a fresh build differ from staging. Every change is a new file, including changes to tables, functions, policies and roles that live in `001`–`007`.
 
@@ -19,7 +19,7 @@ The Supabase CLI records what it has applied in `supabase_migrations.schema_migr
 ## Writing a migration
 
 ```sh
-touch "db/migrations/$(date -u +%Y%m%d%H%M%S)_short_description.sql"
+touch "supabase/migrations/$(date -u +%Y%m%d%H%M%S)_short_description.sql"
 ```
 
 - **Name:** `YYYYMMDDHHMMSS_description.sql`, UTC, lowercase. That's the format `supabase migration new` uses, but the CLI only creates files under `supabase/migrations`, so create the file yourself.
@@ -40,7 +40,7 @@ The migration workflow and the Netlify staging deploy start from the same push a
 
 ## What happens automatically
 
-The **Staging database migrations** workflow (`.github/workflows/staging-migrations.yml`) runs when a PR or push touches `db/migrations/**`.
+The **Staging database migrations** workflow (`.github/workflows/staging-migrations.yml`) runs when a PR or push touches `supabase/migrations/**`.
 
 **On a PR to `staging`:**
 
@@ -72,7 +72,7 @@ The CLI version is pinned in the workflow (`SUPABASE_CLI_VERSION`). Bump it deli
 Production is migrated by hand, from a machine with Node, **before** merging `staging` into `master`. The CLI reads `<workdir>/supabase/migrations`, so stage a copy first:
 
 ```sh
-work="$(mktemp -d)" && mkdir -p "$work/supabase/migrations" && cp db/migrations/*.sql "$work/supabase/migrations/"
+work="$(mktemp -d)" && mkdir -p "$work/supabase/migrations" && cp supabase/migrations/*.sql "$work/supabase/migrations/"
 export DB_URL='<production session pooler string>'
 
 npx supabase@2.122.1 db push --include-all --dry-run --workdir "$work" --db-url "$DB_URL"
@@ -81,14 +81,14 @@ npx supabase@2.122.1 db push --include-all --workdir "$work" --db-url "$DB_URL"
 
 ## Rebuilding a database
 
-Both staging and production were built by hand before #631, so they have the schema but no migration history. The workflow refuses to run against such a database, because the CLI would try to run `001` on top of it. Each one is rebuilt once, from `db/migrations`. **This deletes every row and every auth account in it.** It is also how staging is reset later.
+Both staging and production were built by hand before #631, so they have the schema but no migration history. The workflow refuses to run against such a database, because the CLI would try to run `001` on top of it. Each one is rebuilt once, from `supabase/migrations`. **This deletes every row and every auth account in it.** It is also how staging is reset later.
 
 1. **Empty the `avatars`, `oku-documents` and `organization-documents` buckets** from the dashboard (Storage). `drop_all` removes their metadata rows, but SQL can't delete the files themselves. On production these may include real OKU cards and KYB documents.
-2. **Run `db/staging/drop_all.sql`** in the SQL editor for that database. It drops everything the migrations create, every auth account, and the migration history. It doesn't drop roles, so staging's QA logins survive.
+2. **Run `supabase/staging/drop_all.sql`** in the SQL editor for that database. It drops everything the migrations create, every auth account, and the migration history. It doesn't drop roles, so staging's QA logins survive.
 3. **Build it:**
-   - Staging: re-run the workflow's failed **Migrate staging** job (Actions → the run → **Re-run failed jobs**). Any later push that touches `db/migrations` works too. The job finds an empty database and runs `001` onwards.
+   - Staging: re-run the workflow's failed **Migrate staging** job (Actions → the run → **Re-run failed jobs**). Any later push that touches `supabase/migrations` works too. The job finds an empty database and runs `001` onwards.
    - Production: the two `npx supabase` commands in [Production](#production).
-4. **Staging only: run `db/staging/seed.sql`**, in the SQL editor or with `psql --single-transaction -f`. Then run `db/tests/qa_readonly_access.sql` to confirm QA can still read everything.
+4. **Staging only: run `supabase/staging/seed.sql`**, in the SQL editor or with `psql --single-transaction -f`. Then run `supabase/tests/qa_readonly_access.sql` to confirm QA can still read everything.
 5. **Production only:** sign up the platform admin's account, then grant it `platform_admin` by hand (see [roles-and-permissions.md](roles-and-permissions.md)). The seed's accounts don't exist there.
 
 After merging #631, the first push to `staging` fails with "Staging has the app schema but no migration history". That is expected: rebuild staging as above, starting from step 1.

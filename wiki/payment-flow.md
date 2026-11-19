@@ -4,7 +4,7 @@ How a player pays to register for a tournament, end to end. Payments go through 
 
 ## Data model
 
-Two rows track one registration's money (`db/migrations/001_tables.sql`):
+Two rows track one registration's money (`supabase/migrations/001_tables.sql`):
 
 - **`registrations.status`** (`registration_status` enum): `pending_payment` → `confirmed` | `failed_payment` | `cancelled_payment`; plus `forfeited` (paid then forfeited). Key timestamps: `registered_at`, `confirmed_at`, `cancelled_at`, and `cancellation_reason` (text). `cancelled_at` is set exactly when the status is `cancelled_payment` or `forfeited` (`chk_cancelled_fields_consistent`), so anything that cancels a registration must stamp it and anything that revives one must clear it. `fee_tier` is the tier of the *current* attempt and is overwritten on retry.
 - **`payments.status`** (`payment_status` enum): `pending` → `paid` | `failed`. The registration's money row is `type='registration'`. `chip_transaction_id` is the CHIP purchase id; a partial UNIQUE index on it (`002_indexes.sql`) guarantees one purchase maps to one payment. `payments.fee_tier` is the tier that attempt was charged at and never changes, so tier history and tier counts come from here, not from `registrations`.
@@ -18,7 +18,7 @@ Two consequences of that three-value enum worth knowing before reading `payments
 
 ## Pricing (commission math)
 
-`compute_registration_amounts(amount, commission_rate, organizer_commission_pct)` (`db/migrations/006_payment_functions.sql`) is the single source of truth for what a player pays. It's used by both creation and resume so the two never drift:
+`compute_registration_amounts(amount, commission_rate, organizer_commission_pct)` (`supabase/migrations/006_payment_functions.sql`) is the single source of truth for what a player pays. It's used by both creation and resume so the two never drift:
 
 ```
 platform_fee         = floor(amount * commission_rate / 100)
@@ -79,7 +79,7 @@ A concurrent double-submit that hits the `UNIQUE(user_id, tournament_id)` constr
 
 `assert_tournament_capacity()` (`003`) locks the tournament row `FOR UPDATE` and counts `confirmed` seats **plus** `pending_payment` seats whose `registered_at` is within the last **10 minutes** (`count_taken_seats()`). So an abandoned checkout stops consuming capacity after 10 minutes with no scheduler — the seat frees itself. Capacity is enforced only in Postgres; there is no JS pre-check (it would double-count lapsed holds).
 
-The same count is the floor for capacity itself: `guard_tournament_seats_taken` refuses an update that lowers `max_participants` below it (#591). Settlement doesn't re-check capacity, so without the floor, holds taken under a higher capacity would all confirm past a lowered one. The UPDATE's own row lock serializes it against `assert_tournament_capacity`'s `FOR UPDATE`, so a hold and a decrease can't both slip through; `db/tests/tournament_capacity_floor_race.sql` runs the two in parallel sessions.
+The same count is the floor for capacity itself: `guard_tournament_seats_taken` refuses an update that lowers `max_participants` below it (#591). Settlement doesn't re-check capacity, so without the floor, holds taken under a higher capacity would all confirm past a lowered one. The UPDATE's own row lock serializes it against `assert_tournament_capacity`'s `FOR UPDATE`, so a hold and a decrease can't both slip through; `supabase/tests/tournament_capacity_floor_race.sql` runs the two in parallel sessions.
 
 ## Expiry (no CHIP event)
 
@@ -109,7 +109,7 @@ Key files and what each pins down:
 - `…/register/_lib/__tests__/resolvePaymentState.test.ts` — return-page reconcile: pending→paid/error, **failed_payment→paid rescue** and failed_payment-stays-failed, amount-mismatch stays pending, expiry sweep (terminalized / nothing / no-`chip_transaction_id`), network-error degrades to pending.
 - `…/me/registrations/__tests__/route.test.ts`, `services/payments/__tests__/fees.test.ts` — list-sweep and commission math.
 
-### B. DB money-state scenarios — `db/tests/settle_registration_payment.sql`
+### B. DB money-state scenarios — `supabase/tests/settle_registration_payment.sql`
 
 The vitest layer can't reach the settlement/supersession/expiry SQL (it mocks the RPCs), so the money-loss-critical paths are covered here. Paste the script into the **Supabase SQL editor** (service role) after applying the migrations. It builds throwaway fixtures and is wrapped in `BEGIN … ROLLBACK`, so it **persists nothing**; it prints `ALL SCENARIOS PASSED` or `RAISE`s on the first failure. Scenarios:
 
@@ -164,5 +164,5 @@ Drive a real checkout and inspect the two rows (`registrations.status`, `payment
 - `src/app/api/v1/webhooks/chip/route.ts` — signature verify + settle.
 - `src/app/tournaments/[slug]/register/_lib/resolvePaymentState.ts` — return-page reconcile + lazy expiry.
 - `src/app/tournaments/[slug]/register/page.tsx` + `_components/PaymentInProgress.tsx` — Continue-payment screen for a live pending payment.
-- `db/tests/settle_registration_payment.sql` — transaction-wrapped DB money-state regression test (see [Regression testing](#regression-testing) §B).
-- DB functions are flattened into two files: `db/migrations/006_payment_functions.sql` (`compute_registration_amounts`, `create_registration_with_payment`, `start_new_payment_attempt`, `settle_registration_payment`, `expire_stale_pending_payments`) and `db/migrations/003_functions_triggers.sql` (`assert_tournament_capacity` + the `check_tournament_capacity` INSERT trigger). `payments.checkout_url` and the `cancelled_payment` resume path live in `001_tables.sql` / `006`.
+- `supabase/tests/settle_registration_payment.sql` — transaction-wrapped DB money-state regression test (see [Regression testing](#regression-testing) §B).
+- DB functions are flattened into two files: `supabase/migrations/006_payment_functions.sql` (`compute_registration_amounts`, `create_registration_with_payment`, `start_new_payment_attempt`, `settle_registration_payment`, `expire_stale_pending_payments`) and `supabase/migrations/003_functions_triggers.sql` (`assert_tournament_capacity` + the `check_tournament_capacity` INSERT trigger). `payments.checkout_url` and the `cancelled_payment` resume path live in `001_tables.sql` / `006`.

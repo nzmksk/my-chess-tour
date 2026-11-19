@@ -9,7 +9,7 @@
 --
 -- Covers:
 --   R1  redact_jsonb_columns masks listed keys, leaves the rest untouched, and
---       is idempotent (the maintenance scrub re-applies it)
+--       is idempotent
 --   R2  INSERT on player_bank_accounts redacts account_number in new_data
 --   R3  UPDATE redacts BOTH old_data and new_data (the old value is the one
 --       that would otherwise sit in the log forever)
@@ -26,7 +26,7 @@
 --
 -- organization_bank_accounts.account_number and organization_documents.
 -- storage_path (#518) are covered by scenario A1 in
--- db/tests/organizer_onboarding.sql, alongside the organization_id scoping
+-- supabase/tests/organizer_onboarding.sql, alongside the organization_id scoping
 -- they need. Redaction is the same mechanism; only the column list differs.
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
@@ -64,7 +64,7 @@ BEGIN
     RAISE EXCEPTION 'R1 FAIL: numeric key changed type to %', jsonb_typeof(v_json -> 'rating');
   END IF;
   -- Re-applying it is a no-op, including for a value shorter than 4 characters
-  -- (the maintenance scrub runs it over rows that are already redacted).
+  -- (a value already in masked form is left alone).
   v_json := '{"a": "1234567890", "b": "ab", "c": null}'::jsonb;
   IF redact_jsonb_columns(redact_jsonb_columns(v_json, ARRAY['a','b','c']), ARRAY['a','b','c'])
      IS DISTINCT FROM redact_jsonb_columns(v_json, ARRAY['a','b','c']) THEN

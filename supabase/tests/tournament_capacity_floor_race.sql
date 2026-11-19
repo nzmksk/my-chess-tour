@@ -23,7 +23,7 @@
 --
 --   psql -d <db> \
 --     -c "SET capacity_race.conninfo = 'host=localhost dbname=<db> user=postgres password=...'" \
---     -f db/tests/tournament_capacity_floor_race.sql
+--     -f supabase/tests/tournament_capacity_floor_race.sql
 --
 -- Without the setting it tries 'dbname=<current database>', which works when the
 -- server trusts local connections. A failing assertion RAISEs; on success it

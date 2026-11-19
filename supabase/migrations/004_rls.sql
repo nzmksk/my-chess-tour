@@ -282,7 +282,7 @@ USING (can_act_for(user_id));
 -- No application code needs it: every write goes through the SECURITY DEFINER
 -- functions in 006_payment_functions.sql (create_registration_with_payment,
 -- start_new_payment_attempt, settle_registration_payment,
--- expire_stale_pending_payments), all service-role only. db/tests/registration_writes.sql checks this.
+-- expire_stale_pending_payments), all service-role only. supabase/tests/registration_writes.sql checks this.
 REVOKE UPDATE, INSERT, DELETE ON registrations FROM anon, authenticated;
 
 -- Org members with registration.view can see their tournament's registrations
@@ -359,7 +359,7 @@ USING (
 -- No application code needs it: refunds are created by
 -- review_tournament_cancellation and settled by settle_refund, both
 -- service-role only. A player-initiated refund request, if it is ever built,
--- belongs behind an API route. db/tests/refund_writes.sql checks this.
+-- belongs behind an API route. supabase/tests/refund_writes.sql checks this.
 REVOKE UPDATE, INSERT, DELETE ON refunds FROM anon, authenticated;
 
 -- Org members with refund.manage can view/manage refunds for their tournaments
@@ -400,7 +400,7 @@ USING (has_global_permission(app_user_id(), 'platform.manage'));
 -- and create an already-approved payout, to any bank account, past every guard
 -- in queue_payout. payout.request is enforced by the API route instead; every
 -- write goes through the service-role functions in 006_payment_functions.sql.
--- db/tests/settle_payout.sql checks this.
+-- supabase/tests/settle_payout.sql checks this.
 REVOKE UPDATE, INSERT, DELETE ON payouts FROM anon, authenticated;
 
 -- =============================================

@@ -6,7 +6,7 @@
 -- in 003 (has_global_permission, has_org_permission, ...) and the policies in
 -- 004 look up by name. Every environment needs them, production included, so
 -- they are a migration, not seed data (they moved here from
--- db/staging/seed.sql in #631). wiki/roles-and-permissions.md describes what
+-- supabase/staging/seed.sql in #631). wiki/roles-and-permissions.md describes what
 -- each one allows.
 --
 -- To change them later, add a new migration; this file has already run.

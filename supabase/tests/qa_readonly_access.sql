@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Regression test for the staging QA read-only role (#468).
 --
--- qa_readonly (db/maintenance/apply_qa_readonly_role.sql) must let QA read
+-- qa_readonly (supabase/staging/apply_qa_readonly_role.sql) must let QA read
 -- everything in public and change nothing. The grants are the boundary: a
 -- tester can switch off default_transaction_read_only in their own session.
 --
@@ -47,7 +47,7 @@ DECLARE
 BEGIN
   -- Q1 ---------------------------------------------------------------------
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qa_readonly') THEN
-    RAISE EXCEPTION 'Q1 FAIL: role qa_readonly not found — commit db/maintenance/apply_qa_readonly_role.sql first';
+    RAISE EXCEPTION 'Q1 FAIL: role qa_readonly not found — commit supabase/staging/apply_qa_readonly_role.sql first';
   END IF;
   IF (SELECT rolcanlogin OR rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls
         FROM pg_roles WHERE rolname = 'qa_readonly') THEN

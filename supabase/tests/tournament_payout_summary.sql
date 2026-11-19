@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DB regression test for the tournament_payout_summary view in
--- db/migrations/001_tables.sql (guards issue #350 — organizer dashboard's
+-- supabase/migrations/001_tables.sql (guards issue #350 — organizer dashboard's
 -- Total Revenue / Pending Payout, and the admin dashboard's platform revenue).
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying

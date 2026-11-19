@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
  *
  * These are two different identifier spaces. `users.auth_user_id` is the only
  * link between them, and this is the only place in the application that follows
- * it — the SQL twin is `app_user_id()` (db/migrations/003_functions_triggers.sql).
+ * it — the SQL twin is `app_user_id()` (supabase/migrations/003_functions_triggers.sql).
  *
  * They happen to hold the same value for every account today, because
  * `handle_new_user` writes `id = auth_user_id` for self-signup. That is an

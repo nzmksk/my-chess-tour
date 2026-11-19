@@ -374,8 +374,8 @@ BEGIN
   -- record_id extraction so a redacted column can never be the PK. Without this
   -- every bank-account write is copied verbatim into audit_logs, which is
   -- retained far longer than the row itself.
-  -- What to redact per table lives in redact_audit_snapshot, which the
-  -- maintenance scrub calls too. Unlisted tables pass through untouched.
+  -- What to redact per table lives in redact_audit_snapshot. Unlisted tables
+  -- pass through untouched.
   v_old := redact_audit_snapshot(TG_TABLE_NAME, v_old);
   v_new := redact_audit_snapshot(TG_TABLE_NAME, v_new);
 
@@ -2221,7 +2221,7 @@ $$;
 -- is not SECURITY DEFINER (a client call would only count what RLS shows it),
 -- but its callers are, so it is revoked with them.
 --
--- db/tests/function_privileges.sql fails if a SECURITY DEFINER function is
+-- supabase/tests/function_privileges.sql fails if a SECURITY DEFINER function is
 -- executable by anon or authenticated without being on that list.
 -- =============================================
 REVOKE EXECUTE ON FUNCTION set_organization_bank_account   FROM PUBLIC, anon, authenticated;

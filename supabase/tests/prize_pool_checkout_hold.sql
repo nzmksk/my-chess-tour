@@ -16,7 +16,7 @@
 --   H5  after a paid registration the paid lock is what reports the refusal
 --
 -- Two sessions racing (a checkout and a prize edit at the same moment) are in
--- db/tests/prize_pool_checkout_race.sql.
+-- supabase/tests/prize_pool_checkout_race.sql.
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. The whole thing runs inside a transaction that

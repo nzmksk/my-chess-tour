@@ -11,7 +11,7 @@ export interface EntryFeeBreakdown {
  * Computes what a player is charged for a registration tier.
  *
  * SOURCE OF TRUTH: this mirrors the SQL in `create_registration_with_payment`
- * (db/migrations/003_functions_triggers.sql) — keep the two in sync (covered by
+ * (supabase/migrations/003_functions_triggers.sql) — keep the two in sync (covered by
  * fees.test.ts). The DB function remains authoritative for the actual charge;
  * this is used to display the same number before the purchase is created.
  *
