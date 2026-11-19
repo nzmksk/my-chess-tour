@@ -1,15 +1,13 @@
 name: Staging database migrations
 
 # Applies the migrations in supabase/migrations that the staging database
-# hasn't run yet (#631). A PR to staging gets a dry run that lists them.
-# See wiki/database-migrations.md.
+# hasn't run yet (#631). See wiki/database-migrations.md.
+#
+# No pull_request trigger: a PR runs the workflow file from its own branch, so
+# it could be edited to leak the database URL. The URL is a secret of the
+# "staging" environment, which only the staging branch can use.
 on:
   push:
-    branches: ["staging"]
-    paths:
-      - "supabase/migrations/**"
-      - ".github/workflows/staging-migrations.yml"
-  pull_request:
     branches: ["staging"]
     paths:
       - "supabase/migrations/**"
@@ -19,18 +17,16 @@ on:
 permissions:
   contents: read
 
-# Never cancel a push halfway through. PR dry runs replace each other.
+# Never cancel a migration halfway through.
 concurrency:
-  group: staging-database-${{ github.event.pull_request.number || 'apply' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: staging-database
+  cancel-in-progress: false
 
 jobs:
   migrate:
     name: Migrate staging
     runs-on: ubuntu-latest
-    env:
-      # Empty for PRs from forks and Dependabot, which get no secrets.
-      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    environment: staging
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -43,9 +39,6 @@ jobs:
       # --include-all also applies a migration older than the newest one
       # applied, as when two PRs merge in the opposite order they were written.
       - name: Apply pending migrations
-        if: github.event_name != 'pull_request'
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
         run: supabase db push --db-url "$DATABASE_URL" --include-all --yes
-
-      - name: List pending migrations (dry run)
-        if: github.event_name == 'pull_request' && env.DATABASE_URL != ''
-        run: supabase db push --db-url "$DATABASE_URL" --include-all --dry-run

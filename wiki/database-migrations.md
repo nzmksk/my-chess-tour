@@ -38,13 +38,12 @@ The migration workflow and the Netlify staging deploy start from the same push a
 
 ## The workflow
 
-**Staging database migrations** (`.github/workflows/staging-migrations.yml`) runs when a PR or push touches `supabase/migrations/**`:
+**Staging database migrations** (`.github/workflows/staging-migrations.yml`) runs `supabase db push --include-all` against staging, applying every migration it hasn't run yet:
 
-| When                        | What                                                                                                                                                   |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| PR to `staging`             | `supabase db push --dry-run`: lists the migrations staging hasn't run. It doesn't run them. Skipped for Dependabot and fork PRs, which get no secrets. |
-| Push to `staging` (a merge) | `supabase db push --include-all`: applies them.                                                                                                        |
-| Actions tab → Run workflow  | The same as a push. Only available once the workflow is on `master`.                                                                                   |
+- **On a push to `staging`** (a merge) that touches `supabase/migrations/**`.
+- **From the Actions tab** (Run workflow, with **Use workflow from** set to `staging`). This is only offered once the workflow file is on `master`.
+
+PRs don't trigger it. A PR runs the workflow file from its own branch, so it could be edited to print the database URL. The URL is therefore a secret of the `staging` GitHub environment, which only jobs on the `staging` branch can use.
 
 `--include-all` lets through a migration whose timestamp is older than the newest one applied, which happens when two PRs merge in the opposite order from how they were written.
 
@@ -53,7 +52,11 @@ Each migration commits or rolls back on its own. If the second of three fails, t
 ## Setup (admin, once)
 
 1. In the Supabase dashboard for **staging**: **Connect** → **Session pooler**. Copy the connection string, put the `postgres` password in it (URL-encode special characters: `@` → `%40`, `#` → `%23`, …) and append `?sslmode=require`. Use the session pooler: the direct host is IPv6-only without the IPv4 add-on, and GitHub's runners only have IPv4. If the project restricts database access by IP, GitHub's runners can't connect.
-2. GitHub → repository Settings → Secrets and variables → Actions → **New repository secret**: `STAGING_DATABASE_URL`.
+2. GitHub → repository Settings → **Environments** → **New environment** named `staging`.
+   - Under **Deployment branches and tags**, choose **Selected branches and tags** and add `staging`.
+   - Under **Environment secrets**, add `STAGING_DATABASE_URL` with the string from step 1.
+
+   Don't add it as a repository secret: every workflow run on any branch could read that.
 
 The workflow uses that database URL and no Supabase access token, which would reach every project on the account. The CLI version is pinned in the workflow; bump it deliberately.
 
