@@ -28,8 +28,8 @@
 --   I16 the link-based functions report which invitation they answered
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
--- the current migrations and seed (the owner/admin/member roles and their
--- permissions come from db/staging/seed.sql). Runs inside a transaction that ROLLBACKs, so it
+-- the current migrations (the owner/admin/member roles and their
+-- permissions come from 007_rbac.sql). Runs inside a transaction that ROLLBACKs, so it
 -- persists NOTHING. A failing assertion RAISEs; on success it prints
 -- "ALL SCENARIOS PASSED" via NOTICE.
 -- =============================================================================
@@ -63,7 +63,7 @@ BEGIN
   SELECT id INTO v_admin_role  FROM roles WHERE name = 'admin'  AND scope = 'organization';
   SELECT id INTO v_member_role FROM roles WHERE name = 'member' AND scope = 'organization';
   IF v_owner_role IS NULL OR v_admin_role IS NULL OR v_member_role IS NULL THEN
-    RAISE EXCEPTION 'SETUP FAIL: organization roles missing — apply db/staging/seed.sql first';
+    RAISE EXCEPTION 'SETUP FAIL: organization roles missing — apply db/migrations/007_rbac.sql first';
   END IF;
 
   INSERT INTO users (email, first_name, last_name) VALUES ('inv-owner@test.local', 'O', 'T')    RETURNING id INTO v_owner;

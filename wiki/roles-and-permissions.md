@@ -6,8 +6,8 @@
 > [authentication-flow.md](./authentication-flow.md) (§7 covers the permission
 > gates) and the SQL source of truth in `db/migrations/`.
 >
-> **Source of truth:** roles/permissions/mappings are seeded in
-> `db/staging/seed.sql`; the check functions live in
+> **Source of truth:** roles/permissions/mappings are inserted by
+> `db/migrations/007_rbac.sql`; the check functions live in
 > `db/migrations/003_functions_triggers.sql`; the row-level policies that consume
 > them are in `db/migrations/004_rls.sql`. This doc reflects that code — if it ever
 > disagrees with the migrations, the migrations win.
@@ -48,7 +48,7 @@ this platform-wide?) or per-org (do you have this *in org X*?).
 
 ## 2. Roles
 
-Seeded in `db/staging/seed.sql`. There are **4 roles**:
+Inserted by `db/migrations/007_rbac.sql`. There are **4 roles**:
 
 | Role | Scope | Attached via | Who has it |
 |---|---|---|---|
@@ -64,7 +64,7 @@ organization-scoped and only mean anything inside the org they were granted in.
 
 ## 3. Permissions
 
-**13 permission keys**, seeded in `db/staging/seed.sql`:
+**13 permission keys**, inserted by `db/migrations/007_rbac.sql`:
 
 | Key | Scope it's used in | Meaning |
 |---|---|---|
@@ -86,7 +86,7 @@ organization-scoped and only mean anything inside the org they were granted in.
 
 ## 4. Role → permission matrix
 
-Straight from the `role_permissions` inserts in `db/staging/seed.sql`:
+Straight from the `role_permissions` inserts in `db/migrations/007_rbac.sql`:
 
 | Permission | platform_admin | owner | admin | member |
 |---|:---:|:---:|:---:|:---:|
@@ -109,7 +109,7 @@ Straight from the `role_permissions` inserts in `db/staging/seed.sql`:
 - **`platform_admin`** holds only `platform.manage`. It does **not** hold any
   org-scoped keys — cross-org admin access comes from the dedicated "Platform
   admins full access" RLS policies and app-layer `platform.manage` checks, *not*
-  from the org permission tables. (The seed comment "implies all" is conceptual,
+  from the org permission tables. (The comment "implies all" in 007 is conceptual,
   not a table row.)
 - **`owner`** holds every organization permission — full control of its org.
 - **`admin`** = owner **minus `org.manage`, `tournament.delete`,

@@ -20,7 +20,7 @@
 --       and is refused once accepted or when there is nothing to decline
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
--- the current migrations and seed (the owner/admin roles come from db/staging/seed.sql). Runs
+-- the current migrations (the owner/admin roles come from 007_rbac.sql). Runs
 -- inside a transaction that ROLLBACKs, so it persists NOTHING. A failing assertion
 -- RAISEs; on success it prints "ALL SCENARIOS PASSED" via NOTICE.
 -- =============================================================================

@@ -42,7 +42,7 @@ BEGIN
     VALUES (v_admin_auth, 'bug-admin@test.local', 'Bug', 'Admin')
     RETURNING id INTO v_admin;
 
-  -- Seeded by 006, but this test must not depend on the seed having run.
+  -- Created by migration 007; the ON CONFLICT keeps this test independent of it.
   INSERT INTO roles (name, scope) VALUES ('platform_admin', 'global')
     ON CONFLICT (name) DO NOTHING;
   SELECT id INTO v_admin_role FROM roles WHERE name = 'platform_admin';

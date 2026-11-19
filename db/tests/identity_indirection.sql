@@ -92,7 +92,7 @@ BEGIN
     VALUES (v_reg_b, v_gross, 'test', 'pending', v_b_app);
 
   -- Give B a global role, so I5's self-only check has something to not-see.
-  -- Seeded by 006, but this test must not depend on the seed having run: with no
+  -- Created by migration 007, but this test must not depend on it: with no
   -- role on B there is no row to leak and I5 would pass vacuously.
   INSERT INTO roles (name, scope) VALUES ('platform_admin', 'global')
     ON CONFLICT (name) DO NOTHING;
