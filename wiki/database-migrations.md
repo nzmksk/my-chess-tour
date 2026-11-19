@@ -65,7 +65,7 @@ The workflow uses that database URL and no Supabase access token, which would re
 The **Run database tests** job in `.github/workflows/tests.yml` runs on every PR into `staging` or `master` and every push to them (#633). On the runner it:
 
 1. builds a database from `supabase/migrations` with `supabase db start` (Supabase's Postgres image, with the auth and storage schemas, configured by `supabase/config.toml`);
-2. applies `supabase/staging/apply_qa_readonly_role.sql` and `supabase/staging/seed.sql`, as staging has them;
+2. applies `supabase/staging/apply_qa_readonly_role.sql` (committed: the file itself ends in `ROLLBACK`) and `supabase/staging/seed.sql`, as staging has them;
 3. runs every suite in `supabase/tests` with `supabase/tests/run.sh`, which fails the job if any suite errors or doesn't print `ALL SCENARIOS PASSED`.
 
 A broken migration therefore fails the PR here before it reaches `db push`. The job uses no secrets and never connects to staging or production.
@@ -77,7 +77,7 @@ To run them locally (needs Docker and `psql`):
 ```sh
 npx supabase@2.122.1 db start
 export DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/staging/apply_qa_readonly_role.sql
+sed 's/^ROLLBACK;$/COMMIT;/' supabase/staging/apply_qa_readonly_role.sql | psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f -
 bash supabase/tests/run.sh                                  # all suites
 bash supabase/tests/run.sh supabase/tests/settle_refund.sql # or some
 npx supabase@2.122.1 db stop --no-backup

@@ -70,9 +70,13 @@ jobs:
 
       # What staging has on top of the migrations. qa_readonly_access.sql
       # needs the role; the seed is checked here so it doesn't break unnoticed.
+      # The role script is a dry run that ends in ROLLBACK until edited, so
+      # commit it here.
       - name: Apply the staging scripts
         run: |
-          psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/staging/apply_qa_readonly_role.sql
+          sed 's/^ROLLBACK;$/COMMIT;/' supabase/staging/apply_qa_readonly_role.sql |
+            psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f -
+          test "$(psql "$DB_URL" -X -Atc "SELECT count(*) FROM pg_roles WHERE rolname = 'qa_readonly'")" = 1
           psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/staging/seed.sql
 
       - name: Run the SQL suites
