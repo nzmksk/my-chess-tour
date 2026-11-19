@@ -4,6 +4,7 @@ import {
   InstagramIcon,
   LinkedInIcon,
 } from "@/app/components/Icons";
+import { isReleaseVersion } from "@/lib/changelog";
 
 /**
  * The release this build belongs to, so testers can say which one they were on
@@ -11,13 +12,18 @@ import {
  * next.config.ts. Outside production the short commit is appended, so builds
  * between two releases can be told apart.
  */
-function releaseLabel(): string | null {
+function releaseLabel(): { text: string; href: string } | null {
   const version = process.env.APP_VERSION;
   if (!version) return null;
   const commit = process.env.APP_COMMIT;
   const showCommit =
     commit && process.env.NEXT_PUBLIC_ENVIRONMENT !== "production";
-  return showCommit ? `${version} · ${commit}` : version;
+  return {
+    text: showCommit ? `${version} · ${commit}` : version,
+    // This release's entry on the changelog (#622); a local `dev` build has
+    // no entry to point at.
+    href: isReleaseVersion(version) ? `/changelogs#${version}` : "/changelogs",
+  };
 }
 
 export default function Footer() {
@@ -33,6 +39,9 @@ export default function Footer() {
             <p className="text--meta max-w-48">
               Malaysia&apos;s premier competitive chess circuit.
             </p>
+            <Link href="/changelogs" className="footer-link">
+              Changelog
+            </Link>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -91,7 +100,17 @@ export default function Footer() {
         <p className="text--meta text-center">
           &copy; {year} MY Chess Tour. All rights reserved.
         </p>
-        {release && <p className="text--meta mt-1 text-center">{release}</p>}
+        {release && (
+          <p className="text--meta mt-1 text-center">
+            <Link
+              href={release.href}
+              className="hover:text-gold-bright transition-colors"
+              aria-label={`Version ${release.text}: see what changed`}
+            >
+              {release.text}
+            </Link>
+          </p>
+        )}
       </div>
     </footer>
   );

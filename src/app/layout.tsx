@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { BugReport } from "@/components/BugReport";
 import Footer from "@/components/Footer";
 import { HideOnAdmin } from "@/components/HideOnAdmin";
+import { WhatsNew } from "@/components/WhatsNew";
 import { getNavUser } from "@/services/supabase/permission";
 import { toAuthUser } from "@/lib/auth/auth-user";
 
@@ -104,6 +105,7 @@ export default async function RootLayout({
               <Footer />
             </HideOnAdmin>
             <BugReport />
+            <WhatsNew />
           </AuthProvider>
         </ThemeProvider>
       </body>

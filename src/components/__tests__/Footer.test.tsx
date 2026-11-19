@@ -55,6 +55,12 @@ describe("Footer", () => {
     expect(html).toContain("Organizer Agreement");
   });
 
+  it("renders the Changelog link", () => {
+    const html = renderToStaticMarkup(<Footer />);
+    expect(html).toContain('href="/changelogs"');
+    expect(html).toContain("Changelog");
+  });
+
   it("renders the Facebook social link", () => {
     const html = renderToStaticMarkup(<Footer />);
     expect(html).toContain("facebook.com/mychesstour");
@@ -111,7 +117,7 @@ describe("Footer", () => {
       vi.stubEnv("APP_VERSION", "v0.10.0-alpha");
       vi.stubEnv("APP_COMMIT", "");
       const html = renderToStaticMarkup(<Footer />);
-      expect(html).toContain("v0.10.0-alpha</p>");
+      expect(html).toContain("v0.10.0-alpha</a>");
     });
 
     it("appends the short commit outside production", () => {
@@ -127,8 +133,21 @@ describe("Footer", () => {
       vi.stubEnv("APP_COMMIT", "2579032");
       vi.stubEnv("NEXT_PUBLIC_ENVIRONMENT", "production");
       const html = renderToStaticMarkup(<Footer />);
-      expect(html).toContain("v0.10.0-alpha</p>");
+      expect(html).toContain("v0.10.0-alpha</a>");
       expect(html).not.toContain("2579032");
+    });
+
+    it("links the version to its changelog entry", () => {
+      vi.stubEnv("APP_VERSION", "v0.10.0-alpha");
+      const html = renderToStaticMarkup(<Footer />);
+      expect(html).toContain('href="/changelogs#v0.10.0-alpha"');
+    });
+
+    it("links a non-release version to the changelog page", () => {
+      vi.stubEnv("APP_VERSION", "dev");
+      const html = renderToStaticMarkup(<Footer />);
+      expect(html).toContain('href="/changelogs"');
+      expect(html).not.toContain('href="/changelogs#');
     });
 
     it("renders no version line when none was inlined", () => {
