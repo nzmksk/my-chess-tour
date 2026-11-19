@@ -29,9 +29,9 @@ permissions:
 
 env:
   SUPABASE_CLI_VERSION: "2.122.1"
-  # 001-006 predate the CLI: staging got them by hand. The first apply
-  # records them as applied without running them. Never add to this list.
-  BASELINE_VERSIONS: "001 002 003 004 005 006"
+  # The migrations from before #631 keep their three-digit names. Every
+  # migration since is YYYYMMDDHHMMSS_description.sql. Never add to this list.
+  ORIGINAL_VERSIONS: "001 002 003 004 005 006 007"
 
 jobs:
   migrate:
@@ -76,17 +76,11 @@ jobs:
           history="${state%%|*}"
           schema="${state##*|}"
 
-          # Schema but no history: staging as it was before #631. Without a
-          # baseline the CLI would try to re-run 001 on top of it.
+          # Schema but no history: a database built by hand before #631. The
+          # CLI would try to run 001 on top of it. It has to be rebuilt.
           if [ "$schema" = "t" ] && [ "$history" != "t" ]; then
-            if [ "$MODE" = "apply" ]; then
-              echo "::notice::First run: recording $BASELINE_VERSIONS as applied (staging got them by hand before #631)."
-              sb migration repair --status applied $BASELINE_VERSIONS
-            else
-              echo "Staging has no migration history yet. The first apply records $BASELINE_VERSIONS as applied, then pushes:"
-              ls db/migrations | grep -vE "^($(echo $BASELINE_VERSIONS | tr ' ' '|'))_" || echo "  (nothing)"
-              exit 0
-            fi
+            echo "::error::Staging has the app schema but no migration history: it was built by hand before #631. Run db/staging/drop_all.sql on it, then re-run this job, then load db/staging/seed.sql (wiki/database-migrations.md)."
+            exit 1
           fi
 
           if [ "$MODE" = "apply" ]; then
@@ -125,7 +119,7 @@ jobs:
             [ -n "$added" ] || continue
             name="$(basename "$added")"
             version="${name%%_*}"
-            if ! echo " $BASELINE_VERSIONS " | grep -q " $version " &&
+            if ! echo " $ORIGINAL_VERSIONS " | grep -q " $version " &&
                ! echo "$name" | grep -qE '^[0-9]{14}_[a-z0-9_]+\.sql$'; then
               echo "::error file=$added::Name new migrations YYYYMMDDHHMMSS_description.sql (UTC, lowercase)."
               fail=1
@@ -158,8 +152,16 @@ jobs:
             exit 0
           fi
 
-          has_history="$(psql "$DATABASE_URL" -XAt -c "SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL")"
-          if [ "$has_history" = "t" ]; then
+          state="$(psql "$DATABASE_URL" -XAt -c "SELECT to_regclass('supabase_migrations.schema_migrations') IS NOT NULL, to_regclass('public.tournaments') IS NOT NULL")"
+          history="${state%%|*}"
+          schema="${state##*|}"
+
+          if [ "$schema" = "t" ] && [ "$history" != "t" ]; then
+            echo "::notice::Staging was built by hand before #631 and must be rebuilt before it can be checked against (wiki/database-migrations.md). Skipping the checks against staging."
+            exit 0
+          fi
+
+          if [ "$history" = "t" ]; then
             # An applied migration never runs again: editing it changes
             # nothing on staging, and a fresh build would no longer match.
             versions="$(sed -E 's|.*/([0-9]+)_.*|\1|' "$RUNNER_TEMP/touched" | grep -E '^[0-9]+$' | tr '\n' ' ' || true)"
@@ -177,9 +179,9 @@ jobs:
             plan="$(supabase db push --dry-run --include-all --output-format json --workdir "$WORKDIR" --db-url "$DATABASE_URL")"
             pending="$(jq -r '.migrations[]?' <<<"$plan")"
           else
-            # Not baselined yet: the first apply will record 001-006 as
-            # applied and push everything after them.
-            pending="$(ls db/migrations | grep -vE "^($(echo $BASELINE_VERSIONS | tr ' ' '|'))_" || true)"
+            # An empty database (just reset): the next apply builds it from
+            # every migration, so check exactly that.
+            pending="$(cd db/migrations && ls *.sql)"
           fi
 
           if [ -z "$pending" ]; then
