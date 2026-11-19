@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   compareVersions,
+  hasMissedRelease,
   isReleaseVersion,
   paginateEntries,
   parsePageParam,
@@ -212,5 +213,21 @@ describe("paginateEntries", () => {
 
   it("takes another page size", () => {
     expect(paginateEntries(entries, 2, 20)?.entries).toHaveLength(3);
+  });
+});
+
+describe("hasMissedRelease", () => {
+  it("is true when the last release seen is older than this build", () => {
+    expect(hasMissedRelease("v0.10.0-alpha", "v0.11.0-alpha")).toBe(true);
+  });
+
+  it.each([
+    ["a first visit", null, "v0.11.0-alpha"],
+    ["something unreadable stored", "garbage", "v0.11.0-alpha"],
+    ["an up-to-date visitor", "v0.11.0-alpha", "v0.11.0-alpha"],
+    ["a visitor ahead of this build", "v0.12.0-alpha", "v0.11.0-alpha"],
+    ["a build without a release version", "v0.10.0-alpha", "dev"],
+  ])("is false for %s", (_, lastSeen, current) => {
+    expect(hasMissedRelease(lastSeen, current)).toBe(false);
   });
 });

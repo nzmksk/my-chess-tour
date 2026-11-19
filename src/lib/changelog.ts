@@ -154,6 +154,24 @@ export type Announcement =
   | { kind: "show"; entry: ChangelogEntry; missed: number };
 
 /**
+ * Whether this browser has missed a release since its last visit, and so
+ * whether the "What's new" dialog needs the releases to decide (#640). False
+ * on a first visit, when it is up to date, and on a build without a release
+ * version: pickAnnouncement decides those without any entries.
+ */
+export function hasMissedRelease(
+  lastSeen: string | null,
+  currentVersion: string,
+): boolean {
+  return (
+    isReleaseVersion(currentVersion) &&
+    lastSeen !== null &&
+    isReleaseVersion(lastSeen) &&
+    compareVersions(lastSeen, currentVersion) < 0
+  );
+}
+
+/**
  * Decides what the "What's new" dialog does on this visit.
  *
  * - First visit (nothing stored, or something unreadable): remember the
