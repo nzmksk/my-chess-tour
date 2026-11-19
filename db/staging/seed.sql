@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 006 — Seed Data
+-- Staging seed data
 -- MY Chess Tour
 --
 -- Creates: RBAC roles & permissions · 5 organizers · 50 players

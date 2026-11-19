@@ -25,7 +25,7 @@
 -- run there. Everything a member can read includes users' emails and bank
 -- account numbers, so staging must only ever hold test data.
 --
--- Idempotent: safe to re-run. db/drop_all.sql does not drop roles, and the
+-- Idempotent: safe to re-run. db/staging/drop_all.sql does not drop roles, and the
 -- default privileges survive a teardown, so after drop_all + 001–007 the new
 -- tables are readable again without re-running this.
 --

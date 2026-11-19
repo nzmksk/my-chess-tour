@@ -688,7 +688,7 @@ export async function sendOrganizerApplicationReviewEmail(
 export type MemberInvitationRole = "admin" | "member";
 
 // What each assignable role can do, written to finish "you'd be able to …". Mirrors the
-// role_permissions seed in 006_seed.sql.
+// role_permissions seed in db/staging/seed.sql.
 const MEMBER_ROLE_COPY: Record<
   MemberInvitationRole,
   { label: string; summary: string }

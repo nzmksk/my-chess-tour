@@ -7,7 +7,7 @@
 > gates) and the SQL source of truth in `db/migrations/`.
 >
 > **Source of truth:** roles/permissions/mappings are seeded in
-> `db/migrations/006_seed.sql`; the check functions live in
+> `db/staging/seed.sql`; the check functions live in
 > `db/migrations/003_functions_triggers.sql`; the row-level policies that consume
 > them are in `db/migrations/004_rls.sql`. This doc reflects that code — if it ever
 > disagrees with the migrations, the migrations win.
@@ -48,7 +48,7 @@ this platform-wide?) or per-org (do you have this *in org X*?).
 
 ## 2. Roles
 
-Seeded in `006_seed.sql`. There are **4 roles**:
+Seeded in `db/staging/seed.sql`. There are **4 roles**:
 
 | Role | Scope | Attached via | Who has it |
 |---|---|---|---|
@@ -64,7 +64,7 @@ organization-scoped and only mean anything inside the org they were granted in.
 
 ## 3. Permissions
 
-**13 permission keys**, seeded in `006_seed.sql`:
+**13 permission keys**, seeded in `db/staging/seed.sql`:
 
 | Key | Scope it's used in | Meaning |
 |---|---|---|
@@ -86,7 +86,7 @@ organization-scoped and only mean anything inside the org they were granted in.
 
 ## 4. Role → permission matrix
 
-Straight from the `role_permissions` inserts in `006_seed.sql`:
+Straight from the `role_permissions` inserts in `db/staging/seed.sql`:
 
 | Permission | platform_admin | owner | admin | member |
 |---|:---:|:---:|:---:|:---:|

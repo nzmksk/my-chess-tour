@@ -144,7 +144,7 @@ DROP TYPE IF EXISTS public.invitation_status    CASCADE;
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
 --
---    ALL of them, not just the seed accounts (migration 006). public.users is
+--    ALL of them, not just the seed accounts (db/staging/seed.sql). public.users is
 --    dropped above, and on_auth_user_created only fires on INSERT, so any
 --    account left here comes back from 001 → 007 with no users record linked
 --    to it. Such an account can still sign in but has no profile, and is
