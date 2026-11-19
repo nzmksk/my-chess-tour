@@ -126,5 +126,5 @@ Adjacent (out of scope, don't route into the refund path): `payment.charged_back
 
 ## Testing
 
-- **DB**: `supabase/tests/settle_refund.sql`, `supabase/tests/refund_refire.sql` and `supabase/tests/refund_sweep.sql` (paste into the Supabase SQL editor as service role, or run against a local Postgres with `001`/`002`/`003`/`006` applied). Each rolls back and prints `ALL SCENARIOS PASSED`.
+- **DB**: `supabase/tests/settle_refund.sql`, `supabase/tests/refund_refire.sql` and `supabase/tests/refund_sweep.sql`. CI runs them with every other suite on each PR (#633); to run them locally, see [database-migrations.md](./database-migrations.md#tests). Each rolls back and prints `ALL SCENARIOS PASSED`.
 - **Unit** (`npm run test`): refund cases in `webhooks/chip/__tests__/route.test.ts`, `admin/tournament-cancellations/[id]/__tests__/route.test.ts` (fires nothing), the sweep in `src/services/refunds/__tests__/sweep.test.ts` and `cron/refunds/__tests__/route.test.ts`, plus `src/services/chip/__tests__/chip.test.ts`. The re-fire: `src/services/refunds/__tests__/{fire,stuck}.test.ts`, `admin/refunds/**/__tests__/route.test.ts`, `src/app/admin/refunds/_components/__tests__/StuckRefundsClient.test.tsx`, and the dashboard tests.

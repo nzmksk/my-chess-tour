@@ -25,11 +25,13 @@ Current uses:
 
 | Where                                                            | URL built                                                                                                             |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `src/services/email/email.ts`, `sendTournamentCancellationEmail` | `{{browseUrl}}` → `/tournaments`                                                                                      |
-| `src/services/email/email.ts`, `sendCancellationReviewEmail`     | Dashboard link → `/my/organizations`                                                                                  |
+| `src/services/email/email.ts`, every template with a link        | e.g. `{{browseUrl}}` → `/` (the tournament list, #615), dashboard link → `/my/organizations`, Settings link → `/settings` |
 | `src/app/auth/forgot-password/_actions/forgotPassword.ts`        | Reset link → `/api/v1/auth/callback?token_hash=…&type=recovery&next=/auth/update-password`                            |
 | `src/services/organizations/invitations.ts`, `invitationUrl`     | Invitation link → `/invitations/{token}`                                                                              |
 | `src/app/api/v1/tournaments/[slug]/checkout/route.ts`            | CHIP `success_redirect` / `failure_redirect` / `cancel_redirect` → `/tournaments/{slug}/register[/success\|/failure]` |
+| `src/services/prizes/funding-requests.ts`, `createLink`          | A sponsor's CHIP redirect → `/prize-funding/thank-you`, and the "tournament is open" email's links                    |
+
+One use isn't a link: `src/lib/http/origin-policy.ts` derives the API's allowed cross-origin callers from it (the site and its `admin.` subdomain, #614).
 
 Payment _status_ never depends on this value. It arrives through the CHIP account webhook (`/api/v1/webhooks/chip`), which is configured in the CHIP dashboard, not per purchase. See [payment-flow.md](./payment-flow.md) and [chip-webhook.md](./chip-webhook.md).
 
@@ -70,6 +72,7 @@ const res = await selfApiFetch(`/api/v1/organizations/${orgId}/dashboard`);
 Current callers:
 
 - `src/app/my/organizations/[orgId]/page.tsx`: dashboard data
+- `src/app/my/organizations/[orgId]/payouts/page.tsx`: payouts data
 - `src/app/my/organizations/[orgId]/tournaments/create/page.tsx`: org lookup
 - `src/app/my/organizations/[orgId]/tournaments/[id]/edit/page.tsx`: tournament and org name
 

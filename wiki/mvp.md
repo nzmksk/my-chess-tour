@@ -1,5 +1,10 @@
 # Chess Tournament Platform — MVP Document
 
+> **This is the original MVP specification**, kept as the record of what the product set out to
+> do. It is not a description of the code. For what is built, partial or missing today, see
+> [launch-readiness.md](./launch-readiness.md); for the API, [api-design.md](./api-design.md); for
+> the schema, `supabase/migrations/`. Notes in *italics* mark where the build went a different way.
+
 ## Overview
 
 A platform that connects chess tournament organizers with players, replacing the current manual process of tournament advertising, registration, and payment collection with a streamlined, self-service experience.
@@ -72,9 +77,11 @@ This platform eliminates the back-and-forth by centralizing discovery, registrat
 | Language       | TypeScript              | Single language across the full stack minimizes context-switching for a solo developer.                                                                                           |
 | Frontend + API | Next.js (App Router)    | SSR for SEO (tournament pages discoverable on Google), built-in API routes (no separate backend needed for MVP), and clean layout support for three distinct user roles.          |
 | Database       | PostgreSQL via Supabase | Managed hosting with a generous free tier (500MB, 50k MAU). Includes built-in auth (email, Google, etc.) and row-level security, eliminating the need to build auth from scratch. |
-| ORM            | Prisma or Drizzle       | Type-safe database queries with excellent TypeScript integration.                                                                                                                 |
+| ORM            | Prisma or Drizzle       | Type-safe database queries with excellent TypeScript integration. *As built: no ORM. `@supabase/supabase-js` plus SQL functions, with migrations applied by the Supabase CLI.*      |
 | Payment        | CHIP                    | Malaysian-first, zero setup/monthly fees, pay-per-transaction, RESTful API with sandbox environment.                                                                              |
-| Hosting        | Netlify                 | Free tier with Git-based deployments. Good Next.js support via adapter.                                                                                                           |
+| Hosting        | Netlify                 | Free tier with Git-based deployments. Good Next.js support via adapter. *As built: plain `next build`/`next start` on Netlify; scheduled jobs are GitHub Actions workflows.*      |
+| Cache / limits | Upstash Redis           | *Added during the build:* signup codes, login lockout and API rate limits.                                                                                                        |
+| Monitoring     | Sentry                  | *Added during the build (#125):* error reporting, inert until the DSN is set. See [error-monitoring.md](./error-monitoring.md).                                                  |
 | Email          | Resend                  | Free tier (3,000 emails/month). Clean API for registration confirmations and payout notifications.                                                                                |
 | File Storage   | Supabase Storage        | Included in the free tier. Handles tournament images, receipts, and organizer documents.                                                                                          |
 
@@ -89,333 +96,40 @@ RM0–30/month until meaningful traffic is reached. All core services offer free
 
 ## Database Design
 
-### Entity Relationship Overview
+> The original column-by-column design that stood here (`organizer_profiles`, `organizer_members`, a
+> per-tournament `payouts` total, `refunds` keyed on `payment_id`) was superseded during the build
+> and has been removed so nobody codes against it. The schema's source of truth is
+> `supabase/migrations/` (start with `001_tables.sql`, whose comments explain each table); how it
+> changes is in [database-migrations.md](./database-migrations.md). Below is the as-built map.
 
-```
-users 1──1 player_profiles
-users 1──* organizer_members
-organizer_profiles 1──* organizer_members
-organizer_profiles 1──* tournaments
-tournaments 1──* registrations
-users 1──* registrations
-registrations 1──1 payments
-payments 1──0..1 refunds
-tournaments 1──* payouts
-```
+### As built
 
-### Tables
+| Area | Tables | Notes |
+| -- | -- | -- |
+| Identity | `users`, `player_profiles` | `users.auth_user_id` is the only link to Supabase Auth; RLS resolves the caller with `app_user_id()`. A `player_profiles` row is created empty at signup and filled in just in time. |
+| Access control | `roles`, `permissions`, `role_permissions`, `user_global_roles`, `organization_memberships` | Data-driven roles (`platform_admin`, `owner`, `admin`, `member`) mapped to permission keys. See [roles-and-permissions.md](./roles-and-permissions.md). |
+| Organizations | `organizations`, `organization_documents`, `organization_bank_accounts`, `organization_invitations` | An application *is* the `organizations` row (`approval_status`), with KYB documents in a private bucket and a payout account verified through CHIP Send. |
+| Tournaments | `tournaments`, `tournament_cancellation_requests` | `format`, `time_control`, `entry_fees`, `prizes` and `restrictions` are JSONB. Dates are in the venue's `timezone`. `status`: `draft`, `pending_funding`, `published`, `cancelled`. |
+| Registration & money in | `registrations`, `payments` | One immutable `payments` row per attempt; `registrations.current_payment_id` points at the live one. See [payment-flow.md](./payment-flow.md). |
+| Money back and out | `refunds`, `payouts`, `player_bank_accounts` | Every settled movement is also a `payments` row (`type` = `refund`, `organizer_payout`, `player_prize`, …), so the ledger is one table. See [refund-flow.md](./refund-flow.md), [payout-flow.md](./payout-flow.md). |
+| Prize pool | `prize_funder_contacts`, `prize_fundings`, `prize_awards` | Platform-distributed prizes only. See [prize-flow.md](./prize-flow.md). |
+| Compliance & ops | `sensitive_data_consents`, `audit_logs`, `bug_reports`, `waitlist` | Append-only consent log (#451); trigger-written audit trail with redaction (#503); in-app bug reports (#616); the pre-launch waitlist (form removed in #615, table kept). |
+| Views | `tournament_payout_summary` | Per-tournament ledger projection: revenue, refunds, `net_payout_cents`, `prize_pool_balance_cents`. |
 
-#### users
+### Design notes that held
 
-Core user table linked to Supabase Auth. A single user can hold multiple roles (player, organizer, admin).
+- **Money in sen:** every amount, in columns and in JSONB, is an integer in sen (RM25.50 is 2550).
+- **Participant count** isn't stored. It is counted from confirmed registrations plus live checkout holds (`count_taken_seats`, `get_participant_counts`). Capacity is enforced inside Postgres.
+- **Money state lives in Postgres:** `SECURITY DEFINER` functions with row locks own every state change, so concurrent webhooks and retries can't corrupt it. Network calls happen outside those transactions.
+- **Timestamps** are `timestamptz`. Calendar dates belong to the venue's timezone.
+- **Row-level security** is on for every table except `waitlist`, and nearly every table has a "Platform admins full access" policy (`supabase/migrations/004_rls.sql`).
 
-| Column     | Type          | Constraints                   | Description                              |
-| ---------- | ------------- | ----------------------------- | ---------------------------------------- |
-| id         | uuid          | PK, default gen_random_uuid() | Matches Supabase Auth user ID            |
-| email      | varchar(255)  | unique, not null              | User's email address                     |
-| password   | varchar(255)  | not null                      | User's password                          |
-| first_name | varchar(255)  | not null                      | First name                               |
-| last_name  | varchar(255)  | not null                      | Last name                                |
-| role       | varchar(20)[] | not null, default '{player}'  | Array of roles: player, organizer, admin |
-| avatar_url | text          | nullable                      | Profile photo URL                        |
-| created_at | timestamptz   | not null, default now()       | Account creation timestamp               |
-| updated_at | timestamptz   | not null, default now()       | Last update timestamp                    |
+## User Flows
 
-#### player_profiles
-
-Chess-specific information for players. All chess ID fields are optional to lower the barrier to registration.
-
-| Column          | Type         | Constraints                     | Description                                          |
-| --------------- | ------------ | ------------------------------- | ---------------------------------------------------- |
-| id              | uuid         | PK, default gen_random_uuid()   |                                                      |
-| user_id         | uuid         | FK → users.id, unique, not null | One profile per user                                 |
-| fide_id         | varchar(20)  | nullable                        | FIDE player ID                                       |
-| mcf_id          | varchar(20)  | nullable                        | Malaysian Chess Federation ID                        |
-| national_rating | integer      | nullable                        | National chess rating                                |
-| fide_rating     | integer      | nullable                        | FIDE rating (standard)                               |
-| date_of_birth   | date         | nullable                        | For age-category eligibility                         |
-| gender          | varchar(10)  | nullable                        | For gender-category eligibility                      |
-| state           | varchar(50)  | nullable                        | State of residence (relevant for state-level events) |
-| nationality     | varchar(100) | nullable                        | Player's nationality                                 |
-| created_at      | timestamptz  | not null, default now()         |                                                      |
-| updated_at      | timestamptz  | not null, default now()         |                                                      |
-
-#### organizer_profiles
-
-Organization profile and approval data. An organization can be managed by multiple users via the `organizer_members` table.
-
-| Column               | Type         | Constraints                   | Description                                    |
-| -------------------- | ------------ | ----------------------------- | ---------------------------------------------- |
-| id                   | uuid         | PK, default gen_random_uuid() |                                                |
-| organization_name    | varchar(255) | not null                      | Club or organization name                      |
-| description          | text         | nullable                      | About the organization                         |
-| links                | jsonb        | nullable                      | Social and web links (see example below)       |
-| email                | varchar(255) | not null                      | Official email                                 |
-| phone                | varchar(20)  | nullable                      | Official number                                |
-| past_tournament_refs | text         | nullable                      | References to previously organized tournaments |
-| approval_status      | varchar(20)  | not null, default 'pending'   | pending, approved, rejected                    |
-| approved_by          | uuid         | FK → users.id, nullable       | Admin who approved/rejected                    |
-| approved_at          | timestamptz  | nullable                      | Timestamp of approval/rejection                |
-| rejection_reason     | text         | nullable                      | Reason if rejected                             |
-| created_at           | timestamptz  | not null, default now()       |                                                |
-| updated_at           | timestamptz  | not null, default now()       |                                                |
-
-**`links` JSON example:**
-
-```json
-[
-  { "type": "facebook", "url": "https://facebook.com/klchess" },
-  { "type": "website", "url": "https://klchess.org" },
-  { "type": "instagram", "url": "https://instagram.com/klchess" }
-]
-```
-
-Supported link types: `website`, `facebook`, `instagram`, `x`, `youtube`, `whatsapp`, `telegram`, `other`.
-
-#### organizer_members
-
-Join table linking users to organizations with permission levels.
-
-| Column       | Type        | Constraints                          | Description          |
-| ------------ | ----------- | ------------------------------------ | -------------------- |
-| id           | uuid        | PK, default gen_random_uuid()        |                      |
-| organizer_id | uuid        | FK → organizer_profiles.id, not null | The organization     |
-| user_id      | uuid        | FK → users.id, not null              | The user             |
-| role         | varchar(20) | not null, default 'member'           | owner, admin, member |
-| created_at   | timestamptz | not null, default now()              |                      |
-| updated_at   | timestamptz | not null, default now()              |                      |
-
-**Unique constraint:** (organizer_id, user_id) — a user can only have one role per organization.
-
-**Permission levels:**
-
-- **owner** — Full control. Can manage tournament listings, members, payouts, and organization settings. One per organization (the user who created it).
-- **admin** — Can create/manage tournaments and view participants and payouts. Cannot manage members or organization settings.
-- **member** — Can view tournaments and participants. Cannot create or edit.
-
-#### tournaments
-
-The main event. Created by an approved organizer.
-
-| Column                | Type                   | Constraints                          | Description                                      |
-| --------------------- | ---------------------- | ------------------------------------ | ------------------------------------------------ |
-| id                    | uuid                   | PK, default gen_random_uuid()        |                                                  |
-| organizer_id          | uuid                   | FK → organizer_profiles.id, not null | Organizing entity                                |
-| name                  | varchar(255)           | not null                             | Tournament name                                  |
-| description           | text                   | nullable                             | Full description and rules                       |
-| venue_name            | varchar(255)           | not null                             | Name of the venue                                |
-| venue_state           | varchar(50)            | not null                             | State where the venue is located (for filtering) |
-| venue_address         | text                   | not null                             | Full address                                     |
-| start_date            | date                   | not null                             | Tournament start date                            |
-| end_date              | date                   | not null                             | Tournament end date                              |
-| registration_deadline | timestamptz            | not null                             | Cutoff for new registrations                     |
-| format                | jsonb                  | not null                             | Tournament format details (see example below)    |
-| is_fide_rated         | boolean                | not null, default false              | Whether the tournament is FIDE rated             |
-| is_mcf_rated          | boolean                | not null, default false              | Whether the tournament is MCF rated              |
-| time_control          | jsonb                  | not null                             | Time control details (see example below)         |
-| entry_fees            | jsonb                  | not null                             | Flexible fee structure (see example below)       |
-| prizes                | jsonb                  | nullable                             | Prize breakdown (see example below)              |
-| restrictions          | jsonb                  | nullable                             | Eligibility restrictions (see example below)     |
-| max_participants      | integer                | not null                             | Tournament-wide maximum capacity                 |
-| poster_url            | text                   | nullable                             | Tournament poster image (portrait format)        |
-| status                | tournament_status enum | not null, default 'draft'            | draft, published                                 |
-| created_at            | timestamptz            | not null, default now()              |                                                  |
-| updated_at            | timestamptz            | not null, default now()              |                                                  |
-
-**`format` JSON example:**
-
-```json
-{
-  "type": "rapid",
-  "system": "swiss",
-  "rounds": 7
-}
-```
-
-**`time_control` JSON example:**
-
-```json
-{
-  "base_minutes": 10,
-  "increment_seconds": 5,
-  "delay_seconds": 0
-}
-```
-
-**`entry_fees` JSON example:**
-
-```json
-{
-  "standard": { "amount_cents": 5000 },
-  "additional": [
-    { "type": "early_bird", "amount_cents": 3500, "valid_until": "2026-03-01" },
-    {
-      "type": "titled_players",
-      "amount_cents": 0,
-      "titles": ["GM", "IM", "FM"]
-    },
-    {
-      "type": "rating_based",
-      "amount_cents": 3000,
-      "rating_min": 0,
-      "rating_max": 1500
-    },
-    { "type": "age_based", "amount_cents": 2500, "age_min": 0, "age_max": 12 }
-  ]
-}
-```
-
-**`prizes` JSON example:**
-
-```json
-{
-  "categories": [
-    {
-      "name": "Open",
-      "prizes": [
-        { "place": "1st", "amount": "RM 3,000" },
-        { "place": "2nd", "amount": "RM 2,000" },
-        { "place": "3rd", "amount": "RM 1,000" }
-      ]
-    },
-    {
-      "name": "Under-12",
-      "prizes": [
-        { "place": "1st", "amount": "RM 500" },
-        { "place": "2nd", "amount": "RM 300" },
-        { "place": "3rd", "amount": "RM 200" }
-      ]
-    }
-  ],
-  "special": [
-    { "name": "Best Female Player", "amount": "RM 500" },
-    { "name": "Best Veteran (50+)", "amount": "RM 300" }
-  ]
-}
-```
-
-**`restrictions` JSON example:**
-
-```json
-[
-  { "type": "max_age", "value": 12 },
-  { "type": "max_rating", "value": 1500 },
-  { "type": "gender", "value": "female" }
-]
-```
-
-Supported restriction types: `max_age`, `min_age`, `max_rating`, `min_rating`, `gender`, `state`, `nationality`, `custom`.
-
-#### registrations
-
-A player's registration for a tournament.
-
-| Column              | Type        | Constraints                         | Description                                                                               |
-| ------------------- | ----------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| id                  | uuid        | PK, default gen_random_uuid()       |                                                                                           |
-| user_id             | uuid        | FK → users.id, not null             | The registering player                                                                    |
-| tournament_id       | uuid        | FK → tournaments.id, not null       | The tournament being registered for                                                       |
-| fee_tier            | varchar(50) | not null                            | Which fee tier was applied: standard, early_bird, titled_players, rating_based, age_based |
-| status              | varchar(20) | not null, default 'pending_payment' | pending_payment, confirmed, cancelled, refunded                                           |
-| registered_at       | timestamptz | not null, default now()             |                                                                                           |
-| confirmed_at        | timestamptz | nullable                            | When payment was confirmed                                                                |
-| cancelled_at        | timestamptz | nullable                            | When registration was cancelled                                                           |
-| cancellation_reason | text        | nullable                            | Reason for cancellation                                                                   |
-
-**Unique constraint:** (user_id, tournament_id) — a player can only register once per tournament.
-
-#### payments
-
-Financial record for each registration. One payment per registration.
-
-| Column             | Type         | Constraints                             | Description                                                        |
-| ------------------ | ------------ | --------------------------------------- | ------------------------------------------------------------------ |
-| id                 | uuid         | PK, default gen_random_uuid()           |                                                                    |
-| registration_id    | uuid         | FK → registrations.id, unique, not null | Linked registration                                                |
-| amount_cents       | integer      | not null                                | Total amount charged in sen                                        |
-| platform_fee_cents | integer      | not null                                | Platform commission in sen (charged to player on top of entry fee) |
-| net_amount_cents   | integer      | not null                                | Organizer's share (equal to entry fee amount set by organizer)     |
-| currency           | varchar(3)   | not null, default 'MYR'                 | Currency code                                                      |
-| payment_method     | varchar(50)  | nullable                                | FPX, card, e-wallet, DuitNow QR, etc.                              |
-| chip_purchase_id   | varchar(255) | nullable                                | CHIP's transaction/purchase reference                              |
-| status             | varchar(20)  | not null, default 'pending'             | pending, completed, failed                                         |
-| paid_at            | timestamptz  | nullable                                | When payment was confirmed by CHIP                                 |
-| created_at         | timestamptz  | not null, default now()                 |                                                                    |
-
-#### refunds
-
-Refund records linked to a payment. Initiated by organizer or admin.
-
-> ⚠️ **Superseded by the as-built schema.** The table below is the original intent and is kept for
-> that record only — do not code against it. As built, `refunds` is scoped to `registration_id`
-> (not `payment_id`), the reviewer columns are `reviewed_by`/`reviewed_at` (not `approved_by`),
-> and `refund_status` is `pending | approved | rejected` (there is no `processed` — settlement is
-> recorded by `processed_at` plus a `type='refund'` row in `payments`). Authoritative:
-> `supabase/migrations/001_tables.sql` and [refund-flow.md](./refund-flow.md). In practice the only
-> initiator today is a platform admin approving a tournament cancellation; organizer-initiated
-> refunds are #510.
-
-| Column              | Type         | Constraints                   | Description                            |
-| ------------------- | ------------ | ----------------------------- | -------------------------------------- |
-| id                  | uuid         | PK, default gen_random_uuid() |                                        |
-| payment_id          | uuid         | FK → payments.id, not null    | Original payment being refunded        |
-| refund_amount_cents | integer      | not null                      | Refund amount in sen (can be partial)  |
-| reason              | text         | not null                      | Reason for refund                      |
-| status              | varchar(20)  | not null, default 'pending'   | pending, approved, processed, rejected |
-| requested_by        | uuid         | FK → users.id, not null       | User who initiated the refund          |
-| approved_by         | uuid         | FK → users.id, nullable       | Admin/organizer who approved           |
-| chip_refund_id      | varchar(255) | nullable                      | CHIP's refund transaction reference    |
-| requested_at        | timestamptz  | not null, default now()       |                                        |
-| processed_at        | timestamptz  | nullable                      | When refund was processed by CHIP      |
-
-#### payouts
-
-Tracks money owed and paid to organizers. One payout record per tournament.
-
-| Column                 | Type        | Constraints                          | Description                    |
-| ---------------------- | ----------- | ------------------------------------ | ------------------------------ |
-| id                     | uuid        | PK, default gen_random_uuid()        |                                |
-| tournament_id          | uuid        | FK → tournaments.id, not null        |                                |
-| organizer_id           | uuid        | FK → organizer_profiles.id, not null | Receiving organizer            |
-| total_collected_cents  | integer     | not null, default 0                  | Sum of all confirmed payments  |
-| total_commission_cents | integer     | not null, default 0                  | Sum of platform fees           |
-| total_refunded_cents   | integer     | not null, default 0                  | Sum of processed refunds       |
-| net_payout_cents       | integer     | not null, default 0                  | Amount to be paid to organizer |
-| status                 | varchar(20) | not null, default 'pending'          | pending, processing, completed |
-| paid_at                | timestamptz | nullable                             | When payout was sent           |
-| created_at             | timestamptz | not null, default now()              |                                |
-| updated_at             | timestamptz | not null, default now()              |                                |
-
-### Key Indexes
-
-| Table             | Index                   | Purpose                                  |
-| ----------------- | ----------------------- | ---------------------------------------- |
-| tournaments       | (status, start_date)    | Browse upcoming published tournaments    |
-| tournaments       | (organizer_id)          | Organizer's tournament list              |
-| tournaments       | (venue_state)           | Filter tournaments by state              |
-| organizer_members | (user_id)               | Find all organizations a user belongs to |
-| organizer_members | (organizer_id)          | List all members of an organization      |
-| registrations     | (user_id)               | Player's registration history            |
-| registrations     | (tournament_id, status) | Participant list per tournament          |
-| payments          | (chip_purchase_id)      | Webhook lookup by CHIP reference         |
-| payments          | (registration_id)       | Payment lookup by registration           |
-| payouts           | (tournament_id)         | Payout lookup by tournament              |
-
-### Design Notes
-
-- **Money in cents (sen):** All monetary values in structured columns are stored as integers in sen to avoid floating-point precision issues. RM25.50 is stored as 2550. For JSON fields (entry_fees), amounts are also stored in sen.
-- **JSON fields:** `time_control`, `entry_fees`, and `prizes` use JSONB for flexibility. This allows organizers to define custom fee tiers, time control variations, and prize structures without schema changes. The application layer validates the JSON shape on write.
-- **Participant count:** Not stored in the tournaments table. Current participant count is derived from confirmed registrations and cached using Redis (or similar) to avoid frequent count queries. The cache is invalidated when a registration status changes.
-- **Organization membership:** `organizer_members` enables multiple users to manage an organization with role-based permissions (owner, admin, member).
-- **Soft deletes:** Not used in the MVP. Statuses (cancelled, refunded) serve as logical indicators. Hard deletes are avoided.
-- **Timestamps:** All tables use `timestamptz` (timestamp with time zone) to handle future multi-timezone expansion.
-- **Row-level security:** Supabase RLS policies will enforce that players can only see their own registrations, organizer members can only manage their organization's tournaments (based on role), and platform admins have full access.
-
-## User Flows & Wireframes
+*The HTML wireframes that accompanied these flows have been removed from the repo; the built
+screens are now the reference.*
 
 ### Player Flows
-
-Interactive wireframes are provided as a companion HTML file (`player-wireframes.html`).
 
 #### Flow 1: Browse & Discover Tournaments
 
@@ -427,6 +141,7 @@ Interactive wireframes are provided as a companion HTML file (`player-wireframes
 - **Tournament grid:** Responsive card grid with horizontal layout. Each card shows:
   - Tournament poster in portrait format (left side of card)
   - Spots remaining badge on the poster (color-coded: green = open, amber = few left, red = full)
+  - *As built: cards have no poster; the spots badge sits on the card.*
   - Format badge and rating badges (FIDE Rated, MCF Rated, or Unrated) grouped together in the card body above the tournament name
   - Tournament name
   - Date, venue, time control
@@ -480,8 +195,6 @@ Interactive wireframes are provided as a companion HTML file (`player-wireframes
 
 ### Organizer Flows
 
-Interactive wireframes are provided as a companion HTML file (`organizer-wireframes.html`).
-
 #### Flow 1: Apply as Organizer
 
 **Navigation:** Players can access the application page via two entry points: a "Become an Organizer" link in the top navigation bar (visible to logged-in users who are not yet organizers), and a "Become an Organizer" link at the bottom of the player dashboard sidebar.
@@ -508,7 +221,7 @@ Interactive wireframes are provided as a companion HTML file (`organizer-wirefra
 
 **Screen: 5-Step Wizard**
 
-**Step 1 — Basic Information:** Tournament name, description, poster upload (portrait format recommended), venue name, state, and venue address.
+**Step 1 — Basic Information:** Tournament name, description, poster upload (portrait format recommended), venue name, state, and venue address. *As built: no poster upload; tournament cards show no image.*
 
 **Step 2 — Format & Schedule:** Format type (rapid, blitz, classical), system (Swiss, round robin, knockout), number of rounds, time control (base time, increment, delay), start/end dates, registration deadline, max participants, FIDE/MCF rated checkboxes, and optional restrictions (dynamic rows with type dropdown — max age, max rating, min rating, gender, state, nationality, custom — and value input).
 
@@ -550,8 +263,6 @@ The wizard footer shows "Back", "Save as Draft", and "Next" buttons. Steps are s
 
 ### Admin Flows
 
-Interactive wireframes are provided as a companion HTML file (`admin-wireframes.html`).
-
 The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visually distinguish it from the organizer and player interfaces.
 
 #### Screen 1: Admin Dashboard
@@ -579,6 +290,10 @@ The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visua
 
 #### Screen 4: Tournaments Overview
 
+*(Not built as a list — #107 was closed as a duplicate and #108 as not planned. Admins reach a
+tournament's read-only manage view, `/admin/tournaments/[id]` (#557), from the dashboard,
+cancellations, refunds and prizes pages.)*
+
 - **Full-width search bar** on its own line, indexing by tournament name or organizer name.
 - **Status filter** below the search bar as a dropdown with checkboxes for multi-select (Published, Draft).
 - **Table:** All tournaments across the platform with columns: Tournament name + format/rating details, Organizer name, Date, Registrations (current/max), Revenue (organizer's total), Commission (platform's 10%), and Status badge.
@@ -586,7 +301,7 @@ The admin panel uses a dark sidebar with a distinct "Admin Panel" label to visua
 
 #### Screen 5: Transactions
 
-*(Not built — #109 / #110. This is the only place the spec surfaces refunds across tournaments, so
+*(Not built — #109 was closed as not planned; #110 is open. This is the only place the spec surfaces refunds across tournaments, so
 until it exists an operator sees one tournament's refunds at a time, on its read-only manage page
 (#511).)*
 
@@ -596,11 +311,11 @@ until it exists an operator sees one tournament's refunds at a time, on its read
 
 ## Out of MVP Scope
 
-> **See also:** `api-design.md` for the full API specification including 41 endpoints, auth flows, permission checks, request/response shapes, CHIP webhook handling, and error conventions.
+> **See also:** [api-design.md](./api-design.md) for the API as built: every route, its auth, and the error, rate-limit and CORS conventions.
 
 The following features are intentionally excluded from the MVP to keep the build focused and to be introduced as the platform matures:
 
-- Pairing and bracket generation
+- Pairing and bracket generation (*still out of scope: organizers export the roster, #90, and pair in Swiss-Manager or Vega*)
 - Live scoring and results
 - Player ratings and ranking tracking
 - In-platform messaging or chat
@@ -619,7 +334,7 @@ The following features are intentionally excluded from the MVP to keep the build
 
 ## Go-to-Market Strategy (MVP Phase)
 
-> **See also:** `README.md` for the full sprint plan with 6 milestones, weekly tasks, hour estimates, risk mitigation, and launch checklist.
+> **See also:** [launch-readiness.md](./launch-readiness.md) for what is built and the pre-launch checklist. (The original week-by-week roadmap that lived in `README.md` is in git history.)
 
 - Launch with a small group of organizers personally known within the Malaysian chess community.
 - Seed the platform with real upcoming tournaments to provide immediate value to players.
