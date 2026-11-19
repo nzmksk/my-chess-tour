@@ -9,7 +9,7 @@ How schema changes reach staging and production (#631). The Supabase CLI applies
 | `supabase/migrations/001`–`007`         | The original migrations, from before #631: the schema (001–006) and the RBAC roles and permissions (007).                                                                                      |
 | `supabase/migrations/<14 digits>_*.sql` | Every change since, one file each, applied in filename order.                                                                                                                                  |
 | `supabase/staging/`                     | Staging-only scripts, run by hand: `seed.sql` (test data), `drop_all.sql` (local teardown), and the QA access scripts ([staging-db-access.md](staging-db-access.md)). Never run on production. |
-| `supabase/tests/`                       | SQL regression suites. Each runs in a transaction that rolls back and prints `ALL SCENARIOS PASSED`.                                                                                           |
+| `supabase/tests/`                       | SQL regression suites, run by CI on every PR ([Tests](#tests)). Each prints `ALL SCENARIOS PASSED`.                                                                                            |
 
 `supabase/migrations` is where the CLI looks by default, so it runs from the repo root with no extra setup.
 
@@ -59,6 +59,31 @@ Each migration commits or rolls back on its own. If the second of three fails, t
    Don't add it as a repository secret: every workflow run on any branch could read that.
 
 The workflow uses that database URL and no Supabase access token, which would reach every project on the account. The CLI version is pinned in the workflow; bump it deliberately.
+
+## Tests
+
+The **Run database tests** job in `.github/workflows/tests.yml` runs on every PR into `staging` or `master` and every push to them (#633). On the runner it:
+
+1. builds a database from `supabase/migrations` with `supabase db start` (Supabase's Postgres image, with the auth and storage schemas, configured by `supabase/config.toml`);
+2. applies `supabase/staging/apply_qa_readonly_role.sql` (committed: the file itself ends in `ROLLBACK`) and `supabase/staging/seed.sql`, as staging has them;
+3. runs every suite in `supabase/tests` with `supabase/tests/run.sh`, which fails the job if any suite errors or doesn't print `ALL SCENARIOS PASSED`.
+
+A broken migration therefore fails the PR here before it reaches `db push`. The job uses no secrets and never connects to staging or production.
+
+A new suite in `supabase/tests` is picked up automatically. Most suites run in a transaction that rolls back. The `*_race.sql` suites commit fixtures so a second session (dblink) can see them, and delete them at the end.
+
+To run them locally (needs Docker and `psql`):
+
+```sh
+npx supabase@2.122.1 db start
+export DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+sed 's/^ROLLBACK;$/COMMIT;/' supabase/staging/apply_qa_readonly_role.sql | psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f -
+bash supabase/tests/run.sh                                  # all suites
+bash supabase/tests/run.sh supabase/tests/settle_refund.sql # or some
+npx supabase@2.122.1 db stop --no-backup
+```
+
+`run.sh` also takes `RACE_CONNINFO`, the connection string the race suites' second session (dblink) uses from inside the database server. dblink only accepts a connection whose password was actually checked, and Supabase's image trusts `127.0.0.1`, so the default goes through the container's name, `supabase_db_my-chess-tour`. Against a local Postgres, set it to `host=localhost dbname=<db> user=postgres password=...`.
 
 ## Production
 

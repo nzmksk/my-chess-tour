@@ -39,3 +39,49 @@ jobs:
 
       - name: Run unit tests with coverage
         run: npm run test:coverage
+
+  # The SQL suites in supabase/tests, against a database built from
+  # supabase/migrations on the runner (#633). Nothing here touches staging or
+  # production, so it needs no secrets and is safe on PRs.
+  db-test:
+    name: Run database tests
+    # A release reruns only for the changelog check above.
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up the Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+
+      # Only Postgres: Supabase's image with its auth and storage schemas, and
+      # every migration applied in order, as `db push` applies them to staging.
+      # Images come from GitHub's registry: the CLI's default, AWS's public
+      # one, rate-limits GitHub's runners and only falls back after retries.
+      - name: Build the database from supabase/migrations
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+        run: supabase db start
+
+      # What staging has on top of the migrations. qa_readonly_access.sql
+      # needs the role; the seed is checked here so it doesn't break unnoticed.
+      # The role script is a dry run that ends in ROLLBACK until edited, so
+      # commit it here.
+      - name: Apply the staging scripts
+        run: |
+          sed 's/^ROLLBACK;$/COMMIT;/' supabase/staging/apply_qa_readonly_role.sql |
+            psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f -
+          test "$(psql "$DB_URL" -X -Atc "SELECT count(*) FROM pg_roles WHERE rolname = 'qa_readonly'")" = 1
+          psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f supabase/staging/seed.sql
+
+      - name: Run the SQL suites
+        run: bash supabase/tests/run.sh
