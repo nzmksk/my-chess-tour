@@ -88,7 +88,8 @@ export async function fetchMissedReleases(
  * it was, and labels itself by its title.
  *
  * The releases are only fetched when this browser has missed one (#640). If
- * that fails, nothing is stored or shown, and the next page load tries again.
+ * that fails, nothing is stored or shown, and the next ordinary page tries
+ * again.
  */
 export function WhatsNew({
   version = process.env.APP_VERSION ?? "",
@@ -145,8 +146,10 @@ export function WhatsNew({
         if (!cancelled) act(pickAnnouncement(lastSeen, version, entries));
       })
       .catch(() => {
-        // Already logged on the server. Stay quiet until the next page load.
+        // Already logged on the server. Stay quiet, and try again on the next
+        // ordinary page: client-side navigation keeps this component mounted.
         settled = true;
+        decided.current = false;
       });
 
     return () => {

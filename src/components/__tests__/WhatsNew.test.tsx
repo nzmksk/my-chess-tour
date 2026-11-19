@@ -172,6 +172,20 @@ describe("WhatsNew", () => {
     expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.10.0-alpha");
   });
 
+  it("tries again on the next page after the releases failed to load", async () => {
+    window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
+    load.mockRejectedValueOnce(new Error("503"));
+    const { rerender } = renderAt("/");
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(dialog()).toBeNull();
+
+    mockPathname.current = "/my";
+    rerender(<WhatsNew version="v0.11.0-alpha" loadEntries={load} />);
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it("decides again later when the visitor leaves for checkout mid-load", async () => {
     window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
     let resolveFirst: (entries: readonly ChangelogEntry[]) => void = () => {};
