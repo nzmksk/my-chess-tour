@@ -26,7 +26,7 @@
 -- account numbers, so staging must only ever hold test data.
 --
 -- Idempotent: safe to re-run. db/staging/drop_all.sql does not drop roles, and the
--- default privileges survive a teardown, so after drop_all + 001–006 the new
+-- default privileges survive a teardown, so after drop_all + a rebuild the new
 -- tables are readable again without re-running this.
 --
 -- It ends in ROLLBACK, so it is a dry run until that line is changed to COMMIT.

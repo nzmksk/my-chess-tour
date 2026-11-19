@@ -24,7 +24,7 @@ A tester sees users' emails and bank account numbers, so **staging must only eve
 1. In the Supabase SQL editor for **staging**, run `db/maintenance/apply_qa_readonly_role.sql` with its final `ROLLBACK` changed to `COMMIT`. It is idempotent.
 2. Run `db/tests/qa_readonly_access.sql`. It should print `ALL SCENARIOS PASSED`.
 
-`db/staging/drop_all.sql` doesn't drop roles, and the default privileges stay in place. After a teardown and 001–006, the role can read the new tables without re-running step 1.
+`db/staging/drop_all.sql` doesn't drop roles, and the default privileges stay in place. After a teardown and rebuild, the role can read the new tables without re-running step 1.
 
 ## Adding a tester (admin)
 
