@@ -1,6 +1,6 @@
 # Releases and the app version
 
-How a release is cut, how the footer and bug reports know which release a deployment is running (#621), and how users hear what changed (#622).
+How a release is cut, how the footer and bug reports know which release a deployment is running (#621), and how users hear what changed (#622, #640).
 
 ## Git tags are the source of truth
 
@@ -35,43 +35,73 @@ Netlify clones shallow and without tags, and a cached clone can hold stale ones.
 
 ## The changelog
 
-GitHub's release notes list PR titles for developers. Users get their own changelog, kept in the repo at `src/content/changelog.ts`: one entry per release, newest first, written for players and organizers. It is bundled at build time, so nothing calls GitHub at runtime.
+The changelog is the GitHub release notes (#640). Each release's notes are written for players and organizers, and the site reads them from the GitHub API at runtime. Nothing is kept in the repo, so fixing a typo is an edit on GitHub, with no PR and no deploy.
 
-```ts
-{
-  version: "v0.11.0-alpha", // the tag, exactly
-  date: "2026-11-19",       // the day the release is published
-  headline: "Optional one-line summary.",
-  new: ["What people can do now that they couldn't before."],
-  improved: ["What works better."],
-  fixed: ["What was broken and now works."],
-}
+### Writing the notes
+
+```md
+Optional one-line headline.
+
+### New
+- What people can do now that they couldn't before.
+
+### Improved
+- What works better.
+
+### Fixed
+- What was broken and now works.
+
+<!-- developer notes -->
+
+## What's Changed
+* … (from "Generate release notes")
 ```
 
 - **Write for someone who has never seen the code.** "Organizers can download their participant list as a CSV or Excel file", not "Participant CSV/Excel export (#90)". Leave out refactors, dependency bumps and internal tooling.
-- **`silent: true`** for a release with nothing user-visible. It is still listed on `/changelogs`, but never announced in the dialog.
-- **Entries ahead of their tag stay hidden.** A build only lists entries at or before its own version, so merging the entry before cutting the tag doesn't show an unreleased version on staging.
+- **Everything from `<!-- developer notes -->` on is never shown.** GitHub's generated `## What's Changed`, `## New Contributors` and `**Full Changelog**` end the part for users too. So press "Generate release notes" first, then write the notes for users above the list.
+- **Only `New`, `Improved` and `Fixed` are read**, at any heading level and in any case. Items under any other heading, and list items before the first heading, are dropped. Text before the first heading is the headline.
+- **Items are plain text.** A link keeps its text; bold, italics and code formatting are dropped.
+- **`<!-- silent -->`** for a release with nothing user-visible. It is still listed on `/changelogs`, but never announced in the dialog. A release with no items at all is treated as silent too, and `/changelogs` shows "Behind-the-scenes improvements." for it.
+- **The date is the day the release was published, in Malaysia.** Drafts never show; pre-releases do.
 
 Where it shows up:
 
 | Where | What |
 | -- | -- |
-| `/changelogs` | Every release, newest first, with an anchor per version (`/changelogs#v0.11.0-alpha`) |
-| Footer | A "Changelog" link, and the version text links to that release's entry |
+| `/changelogs` | Every release, newest first, 10 per page (`/changelogs?page=2`), with an anchor per version (`/changelogs#v0.11.0-alpha`) |
+| Footer | A "Changelog" link, and the version text links to that release's entry, which is always first on page 1 |
 | "What's new" dialog | Once per browser after a new release, on the first ordinary page view (see below) |
 
-**The "What's new" dialog** (`src/components/WhatsNew.tsx`) keeps the last version seen in `localStorage` under `mct:lastSeenVersion`, so it works signed out. A first-ever visit stores the version without showing anything. A visitor who skipped several releases sees one dialog, for the newest non-silent one. It never appears on checkout and payment return (`/tournaments/[slug]/register/**`), sign-in, sign-up, verify and password reset (`/auth/**`, since a signed-out player opening `/register` is sent to sign in first) or `/prize-funding/**`; it waits for the next ordinary page. With storage blocked it never shows. To see it again while testing, delete the key in devtools (Application → Local Storage) or set it to an older version.
+### How the site reads them
 
-**CI enforces it.** `src/content/__tests__/changelog.test.ts` fails when any `v*` tag reachable from the checked-out commit has no entry, or when the entries are out of order or malformed. The Tests workflow checks out full history with tags for this, and also runs on every published release, which is what catches a tag cut without an entry.
+- **Cached with no time limit.** `getChangelog()` (`src/services/github/releases.ts`) lists every published release, parses the notes (`src/lib/release-notes.ts`) and caches the result under the `github-releases` tag. It uses `GITHUB_TOKEN` when it is set; without one GitHub allows 60 requests an hour per IP address, shared with whatever else runs there.
+- **The release webhook invalidates it.** GitHub calls `/api/v1/webhooks/github` on every release event (published, edited, deleted, ...), and the route invalidates the tag. The first request after that is still served the old notes while new ones load, and the next one gets them. If GitHub fails during that reload, the old notes stay.
+- **A failure is never cached.** `/changelogs` says it couldn't load the changelog and links to the releases on GitHub; the dialog stays quiet and tries again on the next page load. The error goes to Sentry.
+- **Releases ahead of the build stay hidden.** A build only lists releases at or before its own version (`APP_VERSION`). A release published on staging doesn't show on production until production carries its tag, and on staging it shows after the redeploy that picks up the tag.
+
+**Setting up the webhook**, once per site (repository Settings → Webhooks → Add webhook):
+
+- Payload URL: `https://staging.mychesstour.com/api/v1/webhooks/github`, or `https://www.mychesstour.com/api/v1/webhooks/github` for production.
+- Content type: `application/json`.
+- Secret: generate one with `openssl rand -hex 32` and set the same value as `GITHUB_WEBHOOK_SECRET` on that Netlify site. A delivery with a missing or wrong signature gets a 401; with the variable unset, every delivery gets a 500.
+- Events: "Let me select individual events" → **Releases** only.
+
+GitHub sends a `ping` when the webhook is created; its Recent Deliveries tab should show a 200. Without a working webhook, a site keeps serving the releases it already cached, so edits and new releases don't reach it.
+
+**The "What's new" dialog** (`src/components/WhatsNew.tsx`) keeps the last version seen in `localStorage` under `mct:lastSeenVersion`, so it works signed out. A first-ever visit stores the version without showing anything. Only when the browser has missed a release does the dialog fetch the releases since, from `/api/v1/changelog?after=<last seen>`; if that fails, nothing is stored or shown. A visitor who skipped several releases sees one dialog, for the newest non-silent one. It never appears on checkout and payment return (`/tournaments/[slug]/register/**`), sign-in, sign-up, verify and password reset (`/auth/**`, since a signed-out player opening `/register` is sent to sign in first) or `/prize-funding/**`; it waits for the next ordinary page, and drops a fetch still in flight when the visitor moves into one. With storage blocked it never shows. To see it again while testing, delete the key in devtools (Application → Local Storage) or set it to an older version.
+
+**CI checks the notes.** `.github/workflows/release-notes.yml` runs when a release is published or its notes are edited. It fails when the notes have no `New`, `Improved` or `Fixed` items and aren't marked `<!-- silent -->`, which is what a release published with only GitHub's generated list looks like.
 
 ## Cutting a release
 
-1. **Write the changelog entry** in `src/content/changelog.ts`, in a PR to `staging` (usually the last PR of the release). Use the exact tag you are about to create, and the date you will publish it.
-2. Merge the release's PRs into `staging` and wait for the staging deploy to finish.
-3. Publish a GitHub pre-release with that tag on `staging`. The tag must start with `v` and a digit (`vMAJOR.MINOR.PATCH-alpha`), or the resolver ignores it.
-4. Check the **Tests** workflow run for the release passed (Actions tab). If it failed with "Add these releases to src/content/changelog.ts", the entry is missing or its `version` doesn't match the tag: fix it in a PR, then redeploy.
-5. **Redeploy staging** (Netlify → staging site → Deploys → Trigger deploy → Deploy site). The deploy from step 2 was built before the tag existed, so until this redeploy the footer still shows the previous release plus the commit, and the new entry stays hidden.
+1. Merge the release's PRs into `staging` and wait for the staging deploy to finish.
+2. Draft a GitHub pre-release with a new tag on `staging`. The tag must start with `v` and a digit (`vMAJOR.MINOR.PATCH-alpha`), or the resolver and the changelog ignore it. Press **Generate release notes**, then write the notes for users above the generated list, with `<!-- developer notes -->` between them ([format](#writing-the-notes)). Drafts never show on the site, so take your time.
+3. **Publish** the release.
+4. Check the **Release notes** workflow run passed (Actions tab). If it failed, edit the release's notes; the edit runs the check again.
+5. **Redeploy staging** (Netlify → staging site → Deploys → Trigger deploy → Deploy site). The deploy from step 1 was built before the tag existed, so until this redeploy the footer still shows the previous release plus the commit, and the new release stays hidden.
 6. On `staging.mychesstour.com`, check that the footer shows the new tag, that `/changelogs` lists it, and that the "What's new" dialog appears (set `mct:lastSeenVersion` to the previous version first).
+
+To fix the notes later, edit the release on GitHub. Both sites pick up the change through the webhook, without a deploy.
 
 ### Promoting to production
 

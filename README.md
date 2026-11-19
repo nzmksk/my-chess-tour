@@ -34,19 +34,20 @@ npm run dev        # http://localhost:3000
 
 `.env*` files are git-ignored except [`.env.example`](.env.example): copy it to `.env.local` and get the values from a maintainer. Local development uses the **staging** Supabase project and CHIP's sandbox, so treat staging data as shared. Netlify holds each site's real values, stored verbatim: paste them without quotes.
 
-| Variable                                                                                                        | Used for                                                                                                                               |
-| --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SITE_URL`                                                                                          | Every link that leaves the request (emails, CHIP redirects). `http://localhost:3000` locally. See [wiki/site-url.md](wiki/site-url.md) |
-| `NEXT_PUBLIC_ENVIRONMENT`                                                                                       | `production` / `staging` / `development`; the footer and bug reports show it                                                           |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLIC_KEY`                                                   | Supabase project and its publishable key                                                                                               |
-| `SUPABASE_SECRET_KEY`                                                                                           | Service-role key, server only. Bypasses RLS                                                                                            |
-| `CHIP_API_KEY`, `CHIP_BRAND_ID`, `CHIP_WEBHOOK_PUBLIC_KEY`                                                      | CHIP Collect and its webhook signature                                                                                                 |
-| `CHIP_SEND_API_URL`, `CHIP_SEND_API_KEY`, `CHIP_SEND_API_SECRET`, `CHIP_SEND_WEBHOOK_PUBLIC_KEY`                | CHIP Send (payouts and prizes) and its webhook signature                                                                               |
-| `RESEND_API_KEY`, `RESEND_FROM_EMAIL`                                                                           | Sending email                                                                                                                          |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`                                                            | Signup codes, login lockout, API rate limits                                                                                           |
-| `CRON_SECRET`                                                                                                   | Bearer token the scheduled jobs send to `/api/v1/cron/*`                                                                               |
-| `GITHUB_TOKEN`                                                                                                  | Filing in-app bug reports as GitHub issues                                                                                             |
-| `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Optional. Leave the DSN unset locally and nothing is sent. See [wiki/error-monitoring.md](wiki/error-monitoring.md)                    |
+| Variable                                                                                                        | Used for                                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                                                                                          | Every link that leaves the request (emails, CHIP redirects). `http://localhost:3000` locally. See [wiki/site-url.md](wiki/site-url.md)        |
+| `NEXT_PUBLIC_ENVIRONMENT`                                                                                       | `production` / `staging` / `development`; the footer and bug reports show it                                                                  |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLIC_KEY`                                                   | Supabase project and its publishable key                                                                                                      |
+| `SUPABASE_SECRET_KEY`                                                                                           | Service-role key, server only. Bypasses RLS                                                                                                   |
+| `CHIP_API_KEY`, `CHIP_BRAND_ID`, `CHIP_WEBHOOK_PUBLIC_KEY`                                                      | CHIP Collect and its webhook signature                                                                                                        |
+| `CHIP_SEND_API_URL`, `CHIP_SEND_API_KEY`, `CHIP_SEND_API_SECRET`, `CHIP_SEND_WEBHOOK_PUBLIC_KEY`                | CHIP Send (payouts and prizes) and its webhook signature                                                                                      |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL`                                                                           | Sending email                                                                                                                                 |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`                                                            | Signup codes, login lockout, API rate limits                                                                                                  |
+| `CRON_SECRET`                                                                                                   | Bearer token the scheduled jobs send to `/api/v1/cron/*`                                                                                      |
+| `GITHUB_TOKEN`                                                                                                  | Filing in-app bug reports as GitHub issues, and reading the releases for the changelog                                                        |
+| `GITHUB_WEBHOOK_SECRET`                                                                                         | Signature of the GitHub release webhook that refreshes the cached changelog. See [wiki/releases.md](wiki/releases.md#how-the-site-reads-them) |
+| `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Optional. Leave the DSN unset locally and nothing is sent. See [wiki/error-monitoring.md](wiki/error-monitoring.md)                           |
 
 `NEXT_PUBLIC_*` values are inlined at build time, so changing one on Netlify needs a redeploy.
 
@@ -83,7 +84,6 @@ src/
                      prizes, refunds, rate-limit, fide, sentry, ...
   lib/               Framework-agnostic helpers (may not import app, components or stores)
   stores/            Zustand stores
-  content/           The user-facing changelog
   styles/globals.css Design tokens and component classes
   proxy.ts           Session refresh, route protection, rate limits, origin policy
 supabase/
@@ -109,7 +109,7 @@ wiki/                Design docs and runbooks (index below)
 
 - **Unit and route tests:** Vitest with jsdom, in `__tests__/` folders next to the code. They mock Supabase and CHIP, so they don't reach the SQL.
 - **Database tests:** `supabase/tests/*.sql`, the safety net for the money paths. CI builds a database from `supabase/migrations` and runs them all. To run them locally, see [wiki/database-migrations.md](wiki/database-migrations.md#tests).
-- **CI** (`.github/workflows/tests.yml`) runs lint, Vitest with coverage and the SQL suites on every PR into `staging` or `master`. It also fails if a release tag has no changelog entry.
+- **CI** (`.github/workflows/tests.yml`) runs lint, Vitest with coverage and the SQL suites on every PR into `staging` or `master`. `.github/workflows/release-notes.yml` checks each release's notes, which are the user-facing changelog, when it is published or edited.
 - **Manual CHIP scenarios** to run before a release are in [wiki/payment-flow.md](wiki/payment-flow.md#c-end-to-end-manual-chip-sandbox).
 
 ## Branches, deploys and releases
@@ -117,7 +117,7 @@ wiki/                Design docs and runbooks (index below)
 1. Branch from `staging`, named after the issue (`633-automate-db-tests`), and reference the issue in commit messages (`… (#633)`).
 2. Open a PR into `staging`; it is squash-merged once CI is green.
 3. A merge to `staging` deploys the staging site and applies any new migrations to the staging database.
-4. To release: add the changelog entry, tag a pre-release on `staging`, migrate production's database by hand, then **merge** (not squash) `staging` into `master`. Step by step: [wiki/releases.md](wiki/releases.md).
+4. To release: publish a pre-release on `staging` with notes written for users (they are the changelog), migrate production's database by hand, then **merge** (not squash) `staging` into `master`. Step by step: [wiki/releases.md](wiki/releases.md).
 
 ## Scheduled jobs
 
@@ -154,6 +154,7 @@ Netlify stores values verbatim: paste every value **without quotes**, and PEM ke
 - [ ] **CHIP Collect (sandbox):** API key and brand id. Under Developers → Webhooks, add `https://staging.mychesstour.com/api/v1/webhooks/chip` subscribed to `purchase.paid`, `purchase.captured`, `purchase.payment_failure`, `purchase.cancelled`, `payment.refunded`, `purchase.refund_failure` and `purchase.pending_refund`. Copy **that webhook's** public key (not the account key) into `CHIP_WEBHOOK_PUBLIC_KEY`. See [chip-webhook.md](wiki/chip-webhook.md).
 - [ ] **CHIP Send (sandbox,** `CHIP_SEND_API_URL=https://staging-api.chip-in.asia/api`**):** API key and secret. Register the webhook with `POST /webhooks` (callback `https://staging.mychesstour.com/api/v1/webhooks/chip/send`, hooks `bank_account_status`, `send_instruction_status`, `budget_allocation_status`). `source chip_send.sh` gives you a signed `chip_send` helper for it. Copy the returned `public_key` into `CHIP_SEND_WEBHOOK_PUBLIC_KEY`.
 - [ ] **GitHub token for bug reports:** fine-grained, this repository only, Issues read and write, as `GITHUB_TOKEN`. Create the `user-reported` label on the repo.
+- [ ] **GitHub release webhook** to `https://staging.mychesstour.com/api/v1/webhooks/github` (Releases event, JSON), with its secret as `GITHUB_WEBHOOK_SECRET`. It refreshes the cached changelog ([releases.md](wiki/releases.md#how-the-site-reads-them)).
 - [ ] **Sentry** (optional on staging, needed before launch): steps 1–7 of [error-monitoring.md](wiki/error-monitoring.md#setup).
 
 **Netlify (staging site)**
@@ -210,6 +211,7 @@ curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
 **GitHub**
 
 - [ ] Repository secrets for the scheduled jobs: `CRON_SECRET` (production's value) and `PRODUCTION_URL=https://www.mychesstour.com`.
+- [ ] A second release webhook, to `https://www.mychesstour.com/api/v1/webhooks/github`, with production's `GITHUB_WEBHOOK_SECRET`.
 - [ ] Optionally `CLAUDE_CODE_OAUTH_TOKEN` for `claude.yml`.
 
 **Database**
@@ -223,7 +225,7 @@ curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
 
 **Go live**
 
-- [ ] Add the changelog entry, tag the release on `staging`, then **merge** (not squash) `staging` into `master` ([releases.md](wiki/releases.md)).
+- [ ] Publish the release on `staging` with its notes for users, then **merge** (not squash) `staging` into `master` ([releases.md](wiki/releases.md)).
 - [ ] Run each scheduled workflow once from the Actions tab (refunds, payouts, FIDE ratings) and check it succeeds.
 - [ ] Smoke-test with a real small payment, then refund it (#129).
 - [ ] Sentry: repeat step 9.1 against production.
