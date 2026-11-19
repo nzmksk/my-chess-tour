@@ -149,6 +149,25 @@ describe("WhatsNew", () => {
     expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.10.0-alpha");
   });
 
+  it("stays quiet through sign-in on the way to checkout", async () => {
+    window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
+    const { rerender } = renderAt("/auth/login");
+    expect(dialog()).toBeNull();
+
+    mockPathname.current = "/tournaments/kl-open/register";
+    rerender(<WhatsNew version="v0.11.0-alpha" entries={ENTRIES} />);
+    expect(dialog()).toBeNull();
+    expect(window.localStorage.getItem(LAST_SEEN_KEY)).toBe("v0.10.0-alpha");
+
+    mockPathname.current = "/tournaments/kl-open/register/success";
+    rerender(<WhatsNew version="v0.11.0-alpha" entries={ENTRIES} />);
+    expect(dialog()).toBeNull();
+
+    mockPathname.current = "/my";
+    rerender(<WhatsNew version="v0.11.0-alpha" entries={ENTRIES} />);
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+  });
+
   it("waits out a quiet flow, then shows on the next ordinary page", async () => {
     window.localStorage.setItem(LAST_SEEN_KEY, "v0.10.0-alpha");
     const { rerender } = renderAt("/tournaments/kl-open/register");
@@ -185,8 +204,11 @@ describe("isQuietPath", () => {
     "/tournaments/kl-open/register",
     "/tournaments/kl-open/register/success",
     "/tournaments/kl-open/register/failure",
+    "/auth/login",
     "/auth/signup",
     "/auth/signup/verify",
+    "/auth/forgot-password",
+    "/auth/update-password",
     "/prize-funding/thank-you",
   ])("keeps %s quiet", (pathname) => {
     expect(isQuietPath(pathname)).toBe(true);
@@ -196,7 +218,7 @@ describe("isQuietPath", () => {
     "/",
     "/tournaments/kl-open",
     "/tournaments/registered-players",
-    "/auth/login",
+    "/authors",
     "/my",
     "/changelogs",
   ])("allows %s", (pathname) => {

@@ -26,8 +26,10 @@ export const LAST_SEEN_KEY = "mct:lastSeenVersion";
 const QUIET_PATHS = [
   // Checkout and the payment success / failure pages it returns to.
   /^\/tournaments\/[^/]+\/register(\/|$)/,
-  // Sign-up and email verification.
-  /^\/auth\/signup(\/|$)/,
+  // Signing in, signing up, verifying and resetting a password. Sign-in is
+  // part of checkout too: a signed-out player opening /register is sent to
+  // /auth/login?next=..., and the release would be marked seen mid-flow.
+  /^\/auth(\/|$)/,
   // Sponsors returning from paying into a prize pool.
   /^\/prize-funding(\/|$)/,
 ];
