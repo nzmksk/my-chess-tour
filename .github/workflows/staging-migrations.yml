@@ -1,0 +1,93 @@
+name: Staging database migrations
+
+# Applies db/deltas/*.sql and replays 007 against the staging database (#631).
+# A PR to staging gets a dry run against the real staging data (everything
+# rolled back); the merge applies it. See wiki/database-migrations.md.
+on:
+  push:
+    branches: ["staging"]
+    paths:
+      - "db/**"
+      - ".github/workflows/staging-migrations.yml"
+  pull_request:
+    branches: ["staging"]
+    paths:
+      - "db/**"
+      - ".github/workflows/staging-migrations.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: apply, then roll back"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Migrate staging
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Never cancel an apply halfway through. A newer push queued behind it
+    # replaces an older queued one, which is fine: the runner works from what
+    # the database has recorded, not from the diff.
+    concurrency:
+      group: staging-database-apply
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Check the secret is set
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Add the STAGING_DATABASE_URL repository secret (wiki/database-migrations.md)."
+            exit 1
+          fi
+
+      - name: Migrate
+        run: |
+          psql --version
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            db/migrate.sh --dry-run
+          else
+            db/migrate.sh
+          fi
+
+  dry-run:
+    name: Dry run against staging
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: staging-database-dry-run-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    env:
+      # Empty for PRs from forks and Dependabot, which get no secrets.
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # The PR's merge commit and its first parent, the base branch tip.
+          fetch-depth: 2
+
+      - name: Base migration changed without a delta?
+        run: |
+          changed="$(git diff --name-only --diff-filter=AMR HEAD^1 HEAD)"
+          base="$(echo "$changed" | grep -E '^db/migrations/00[1-6]_' || true)"
+          deltas="$(echo "$changed" | grep -E '^db/deltas/.*\.sql$' || true)"
+          if [ -n "$base" ] && [ -z "$deltas" ]; then
+            echo "::warning::This PR changes $(echo $base | tr '\n' ' ')but adds no db/deltas file. Staging won't get the change unless it is comments only."
+          fi
+
+      - name: Dry run
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::No STAGING_DATABASE_URL secret for this PR; skipping the dry run."
+            exit 0
+          fi
+          psql --version
+          db/migrate.sh --dry-run
