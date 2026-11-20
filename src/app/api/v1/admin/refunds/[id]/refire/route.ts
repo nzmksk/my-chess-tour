@@ -3,6 +3,7 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { fireRefund } from "@/services/refunds/fire";
 import { NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // fireRefund can send the refund outcome email, whose templates are read from disk.
 export const runtime = "nodejs";
@@ -29,7 +30,7 @@ const errorResponse = (code: string, message: string, status: number) =>
  * Every attempt answers 200 with what happened (`outcome`), including refusals:
  * the admin is told why nothing changed. Only a missing refund is a 404.
  */
-export async function POST(
+async function handlePost(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -67,3 +68,5 @@ export async function POST(
 
   return NextResponse.json({ data: { refund_id: id, outcome } }, { status: 200 });
 }
+
+export const POST = withAuditContext("admin.refund.refire", handlePost);

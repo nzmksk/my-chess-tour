@@ -10,6 +10,7 @@ import { describePrizeAwardRefusal } from "@/services/prizes/problems";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Entering a winner alerts the platform admins, and templates are read from disk.
 export const runtime = "nodejs";
@@ -68,7 +69,7 @@ export async function GET(
  * again before approving. enter_prize_award does every check that can be done
  * in the database: the winner played, the prize is declared, a split fits.
  */
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -142,3 +143,5 @@ export async function POST(
 
   return NextResponse.json({ data: { id: data as string } }, { status: 201 });
 }
+
+export const POST = withAuditContext("prize-award.enter", handlePost);

@@ -9,6 +9,7 @@ import { notifyNominationResponded } from "@/services/payouts/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Responding emails the organizer, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -86,7 +87,7 @@ async function authorizeNominee(
  * tournament's payout comes here, unless the nomination is frozen first by a player
  * paying.
  */
-export async function POST(_request: NextRequest, { params }: Params): Promise<NextResponse> {
+async function handlePost(_request: NextRequest, { params }: Params): Promise<NextResponse> {
   const { orgId, tournamentId } = await params;
 
   const auth = await authorizeNominee(orgId, tournamentId, "accept");
@@ -114,7 +115,7 @@ export async function POST(_request: NextRequest, { params }: Params): Promise<N
  * nomination is cleared and the payout stays with the organizing organization.
  * An accepted nomination can't be declined here: only the organizer can withdraw it.
  */
-export async function DELETE(_request: NextRequest, { params }: Params): Promise<NextResponse> {
+async function handleDelete(_request: NextRequest, { params }: Params): Promise<NextResponse> {
   const { orgId, tournamentId } = await params;
 
   const auth = await authorizeNominee(orgId, tournamentId, "decline");
@@ -133,3 +134,6 @@ export async function DELETE(_request: NextRequest, { params }: Params): Promise
 
   return NextResponse.json({ data }, { status: 200 });
 }
+
+export const DELETE = withAuditContext("payout-nomination.decline", handleDelete);
+export const POST = withAuditContext("payout-nomination.accept", handlePost);

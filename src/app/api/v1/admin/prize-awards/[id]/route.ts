@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse, inOrderAfterResponse } from "@/lib/http/after-response";
 import { authorizePlatformAdmin, errorResponse, UUID_RE } from "../authorize";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Approving emails the winner and sends the prize; templates are read from disk.
 export const runtime = "nodejs";
@@ -21,7 +22,7 @@ export const runtime = "nodejs";
  *
  * Body: { action: "approve" | "reject", rejection_reason? }.
  */
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -85,3 +86,5 @@ export async function PATCH(
     { status: 200 },
   );
 }
+
+export const PATCH = withAuditContext("admin.prize-award.review", handlePatch);

@@ -5,6 +5,7 @@ import {
 } from "@/services/supabase/permission";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,7 +76,7 @@ async function resolveOrgAccess(
   return null;
 }
 
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -225,7 +226,7 @@ export async function PATCH(
   return NextResponse.json({ data: { user_id: id, role } }, { status: 200 });
 }
 
-export async function DELETE(
+async function handleDelete(
   _request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -329,3 +330,6 @@ export async function DELETE(
 
   return new NextResponse(null, { status: 204 });
 }
+
+export const DELETE = withAuditContext("org.member.remove", handleDelete);
+export const PATCH = withAuditContext("org.member.change-role", handlePatch);

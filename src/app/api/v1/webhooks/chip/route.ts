@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Needs the Node.js runtime for `crypto` and access to the raw request body.
 export const runtime = "nodejs";
@@ -204,7 +205,7 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
   }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   // Must read the raw body before parsing — the signature is over these bytes.
   const raw = await request.text();
 
@@ -394,3 +395,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ data: { received: true } }, { status: 200 });
 }
+
+export const POST = withAuditContext("webhook.chip", handlePost);

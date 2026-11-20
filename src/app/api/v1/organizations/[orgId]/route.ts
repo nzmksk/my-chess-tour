@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateOrgUpdate } from "./validators";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,7 +25,7 @@ const AVATAR_PUBLIC_PREFIX = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1
  * approval_status gate: a pending or rejected organization must still be able
  * to correct the details it is being judged on.
  */
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<NextResponse> {
@@ -149,3 +150,5 @@ export async function PATCH(
 
   return NextResponse.json({ data: updated }, { status: 200 });
 }
+
+export const PATCH = withAuditContext("org.update", handlePatch);

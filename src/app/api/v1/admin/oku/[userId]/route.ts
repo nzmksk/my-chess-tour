@@ -5,6 +5,7 @@ import { notifyOkuReviewed } from "@/services/oku/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Reviewing emails the player, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -26,7 +27,7 @@ async function checkAdminAccess(
   return { user: claims, isAdmin: !!isAdmin, error };
 }
 
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> },
 ): Promise<NextResponse> {
@@ -140,3 +141,5 @@ export async function PATCH(
 
   return NextResponse.json({ data }, { status: 200 });
 }
+
+export const PATCH = withAuditContext("admin.oku.review", handlePatch);

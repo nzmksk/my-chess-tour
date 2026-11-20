@@ -4,6 +4,7 @@ import { getTodayInTimeZone, resolveTimeZone } from "@/lib/tournaments/datetime"
 import { authorizeTournamentManager } from "../_lib/authorize";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 interface CancelBody {
   reason?: unknown;
@@ -14,7 +15,7 @@ interface CancelBody {
 // platform admin to review. The tournament only becomes 'cancelled' (and player
 // refunds are queued, then fired through CHIP) once an admin approves the request
 // via review_tournament_cancellation() — see the admin PATCH route.
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -138,3 +139,5 @@ export async function POST(
 
   return NextResponse.json({ data: created }, { status: 201 });
 }
+
+export const POST = withAuditContext("tournament.cancel-request", handlePost);

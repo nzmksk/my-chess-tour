@@ -6,6 +6,7 @@ import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { liveRefund, refundState } from "@/lib/refunds/state";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const VALID_STATUSES = new Set([
   "pending_payment",
@@ -50,7 +51,7 @@ type RegistrationRow = {
   refunds: RefundRow[] | null;
 };
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -216,3 +217,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     { status: 200 },
   );
 }
+
+export const GET = withAuditContext("payment.expire-stale", handleGet);

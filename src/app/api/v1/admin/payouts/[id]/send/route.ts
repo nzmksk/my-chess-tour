@@ -5,6 +5,7 @@ import { executePayout } from "@/services/payouts/execute";
 import { canResend } from "@/services/payouts/resend";
 import { NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // executePayout can send email, whose templates are read from disk.
 export const runtime = "nodejs";
@@ -24,7 +25,7 @@ const errorResponse = (code: string, message: string, status: number) =>
  * Safe to call any number of times. executePayout re-checks everything, CHIP
  * dedupes on the payout id, and a settled row is left alone.
  */
-export async function POST(
+async function handlePost(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -84,3 +85,5 @@ export async function POST(
 
   return NextResponse.json({ data: { payout_id: id, outcome } }, { status: 200 });
 }
+
+export const POST = withAuditContext("admin.payout.send", handlePost);

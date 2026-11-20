@@ -21,6 +21,7 @@ import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-res
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 function prizePoolNotFundedResponse(): NextResponse {
   return NextResponse.json(
@@ -44,7 +45,7 @@ function isHoldLive(registeredAt: string): boolean {
   );
 }
 
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ): Promise<NextResponse> {
@@ -763,3 +764,5 @@ async function initiateChipPayment(
     { status: 201 },
   );
 }
+
+export const POST = withAuditContext("registration.checkout", handlePost);

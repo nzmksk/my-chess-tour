@@ -4,6 +4,7 @@ import {
   logInternalError,
 } from "@/lib/http/internal-error";
 import { sweepUnfiredRefunds } from "@/services/refunds/sweep";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Session-less background job (mirrors the CHIP webhook and the other crons):
 // uses supabaseAdmin only, and needs the Node runtime for the refund emails'
@@ -24,7 +25,7 @@ export const maxDuration = 60;
  * and reach the admin Stuck refunds page. Failing to load the work list is a
  * 500, so the scheduled job shows as failed.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     return NextResponse.json(
@@ -57,3 +58,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+export const POST = withAuditContext("cron.refunds", handlePost);

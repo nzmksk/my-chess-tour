@@ -13,6 +13,7 @@ import { validateEarlyPayoutRequest } from "./validators";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Filing a request emails the platform admins, and templates are read from disk.
 export const runtime = "nodejs";
@@ -231,7 +232,7 @@ function requestErrorResponse(error: {
  * The request reserves its amount straight away. Nothing is sent until it is
  * approved; see PATCH /api/v1/admin/payouts/[id].
  */
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<NextResponse> {
@@ -301,3 +302,5 @@ export async function POST(
 
   return NextResponse.json({ data: { payout_id: payoutId } }, { status: 201 });
 }
+
+export const POST = withAuditContext("payout.request-early", handlePost);
