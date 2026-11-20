@@ -379,11 +379,11 @@ export default function PayoutReviewClient({ review }: { review: PayoutReview })
             ({formatDate(tournament.start_date)} – {formatDate(tournament.end_date)})
           </span>
         </DetailRow>
-        <DetailRow label="Registration closed">
+        <DetailRow label="Registration closes">
           {tournament.registration_closed_at ? (
             formatInstant(tournament.registration_closed_at)
           ) : (
-            <span className="text-warning">Not yet</span>
+            <span className="text-text-muted">Not set</span>
           )}
         </DetailRow>
       </Section>

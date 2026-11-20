@@ -38,6 +38,10 @@ import {
   rosterDisplayName,
   type RosterEntry,
 } from "../roster";
+import {
+  runWithAuditContext,
+  withAuditHeaders,
+} from "@/services/supabase/audit-context";
 
 const TOUR_ID = "cccccccc-0000-0000-0000-000000000001";
 const ALICE = "aaaaaaaa-0000-0000-0000-000000000001";
@@ -282,4 +286,24 @@ describe("loadRoster", () => {
       expect(result).toEqual({ ok: false, context: table, error });
     },
   );
+});
+
+describe("loadRoster audit scope (#470)", () => {
+  it("expires stale payments as housekeeping: its own label, no actor", async () => {
+    let headers: Headers | undefined;
+    mockRpc.mockImplementation(async () => {
+      headers = new Headers(withAuditHeaders()?.headers);
+      return { data: null, error: null };
+    });
+
+    // Opened by an organizer's request, whose actor must not be borrowed.
+    await runWithAuditContext(
+      "tournament.manage",
+      () => loadRoster(TOUR_ID, "standard"),
+      ALICE,
+    );
+
+    expect(headers?.get("x-audit-context")).toBe("payment.expire-stale");
+    expect(headers?.has("x-audit-actor")).toBe(false);
+  });
 });

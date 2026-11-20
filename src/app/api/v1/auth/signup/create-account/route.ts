@@ -14,6 +14,7 @@ import {
 import { TERMS_VERSION } from "@/lib/reference/legal";
 import { generateCode } from "@/services/auth/verification-code";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Undo a freshly-created account when a post-creation step (storing/sending the
 // verification code) fails — otherwise the half-provisioned account would block
@@ -49,7 +50,7 @@ async function rollbackAccount(authUserId: string): Promise<void> {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   // Per-IP rate limit so the email-existence response can't be used to probe
   // which addresses are registered at scale.
   const limited = await enforceRateLimit("signup", request, null);
@@ -292,3 +293,5 @@ export async function POST(request: NextRequest) {
   });
   return response;
 }
+
+export const POST = withAuditContext("auth.signup.create-account", handlePost);

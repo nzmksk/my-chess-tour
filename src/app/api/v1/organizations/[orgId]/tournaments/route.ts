@@ -12,6 +12,7 @@ import {
 } from "@/lib/tournaments/publish-validation";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,7 +67,7 @@ interface CreateTournamentBody {
   restrictions?: Restriction[];
 }
 
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<NextResponse> {
@@ -310,3 +311,5 @@ export async function POST(
 
   return NextResponse.json({ data: tournament }, { status: 201 });
 }
+
+export const POST = withAuditContext("tournament.create", handlePost);

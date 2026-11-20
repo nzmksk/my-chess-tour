@@ -9,12 +9,13 @@ import { revalidateTag } from "next/cache";
 import { registrationStatus } from "@/lib/tournaments/registration-status";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Manually closes registration for a published tournament before its deadline.
 // This is IRREVERSIBLE — there is no re-open action; once closed, the only way
 // registration reopens is by editing the tournament back to a draft (which it
 // cannot be once published). The organizer is warned of this in the UI.
-export async function POST(
+async function handlePost(
   _request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -99,3 +100,5 @@ export async function POST(
 
   return NextResponse.json({ data: updated }, { status: 200 });
 }
+
+export const POST = withAuditContext("tournament.close-registration", handlePost);

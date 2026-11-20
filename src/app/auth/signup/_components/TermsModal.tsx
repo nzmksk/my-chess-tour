@@ -64,9 +64,13 @@ export default function TermsModal({ onClose }: TermsModalProps) {
           <h3 className="modal-section-title">1. Acceptance of Terms</h3>
           <p className="modal-paragraph">
             By registering for an account or using any MCT service, you confirm
-            that you are at least 13 years of age (or have parental consent) and
-            that you agree to be bound by these Terms and our Privacy Policy. If
-            you do not agree, you may not use our services.
+            that either you are at least 18 years of age, or you are under 18
+            and your parent or legal guardian has agreed to these Terms on your
+            behalf. You also confirm that you agree to be bound by these Terms
+            and our Privacy Policy. A parent or guardian who agrees on a
+            minor&apos;s behalf is responsible for the minor&apos;s use of the
+            platform, including any payment made. If you do not agree, you may
+            not use our services.
           </p>
 
           <h3 className="modal-section-title">2. Account Registration</h3>
@@ -125,12 +129,6 @@ export default function TermsModal({ onClose }: TermsModalProps) {
               part of it is paid out to another player as prize money.
             </li>
             <li>
-              Prize money is funded separately by the organiser, a sponsor or a
-              grant, and is distributed by the organiser — unless they have
-              appointed MY Chess Tour to distribute a fully funded prize pool
-              for that event.
-            </li>
-            <li>
               MY Chess Tour collects a platform service fee of up to 10%. The
               total you pay is always shown in full before you pay.
             </li>
@@ -143,7 +141,48 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             </li>
           </ul>
 
-          <h3 className="modal-section-title">5. Organisers</h3>
+          <h3 className="modal-section-title">5. Prizes</h3>
+          <p className="modal-paragraph">
+            The prizes for each event, and who funds them, are set by the
+            organiser and shown on the event page. Prize money comes from the
+            organiser, a sponsor or a grant — never from entry fees.
+          </p>
+          <ul className="modal-list">
+            <li>
+              Prizes are awarded on the final results certified by the chief
+              arbiter, under the prize rules published for the event, including
+              its tie-break and category rules.
+            </li>
+            <li>
+              A player who is disqualified, or who entered an age, gender or OKU
+              category on inaccurate profile details, is not entitled to a prize
+              from it.
+            </li>
+            <li>
+              By default the organiser pays prizes directly to the winners and
+              is responsible for doing so. Questions about a prize the organiser
+              pays should go to the organiser.
+            </li>
+            <li>
+              Where the organiser has appointed MY Chess Tour to distribute the
+              prizes, the full prize pool is paid to us before the event is
+              listed, so the prizes advertised are already funded. We check each
+              winner against the certified results and pay the prize by bank
+              transfer to the bank account you register with us. We never pay
+              out more than we have collected for the event.
+            </li>
+            <li>
+              A prize we distribute that is still unclaimed twelve months after
+              the event ends — for example, because no valid bank account was
+              provided — is forfeited and returned to the parties who funded it.
+            </li>
+            <li>
+              Prizes are paid in Malaysian Ringgit (MYR). You are responsible
+              for any tax due on prize money you receive.
+            </li>
+          </ul>
+
+          <h3 className="modal-section-title">6. Organisers</h3>
           <p className="modal-paragraph">
             Organising tournaments on MY Chess Tour requires an approved
             organization and acceptance of our{" "}
@@ -160,7 +199,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             players under these Terms.
           </p>
 
-          <h3 className="modal-section-title">6. Code of Conduct</h3>
+          <h3 className="modal-section-title">7. Code of Conduct</h3>
           <p className="modal-paragraph">
             We are committed to a respectful and inclusive environment. All
             users must:
@@ -186,7 +225,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             FIDE.
           </p>
 
-          <h3 className="modal-section-title">7. Intellectual Property</h3>
+          <h3 className="modal-section-title">8. Intellectual Property</h3>
           <p className="modal-paragraph">
             All content on the MY Chess Tour platform — including logos,
             graphics, software, and tournament data — is owned by or licensed to
@@ -194,7 +233,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             without our written permission.
           </p>
 
-          <h3 className="modal-section-title">8. Limitation of Liability</h3>
+          <h3 className="modal-section-title">9. Limitation of Liability</h3>
           <p className="modal-paragraph">
             MY Chess Tour provides its platform on an &quot;as is&quot; basis.
             To the fullest extent permitted by Malaysian law, we are not liable
@@ -202,7 +241,7 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             your use of the platform or participation in any event.
           </p>
 
-          <h3 className="modal-section-title">9. Amendments</h3>
+          <h3 className="modal-section-title">10. Amendments</h3>
           <p className="modal-paragraph">
             We may update these Terms from time to time. We will notify you of
             material changes via email or a prominent notice on the platform.
@@ -210,14 +249,14 @@ export default function TermsModal({ onClose }: TermsModalProps) {
             of the revised Terms.
           </p>
 
-          <h3 className="modal-section-title">10. Governing Law</h3>
+          <h3 className="modal-section-title">11. Governing Law</h3>
           <p className="modal-paragraph">
-            These Terms are governed by the laws of Malaysia. Any disputes shall
-            be subject to the exclusive jurisdiction of the courts of Kuala
-            Lumpur, Malaysia.
+            These Terms are governed by the laws of Malaysia. Any dispute
+            arising from them shall be subject to the exclusive jurisdiction of
+            the courts of Malaysia.
           </p>
 
-          <h3 className="modal-section-title">11. Contact Us</h3>
+          <h3 className="modal-section-title">12. Contact Us</h3>
           <p className="modal-paragraph">
             For questions about these Terms, please contact us at{" "}
             <strong>{SUPPORT_EMAIL}</strong>.

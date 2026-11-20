@@ -21,6 +21,10 @@ import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-res
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
+import {
+  noteAuditActor,
+  withAuditContext,
+} from "@/services/supabase/audit-context";
 
 function prizePoolNotFundedResponse(): NextResponse {
   return NextResponse.json(
@@ -44,7 +48,7 @@ function isHoldLive(registeredAt: string): boolean {
   );
 }
 
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ): Promise<NextResponse> {
@@ -84,6 +88,11 @@ export async function POST(
       { status: 401 },
     );
   }
+
+  // getAuthClaims() names the audit actor on every other route; skipping it
+  // (above) means naming the player here, or the registration and payment
+  // writes below would be audited with no actor (#470).
+  noteAuditActor(userId);
 
   // Every checkout can create a CHIP purchase and hold a seat.
   const limited = await enforceRateLimit("checkout", request, userId);
@@ -763,3 +772,5 @@ async function initiateChipPayment(
     { status: 201 },
   );
 }
+
+export const POST = withAuditContext("registration.checkout", handlePost);

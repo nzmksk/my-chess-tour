@@ -8,6 +8,7 @@ import {
 import { notifyInvitationResponded } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Answering emails the inviter, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ type Params = { params: Promise<{ token: string }> };
  * in with the address it was sent to (accept_organization_invitation checks).
  * Grants the membership with the offered role. Accepting twice is not an error.
  */
-export async function POST(_request: NextRequest, { params }: Params): Promise<NextResponse> {
+async function handlePost(_request: NextRequest, { params }: Params): Promise<NextResponse> {
   const { token } = await params;
 
   if (!INVITATION_TOKEN_RE.test(token)) {
@@ -54,3 +55,5 @@ export async function POST(_request: NextRequest, { params }: Params): Promise<N
 
   return NextResponse.json({ data }, { status: 200 });
 }
+
+export const POST = withAuditContext("invitation.accept", handlePost);

@@ -5,12 +5,13 @@ import {
 } from "@/app/api/v1/organizations/_lib/authorize-org";
 import { invitationErrorResponse } from "@/app/api/v1/organizations/_lib/invitation-errors";
 import { NextRequest, NextResponse } from "next/server";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 /**
  * Revokes a pending invitation, so its link stops working now rather than at
  * expiry: e.g. one sent to a mistyped address. Needs org.invite.
  */
-export async function DELETE(
+async function handleDelete(
   _request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -38,3 +39,5 @@ export async function DELETE(
 
   return NextResponse.json({ data }, { status: 200 });
 }
+
+export const DELETE = withAuditContext("invitation.revoke", handleDelete);

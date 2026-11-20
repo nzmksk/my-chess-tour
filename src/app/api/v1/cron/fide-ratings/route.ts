@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { syncFidePlayer } from "@/services/fide/fide";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Session-less background job (mirrors the CHIP webhook): uses supabaseAdmin
 // only and needs the Node runtime.
@@ -30,7 +31,7 @@ interface PlayerRow {
  * that POSTs here with the shared CRON_SECRET. Per-player failures are counted
  * and skipped, never failing the whole run.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     return NextResponse.json(
@@ -100,3 +101,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ data: stats }, { status: 200 });
 }
+
+export const POST = withAuditContext("cron.fide-ratings", handlePost);

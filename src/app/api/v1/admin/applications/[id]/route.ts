@@ -6,6 +6,7 @@ import { notifyApplicationReviewed } from "@/services/organizations/notify";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse, inOrderAfterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Reviewing emails the applicant, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -103,7 +104,7 @@ export async function GET(
   return NextResponse.json({ data }, { status: 200 });
 }
 
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -243,3 +244,5 @@ export async function PATCH(
 
   return NextResponse.json({ data }, { status: 200 });
 }
+
+export const PATCH = withAuditContext("admin.application.review", handlePatch);

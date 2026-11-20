@@ -11,6 +11,7 @@ import {
 } from "@/services/organizations/invitations";
 import { NextRequest, NextResponse } from "next/server";
 import { validateInviteRequest } from "./validators";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Inviting emails the invitee, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -31,7 +32,7 @@ interface CreatedInvitation {
  * after 30 days. Inviting an address that already has a pending invitation
  * refreshes it with a new link, role and expiry — that is also how one is resent.
  */
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<NextResponse> {
@@ -106,3 +107,5 @@ export async function POST(
     { status: 201 },
   );
 }
+
+export const POST = withAuditContext("invitation.create", handlePost);

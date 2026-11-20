@@ -20,6 +20,7 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,7 +44,7 @@ interface TournamentRow {
   status: string;
 }
 
-export async function POST(
+async function handlePost(
   _request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -296,3 +297,5 @@ export async function POST(
 
   return NextResponse.json({ data: updated }, { status: 200 });
 }
+
+export const POST = withAuditContext("tournament.publish", handlePost);

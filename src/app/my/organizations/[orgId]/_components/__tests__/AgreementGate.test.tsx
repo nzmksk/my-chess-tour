@@ -84,9 +84,11 @@ describe("AgreementGate", () => {
     ).toBeDefined();
   });
 
-  it("lists what changed since the version the org accepted", () => {
+  it("shows the whole agreement for a version older than its history", () => {
     // A re-acceptance prompt that doesn't say what moved buys a reflexive tick,
-    // which is worth nothing when the claw-back clause is tested.
+    // which is worth nothing when the claw-back clause is tested. A version from
+    // before the first one has nothing to diff against, so the summary is shown
+    // for what it is: what the agreement covers, not a list of changes.
     renderGate("2025-01-01");
 
     const expected = changesSince(ORGANIZER_AGREEMENT_HISTORY, "2025-01-01");
@@ -94,9 +96,8 @@ describe("AgreementGate", () => {
     for (const change of expected) {
       expect(screen.getByText(change)).toBeDefined();
     }
-    expect(
-      screen.getByText("What changed since version 2025-01-01"),
-    ).toBeDefined();
+    expect(screen.getByText("What it covers")).toBeDefined();
+    expect(screen.queryByText(/What changed since/)).toBeNull();
   });
 
   it("frames a first-time acceptance as 'what it covers'", () => {

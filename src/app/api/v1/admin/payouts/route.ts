@@ -9,6 +9,7 @@ import {
 } from "@/services/payouts/recipient-problem";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // executePayout can send email, whose templates are read from disk.
 export const runtime = "nodejs";
@@ -100,7 +101,7 @@ function queueErrorMessage(message: string): string {
  * `outcome` is passed through because "queued" isn't "paid": a payout short of
  * budget is parked and retried, and the admin should be told so.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const auth = await authorizeAdmin();
   if ("response" in auth) return auth.response;
 
@@ -173,3 +174,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ data: { payout_id: payoutId, outcome } }, { status: 201 });
 }
+
+export const POST = withAuditContext("admin.payout.queue", handlePost);

@@ -10,6 +10,7 @@ import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Nominating emails the nominee, and email templates are read from disk.
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ export const runtime = "nodejs";
  * the nomination with `beneficiary_organization_id: null`. It redirects nothing until
  * the nominee accepts. Owner only: this decides where money goes.
  */
-export async function PUT(
+async function handlePut(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -110,3 +111,5 @@ export async function PUT(
 
   return NextResponse.json({ data }, { status: 200 });
 }
+
+export const PUT = withAuditContext("payout-nomination.nominate", handlePut);

@@ -8,6 +8,7 @@ import { describeEarlyPayoutProblem } from "@/services/payouts/recipient-problem
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse, inOrderAfterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Approving sends the payout and both outcomes email the organization; email
 // templates are read from disk.
@@ -58,7 +59,7 @@ function reviewConflictMessage(message: string): string {
 // executePayout, best-effort, because a network call can't run in that
 // transaction. A send that doesn't go through leaves the row pending, approved
 // and safe to re-run, and the response says what happened.
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -159,3 +160,5 @@ export async function PATCH(
     { status: 200 },
   );
 }
+
+export const PATCH = withAuditContext("admin.payout.review", handlePatch);

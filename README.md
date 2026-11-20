@@ -122,6 +122,7 @@ wiki/                Design docs and runbooks (index below)
 - **Dates:** a tournament's dates and "today" are in the venue's timezone (`tournaments.timezone`), never the server's.
 - **Schema changes are new migration files.** Never edit one that has been applied. See [wiki/database-migrations.md](wiki/database-migrations.md).
 - **A new sensitive column** must be added to `redact_audit_snapshot()` in the same PR.
+- **A route handler that writes** is exported through `withAuditContext("area.action", handler)` from `@/services/supabase/audit-context`, so `audit_logs` records what was done and, through `getAuthClaims()`, by whom (#470). Writes outside a route handler (a page render) open a scope with `runWithAuditContext`.
 
 ## Testing
 

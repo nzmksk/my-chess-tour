@@ -78,6 +78,7 @@ vi.mock("@/services/registrations/notify", () => ({
 }));
 
 import { resolvePaymentState } from "../resolvePaymentState";
+import { withAuditHeaders } from "@/services/supabase/audit-context";
 
 const TOURNAMENT_ID = "00000000-0000-0000-0000-000000000001";
 const USER_ID = "aaaaaaaa-0000-0000-0000-000000000001";
@@ -450,5 +451,38 @@ describe("resolvePaymentState", () => {
 
     expect(result.state).toBe("pending");
     expect(mockGetChipPurchase).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolvePaymentState audit scope (#470)", () => {
+  it("runs its reads and writes as the player, labelled registration.payment-return", async () => {
+    setResults(
+      { data: makeRegistration("pending_payment"), error: null },
+      { data: null, error: null },
+    );
+    const seen: Headers[] = [];
+    const capture = () => seen.push(new Headers(withAuditHeaders()?.headers));
+    const original = mockFrom.getMockImplementation()!;
+    mockFrom.mockImplementation((table: string) => {
+      capture();
+      return original(table);
+    });
+    mockRpc.mockImplementation(() => {
+      capture();
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    try {
+      await resolvePaymentState(TOURNAMENT_ID, USER_ID);
+    } finally {
+      mockFrom.mockImplementation(original);
+      mockRpc.mockImplementation(() => Promise.resolve({ data: null, error: null }));
+    }
+
+    expect(seen.length).toBeGreaterThan(0);
+    for (const headers of seen) {
+      expect(headers.get("x-audit-context")).toBe("registration.payment-return");
+      expect(headers.get("x-audit-actor")).toBe(USER_ID);
+    }
   });
 });

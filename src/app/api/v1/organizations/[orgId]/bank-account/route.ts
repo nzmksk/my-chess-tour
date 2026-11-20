@@ -9,6 +9,7 @@ import { registerOrganizationBankAccount } from "@/services/payouts/bank-account
 import { validateBankAccountRequest } from "./validators";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -154,7 +155,7 @@ export async function GET(
  * `pending`, which is the whole point — details that changed have not been
  * verified.
  */
-export async function PUT(
+async function handlePut(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<NextResponse> {
@@ -240,3 +241,5 @@ export async function PUT(
 
   return NextResponse.json({ data: result }, { status: 200 });
 }
+
+export const PUT = withAuditContext("org.bank-account.set", handlePut);

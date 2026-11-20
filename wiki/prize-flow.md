@@ -121,7 +121,7 @@ Registration with CHIP Send reuses `src/services/payouts/bank-account.ts` (`regi
 
 ## Residual funds: returned to the funders
 
-**Decision (#523):** any part of a pool that isn't awarded (a prize with no eligible winner, a forfeit, anything paid in beyond the declared prizes) is **returned to the funders, pro rata to what each paid in, less transfer costs, once every award for the tournament has been settled**. A prize unclaimed twelve months after the tournament ends is treated the same way, and a tournament cancelled before results are certified returns the whole pool. Section 9 of the Organizer Agreement says exactly this (version 2026-11-18). If the two ever disagree, the agreement is what will be held against us, so change them together.
+**Decision (#523):** any part of a pool that isn't awarded (a prize with no eligible winner, a forfeit, anything paid in beyond the declared prizes) is **returned to the funders, pro rata to what each paid in, less transfer costs, once every award for the tournament has been settled**. A prize unclaimed twelve months after the tournament ends is treated the same way, and a tournament cancelled before results are certified returns the whole pool. Section 9 of the Organizer Agreement says exactly this (version 2026-11-20). If the two ever disagree, the agreement is what will be held against us, so change them together.
 
 The return itself is an **operations step today**, not automated. Once the remaining `prize_pool_balance_cents` is known, an admin refunds each funder's CHIP purchase (partial refunds are supported) and records the money with a `payment_type='adjustment'` row, so the pool balance goes to zero. Automating this, and the full return on cancellation, is a follow-up.
 

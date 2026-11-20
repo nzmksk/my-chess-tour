@@ -36,6 +36,7 @@ import { hasPaidRegistration } from "@/services/payments/paid-registration";
 import { loadPrizePoolPosition } from "@/services/prizes/pool";
 import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
 import type { PrizesJson } from "@/lib/tournaments/prize-funding";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 /** Live to the organizer: published, or published and waiting for its prize pool. */
 const isOutOfDraft = (status: string) =>
@@ -429,7 +430,7 @@ function isPrizesInCheckout(error: { code?: string; message: string }): boolean 
   return error.code === "P0001" && PRIZES_IN_CHECKOUT.test(error.message);
 }
 
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -770,3 +771,5 @@ export async function PATCH(
 
   return NextResponse.json({ data: { ...updated, status } }, { status: 200 });
 }
+
+export const PATCH = withAuditContext("tournament.update", handlePatch);

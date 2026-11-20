@@ -13,6 +13,7 @@ import { normalizePublicKey } from "@/services/chip/public-key";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // CHIP Send webhook. A SEPARATE route from the Collect webhook
 // (webhooks/chip/route.ts). Both use RSA, but they differ:
@@ -442,7 +443,7 @@ async function handleSendInstructionEvent(
   return ack();
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   // Must read the raw body before parsing — the signature is over these bytes.
   const raw = await request.text();
 
@@ -489,3 +490,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // re-checking the balance on its next execution. Acknowledge so CHIP stops retrying.
   return ack();
 }
+
+export const POST = withAuditContext("webhook.chip-send", handlePost);

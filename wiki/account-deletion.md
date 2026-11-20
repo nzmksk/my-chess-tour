@@ -15,10 +15,11 @@ How support deletes a player's account when they ask. There is no self-serve del
 | `users` / `player_profiles` audit history | Kept as rows, every personal field replaced with `[anonymised]` | The history of *when* the account changed survives; the content does not |
 | Other audit rows the user wrote (`changed_by`) | Kept, `changed_by` cleared | They record changes to other records, not to the user |
 | `registrations`, `payments`, `refunds`, `payouts` and their audit rows | Kept, `user_id` set to NULL by the foreign key | Financial records, kept 7 years (Income Tax Act). This overrides the deletion request |
-| Organisation documents the user uploaded | Kept | Business verification documents, kept 7 years after the organiser relationship ends |
+| Organisation documents the user uploaded | Kept | Business verification documents, kept for up to 1 year after the organiser partnership ends |
 | Bug reports they sent (`bug_reports`) | Kept, `user_id` set to NULL by the foreign key | The report itself was written for publication on GitHub and names no one; only the link to the account is personal |
 | `waitlist` entry for their email | Deleted | Pre-launch email capture (the form was removed in #615; older entries remain) |
 | `organization_invitations` addressed to their email | Deleted | An invitation holds the invitee's address, whether or not they ever had an account |
+| Audit history of invitations addressed to them, at any address the account has had | Kept as rows, the address (and everything but ids, status and timestamps) replaced with `[anonymised]` | Invitations are audited (#470); the organization's record of who was invited when survives, by id |
 
 Every foreign key to `users` is `ON DELETE SET NULL` or `ON DELETE CASCADE`, so the whole thing is one `DELETE` plus the audit-log step. The audit-log step is the part that is easy to forget: deleting the rows does **not** reach `audit_logs`, which still holds full copies of them (#503).
 
@@ -95,6 +96,8 @@ DELETE FROM users WHERE id = '<users.id>';
 
 -- Expect snapshots_anonymised > 0. changed_by_cleared is usually 0 here,
 -- because the delete above already nulled changed_by through the foreign key.
+-- Also anonymises the audit rows of invitations addressed to them, finding
+-- every address they've had in their own users audit history.
 SELECT * FROM anonymise_user_audit_logs('<users.id>');
 
 COMMIT;
@@ -105,12 +108,15 @@ The function refuses (`USER_NOT_DELETED`) if the `users` row still exists withou
 ## 6. Verify
 
 ```sql
--- All three should return 0.
+-- All four should return 0.
 SELECT count(*) FROM users WHERE id = '<users.id>';
 SELECT count(*) FROM auth.users WHERE id = '<auth_user_id>';
 SELECT count(*) FROM audit_logs
 WHERE table_name IN ('users', 'player_profiles')
   AND record_id = '<users.id>'
+  AND concat(old_data::text, new_data::text) ILIKE '%<their email>%';
+SELECT count(*) FROM audit_logs
+WHERE table_name = 'organization_invitations'
   AND concat(old_data::text, new_data::text) ILIKE '%<their email>%';
 ```
 
