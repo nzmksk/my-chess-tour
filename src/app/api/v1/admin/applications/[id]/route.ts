@@ -202,6 +202,20 @@ export async function PATCH(
         { status: 404 },
       );
     }
+    // A rejection is final: its name and payout account were released for a
+    // re-application (#582).
+    if (error.message?.includes("APPLICATION_REJECTED")) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "APPLICATION_REJECTED",
+            message:
+              "A rejected application cannot be approved. The applicant must apply again.",
+          },
+        },
+        { status: 409 },
+      );
+    }
     return internalErrorResponse(
       "PATCH /api/v1/admin/applications/[id]: error",
       error,

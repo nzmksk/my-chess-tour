@@ -510,6 +510,28 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       expect(res.status).toBe(404);
     });
 
+    it("returns 409 when approving an application that was already rejected", async () => {
+      // A rejection is final: its name and payout account were released for a
+      // re-application (#582).
+      mockAdminRpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "P0001",
+          message:
+            "APPLICATION_REJECTED: a rejected application cannot be approved; the applicant must re-apply",
+        },
+      });
+      const res = await PATCH(makePatchRequest(), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
+      expect(res.status).toBe(409);
+      const json = await res.json();
+      expect(json.error.code).toBe("APPLICATION_REJECTED");
+      await runAfterCallbacks();
+      expect(mockRegisterBank).not.toHaveBeenCalled();
+      expect(mockNotifyReviewed).not.toHaveBeenCalled();
+    });
+
     it("returns 500 on database error", async () => {
       mockAdminRpc.mockResolvedValue({
         data: null,
