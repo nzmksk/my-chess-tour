@@ -37,10 +37,13 @@ export default function TermsPage() {
               </h2>
               <p className="text-text-secondary">
                 By registering for an account or using any MCT service, you
-                confirm that you are at least 13 years of age (or have parental
-                consent) and that you agree to be bound by these Terms and our
-                Privacy Policy. If you do not agree, you may not use our
-                services.
+                confirm that you are at least 18 years of age and that you agree
+                to be bound by these Terms and our Privacy Policy. If you are
+                under 18, you may use our services only with the consent of your
+                parent or legal guardian, who agrees to these Terms on your
+                behalf and is responsible for your use of the platform,
+                including any payment made. If you do not agree, you may not use
+                our services.
               </p>
             </section>
 

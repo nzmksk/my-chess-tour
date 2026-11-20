@@ -58,7 +58,7 @@ export const TERMS_HISTORY: readonly LegalVersion[] = [
   {
     version: "2026-11-20",
     changes: [
-      "You must be at least 13 years old, or have a parent's consent, and your name must match your MyKad or passport — it is used for official tournament records and FIDE/MCF registration.",
+      "You must be at least 18 years old. If you are under 18, you may use the platform only with a parent's or legal guardian's consent; they accept these terms for you and are responsible for your use of it, including payments. Your name must match your MyKad or passport — it is used for official tournament records and FIDE/MCF registration.",
       "Tournaments follow the FIDE Laws of Chess. You agree to abide by the arbiter's decisions, to compete without computer assistance, and to accept results as final unless you appeal within the time the arbiter sets.",
       "Entry fees are collected by MY Chess Tour on the organiser's behalf and paid out to them under a written Organizer Agreement.",
       "Your entry fee pays for running the event — venue, arbiters, equipment and rating fees. It is not a stake, and no part of it is paid out to another player as prize money. Prize money is funded separately by the organiser, a sponsor or a grant.",
