@@ -120,12 +120,6 @@ export default function TermsPage() {
                   part of it is paid out to another player as prize money.
                 </li>
                 <li>
-                  Prize money is funded separately by the organiser, a sponsor
-                  or a grant, and is distributed by the organiser — unless they
-                  have appointed MY Chess Tour to distribute a fully funded
-                  prize pool for that event.
-                </li>
-                <li>
                   MY Chess Tour collects a platform service fee of up to 10%.
                   The total you pay is always shown in full before you pay.
                 </li>
@@ -142,7 +136,54 @@ export default function TermsPage() {
 
             <section>
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
-                5. Organisers
+                5. Prizes
+              </h2>
+              <p className="text-text-secondary mb-2">
+                The prizes for each event, and who funds them, are set by the
+                organiser and shown on the event page. Prize money comes from
+                the organiser, a sponsor or a grant — never from entry fees.
+              </p>
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
+                <li>
+                  Prizes are awarded on the final results certified by the chief
+                  arbiter, under the prize rules published for the event,
+                  including its tie-break and category rules.
+                </li>
+                <li>
+                  A player who is disqualified, or who entered an age, gender or
+                  OKU category on inaccurate profile details, is not entitled to
+                  a prize from it.
+                </li>
+                <li>
+                  By default the organiser pays prizes directly to the winners
+                  and is responsible for doing so. Questions about a prize the
+                  organiser pays should go to the organiser.
+                </li>
+                <li>
+                  Where the organiser has appointed MY Chess Tour to distribute
+                  the prizes, the full prize pool is paid to us before the event
+                  is listed, so the prizes advertised are already funded. We
+                  check each winner against the certified results and pay the
+                  prize by bank transfer to the bank account you register with
+                  us. We never pay out more than we have collected for the
+                  event.
+                </li>
+                <li>
+                  A prize we distribute that is still unclaimed twelve months
+                  after the event ends — for example, because no valid bank
+                  account was provided — is forfeited and returned to the
+                  parties who funded it.
+                </li>
+                <li>
+                  Prizes are paid in Malaysian Ringgit (MYR). You are
+                  responsible for any tax due on prize money you receive.
+                </li>
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
+                6. Organisers
               </h2>
               <p className="text-text-secondary mb-2">
                 Organising tournaments on MY Chess Tour requires an approved
@@ -164,7 +205,7 @@ export default function TermsPage() {
 
             <section>
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
-                6. Code of Conduct
+                7. Code of Conduct
               </h2>
               <p className="text-text-secondary mb-2">
                 We are committed to a respectful and inclusive environment. All
@@ -196,7 +237,7 @@ export default function TermsPage() {
 
             <section>
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
-                7. Intellectual Property
+                8. Intellectual Property
               </h2>
               <p className="text-text-secondary">
                 All content on the MY Chess Tour platform — including logos,
@@ -208,7 +249,7 @@ export default function TermsPage() {
 
             <section>
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
-                8. Limitation of Liability
+                9. Limitation of Liability
               </h2>
               <p className="text-text-secondary">
                 MY Chess Tour provides its platform on an &quot;as is&quot;
@@ -221,7 +262,7 @@ export default function TermsPage() {
 
             <section>
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
-                9. Amendments
+                10. Amendments
               </h2>
               <p className="text-text-secondary">
                 We may update these Terms from time to time. We will notify you
@@ -233,7 +274,7 @@ export default function TermsPage() {
 
             <section>
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
-                10. Governing Law
+                11. Governing Law
               </h2>
               <p className="text-text-secondary">
                 These Terms are governed by the laws of Malaysia. Any dispute
@@ -244,7 +285,7 @@ export default function TermsPage() {
 
             <section>
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
-                11. Contact Us
+                12. Contact Us
               </h2>
               <p className="text-text-secondary">
                 For questions about these Terms, please contact us at{" "}
