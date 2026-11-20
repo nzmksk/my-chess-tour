@@ -31,7 +31,11 @@ export default function Footer() {
   const release = releaseLabel();
 
   return (
-    <footer className="bg-bg-sunken border-border border-t-2">
+    // Hidden on any page that marks itself with data-no-footer, such as the
+    // 404 page (#643). The root layout renders the footer and can't tell a
+    // 404 from any other path, so the page opts out instead. CSS rather than
+    // a client check, so the footer never flashes in before being removed.
+    <footer className="bg-bg-sunken border-border border-t-2 [body:has([data-no-footer])_&]:hidden">
       <div className="mx-auto max-w-300 px-6 py-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           <div className="flex flex-col gap-3">

@@ -26,6 +26,13 @@ describe("Footer", () => {
     expect(html).toContain("<footer");
   });
 
+  it("hides itself on a page marked data-no-footer, such as the 404 page", () => {
+    // The root layout can't tell a 404 from any other path, so the page opts
+    // out and the footer hides with CSS (#643).
+    const html = renderToStaticMarkup(<Footer />);
+    expect(html).toContain("[body:has([data-no-footer])_&amp;]:hidden");
+  });
+
   it("renders the brand name", () => {
     const html = renderToStaticMarkup(<Footer />);
     expect(html).toContain("MY Chess Tour");
