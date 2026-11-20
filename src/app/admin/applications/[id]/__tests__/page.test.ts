@@ -37,16 +37,19 @@ vi.mock("@/services/supabase/server", () => ({
 }));
 
 // The page now issues three differently-shaped queries (organizations →
-// .is().single(); bank account → .eq().eq().maybeSingle(); documents →
-// .eq().order()), so the builder has to be chainable rather than a fixed chain.
-// The individual spies are still shared, which is what the assertions below
-// read.
+// .is().single(); bank account → .eq().order().limit().maybeSingle();
+// documents → .eq().order()), so the builder has to be chainable rather than a
+// fixed chain. The bank account query gets its own builder, because its
+// .order() continues the chain where the documents query's resolves. The
+// individual spies are still shared, which is what the assertions below read.
 const mockSingle = vi.hoisted(() => vi.fn());
 const mockMaybeSingle = vi.hoisted(() => vi.fn());
 const mockOrder = vi.hoisted(() => vi.fn());
 const mockIs = vi.hoisted(() => vi.fn());
 const mockEq = vi.hoisted(() => vi.fn());
 const mockSelect = vi.hoisted(() => vi.fn());
+const mockBankOrder = vi.hoisted(() => vi.fn());
+const mockBankLimit = vi.hoisted(() => vi.fn());
 const mockFrom = vi.hoisted(() => vi.fn());
 const mockCreateSignedUrl = vi.hoisted(() => vi.fn());
 
@@ -109,7 +112,18 @@ describe("AdminApplicationDetailPage", () => {
     mockSelect.mockReturnValue(builder);
     mockEq.mockReturnValue(builder);
     mockIs.mockReturnValue(builder);
-    mockFrom.mockReturnValue(builder);
+    const bankBuilder = {
+      select: vi.fn(() => bankBuilder),
+      eq: vi.fn(() => bankBuilder),
+      order: mockBankOrder,
+      limit: mockBankLimit,
+      maybeSingle: mockMaybeSingle,
+    };
+    mockBankOrder.mockReturnValue(bankBuilder);
+    mockBankLimit.mockReturnValue(bankBuilder);
+    mockFrom.mockImplementation((table: string) =>
+      table === "organization_bank_accounts" ? bankBuilder : builder,
+    );
 
     // Defaults for the two queries added alongside the KYB review sections.
     mockMaybeSingle.mockResolvedValue({ data: null, error: null });
@@ -243,6 +257,22 @@ describe("AdminApplicationDetailPage", () => {
     const rendered = JSON.stringify(result);
     expect(rendered).toContain("5678");
     expect(rendered).not.toContain("514012345678");
+  });
+
+  it("shows the newest bank account, so a rejected application's deactivated one still appears", async () => {
+    // Rejecting an application deactivates its account (#582); filtering on
+    // is_active would show the reviewer "No bank account on file".
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockSingle.mockResolvedValue({ data: makeApplicationDetail(), error: null });
+
+    const AdminApplicationDetailPage = await importPage();
+    await AdminApplicationDetailPage({ params: Promise.resolve({ id: APP_ID }) });
+
+    expect(mockBankOrder).toHaveBeenCalledWith("created_at", {
+      ascending: false,
+    });
+    expect(mockBankLimit).toHaveBeenCalledWith(1);
   });
 
   it("signs each document URL server-side with a 5-minute expiry", async () => {

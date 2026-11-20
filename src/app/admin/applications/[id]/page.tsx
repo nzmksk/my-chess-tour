@@ -139,7 +139,12 @@ export default async function AdminApplicationDetailPage({
         "bank_name, bank_code, account_holder, account_number, status, rejection_reason",
       )
       .eq("organization_id", id)
-      .eq("is_active", true)
+      // The newest row, not the active one: rejecting an application
+      // deactivates its account (#582), and the reviewer still needs to see it.
+      // While an organization has an active account it is always the newest,
+      // because replacing one inserts a fresh row.
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle(),
     supabaseAdmin
       .from("organization_documents")
