@@ -394,8 +394,8 @@ export default function OrganizerAgreementPage() {
               <h2 className={H2}>15. Governing Law and Contact</h2>
               <p className="text-text-secondary">
                 This Agreement is governed by the laws of Malaysia, and the
-                courts of Kuala Lumpur have exclusive jurisdiction over any
-                dispute arising from it. For questions about this Agreement,
+                courts of Malaysia have exclusive jurisdiction over any dispute
+                arising from it. For questions about this Agreement,
                 contact us at <strong>{SUPPORT_EMAIL}</strong>.
               </p>
             </section>
