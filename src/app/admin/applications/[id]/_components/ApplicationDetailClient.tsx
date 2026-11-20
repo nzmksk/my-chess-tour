@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
   ApplicationDetail,
+  ApplicationEvent,
   ApprovalStatus,
   OrgLink,
   OrgLinks,
@@ -48,6 +49,55 @@ const STATUS_CONFIG: Record<
     className: "bg-danger/15 text-danger border border-danger/20",
   },
 };
+
+const EVENT_LABELS: Record<ApplicationEvent["event"], string> = {
+  submitted: "Submitted",
+  resubmitted: "Amended and resubmitted",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
+/**
+ * Every submission and decision on the application, oldest first (#582). A
+ * resubmission clears the rejection on the application itself, so this is
+ * where the reviewer sees what was asked for last time.
+ */
+function ApplicationHistory({ history }: { history: ApplicationEvent[] }) {
+  return (
+    <section className="card mb-4 overflow-hidden">
+      <div className="border-border bg-bg-raised border-b px-5 py-3">
+        <h2 className="font-cinzel text-text-primary text-sm font-bold tracking-wide uppercase">
+          Application History
+        </h2>
+      </div>
+      <ol className="flex flex-col gap-3 px-5 py-4">
+        {history.map((entry) => (
+          <li key={entry.id} className="font-lato text-sm">
+            <span className="text-text-primary font-semibold">
+              {EVENT_LABELS[entry.event]}
+            </span>
+            <span className="text-text-muted">
+              {" "}
+              ·{" "}
+              {new Date(entry.created_at).toLocaleString("en-MY", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {entry.actor &&
+                ` · ${entry.actor.first_name} ${entry.actor.last_name}`}
+            </span>
+            {entry.reason && (
+              <p className="text-text-secondary mt-0.5">{entry.reason}</p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 function StatusBadge({ status }: { status: ApprovalStatus }) {
   const config = STATUS_CONFIG[status];
@@ -285,6 +335,10 @@ export default function ApplicationDetailClient({ application }: Props) {
             </p>
           </div>
         )}
+
+      {application.history.length > 0 && (
+        <ApplicationHistory history={application.history} />
+      )}
 
       {/* Organization details */}
       <section className="card mb-4 overflow-hidden">

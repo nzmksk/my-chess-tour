@@ -97,22 +97,83 @@ interface DocumentEntry {
   file: File;
 }
 
-export default function ApplyForm() {
+/** A document already on the application being amended. */
+export interface ExistingDocument {
+  id: string;
+  docType: string;
+  originalFilename: string | null;
+}
+
+/**
+ * A rejected application the applicant is amending (#582). Masked: the bank
+ * account comes with its last 4 digits only, and keeping it never sends the
+ * number back.
+ */
+export interface AmendApplication {
+  id: string;
+  rejectionReason: string | null;
+  name: string;
+  description: string | null;
+  links: { label: string; url: string }[] | null;
+  email: string | null;
+  phone: string | null;
+  pastTournamentRefs: string | null;
+  entityType: EntityType | null;
+  registrationNumber: string | null;
+  bank: {
+    bankName: string;
+    bankCode: string;
+    accountHolder: string;
+    last4: string;
+  } | null;
+  documents: ExistingDocument[];
+}
+
+// Links are stored with the type's label (see handleSubmit), so map it back.
+function linkEntriesFrom(
+  links: AmendApplication["links"] | undefined,
+): LinkEntry[] {
+  return (links ?? []).map((link) => ({
+    type: LINK_TYPES.find((t) => t.label === link.label)?.value ?? "other",
+    url: link.url,
+  }));
+}
+
+const DOC_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  Object.values(DOC_TYPES_BY_ENTITY)
+    .flat()
+    .map((t) => [t.value, t.label]),
+);
+
+export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [links, setLinks] = useState<LinkEntry[]>([]);
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [pastTournamentRefs, setPastTournamentRefs] = useState("");
+  const [name, setName] = useState(amend?.name ?? "");
+  const [description, setDescription] = useState(amend?.description ?? "");
+  const [links, setLinks] = useState<LinkEntry[]>(() =>
+    linkEntriesFrom(amend?.links),
+  );
+  const [email, setEmail] = useState(amend?.email ?? "");
+  const [phone, setPhone] = useState(amend?.phone ?? "");
+  const [pastTournamentRefs, setPastTournamentRefs] = useState(
+    amend?.pastTournamentRefs ?? "",
+  );
   const [bank, setBank] = useState<BankAccountValues>({
     bankName: "",
     bankCode: "",
     accountHolder: "",
     accountNumber: "",
   });
-  const [entityType, setEntityType] = useState<EntityType>("company");
-  const [registrationNumber, setRegistrationNumber] = useState("");
+  // Amending: keep the application's account unless the applicant replaces it.
+  const [keepBank, setKeepBank] = useState(Boolean(amend?.bank));
+  const [entityType, setEntityType] = useState<EntityType>(
+    amend?.entityType ?? "company",
+  );
+  const [registrationNumber, setRegistrationNumber] = useState(
+    amend?.registrationNumber ?? "",
+  );
+  const [keptDocuments, setKeptDocuments] = useState<ExistingDocument[]>(
+    amend?.documents ?? [],
+  );
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [status, setStatus] = useState<FormStatus>("idle");
@@ -160,7 +221,13 @@ export default function ApplyForm() {
       accepted.push({ docType: defaultType, file });
     }
 
-    setDocuments((prev) => [...prev, ...accepted].slice(0, MAX_DOCUMENTS));
+    setDocuments((prev) =>
+      [...prev, ...accepted].slice(0, MAX_DOCUMENTS - keptDocuments.length),
+    );
+  }
+
+  function removeKeptDocument(id: string) {
+    setKeptDocuments((prev) => prev.filter((doc) => doc.id !== id));
   }
 
   function removeDocument(index: number) {
@@ -176,9 +243,12 @@ export default function ApplyForm() {
   // Mirrors the entity rule the API and the RPC both enforce, so the applicant
   // is told what's missing before a round trip and an upload.
   function missingRequiredDocument(): string | null {
-    if (documents.length === 0)
+    if (documents.length + keptDocuments.length === 0)
       return `Please upload your ${entityConfig.docLabel}.`;
-    const types = documents.map((d) => d.docType);
+    const types = [
+      ...keptDocuments.map((d) => d.docType),
+      ...documents.map((d) => d.docType),
+    ];
     if (entityType === "individual") {
       return types.some(
         (t) => t === "identity_document" || t === "authorization_letter",
@@ -196,7 +266,9 @@ export default function ApplyForm() {
     e.preventDefault();
     if (status === "submitting") return;
 
-    const bankError = validateBankAccount(bank, { requireBankCode: true });
+    const bankError = keepBank
+      ? null
+      : validateBankAccount(bank, { requireBankCode: true });
     if (bankError) {
       setErrorMessage(bankError);
       setStatus("error");
@@ -273,29 +345,47 @@ export default function ApplyForm() {
         });
       }
 
-      const res = await fetch("/api/v1/organizations/applications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim() || null,
-          links: filteredLinks.length > 0 ? filteredLinks : null,
-          email: email.trim(),
-          phone: phone.trim() || null,
-          past_tournament_refs: pastTournamentRefs.trim() || null,
-          entity_type: entityType,
-          registration_number:
-            entityType === "individual" ? null : registrationNumber.trim(),
-          // Only the SWIFT code — the server derives the bank's display name,
-          // so the stored name can't contradict the code.
-          bank_code: bank.bankCode,
-          bank_account_holder: bank.accountHolder.trim(),
-          bank_account_number: normalizeAccountNumber(bank.accountNumber),
-          documents: uploaded,
-          // The version this is recorded against is the server's, not ours.
-          agreement_accepted: agreementAccepted,
-        }),
-      });
+      const fields = {
+        name: name.trim(),
+        description: description.trim() || null,
+        links: filteredLinks.length > 0 ? filteredLinks : null,
+        email: email.trim(),
+        phone: phone.trim() || null,
+        past_tournament_refs: pastTournamentRefs.trim() || null,
+        entity_type: entityType,
+        registration_number:
+          entityType === "individual" ? null : registrationNumber.trim(),
+        // The version this is recorded against is the server's, not ours.
+        agreement_accepted: agreementAccepted,
+      };
+      // Only the SWIFT code — the server derives the bank's display name, so
+      // the stored name can't contradict the code.
+      const bankFields = {
+        bank_code: bank.bankCode,
+        bank_account_holder: bank.accountHolder.trim(),
+        bank_account_number: normalizeAccountNumber(bank.accountNumber),
+      };
+
+      const res = amend
+        ? await fetch(`/api/v1/organizations/applications/${amend.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...fields,
+              ...(keepBank ? { keep_bank_account: true } : bankFields),
+              keep_document_ids: keptDocuments.map((d) => d.id),
+              new_documents: uploaded,
+            }),
+          })
+        : await fetch("/api/v1/organizations/applications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...fields,
+              ...bankFields,
+              documents: uploaded,
+            }),
+          });
 
       const json = await res.json();
 
@@ -321,7 +411,7 @@ export default function ApplyForm() {
           ⏳
         </div>
         <h1 className="font-cinzel text-text-primary mb-2 text-xl font-semibold">
-          Application Submitted
+          {amend ? "Application Resubmitted" : "Application Submitted"}
         </h1>
         <p className="font-lato text-text-secondary mb-2 text-sm">
           Your application for{" "}
@@ -357,13 +447,25 @@ export default function ApplyForm() {
     <div className="mx-auto max-w-lg">
       <div className="mb-6">
         <h1 className="font-cinzel text-text-primary text-xl font-semibold tracking-wider">
-          Apply as Tournament Organizer
+          {amend ? "Amend Your Application" : "Apply as Tournament Organizer"}
         </h1>
         <p className="font-lato text-text-muted mt-1 text-sm">
-          Fill in your organization details. Your application will be reviewed
-          by our admin team.
+          {amend
+            ? "Fix what the review asked for and resubmit. Your application goes back to our admin team for another review."
+            : "Fill in your organization details. Your application will be reviewed by our admin team."}
         </p>
       </div>
+
+      {amend?.rejectionReason && (
+        <div className="bg-danger/10 border-danger/20 mb-6 rounded-lg border p-4">
+          <p className="font-lato text-danger mb-1 text-xs font-semibold tracking-wide uppercase">
+            Why it was declined
+          </p>
+          <p className="font-lato text-text-primary text-sm">
+            {amend.rejectionReason}
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Organization Name */}
@@ -498,16 +600,49 @@ export default function ApplyForm() {
             must match your bank&apos;s records exactly — payouts fail
             otherwise, and the failed transfer is at your cost.
           </p>
-          <BankAccountFields
-            values={bank}
-            onChange={(patch) => {
-              setBank((prev) => ({ ...prev, ...patch }));
-              setErrorMessage(null);
-            }}
-            banks={MALAYSIAN_BANKS}
-            idPrefix="org_bank"
-            disabled={status === "submitting"}
-          />
+          {keepBank && amend?.bank ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="font-lato text-text-secondary flex-1 text-sm">
+                {amend.bank.bankName} · {amend.bank.accountHolder} · ••••
+                {amend.bank.last4}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setKeepBank(false);
+                  setErrorMessage(null);
+                }}
+                className="font-lato text-gold-bright border-border hover:border-gold-bright hover:bg-gold-ghost rounded-md border border-dashed px-3 py-2 text-sm font-medium transition-colors"
+              >
+                Use a different account
+              </button>
+            </div>
+          ) : (
+            <>
+              <BankAccountFields
+                values={bank}
+                onChange={(patch) => {
+                  setBank((prev) => ({ ...prev, ...patch }));
+                  setErrorMessage(null);
+                }}
+                banks={MALAYSIAN_BANKS}
+                idPrefix="org_bank"
+                disabled={status === "submitting"}
+              />
+              {amend?.bank && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKeepBank(true);
+                    setErrorMessage(null);
+                  }}
+                  className="font-lato text-text-muted hover:text-text-primary mt-3 text-sm underline"
+                >
+                  Keep the current account (••••{amend.bank.last4})
+                </button>
+              )}
+            </>
+          )}
         </fieldset>
 
         {/* Entity & verification documents */}
@@ -579,6 +714,25 @@ export default function ApplyForm() {
               Verification Documents <span className="text-error">*</span>
             </label>
 
+            {keptDocuments.map((doc) => (
+              <div key={doc.id} className="flex items-center gap-2">
+                <span className="font-lato text-text-muted w-44 shrink-0 text-sm">
+                  {DOC_TYPE_LABELS[doc.docType] ?? doc.docType}
+                </span>
+                <span className="font-lato text-text-secondary flex-1 truncate text-sm">
+                  {doc.originalFilename ?? "Uploaded document"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeKeptDocument(doc.id)}
+                  className="border-border text-text-muted hover:border-danger hover:text-danger hover:bg-danger-bg flex h-10 w-9 shrink-0 items-center justify-center rounded-md border text-base transition-colors"
+                  aria-label={`Remove ${doc.originalFilename ?? "uploaded document"}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+
             {documents.map((doc, index) => (
               <div key={index} className="flex items-center gap-2">
                 <select
@@ -613,7 +767,9 @@ export default function ApplyForm() {
               multiple
               accept={DOC_ACCEPT}
               aria-label="Verification documents"
-              disabled={documents.length >= MAX_DOCUMENTS}
+              disabled={
+                documents.length + keptDocuments.length >= MAX_DOCUMENTS
+              }
               onChange={(e) => {
                 addDocuments(e.target.files);
                 // Reset so re-picking the same file fires onChange again.
@@ -670,7 +826,11 @@ export default function ApplyForm() {
           disabled={status === "submitting" || !agreementAccepted}
           className="btn-primary w-full rounded-md"
         >
-          {status === "submitting" ? "Submitting…" : "Submit Application"}
+          {status === "submitting"
+            ? "Submitting…"
+            : amend
+              ? "Resubmit Application"
+              : "Submit Application"}
         </button>
       </form>
     </div>

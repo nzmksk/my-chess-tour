@@ -60,6 +60,15 @@ export interface ApplicationDocument {
   url: string | null;
 }
 
+/** One submission, resubmission or review decision (#582), oldest first. */
+export interface ApplicationEvent {
+  id: string;
+  event: "submitted" | "resubmitted" | "approved" | "rejected";
+  reason: string | null;
+  created_at: string;
+  actor: { first_name: string; last_name: string } | null;
+}
+
 export interface ApplicationDetail {
   id: string;
   name: string;
@@ -77,6 +86,7 @@ export interface ApplicationDetail {
   applicant: Applicant | null;
   bank_account: ApplicationBankAccount | null;
   documents: ApplicationDocument[];
+  history: ApplicationEvent[];
 }
 
 /**
@@ -132,26 +142,36 @@ export default async function AdminApplicationDetailPage({
     redirect("/admin/applications");
   }
 
-  const [{ data: bankRow }, { data: documentRows }] = await Promise.all([
-    supabaseAdmin
-      .from("organization_bank_accounts")
-      .select(
-        "bank_name, bank_code, account_holder, account_number, status, rejection_reason",
-      )
-      .eq("organization_id", id)
-      // The newest row, not the active one: rejecting an application
-      // deactivates its account (#582), and the reviewer still needs to see it.
-      // While an organization has an active account it is always the newest,
-      // because replacing one inserts a fresh row.
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabaseAdmin
-      .from("organization_documents")
-      .select("id, doc_type, storage_path, original_filename")
-      .eq("organization_id", id)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: bankRow }, { data: documentRows }, { data: historyRows }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("organization_bank_accounts")
+        .select(
+          "bank_name, bank_code, account_holder, account_number, status, rejection_reason",
+        )
+        .eq("organization_id", id)
+        // The newest row, not the active one: rejecting an application
+        // deactivates its account (#582), and the reviewer still needs to see it.
+        // While an organization has an active account it is always the newest,
+        // because replacing one inserts a fresh row.
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("organization_documents")
+        .select("id, doc_type, storage_path, original_filename")
+        .eq("organization_id", id)
+        .order("created_at", { ascending: true }),
+      // Every submission and decision, so an earlier rejection is still visible
+      // after the applicant amends and resubmits (#582).
+      supabaseAdmin
+        .from("organization_application_events")
+        .select(
+          "id, event, reason, created_at, actor:users!actor_id(first_name, last_name)",
+        )
+        .eq("organization_id", id)
+        .order("created_at", { ascending: true }),
+    ]);
 
   // Masked here, in the server component, so the full number never reaches the
   // client bundle — the same rule the API follows.
@@ -191,6 +211,7 @@ export default async function AdminApplicationDetailPage({
             ...data,
             bank_account: bankAccount,
             documents,
+            history: historyRows ?? [],
           } as unknown as ApplicationDetail
         }
       />

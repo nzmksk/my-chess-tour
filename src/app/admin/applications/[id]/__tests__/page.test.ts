@@ -299,4 +299,63 @@ describe("AdminApplicationDetailPage", () => {
       300,
     );
   });
+
+  it("passes the application's history to the client, oldest first (#582)", async () => {
+    // A resubmission clears the rejection on the application itself, so the
+    // history is where the reviewer sees what was asked for last time.
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockSingle.mockResolvedValue({ data: makeApplicationDetail(), error: null });
+
+    const historyOrder = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "e1",
+          event: "submitted",
+          reason: null,
+          created_at: "2026-02-20T10:00:00Z",
+          actor: { first_name: "Lee", last_name: "Wei Hao" },
+        },
+        {
+          id: "e2",
+          event: "rejected",
+          reason: "SSM certificate unreadable",
+          created_at: "2026-02-21T10:00:00Z",
+          actor: { first_name: "Admin", last_name: "One" },
+        },
+        {
+          id: "e3",
+          event: "resubmitted",
+          reason: null,
+          created_at: "2026-02-22T10:00:00Z",
+          actor: { first_name: "Lee", last_name: "Wei Hao" },
+        },
+      ],
+      error: null,
+    });
+    const historyBuilder = {
+      select: vi.fn(() => historyBuilder),
+      eq: vi.fn(() => historyBuilder),
+      order: historyOrder,
+    };
+    const defaultFrom = mockFrom.getMockImplementation()!;
+    mockFrom.mockImplementation((table: string) =>
+      table === "organization_application_events"
+        ? historyBuilder
+        : defaultFrom(table),
+    );
+
+    const AdminApplicationDetailPage = await importPage();
+    const result = await AdminApplicationDetailPage({
+      params: Promise.resolve({ id: APP_ID }),
+    });
+
+    expect(historyBuilder.eq).toHaveBeenCalledWith("organization_id", APP_ID);
+    expect(historyOrder).toHaveBeenCalledWith("created_at", {
+      ascending: true,
+    });
+    const rendered = JSON.stringify(result);
+    expect(rendered).toContain("SSM certificate unreadable");
+    expect(rendered).toContain("resubmitted");
+  });
 });
