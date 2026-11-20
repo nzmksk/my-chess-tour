@@ -236,9 +236,9 @@ export default function TermsPage() {
                 10. Governing Law
               </h2>
               <p className="text-text-secondary">
-                These Terms are governed by the laws of Malaysia. Any disputes
-                shall be subject to the exclusive jurisdiction of the courts of
-                Kuala Lumpur, Malaysia.
+                These Terms are governed by the laws of Malaysia. Any dispute
+                arising from them shall be subject to the exclusive jurisdiction
+                of the courts of Malaysia.
               </p>
             </section>
 

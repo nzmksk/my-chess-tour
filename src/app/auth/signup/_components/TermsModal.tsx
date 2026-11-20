@@ -215,9 +215,9 @@ export default function TermsModal({ onClose }: TermsModalProps) {
 
           <h3 className="modal-section-title">10. Governing Law</h3>
           <p className="modal-paragraph">
-            These Terms are governed by the laws of Malaysia. Any disputes shall
-            be subject to the exclusive jurisdiction of the courts of Kuala
-            Lumpur, Malaysia.
+            These Terms are governed by the laws of Malaysia. Any dispute
+            arising from them shall be subject to the exclusive jurisdiction of
+            the courts of Malaysia.
           </p>
 
           <h3 className="modal-section-title">11. Contact Us</h3>
