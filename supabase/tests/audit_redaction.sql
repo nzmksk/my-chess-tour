@@ -23,6 +23,8 @@
 --   R8  filenames and paths keep ONLY an accepted extension, never "the last
 --       4 characters": a name with no extension, or one whose "extension" is
 --       really the end of an IC number, masks to a bare '****'
+--   R9  organization_invitations.token_hash (#470) is masked to its last 4
+--       characters; the invitee's address and the rest of the row are kept
 --
 -- organization_bank_accounts.account_number and organization_documents.
 -- storage_path (#518) are covered by scenario A1 in
@@ -234,6 +236,22 @@ BEGIN
     RAISE EXCEPTION 'R8 FAIL: trailing IC digits survive in an organization_documents snapshot';
   END IF;
   RAISE NOTICE 'R8 PASS — filenames and paths keep only an accepted extension';
+
+  -- ---- R9: invitation token hashes ----------------------------------------
+  -- The full trigger path (create, re-send, revoke) is scenario I17 in
+  -- supabase/tests/organization_invitations.sql; this is the column list.
+  v_json := redact_audit_snapshot('organization_invitations', jsonb_build_object(
+    'token_hash', encode(sha256('r9-token'::bytea), 'hex'),
+    'email', 'r9@test.local',
+    'status', 'pending'
+  ));
+  IF v_json ->> 'token_hash' <> '****' || right(encode(sha256('r9-token'::bytea), 'hex'), 4) THEN
+    RAISE EXCEPTION 'R9 FAIL: token_hash=% (expected masked to the last 4)', v_json ->> 'token_hash';
+  END IF;
+  IF v_json ->> 'email' <> 'r9@test.local' OR v_json ->> 'status' <> 'pending' THEN
+    RAISE EXCEPTION 'R9 FAIL: an unlisted key was altered: %', v_json;
+  END IF;
+  RAISE NOTICE 'R9 PASS — invitation token hashes are masked';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;
