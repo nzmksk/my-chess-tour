@@ -15,7 +15,7 @@ How support deletes a player's account when they ask. There is no self-serve del
 | `users` / `player_profiles` audit history | Kept as rows, every personal field replaced with `[anonymised]` | The history of *when* the account changed survives; the content does not |
 | Other audit rows the user wrote (`changed_by`) | Kept, `changed_by` cleared | They record changes to other records, not to the user |
 | `registrations`, `payments`, `refunds`, `payouts` and their audit rows | Kept, `user_id` set to NULL by the foreign key | Financial records, kept 7 years (Income Tax Act). This overrides the deletion request |
-| Organisation documents the user uploaded | Kept | Business verification documents, kept 7 years after the organiser relationship ends |
+| Organisation documents the user uploaded | Kept | Business verification documents, kept for up to 1 year after the organiser partnership ends |
 | Bug reports they sent (`bug_reports`) | Kept, `user_id` set to NULL by the foreign key | The report itself was written for publication on GitHub and names no one; only the link to the account is personal |
 | `waitlist` entry for their email | Deleted | Pre-launch email capture (the form was removed in #615; older entries remain) |
 | `organization_invitations` addressed to their email | Deleted | An invitation holds the invitee's address, whether or not they ever had an account |

@@ -293,7 +293,7 @@ export default function PrivacyPage() {
                         Business verification documents (organisers)
                       </td>
                       <td className="text-text-secondary px-3 py-2">
-                        7 years after the organiser relationship ends
+                        Up to 1 year after the organiser partnership ends
                       </td>
                     </tr>
                   </tbody>

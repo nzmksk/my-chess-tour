@@ -261,7 +261,7 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               </tr>
               <tr>
                 <td>Business verification documents (organisers)</td>
-                <td>7 years after the organiser relationship ends</td>
+                <td>Up to 1 year after the organiser partnership ends</td>
               </tr>
             </tbody>
           </table>
