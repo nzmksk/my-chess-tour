@@ -398,9 +398,8 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
 
           <h3 className="modal-section-title">10. Contact Us</h3>
           <p className="modal-paragraph">
-            For privacy-related inquiries or to exercise your PDPA rights,
-            contact our Data Protection Officer at{" "}
-            <strong>privacy@mychesstour.com</strong>.
+            For privacy-related inquiries or to exercise your PDPA rights, email
+            us at <strong>privacy@mychesstour.com</strong>.
           </p>
         </div>
 

@@ -460,8 +460,7 @@ export default function PrivacyPage() {
               </h2>
               <p className="text-text-secondary">
                 For privacy-related inquiries or to exercise your PDPA rights,
-                contact our Data Protection Officer at{" "}
-                <strong>privacy@mychesstour.com</strong>.
+                email us at <strong>privacy@mychesstour.com</strong>.
               </p>
             </section>
           </div>
