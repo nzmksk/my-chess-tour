@@ -1,25 +1,16 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
-import { assertUploadedObject } from "@/services/supabase/storage";
 import { NextRequest, NextResponse } from "next/server";
 import { validateApplyRequest } from "./validators";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { withAuditContext } from "@/services/supabase/audit-context";
-
-// Must match the uploader in ApplyForm. Enforced here as well as there because
-// the browser check is a UX affordance, not a control — the file goes straight
-// to storage and never passes through this route.
-const DOCUMENT_BUCKET = "organization-documents";
-const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
-const DOCUMENT_MIME_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-] as const;
+import {
+  applicationRpcErrorResponse,
+  checkUploadedDocuments,
+} from "./application-rpc";
 
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
@@ -83,32 +74,11 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   if ("error" in validated) return validated.error;
   const body = validated.data;
 
-  // Confirm each claimed object actually exists and is within limits before its
-  // path is recorded. Sequential rather than parallel: an applicant submits a
-  // handful of documents, and the first failure is the one worth reporting.
-  for (const doc of body.documents) {
-    const check = await assertUploadedObject(DOCUMENT_BUCKET, doc.storage_path, {
-      maxBytes: DOCUMENT_MAX_BYTES,
-      mimeTypes: DOCUMENT_MIME_TYPES,
-    });
-    if (!check.ok) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: `${doc.original_filename ?? "Document"}: ${check.reason}`,
-          },
-        },
-        { status: 400 },
-      );
-    }
-  }
+  const uploadError = await checkUploadedDocuments(body.documents);
+  if (uploadError) return uploadError;
 
   // One transaction for the organization, its bank account, its documents and
-  // its agreement stamp. The previous read-then-insert lost the name-uniqueness
-  // race, and — once bank details and documents joined the payload — a failure
-  // partway through would have left the organization created and its name taken
-  // with no way for the applicant to retry.
+  // its agreement stamp, so a failure partway through leaves nothing behind.
   const { data: org, error: rpcErr } = await supabaseAdmin.rpc(
     "create_organization_application",
     {
@@ -134,43 +104,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   );
 
   if (rpcErr) {
-    // Sentinel prefixes raised by the RPC (003_functions_triggers.sql). The
-    // whole transaction has already rolled back, so the name is still free.
-    if (rpcErr.message.includes("NAME_TAKEN")) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "NAME_TAKEN",
-            message: "An organization with this name already exists",
-          },
-        },
-        { status: 409 },
-      );
-    }
-    if (rpcErr.message.includes("BANK_ACCOUNT_IN_USE")) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "BANK_ACCOUNT_IN_USE",
-            message:
-              "This bank account is already the payout destination for another organization",
-          },
-        },
-        { status: 409 },
-      );
-    }
-    if (rpcErr.message.includes("ENTITY_DOCS_REQUIRED")) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message:
-              "The verification documents do not match the entity type selected",
-          },
-        },
-        { status: 400 },
-      );
-    }
+    // The whole transaction has already rolled back, so nothing was created.
+    const mapped = applicationRpcErrorResponse(rpcErr);
+    if (mapped) return mapped;
     return internalErrorResponse(
       "Org applications: create_organization_application failed",
       rpcErr,

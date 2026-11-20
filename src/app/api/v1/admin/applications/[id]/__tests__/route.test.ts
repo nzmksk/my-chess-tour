@@ -511,14 +511,14 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
     });
 
     it("returns 409 when approving an application that was already rejected", async () => {
-      // A rejection is final: its name and payout account were released for a
-      // re-application (#582).
+      // It goes back to review only when the applicant amends and resubmits
+      // it (#582).
       mockAdminRpc.mockResolvedValue({
         data: null,
         error: {
           code: "P0001",
           message:
-            "APPLICATION_REJECTED: a rejected application cannot be approved; the applicant must re-apply",
+            "APPLICATION_REJECTED: a rejected application cannot be approved; the applicant must amend and resubmit it",
         },
       });
       const res = await PATCH(makePatchRequest(), {
@@ -527,6 +527,29 @@ describe("PATCH /api/v1/admin/applications/:id", () => {
       expect(res.status).toBe(409);
       const json = await res.json();
       expect(json.error.code).toBe("APPLICATION_REJECTED");
+      await runAfterCallbacks();
+      expect(mockRegisterBank).not.toHaveBeenCalled();
+      expect(mockNotifyReviewed).not.toHaveBeenCalled();
+    });
+
+    it("returns 409 NAME_TAKEN when another organization with the name was approved first", async () => {
+      // Only an approved organization holds its name (#582), so two pending
+      // applications can share one until the first is approved.
+      mockAdminRpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "P0001",
+          message:
+            "NAME_TAKEN: an approved organization already uses this name",
+        },
+      });
+      const res = await PATCH(makePatchRequest(), {
+        params: Promise.resolve({ id: APP_ID }),
+      });
+      expect(res.status).toBe(409);
+      const json = await res.json();
+      expect(json.error.code).toBe("NAME_TAKEN");
+      expect(json.error.message).toMatch(/reject this application/i);
       await runAfterCallbacks();
       expect(mockRegisterBank).not.toHaveBeenCalled();
       expect(mockNotifyReviewed).not.toHaveBeenCalled();

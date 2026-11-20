@@ -29,10 +29,31 @@ const DOCUMENT_TYPES: readonly OrgDocumentType[] = [
 /** At most this many KYB documents per application — a bound, not a target. */
 const MAX_DOCUMENTS = 10;
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface OrgDocumentInput {
   doc_type: OrgDocumentType;
   storage_path: string;
   original_filename: string | null;
+}
+
+interface BankAccountInput {
+  bank_code: string;
+  bank_account_holder: string;
+  bank_account_number: string;
+}
+
+/** The organization's own details: the same on a first submission and an amendment. */
+interface OrgFields {
+  name: string;
+  description: string | null;
+  links: OrgLink[] | null;
+  email: string;
+  phone: string | null;
+  past_tournament_refs: string | null;
+  entity_type: OrgEntityType;
+  registration_number: string | null;
 }
 
 // Deliberately no agreement_version field. The applicant declares that they
@@ -43,20 +64,23 @@ interface OrgDocumentInput {
 //
 // Likewise no bank_name: the client sends a SWIFT code and the server derives
 // the display name from src/lib/reference/malaysian-banks.ts, so the two cannot disagree.
-export interface ApplyRequest {
-  name: string;
-  description?: string | null;
-  links?: OrgLink[] | null;
-  email: string;
-  phone?: string | null;
-  past_tournament_refs?: string | null;
-  entity_type: OrgEntityType;
-  registration_number: string | null;
-  bank_code: string;
-  bank_account_holder: string;
-  bank_account_number: string;
+export interface ApplyRequest extends OrgFields, BankAccountInput {
   documents: OrgDocumentInput[];
 }
+
+/**
+ * An amendment of a rejected application (#582). The applicant either keeps the
+ * application's payout account (`bank` is null; its number never leaves the
+ * database) or gives a new one, and keeps the listed documents while adding
+ * `new_documents`. The documents left out are removed.
+ */
+export interface ResubmitRequest extends OrgFields {
+  bank: BankAccountInput | null;
+  keep_document_ids: string[];
+  new_documents: OrgDocumentInput[];
+}
+
+type Validated<T> = { data: T } | { error: NextResponse };
 
 function invalid(message: string): { error: NextResponse } {
   return {
@@ -78,21 +102,13 @@ function orgDocumentPrefix(appUserId: string): string {
   return `users/${appUserId}/org-kyb/`;
 }
 
-/**
- * @param body   parsed request body
- * @param appUserId the CALLER's public.users.id, from the session — never from
- *   the body. It is what the document paths are checked against.
- */
-export function validateApplyRequest(
-  body: unknown,
-  appUserId: string,
-): { data: ApplyRequest } | { error: NextResponse } {
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return invalid("Invalid request body");
-  }
+function asObject(body: unknown): Record<string, unknown> | null {
+  return body && typeof body === "object" && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : null;
+}
 
-  const b = body as Record<string, unknown>;
-
+function validateOrgFields(b: Record<string, unknown>): Validated<OrgFields> {
   if (!b.name || typeof b.name !== "string" || b.name.trim() === "") {
     return invalid("Organization name is required");
   }
@@ -106,7 +122,8 @@ export function validateApplyRequest(
   }
 
   // The agreement governs money movement and carries a claw-back obligation, so
-  // an application without an explicit acceptance is not an application.
+  // an application without an explicit acceptance is not an application. An
+  // amendment accepts it again: the version may have changed since.
   if (b.agreement_accepted !== true) {
     return invalid("You must accept the Organizer Agreement");
   }
@@ -114,7 +131,58 @@ export function validateApplyRequest(
   const linksError = validateOrgLinks(b.links);
   if (linksError) return invalid(linksError);
 
-  // ---- Payout bank account -------------------------------------------------
+  if (
+    typeof b.entity_type !== "string" ||
+    !ENTITY_TYPES.includes(b.entity_type as OrgEntityType)
+  ) {
+    return invalid("Please choose the type of entity you are applying as");
+  }
+  const entityType = b.entity_type as OrgEntityType;
+
+  const registrationNumber =
+    typeof b.registration_number === "string"
+      ? b.registration_number.trim() || null
+      : null;
+
+  if (entityType !== "individual" && !registrationNumber) {
+    return invalid(
+      entityType === "company"
+        ? "An SSM registration number is required"
+        : "An ROS registration number is required",
+    );
+  }
+
+  if (registrationNumber && registrationNumber.length > 100) {
+    return invalid("Registration number must be 100 characters or fewer");
+  }
+
+  return {
+    data: {
+      name: b.name.trim(),
+      description:
+        typeof b.description === "string" ? b.description.trim() || null : null,
+      links:
+        Array.isArray(b.links) && b.links.length > 0
+          ? (b.links as OrgLink[])
+          : null,
+      email: (b.email as string).trim(),
+      phone: typeof b.phone === "string" ? b.phone.trim() || null : null,
+      past_tournament_refs:
+        typeof b.past_tournament_refs === "string"
+          ? b.past_tournament_refs.trim() || null
+          : null,
+      entity_type: entityType,
+      // An individual has no registry entry; normalised away so the column
+      // means exactly one thing (the RPC does the same).
+      registration_number:
+        entityType === "individual" ? null : registrationNumber,
+    },
+  };
+}
+
+function validateBankAccount(
+  b: Record<string, unknown>,
+): Validated<BankAccountInput> {
   // An unknown SWIFT code is one CHIP Send will not recognise either, so it is
   // rejected here rather than becoming a failed payout later.
   if (typeof b.bank_code !== "string" || !BANK_SWIFT_CODES.has(b.bank_code)) {
@@ -144,50 +212,35 @@ export function validateApplyRequest(
     );
   }
 
-  // ---- Entity identity -----------------------------------------------------
-  if (
-    typeof b.entity_type !== "string" ||
-    !ENTITY_TYPES.includes(b.entity_type as OrgEntityType)
-  ) {
-    return invalid("Please choose the type of entity you are applying as");
-  }
-  const entityType = b.entity_type as OrgEntityType;
+  return {
+    data: {
+      bank_code: b.bank_code,
+      bank_account_holder: b.bank_account_holder.trim(),
+      bank_account_number: accountNumber,
+    },
+  };
+}
 
-  const registrationNumber =
-    typeof b.registration_number === "string"
-      ? b.registration_number.trim() || null
-      : null;
-
-  if (entityType !== "individual" && !registrationNumber) {
-    return invalid(
-      entityType === "company"
-        ? "An SSM registration number is required"
-        : "An ROS registration number is required",
-    );
+function validateDocuments(
+  value: unknown,
+  appUserId: string,
+): Validated<OrgDocumentInput[]> {
+  if (!Array.isArray(value)) {
+    return invalid("Documents must be a list");
   }
 
-  if (registrationNumber && registrationNumber.length > 100) {
-    return invalid("Registration number must be 100 characters or fewer");
-  }
-
-  // ---- Verification documents ----------------------------------------------
-  if (!Array.isArray(b.documents) || b.documents.length === 0) {
-    return invalid("At least one verification document is required");
-  }
-
-  if (b.documents.length > MAX_DOCUMENTS) {
+  if (value.length > MAX_DOCUMENTS) {
     return invalid(`At most ${MAX_DOCUMENTS} documents can be submitted`);
   }
 
   const allowedPrefix = orgDocumentPrefix(appUserId);
   const documents: OrgDocumentInput[] = [];
 
-  for (const entry of b.documents) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+  for (const entry of value) {
+    const d = asObject(entry);
+    if (!d) {
       return invalid("Each document must be an object");
     }
-
-    const d = entry as Record<string, unknown>;
 
     if (
       typeof d.doc_type !== "string" ||
@@ -220,59 +273,120 @@ export function validateApplyRequest(
     });
   }
 
-  // Mirrors the rule create_organization_application enforces in-transaction.
-  // Checked here too so the applicant gets a readable message naming the
-  // document they're missing, rather than a generic RPC failure.
-  // The registry that matches the entity, not either one: a company is
-  // registered with SSM and a society with ROS.
-  const requiredRegistryDoc = entityType === "company" ? "ssm" : "ros";
-  const hasRegistryDoc = documents.some(
-    (d) => d.doc_type === requiredRegistryDoc,
-  );
-  const hasIdentityDoc = documents.some(
-    (d) =>
-      d.doc_type === "identity_document" ||
-      d.doc_type === "authorization_letter",
-  );
+  return { data: documents };
+}
 
-  if (entityType !== "individual" && !hasRegistryDoc) {
-    return invalid(
-      entityType === "company"
-        ? "An SSM document is required for a company"
-        : "An ROS document is required for a society",
-    );
+/**
+ * Mirrors the rule the application RPCs enforce in-transaction. Checked here
+ * too so the applicant gets a readable message naming the document they're
+ * missing, rather than a generic RPC failure. The registry that matches the
+ * entity, not either one: a company is registered with SSM and a society with
+ * ROS.
+ */
+function missingEntityDocument(
+  entityType: OrgEntityType,
+  docTypes: string[],
+): string | null {
+  if (entityType === "individual") {
+    return docTypes.some(
+      (t) => t === "identity_document" || t === "authorization_letter",
+    )
+      ? null
+      : "An identity document or authorization letter is required for an individual organizer";
+  }
+  if (entityType === "company") {
+    return docTypes.includes("ssm")
+      ? null
+      : "An SSM document is required for a company";
+  }
+  return docTypes.includes("ros")
+    ? null
+    : "An ROS document is required for a society";
+}
+
+/**
+ * @param body   parsed request body
+ * @param appUserId the CALLER's public.users.id, from the session — never from
+ *   the body. It is what the document paths are checked against.
+ */
+export function validateApplyRequest(
+  body: unknown,
+  appUserId: string,
+): Validated<ApplyRequest> {
+  const b = asObject(body);
+  if (!b) return invalid("Invalid request body");
+
+  const fields = validateOrgFields(b);
+  if ("error" in fields) return fields;
+
+  const bank = validateBankAccount(b);
+  if ("error" in bank) return bank;
+
+  if (!Array.isArray(b.documents) || b.documents.length === 0) {
+    return invalid("At least one verification document is required");
+  }
+  const documents = validateDocuments(b.documents, appUserId);
+  if ("error" in documents) return documents;
+
+  const missing = missingEntityDocument(
+    fields.data.entity_type,
+    documents.data.map((d) => d.doc_type),
+  );
+  if (missing) return invalid(missing);
+
+  return {
+    data: { ...fields.data, ...bank.data, documents: documents.data },
+  };
+}
+
+/**
+ * Validates an amendment of a rejected application (#582). The entity rule is
+ * checked by the RPC, which is the only place that knows the types of the kept
+ * documents.
+ *
+ * @param appUserId the CALLER's public.users.id, from the session.
+ */
+export function validateResubmitRequest(
+  body: unknown,
+  appUserId: string,
+): Validated<ResubmitRequest> {
+  const b = asObject(body);
+  if (!b) return invalid("Invalid request body");
+
+  const fields = validateOrgFields(b);
+  if ("error" in fields) return fields;
+
+  let bank: BankAccountInput | null = null;
+  if (b.keep_bank_account !== true) {
+    const validated = validateBankAccount(b);
+    if ("error" in validated) return validated;
+    bank = validated.data;
   }
 
-  if (entityType === "individual" && !hasIdentityDoc) {
-    return invalid(
-      "An identity document or authorization letter is required for an individual organizer",
-    );
+  const keep = b.keep_document_ids ?? [];
+  if (
+    !Array.isArray(keep) ||
+    !keep.every((id) => typeof id === "string" && UUID_RE.test(id))
+  ) {
+    return invalid("Kept documents must be a list of document ids");
+  }
+
+  const newDocuments = validateDocuments(b.new_documents ?? [], appUserId);
+  if ("error" in newDocuments) return newDocuments;
+
+  if (keep.length + newDocuments.data.length === 0) {
+    return invalid("At least one verification document is required");
+  }
+  if (keep.length + newDocuments.data.length > MAX_DOCUMENTS) {
+    return invalid(`At most ${MAX_DOCUMENTS} documents can be submitted`);
   }
 
   return {
     data: {
-      name: b.name.trim(),
-      description:
-        typeof b.description === "string" ? b.description.trim() || null : null,
-      links:
-        Array.isArray(b.links) && b.links.length > 0
-          ? (b.links as OrgLink[])
-          : null,
-      email: (b.email as string).trim(),
-      phone: typeof b.phone === "string" ? b.phone.trim() || null : null,
-      past_tournament_refs:
-        typeof b.past_tournament_refs === "string"
-          ? b.past_tournament_refs.trim() || null
-          : null,
-      entity_type: entityType,
-      // An individual has no registry entry; normalised away so the column
-      // means exactly one thing (the RPC does the same).
-      registration_number:
-        entityType === "individual" ? null : registrationNumber,
-      bank_code: b.bank_code,
-      bank_account_holder: b.bank_account_holder.trim(),
-      bank_account_number: accountNumber,
-      documents,
+      ...fields.data,
+      bank,
+      keep_document_ids: keep as string[],
+      new_documents: newDocuments.data,
     },
   };
 }
