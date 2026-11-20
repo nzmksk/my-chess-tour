@@ -1,11 +1,11 @@
 -- =============================================
 -- ORGANIZER AGREEMENT 2026-11-20 (#663)
--- The Agreement now allows early payouts while registration is open, says an
--- unpaid claw-back can end in legal action, and no longer names Kuala Lumpur
--- for disputes. Bumping the version is the re-acceptance mechanism: an
--- organization still on 2026-11-18 is asked to accept the new version, and
--- payout_recipient_problem refuses to pay it (agreement_not_current) until it
--- does.
+-- Moves the database to the Organizer Agreement's first published version,
+-- 2026-11-20, which allows early payouts while registration is open, says an
+-- unpaid claw-back can end in legal action, and names no city for disputes.
+-- An organization that accepted earlier, unpublished wording (stored as
+-- 2026-11-18) is asked to accept 2026-11-20, and payout_recipient_problem
+-- refuses to pay it (agreement_not_current) until it does.
 -- =============================================
 
 -- =============================================
