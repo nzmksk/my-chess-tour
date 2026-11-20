@@ -2,7 +2,7 @@
 -- ACCOUNT DELETION: INVITATION AUDIT ROWS (#470)
 --
 -- organization_invitations is audited now
--- (20261120045057_audit_organization_invitations.sql), and every snapshot holds
+-- (20261120120510_audit_organization_invitations.sql), and every snapshot holds
 -- the invitee's email address. The deletion runbook (wiki/account-deletion.md)
 -- deletes the invitations addressed to the user, but deleting rows does not
 -- reach audit_logs, so the address would outlive the account there.

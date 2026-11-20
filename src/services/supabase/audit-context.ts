@@ -14,7 +14,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
  *   x-audit-context  a short label for what was done
  *
  * `audit_trigger_func` trusts them only on a service-role request
- * (supabase/migrations/20261120042837_audit_actor_and_context.sql), so a client
+ * (supabase/migrations/20261120120505_audit_actor_and_context.sql), so a client
  * sending them with the public key changes nothing.
  *
  * The scope is per request (AsyncLocalStorage), so nothing has to be threaded

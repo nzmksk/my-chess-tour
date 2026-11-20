@@ -10,7 +10,7 @@
 -- the service role (create_organization_invitation, accept_/decline_
 -- organization_invitation[_by_id], revoke_organization_invitation), so the
 -- actor and context come from the x-audit-* headers
--- (20261120042837_audit_actor_and_context.sql). Expiry is derived from
+-- (20261120120505_audit_actor_and_context.sql). Expiry is derived from
 -- expires_at, never stored, so it writes no row.
 --
 -- Three parts:
@@ -59,7 +59,7 @@ AS $$
 $$;
 
 -- ---- 2. organization_id scoping --------------------------------------------
--- audit_trigger_func as in 20261120042837_audit_actor_and_context.sql, with
+-- audit_trigger_func as in 20261120120505_audit_actor_and_context.sql, with
 -- organization_invitations added to the tables that carry organization_id.
 CREATE OR REPLACE FUNCTION audit_trigger_func()
 RETURNS TRIGGER AS $$
