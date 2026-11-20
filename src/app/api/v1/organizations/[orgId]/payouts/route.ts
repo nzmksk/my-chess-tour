@@ -224,8 +224,8 @@ function requestErrorResponse(error: {
 }
 
 /**
- * Requests an early payout: up to half a tournament's net revenue once its
- * registration has closed, at most twice, for a platform admin to approve. Owner
+ * Requests an early payout: up to half a tournament's net revenue, at most twice,
+ * for a platform admin to approve. Registration may still be open (#663). Owner
  * only (payout.request), as it moves money to a bank account.
  *
  * The request reserves its amount straight away. Nothing is sent until it is

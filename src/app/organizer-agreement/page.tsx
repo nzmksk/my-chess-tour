@@ -140,12 +140,12 @@ export default function OrganizerAgreementPage() {
               <h2 className={H2}>5. Early Payouts</h2>
               <p className="text-text-secondary mb-2">
                 You may request payment of part of your revenue before the
-                tournament ends. Early payouts are granted{" "}
+                tournament ends, including while registration is still open.
+                Early payouts are granted{" "}
                 <strong>at the platform&apos;s sole discretion</strong> and are
                 subject to all of the following:
               </p>
               <ul className={UL}>
-                <li>registration for the tournament must have closed;</li>
                 <li>
                   the total advanced must not exceed <strong>50%</strong> of net
                   revenue at the time of the request;
@@ -226,7 +226,9 @@ export default function OrganizerAgreementPage() {
                 already advanced, the difference becomes immediately repayable
                 by you on demand. We may recover it by deducting from payouts
                 due to you on any other tournament, by invoicing you directly,
-                or by both. This obligation survives termination of this
+                or by both. Where a significant amount remains unpaid after we
+                have demanded it, we may also take legal action against you to
+                recover it. This obligation survives termination of this
                 Agreement and applies regardless of whether a beneficiary
                 received the funds.
               </p>
@@ -392,8 +394,8 @@ export default function OrganizerAgreementPage() {
               <h2 className={H2}>15. Governing Law and Contact</h2>
               <p className="text-text-secondary">
                 This Agreement is governed by the laws of Malaysia, and the
-                courts of Kuala Lumpur have exclusive jurisdiction over any
-                dispute arising from it. For questions about this Agreement,
+                courts of Malaysia have exclusive jurisdiction over any dispute
+                arising from it. For questions about this Agreement,
                 contact us at <strong>{SUPPORT_EMAIL}</strong>.
               </p>
             </section>

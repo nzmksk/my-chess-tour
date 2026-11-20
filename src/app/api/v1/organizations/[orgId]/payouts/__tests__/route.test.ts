@@ -183,13 +183,13 @@ describe("GET /organizations/[orgId]/payouts", () => {
 
   it("says why an early payout can't be requested", async () => {
     mockRpc.mockResolvedValue({
-      data: [{ ...overviewRow, early_payout_cap_cents: 0, early_payout_problem: "registration_open" }],
+      data: [{ ...overviewRow, early_payout_cap_cents: 0, early_payout_problem: "nothing_payable_early" }],
       error: null,
     });
     const { data } = await (await call()).json();
     expect(data.tournaments[0].early_payout).toEqual({
       cap_cents: 0,
-      blocked: expect.stringMatching(/registration has closed/),
+      blocked: expect.stringMatching(/nothing left that can be paid out early/),
     });
   });
 
@@ -377,7 +377,6 @@ describe("POST /organizations/[orgId]/payouts", () => {
     ["23505", 'duplicate key value violates unique constraint "uniq_early_payout_seq_per_tournament"', 409, "PAYOUT_LIMIT_REACHED", /both early payouts/i],
     ["P0001", "EARLY_PAYOUT_EXCEEDS_CAP: 600100 cents requested, 600000 cents can be paid early", 400, "PAYOUT_EXCEEDS_CAP", /RM 6,001\.00 is more than the RM 6,000\.00/],
     ["P0001", "PAYOUT_BELOW_MINIMUM: 999 cents requested, the minimum is 1000", 400, "PAYOUT_BELOW_MINIMUM", /minimum payout is RM 10\.00/],
-    ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: registration_open", 409, "EARLY_PAYOUT_NOT_ALLOWED", /registration has closed/i],
     ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: beneficiary_set", 409, "EARLY_PAYOUT_NOT_ALLOWED", /nominated organization/i],
     ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: cancellation_pending", 409, "EARLY_PAYOUT_NOT_ALLOWED", /cancellation request/i],
     ["P0001", "EARLY_PAYOUT_NOT_ALLOWED: bank_account_not_verified", 409, "EARLY_PAYOUT_NOT_ALLOWED", /verified payout bank/i],

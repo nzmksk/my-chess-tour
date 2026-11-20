@@ -56,14 +56,25 @@ describe("current_organizer_agreement_version()", () => {
     // The money functions refuse a stale agreement in SQL, which can't import
     // this module. Bump both together: if they drift, every payout is refused
     // (SQL older) or stale organizations are paid (SQL newer than nothing).
-    const sql = fs.readFileSync(
-      path.join(process.cwd(), "supabase/migrations/003_functions_triggers.sql"),
-      "utf-8",
-    );
-    const match = sql.match(
-      /FUNCTION current_organizer_agreement_version\(\)[\s\S]*?SELECT '([^']+)'/,
-    );
-    expect(match?.[1]).toBe(ORGANIZER_AGREEMENT_VERSION);
+    //
+    // Migrations are append-only, so a bump is a new migration replacing the
+    // function. The one in force is the last definition in filename order,
+    // which is the order the CLI applies them in.
+    const dir = path.join(process.cwd(), "supabase/migrations");
+    const versions = fs
+      .readdirSync(dir)
+      .filter((file) => file.endsWith(".sql"))
+      .sort()
+      .flatMap((file) =>
+        [
+          ...fs
+            .readFileSync(path.join(dir, file), "utf-8")
+            .matchAll(
+              /FUNCTION current_organizer_agreement_version\(\)[\s\S]*?SELECT '([^']+)'/g,
+            ),
+        ].map((match) => match[1]),
+      );
+    expect(versions.at(-1)).toBe(ORGANIZER_AGREEMENT_VERSION);
   });
 });
 

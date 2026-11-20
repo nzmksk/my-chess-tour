@@ -31,6 +31,11 @@ interface Props {
  * a money-movement document without telling them what moved is how you get a
  * reflexive tick, which is worth nothing when the claw-back clause is tested.
  * An organization that skipped a version sees every version it missed.
+ *
+ * "What changed since" only makes sense against a version in the history. An
+ * acceptance of anything older (wording from before the first version) has no
+ * entry to diff against, so it gets the full summary as "What it covers", the
+ * same as an organization that never accepted at all.
  */
 export default function AgreementGate({
   organizationId,
@@ -44,6 +49,11 @@ export default function AgreementGate({
   if (agreementVersion === ORGANIZER_AGREEMENT_VERSION) return null;
 
   const changes = changesSince(ORGANIZER_AGREEMENT_HISTORY, agreementVersion);
+  const acceptedRecordedVersion =
+    agreementVersion !== null &&
+    ORGANIZER_AGREEMENT_HISTORY.some(
+      (entry) => entry.version === agreementVersion,
+    );
 
   async function handleAccept() {
     if (submitting || !accepted) return;
@@ -102,7 +112,7 @@ export default function AgreementGate({
       {changes.length > 0 && (
         <div className="border-border bg-bg-sunken mb-4 rounded-md border p-4">
           <p className="font-lato text-text-primary mb-2 text-sm font-semibold">
-            {agreementVersion
+            {acceptedRecordedVersion
               ? `What changed since version ${agreementVersion}`
               : "What it covers"}
           </p>
