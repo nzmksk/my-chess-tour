@@ -107,7 +107,8 @@ export async function PATCH(
     .single();
 
   if (updateError) {
-    // idx_organizations_name_active — case-insensitive unique among active orgs.
+    // idx_organizations_name_active — case-insensitive unique among pending and
+    // approved orgs (a rejected application releases its name, #582).
     if (updateError.code === "23505") {
       return NextResponse.json(
         {
