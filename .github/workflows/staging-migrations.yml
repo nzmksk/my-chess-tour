@@ -36,6 +36,25 @@ jobs:
         with:
           version: 2.122.1
 
+      # Staging got 001–007 by hand before the CLI tracked it (#646): the
+      # schema is there but the history is empty, so db push would run 001
+      # again and fail. Record them as applied once, only while nothing is
+      # recorded and the schema exists. A new database gets them from db push.
+      - name: Record the hand-applied original migrations
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          query() { psql "$DATABASE_URL" -X -t -A -v ON_ERROR_STOP=1 -c "$1"; }
+          recorded=0
+          if [ "$(query "select to_regclass('supabase_migrations.schema_migrations') is not null")" = t ]; then
+            recorded=$(query "select count(*) from supabase_migrations.schema_migrations")
+          fi
+          if [ "$recorded" = 0 ] && [ "$(query "select to_regclass('public.users') is not null")" = t ]; then
+            supabase migration repair --db-url "$DATABASE_URL" --status applied 001 002 003 004 005 006 007
+          else
+            echo "Nothing to record."
+          fi
+
       # --include-all also applies a migration older than the newest one
       # applied, as when two PRs merge in the opposite order they were written.
       - name: Apply pending migrations
