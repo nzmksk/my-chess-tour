@@ -34,6 +34,10 @@
 --       ENTITY_DOCS_REQUIRED
 --   A1  audit snapshots redact account_number and storage_path, and carry the
 --       organization_id
+--   R1  a rejected applicant re-applies with the same name (any case) AND the
+--       same bank account (#582): rejecting released both
+--   R2  a pending or approved organization's name still raises NAME_TAKEN
+--   R3  a rejected application cannot be approved (APPLICATION_REJECTED)
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it builds
@@ -57,6 +61,9 @@ DECLARE
   v_reg_no      text;
   v_snapshot    jsonb;
   v_audit_org   uuid;
+  v_rejected    uuid;
+  v_reapplied   uuid;
+  v_active      boolean;
 BEGIN
   INSERT INTO users (auth_user_id, email, first_name, last_name)
     VALUES (gen_random_uuid(), 'onboarding@test.local', 'On', 'Boarding')
@@ -411,6 +418,117 @@ BEGIN
     RAISE EXCEPTION 'A1 FAIL: document audit row has no organization_id';
   END IF;
   RAISE NOTICE 'A1 PASS — account_number and storage_path redacted, org-scoped';
+
+  -- ---- R1: a rejected applicant re-applies with the same name (#582) -------
+  v_result := create_organization_application(
+    p_created_by        => v_user,
+    p_name              => 'Second Chance Chess',
+    p_email             => 'second@test.local',
+    p_entity_type       => 'individual',
+    p_agreement_version => '2026-08-02',
+    p_bank_code         => 'RHBBMYKL',
+    p_bank_name         => 'RHB Bank',
+    p_account_holder    => 'Second Chance',
+    p_account_number    => '8889990001',
+    p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/id.pdf"}]'::jsonb
+  );
+  v_rejected := (v_result->>'id')::uuid;
+
+  PERFORM review_organization_application(
+    v_rejected, v_user, 'reject', 'Identity document is unreadable');
+
+  SELECT is_active INTO v_active
+    FROM organization_bank_accounts WHERE organization_id = v_rejected;
+  IF v_active THEN
+    RAISE EXCEPTION 'R1 FAIL: rejecting left the application''s bank account active';
+  END IF;
+
+  -- Same name in another case, same bank account: both were released.
+  v_result := create_organization_application(
+    p_created_by        => v_user,
+    p_name              => 'SECOND CHANCE CHESS',
+    p_email             => 'second@test.local',
+    p_entity_type       => 'individual',
+    p_agreement_version => '2026-08-02',
+    p_bank_code         => 'RHBBMYKL',
+    p_bank_name         => 'RHB Bank',
+    p_account_holder    => 'Second Chance',
+    p_account_number    => '8889990001',
+    p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/id2.pdf"}]'::jsonb
+  );
+  v_reapplied := (v_result->>'id')::uuid;
+
+  IF (SELECT approval_status FROM organizations WHERE id = v_rejected) <> 'rejected' THEN
+    RAISE EXCEPTION 'R1 FAIL: the rejected application was not kept for audit';
+  END IF;
+  RAISE NOTICE 'R1 PASS — a rejected applicant re-applied with the same name and bank account';
+
+  -- ---- R2: pending and approved names stay taken ---------------------------
+  -- Pending: the re-application itself.
+  BEGIN
+    PERFORM create_organization_application(
+      p_created_by        => v_user,
+      p_name              => 'second chance chess',
+      p_email             => 'third@test.local',
+      p_entity_type       => 'individual',
+      p_agreement_version => '2026-08-02',
+      p_bank_code         => 'RHBBMYKL',
+      p_bank_name         => 'RHB Bank',
+      p_account_holder    => 'Third',
+      p_account_number    => '8889990002',
+      p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/id3.pdf"}]'::jsonb
+    );
+    RAISE EXCEPTION 'R2 FAIL: a pending organization''s name was reused'
+      USING ERRCODE = 'assert_failure';
+  EXCEPTION
+    WHEN sqlstate 'P0001' THEN
+      IF SQLERRM NOT LIKE 'NAME_TAKEN%' THEN
+        RAISE EXCEPTION 'R2 FAIL: expected NAME_TAKEN for a pending name, got — %', SQLERRM;
+      END IF;
+  END;
+
+  -- Approved: the same re-application, once approved.
+  PERFORM review_organization_application(v_reapplied, v_user, 'approve', NULL);
+  BEGIN
+    PERFORM create_organization_application(
+      p_created_by        => v_user,
+      p_name              => 'Second Chance Chess',
+      p_email             => 'third@test.local',
+      p_entity_type       => 'individual',
+      p_agreement_version => '2026-08-02',
+      p_bank_code         => 'RHBBMYKL',
+      p_bank_name         => 'RHB Bank',
+      p_account_holder    => 'Third',
+      p_account_number    => '8889990002',
+      p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/id3.pdf"}]'::jsonb
+    );
+    RAISE EXCEPTION 'R2 FAIL: an approved organization''s name was reused'
+      USING ERRCODE = 'assert_failure';
+  EXCEPTION
+    WHEN sqlstate 'P0001' THEN
+      IF SQLERRM NOT LIKE 'NAME_TAKEN%' THEN
+        RAISE EXCEPTION 'R2 FAIL: expected NAME_TAKEN for an approved name, got — %', SQLERRM;
+      END IF;
+  END;
+  RAISE NOTICE 'R2 PASS — pending and approved names still raise NAME_TAKEN';
+
+  -- ---- R3: a rejection is final --------------------------------------------
+  -- Approving the old row now would put two approved organizations under one
+  -- name, the second with no payout account.
+  BEGIN
+    PERFORM review_organization_application(v_rejected, v_user, 'approve', NULL);
+    RAISE EXCEPTION 'R3 FAIL: a rejected application was approved'
+      USING ERRCODE = 'assert_failure';
+  EXCEPTION
+    WHEN sqlstate 'P0001' THEN
+      IF SQLERRM NOT LIKE 'APPLICATION_REJECTED%' THEN
+        RAISE EXCEPTION 'R3 FAIL: expected APPLICATION_REJECTED, got — %', SQLERRM;
+      END IF;
+  END;
+  IF (SELECT approval_status FROM organizations WHERE id = v_rejected) <> 'rejected' THEN
+    RAISE EXCEPTION 'R3 FAIL: the refused approval changed the application''s status';
+  END IF;
+  RAISE NOTICE 'R3 PASS — a rejected application cannot be approved';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;
