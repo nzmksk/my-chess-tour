@@ -19,6 +19,10 @@
 --       audit logs" still returns exactly their own rows
 --   X7  the hard-delete path: with the users row gone, the DELETE snapshot
 --       (which carries the full pre-delete row) is anonymised too
+--   X8  invitation audit rows (#470), run as the runbook does: snapshots of
+--       invitations addressed to the user, at their current address or one
+--       they used before, are anonymised but kept; an invitation to someone
+--       else is untouched; re-running changes nothing
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it builds
@@ -46,6 +50,11 @@ DECLARE
   v_snap       integer;
   v_cleared    integer;
   v_json       jsonb;
+  v_d          uuid;
+  v_inviter    uuid;
+  v_inv_org    uuid;
+  v_inv_rows   integer;
+  v_other_inv  text;
 BEGIN
   -- ---- fixtures (service role: RLS not enforced) --------------------------
   INSERT INTO users (auth_user_id, email, first_name, last_name)
@@ -251,6 +260,74 @@ BEGIN
     RAISE EXCEPTION 'X7 FAIL: personal data survives after a hard delete';
   END IF;
   RAISE NOTICE 'X7 PASS — hard-deleted account anonymised, DELETE snapshot included';
+
+  -- ---- X8: invitation audit rows ------------------------------------------
+  INSERT INTO users (auth_user_id, email, first_name, last_name)
+    VALUES (gen_random_uuid(), 'x8-old@test.local', 'Dewi', 'Moved')
+    RETURNING id INTO v_d;
+  -- An address change: the users snapshots now hold both addresses.
+  UPDATE users SET email = 'x8-new@test.local' WHERE id = v_d;
+
+  INSERT INTO users (auth_user_id, email, first_name, last_name)
+    VALUES (gen_random_uuid(), 'x8-inviter@test.local', 'Ivan', 'Viter')
+    RETURNING id INTO v_inviter;
+  INSERT INTO organizations (name, entity_type, agreement_version, agreement_accepted_at, approval_status)
+    VALUES ('X8 ORG', 'society', current_organizer_agreement_version(), now(), 'approved')
+    RETURNING id INTO v_inv_org;
+  INSERT INTO organization_memberships (organization_id, user_id, role_id)
+    SELECT v_inv_org, v_inviter, id FROM roles WHERE name = 'owner' AND scope = 'organization';
+
+  PERFORM create_organization_invitation(v_inv_org, 'x8-old@test.local', 'member', v_inviter,
+                                         encode(sha256('x8-a'::bytea), 'hex'));
+  PERFORM create_organization_invitation(v_inv_org, 'x8-new@test.local', 'member', v_inviter,
+                                         encode(sha256('x8-b'::bytea), 'hex'));
+  PERFORM create_organization_invitation(v_inv_org, 'x8-someone@test.local', 'member', v_inviter,
+                                         encode(sha256('x8-c'::bytea), 'hex'));
+  SELECT md5(string_agg(row_to_json(a)::text, '|' ORDER BY a.id)) INTO v_other_inv
+    FROM audit_logs a
+    WHERE a.table_name = 'organization_invitations' AND a.new_data ->> 'email' = 'x8-someone@test.local';
+
+  -- The runbook, step 5: invitations to the current address, then the user.
+  DELETE FROM organization_invitations WHERE email = 'x8-new@test.local';
+  DELETE FROM users WHERE id = v_d;
+
+  SELECT count(*) INTO v_inv_rows FROM audit_logs a
+    WHERE a.table_name = 'organization_invitations'
+      AND COALESCE(a.new_data, a.old_data) ->> 'email' IN ('x8-old@test.local', 'x8-new@test.local');
+  IF v_inv_rows < 3 THEN  -- two INSERTs and the DELETE
+    RAISE EXCEPTION 'X8 fixture FAIL: expected at least 3 invitation audit rows for the user, found %', v_inv_rows;
+  END IF;
+
+  PERFORM anonymise_user_audit_logs(v_d);
+
+  IF EXISTS (
+    SELECT 1 FROM audit_logs a
+    WHERE a.table_name = 'organization_invitations'
+      AND concat(a.old_data::text, a.new_data::text) ~* 'x8-old@|x8-new@'
+  ) THEN
+    RAISE EXCEPTION 'X8 FAIL: an invitation snapshot still holds one of the user''s addresses';
+  END IF;
+  SELECT count(*) INTO v_count FROM audit_logs a
+    WHERE a.table_name = 'organization_invitations'
+      AND COALESCE(a.new_data, a.old_data) ->> 'organization_id' = v_inv_org::text
+      AND COALESCE(a.new_data, a.old_data) ->> 'email' = '[anonymised]'
+      AND COALESCE(a.new_data, a.old_data) ->> 'status' = 'pending'
+      AND COALESCE(a.new_data, a.old_data) ->> 'invited_by' = v_inviter::text;
+  IF v_count <> v_inv_rows THEN
+    RAISE EXCEPTION 'X8 FAIL: % of % invitation rows kept with ids and status (rows must stay)', v_count, v_inv_rows;
+  END IF;
+  IF (SELECT md5(string_agg(row_to_json(a)::text, '|' ORDER BY a.id))
+        FROM audit_logs a
+        WHERE a.table_name = 'organization_invitations'
+          AND a.new_data ->> 'email' = 'x8-someone@test.local') IS DISTINCT FROM v_other_inv THEN
+    RAISE EXCEPTION 'X8 FAIL: another invitee''s audit rows changed';
+  END IF;
+
+  SELECT r.snapshots_anonymised INTO v_snap FROM anonymise_user_audit_logs(v_d) r;
+  IF v_snap <> 0 THEN
+    RAISE EXCEPTION 'X8 FAIL: second run changed % snapshots', v_snap;
+  END IF;
+  RAISE NOTICE 'X8 PASS — % invitation snapshots anonymised, old address included', v_inv_rows;
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;
