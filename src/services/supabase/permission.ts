@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/services/supabase/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { lookupAppUserId } from "@/services/supabase/identity";
+import { noteAuditActor } from "@/services/supabase/audit-context";
 import type { UserOrganization } from "@/lib/auth/roles";
 
 export type AuthIdentity = {
@@ -60,12 +61,24 @@ async function resolveAuthClaims(): Promise<AuthIdentity | null> {
 
 // Per-request memoized: every render-phase caller in a single request shares
 // one validation instead of each hitting auth independently.
-export const getAuthClaims = cache(resolveAuthClaims);
+const resolveAuthClaimsOnce = cache(resolveAuthClaims);
+
+// Also records the signed-in user as the actor of the request's audit scope
+// (#470), so the writes the route makes are attributed to them. On every call,
+// not just the first: a memoized result may come from a call made before the
+// scope was opened.
+export async function getAuthClaims(): Promise<AuthIdentity | null> {
+  const claims = await resolveAuthClaimsOnce();
+  if (claims) noteAuditActor(claims.id);
+  return claims;
+}
 
 // Back-compat identity accessor. Intentionally uncached so it stays predictable
 // outside a request scope (e.g. unit tests).
 export async function getCurrentUser(): Promise<AuthIdentity | null> {
-  return resolveAuthClaims();
+  const claims = await resolveAuthClaims();
+  if (claims) noteAuditActor(claims.id);
+  return claims;
 }
 
 /**

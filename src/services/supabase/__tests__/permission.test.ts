@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getAppUserId,
+  getAuthClaims,
   getCurrentUser,
   getNavUser,
   hasOrgPermission,
@@ -10,6 +11,7 @@ import {
 } from "../permission";
 import { lookupAppUserId } from "@/services/supabase/identity";
 import { appIdFor } from "@/test/identity";
+import { runWithAuditContext, withAuditHeaders } from "../audit-context";
 
 // Stubbed globally in src/test/setup.ts to return the auth id unchanged.
 const mockLookupAppUserId = vi.mocked(lookupAppUserId);
@@ -322,5 +324,58 @@ describe("identity resolution", () => {
     createClient.mockResolvedValue(makeClient({ claims: null }) as never);
 
     expect(await getAppUserId()).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audit attribution (#470): resolving the session names the request's actor,
+// so every write the route makes through supabaseAdmin is attributed to it.
+// ---------------------------------------------------------------------------
+
+describe("audit actor", () => {
+  const claims = {
+    sub: "auth-abc",
+    email: "alice@example.com",
+    user_metadata: {},
+    role: "authenticated",
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  const actorHeader = () => new Headers(withAuditHeaders()?.headers).get("x-audit-actor");
+
+  it("getAuthClaims records the users.id, not the auth id, as the actor", async () => {
+    mockLookupAppUserId.mockResolvedValue("app-xyz");
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+
+    const actor = await runWithAuditContext("org.update", async () => {
+      await getAuthClaims();
+      return actorHeader();
+    });
+
+    expect(actor).toBe("app-xyz");
+  });
+
+  it("getCurrentUser records the actor too", async () => {
+    mockLookupAppUserId.mockResolvedValue("app-xyz");
+    createClient.mockResolvedValue(makeClient({ claims }) as never);
+
+    const actor = await runWithAuditContext("org.update", async () => {
+      await getCurrentUser();
+      return actorHeader();
+    });
+
+    expect(actor).toBe("app-xyz");
+  });
+
+  it("records no actor when there is no session", async () => {
+    createClient.mockResolvedValue(makeClient({ claims: null }) as never);
+
+    const actor = await runWithAuditContext("invitation.decline", async () => {
+      await getAuthClaims();
+      return actorHeader();
+    });
+
+    expect(actor).toBeNull();
   });
 });
