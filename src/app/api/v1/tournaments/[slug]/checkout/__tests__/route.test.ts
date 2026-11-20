@@ -133,6 +133,7 @@ import { POST } from "../route";
 import { lookupAppUserId } from "@/services/supabase/identity";
 import { appIdFor } from "@/test/identity";
 import { hitWindow } from "@/services/rate-limit/window";
+import { withAuditHeaders } from "@/services/supabase/audit-context";
 
 // Stubbed globally in src/test/setup.ts to return appIdFor(sub), so the auth and
 // app identifier spaces differ throughout this file. Overridden per case below
@@ -874,6 +875,31 @@ describe("POST /api/v1/tournaments/:slug/checkout — identity indirection", () 
     expect(res.status).toBe(201);
     expect(mockProfileBuilder.eq).toHaveBeenCalledWith("user_id", APP_ID);
     expect(mockProfileBuilder.eq).not.toHaveBeenCalledWith("user_id", AUTH_ID);
+  });
+
+  it("audits the ledger writes as the resolved users.id (#470)", async () => {
+    // The route skips getAuthClaims(), which is what names the actor elsewhere,
+    // so it has to name the player itself. Read the headers supabaseAdmin would
+    // send at the moment the registration RPC goes out.
+    const sent: Headers[] = [];
+    mockRpc.mockImplementation(() => {
+      sent.push(new Headers(withAuditHeaders({})?.headers));
+      return Promise.resolve({
+        data: { registration_id: "reg-1", payment_id: "pay-1" },
+        error: null,
+      });
+    });
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(sent).not.toHaveLength(0);
+    for (const headers of sent) {
+      expect(headers.get("x-audit-context")).toBe("registration.checkout");
+      expect(headers.get("x-audit-actor")).toBe(APP_ID);
+    }
   });
 
   it("401s without touching the ledger when the session has no users row", async () => {
