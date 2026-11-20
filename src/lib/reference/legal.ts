@@ -56,7 +56,7 @@ export interface LegalVersion {
  */
 export const TERMS_HISTORY: readonly LegalVersion[] = [
   {
-    version: "2026-11-19",
+    version: "2026-11-20",
     changes: [
       "You must be at least 13 years old, or have a parent's consent, and your name must match your MyKad or passport — it is used for official tournament records and FIDE/MCF registration.",
       "Tournaments follow the FIDE Laws of Chess. You agree to abide by the arbiter's decisions, to compete without computer assistance, and to accept results as final unless you appeal within the time the arbiter sets.",

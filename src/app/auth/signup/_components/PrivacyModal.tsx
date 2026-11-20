@@ -136,38 +136,42 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             their own explicit consent: a separate checkbox, shown when you give
             us that data, never pre-ticked and never combined with accepting
             these terms. We record when you consented and to which wording. The
-            table below lists the data that needs this kind of care:
+            table below lists the data that needs this kind of care, and which
+            of it needs your separate consent:
           </p>
           <table className="modal-table">
             <thead>
               <tr>
                 <th>Data Field</th>
+                <th>Separate Consent</th>
                 <th>Reason for Collection</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>OKU (disability) status and OKU card</td>
+                <td>Required</td>
                 <td>
-                  Health data, collected only with your separate consent. Used
-                  for event accessibility, FIDE Special Needs registration, and
-                  OKU categories and special prizes. Your card is seen only by
-                  our reviewers. Whether you are verified OKU is shared with the
-                  organisers of tournaments you enter, but never your card or
-                  the outcome of a pending or rejected application
+                  Health data. Used for event accessibility, FIDE Special Needs
+                  registration, and OKU categories and special prizes. Your card
+                  is seen only by our reviewers. Whether you are verified OKU is
+                  shared with the organisers of tournaments you enter, but never
+                  your card or the outcome of a pending or rejected application
                 </td>
               </tr>
               <tr>
                 <td>Bank details (bank, account holder, account number)</td>
+                <td>Required</td>
                 <td>
-                  Financial data, collected only with your separate consent.
-                  Used to pay you prizes distributed through MY Chess Tour, and
-                  shared with CHIP, our payment processor, to verify the account
-                  and make the transfer. Never shared with organisers
+                  Financial data. Used to pay you prizes distributed through MY
+                  Chess Tour, and shared with CHIP, our payment processor, to
+                  verify the account and make the transfer. Never shared with
+                  organisers
                 </td>
               </tr>
               <tr>
                 <td>Date of birth</td>
+                <td>Not required</td>
                 <td>
                   Age-category eligibility; identity verification; shared with
                   the organisers of tournaments you enter
@@ -175,6 +179,7 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               </tr>
               <tr>
                 <td>Gender</td>
+                <td>Not required</td>
                 <td>
                   Gender-restricted event categories (e.g. Women&apos;s Open);
                   shared with the organisers of tournaments you enter
