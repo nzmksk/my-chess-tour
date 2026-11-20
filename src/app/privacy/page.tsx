@@ -108,7 +108,8 @@ export default function PrivacyPage() {
                 checkbox, shown when you give us that data, never pre-ticked and
                 never combined with accepting these terms. We record when you
                 consented and to which wording. The table below lists the data
-                that needs this kind of care:
+                that needs this kind of care, and which of it needs your
+                separate consent:
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-xs">
@@ -116,6 +117,9 @@ export default function PrivacyPage() {
                     <tr>
                       <th className="font-cinzel text-gold-muted border-border border-b px-3 py-2 text-left tracking-widest uppercase">
                         Data Field
+                      </th>
+                      <th className="font-cinzel text-gold-muted border-border border-b px-3 py-2 text-left tracking-widest uppercase">
+                        Separate Consent
                       </th>
                       <th className="font-cinzel text-gold-muted border-border border-b px-3 py-2 text-left tracking-widest uppercase">
                         Reason for Collection
@@ -128,11 +132,13 @@ export default function PrivacyPage() {
                         OKU (disability) status and OKU card
                       </td>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
-                        Health data, collected only with your separate consent.
-                        Used for event accessibility, FIDE Special Needs
-                        registration, and OKU categories and special prizes.
-                        Your card is seen only by our reviewers. Whether you are
-                        verified OKU is shared with the organisers of
+                        Required
+                      </td>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        Health data. Used for event accessibility, FIDE Special
+                        Needs registration, and OKU categories and special
+                        prizes. Your card is seen only by our reviewers. Whether
+                        you are verified OKU is shared with the organisers of
                         tournaments you enter, but never your card or the
                         outcome of a pending or rejected application
                       </td>
@@ -142,16 +148,21 @@ export default function PrivacyPage() {
                         Bank details (bank, account holder, account number)
                       </td>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
-                        Financial data, collected only with your separate
-                        consent. Used to pay you prizes distributed through MY
-                        Chess Tour, and shared with CHIP, our payment processor,
-                        to verify the account and make the transfer. Never
-                        shared with organisers
+                        Required
+                      </td>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        Financial data. Used to pay you prizes distributed
+                        through MY Chess Tour, and shared with CHIP, our payment
+                        processor, to verify the account and make the transfer.
+                        Never shared with organisers
                       </td>
                     </tr>
                     <tr>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
                         Date of birth
+                      </td>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        Not required
                       </td>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
                         Age-category eligibility; identity verification; shared
@@ -160,6 +171,9 @@ export default function PrivacyPage() {
                     </tr>
                     <tr>
                       <td className="text-text-secondary px-3 py-2">Gender</td>
+                      <td className="text-text-secondary px-3 py-2">
+                        Not required
+                      </td>
                       <td className="text-text-secondary px-3 py-2">
                         Gender-restricted event categories (e.g. Women&apos;s
                         Open); shared with the organisers of tournaments you
@@ -279,7 +293,7 @@ export default function PrivacyPage() {
                         Business verification documents (organisers)
                       </td>
                       <td className="text-text-secondary px-3 py-2">
-                        7 years after the organiser relationship ends
+                        Up to 1 year after the organiser partnership ends
                       </td>
                     </tr>
                   </tbody>
@@ -297,14 +311,19 @@ export default function PrivacyPage() {
               </p>
               <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
-                  All data is transmitted over encrypted connections
+                  All data is encrypted in transit, over secure connections
                   (HTTPS/TLS).
                 </li>
                 <li>
-                  Our database and file storage are hosted on encrypted storage
-                  volumes. We do not additionally encrypt individual fields such
-                  as bank account numbers, and we would rather state that
-                  plainly than overstate the protection.
+                  All data we store, including your bank details and any
+                  documents you upload, is encrypted at rest in our database and
+                  file storage.
+                </li>
+                <li>
+                  Once saved, your full bank account number is never shown
+                  again: the platform and our emails show only its last 4
+                  digits. It is also masked in our internal change logs, so no
+                  historical copies of it are kept there.
                 </li>
                 <li>
                   Access is enforced at the database level by row-level
@@ -320,14 +339,10 @@ export default function PrivacyPage() {
                   under Sharing of Data.
                 </li>
                 <li>
-                  Bank account numbers and document paths are masked in our
-                  internal change logs, so historical copies of them are not
-                  retained there.
-                </li>
-                <li>
-                  Verification documents are held in private storage that is not
-                  publicly reachable, and are reviewed only by platform
-                  administrators.
+                  OKU cards and verification documents are held in private
+                  storage that is not publicly reachable, are reviewed only by
+                  platform administrators, and their storage locations are
+                  masked in our internal change logs.
                 </li>
               </ul>
             </section>
@@ -445,8 +460,7 @@ export default function PrivacyPage() {
               </h2>
               <p className="text-text-secondary">
                 For privacy-related inquiries or to exercise your PDPA rights,
-                contact our Data Protection Officer at{" "}
-                <strong>privacy@mychesstour.com</strong>.
+                email us at <strong>privacy@mychesstour.com</strong>.
               </p>
             </section>
           </div>
