@@ -7,7 +7,12 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
   return (
-    <main className="bg-bg-base flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center">
+    // data-no-footer: a dead end has nothing for the site footer to add, so
+    // the page stays one centred screen (#643). See Footer.
+    <main
+      data-no-footer
+      className="bg-bg-base flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center"
+    >
       {/* Decorative chess piece */}
       <span className="text-gold-bright text-6xl select-none" aria-hidden>
         ♞
