@@ -47,6 +47,8 @@ PRs don't trigger it. A PR runs the workflow file from its own branch, so it cou
 
 `--include-all` lets through a migration whose timestamp is older than the newest one applied, which happens when two PRs merge in the opposite order from how they were written.
 
+Before `db push`, a step records `001`–`007` as applied (`supabase migration repair --status applied`) when the database already has the schema (`public.users` exists) but its history is empty (#646). Staging got those files by hand before the CLI tracked it, so without this `db push` would run `001` again and fail with `type "role_scope" already exists`. Once they're recorded the step does nothing, and it never touches a brand-new database, which gets them from `db push`.
+
 Each migration commits or rolls back on its own. If the second of three fails, the first stays applied, the third is never tried, and the job goes red. Fix it with a new commit: the failed migration was never recorded, so you may still edit it.
 
 ## Setup (admin, once)
@@ -91,6 +93,13 @@ Production is migrated by hand, from the repo root on a machine with Node, **bef
 
 ```sh
 export DB_URL='<production session pooler string>'
+npx supabase@2.122.1 migration list --db-url "$DB_URL"
 npx supabase@2.122.1 db push --db-url "$DB_URL" --include-all --dry-run
 npx supabase@2.122.1 db push --db-url "$DB_URL" --include-all
+```
+
+If production's schema was built by hand, `migration list` shows `001`–`007` with no **Remote** version, and `db push` would run them again and fail (#646). Record them as applied first, once:
+
+```sh
+npx supabase@2.122.1 migration repair --db-url "$DB_URL" --status applied 001 002 003 004 005 006 007
 ```
