@@ -659,10 +659,16 @@ BEGIN
     NULL;
   END;
 
+  -- Open registration is not a refusal (#663): an early payout can be asked
+  -- for before entries close, whether the close is still ahead or unset.
   UPDATE tournaments SET registration_closed_at = now() + interval '1 day' WHERE id = v_t;
-  PERFORM pg_temp.expect_early_refusal('E6 registration open', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: registration_open');
+  IF early_payout_problem(v_t) IS NOT NULL THEN
+    RAISE EXCEPTION 'E6 FAIL: open registration refused an early payout (%)', early_payout_problem(v_t);
+  END IF;
   UPDATE tournaments SET registration_closed_at = NULL WHERE id = v_t;
-  PERFORM pg_temp.expect_early_refusal('E6 never closed', v_t, v_owner, 2000, 'EARLY_PAYOUT_NOT_ALLOWED: registration_open');
+  IF early_payout_problem(v_t) IS NOT NULL THEN
+    RAISE EXCEPTION 'E6 FAIL: an unset registration close refused an early payout (%)', early_payout_problem(v_t);
+  END IF;
   UPDATE tournaments SET registration_closed_at = now() - interval '1 minute' WHERE id = v_t;
 
   INSERT INTO tournament_cancellation_requests (tournament_id, requested_by, reason)

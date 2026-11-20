@@ -28,7 +28,6 @@ export function describeBlockReason(code: string): string {
 
 const EARLY_PAYOUT_PROBLEMS: Record<string, string> = {
   tournament_not_published: "Early payouts are only available for published tournaments.",
-  registration_open: "Early payouts open once registration has closed.",
   beneficiary_set:
     "This tournament pays out to a nominated organization, so it can only be paid out in full after it ends.",
   early_payout_limit_reached: "Both early payouts for this tournament have been used.",

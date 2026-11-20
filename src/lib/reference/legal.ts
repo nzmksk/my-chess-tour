@@ -88,7 +88,7 @@ export const ORGANIZER_AGREEMENT_HISTORY: readonly LegalVersion[] = [
       "Entry fees are an administration fee for running the event. They never fund prizes, and every declared prize must name an external source — a sponsor, a grant, or your own funds.",
       "Commission is up to 10%, and you choose per tournament how much your organization absorbs against how much is added to the player's price.",
       "Payouts are your net revenue in full, disbursed automatically three days after the tournament's final scheduled session in the venue's timezone. MYR only, minimum RM 10.",
-      "Early payouts are capped at 50% of net revenue, limited to two per tournament, available only after registration closes, and granted at the platform's discretion.",
+      "Early payouts are capped at 50% of net revenue, limited to two per tournament, available even while registration is still open, and granted at the platform's discretion.",
       "Early payouts are advances: if a tournament is later cancelled or refunded, the shortfall is repayable.",
       "You may nominate another approved organization to receive a payout, but you remain fully liable regardless of who is paid.",
       "If you appoint MY Chess Tour to distribute a sponsor-funded prize pool, each funder is sent a payment request when you publish, the tournament is listed and opens for registration only once the pool is fully funded, each winner you enter is reviewed before payment, and anything not awarded is returned to the funders pro rata.",

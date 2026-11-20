@@ -140,12 +140,12 @@ export default function OrganizerAgreementPage() {
               <h2 className={H2}>5. Early Payouts</h2>
               <p className="text-text-secondary mb-2">
                 You may request payment of part of your revenue before the
-                tournament ends. Early payouts are granted{" "}
+                tournament ends, including while registration is still open.
+                Early payouts are granted{" "}
                 <strong>at the platform&apos;s sole discretion</strong> and are
                 subject to all of the following:
               </p>
               <ul className={UL}>
-                <li>registration for the tournament must have closed;</li>
                 <li>
                   the total advanced must not exceed <strong>50%</strong> of net
                   revenue at the time of the request;
