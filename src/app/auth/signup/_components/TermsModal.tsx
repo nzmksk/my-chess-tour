@@ -64,12 +64,13 @@ export default function TermsModal({ onClose }: TermsModalProps) {
           <h3 className="modal-section-title">1. Acceptance of Terms</h3>
           <p className="modal-paragraph">
             By registering for an account or using any MCT service, you confirm
-            that you are at least 18 years of age and that you agree to be bound
-            by these Terms and our Privacy Policy. If you are under 18, you may
-            use our services only with the consent of your parent or legal
-            guardian, who agrees to these Terms on your behalf and is
-            responsible for your use of the platform, including any payment
-            made. If you do not agree, you may not use our services.
+            that either you are at least 18 years of age, or you are under 18
+            and your parent or legal guardian has agreed to these Terms on your
+            behalf. You also confirm that you agree to be bound by these Terms
+            and our Privacy Policy. A parent or guardian who agrees on a
+            minor&apos;s behalf is responsible for the minor&apos;s use of the
+            platform, including any payment made. If you do not agree, you may
+            not use our services.
           </p>
 
           <h3 className="modal-section-title">2. Account Registration</h3>
