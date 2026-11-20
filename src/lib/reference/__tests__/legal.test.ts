@@ -188,6 +188,22 @@ describe("changesSince", () => {
       changesSince(ORGANIZER_AGREEMENT_HISTORY, ORGANIZER_AGREEMENT_VERSION),
     ).toEqual([]);
   });
+
+  it("shows an organization on 2026-11-18 only what 2026-11-20 changed", () => {
+    // AgreementGate titles this list "What changed since version 2026-11-18".
+    // Organizations accepted that version, so its entry must stay as it was and
+    // the next one must hold only the deltas. Re-dating a full summary would
+    // present every unchanged clause as new (#663).
+    const changes = changesSince(ORGANIZER_AGREEMENT_HISTORY, "2026-11-18");
+    expect(changes).toEqual(
+      ORGANIZER_AGREEMENT_HISTORY.find((e) => e.version === "2026-11-20")
+        ?.changes,
+    );
+    expect(changes).toHaveLength(3);
+    expect(changes.join(" ")).toMatch(/registration is still open/);
+    expect(changes.join(" ")).toMatch(/legal action/);
+    expect(changes.join(" ")).toMatch(/courts of Malaysia/);
+  });
 });
 
 describe("sensitive data consent statements", () => {

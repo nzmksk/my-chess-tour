@@ -31,11 +31,14 @@
 // everyone who skipped a version, and silently rots the moment the next version
 // ships.
 //
-// Both documents are at their FIRST version. Nothing has been published, so
-// there is no earlier wording anyone could have agreed to and nothing to diff
-// against — the entries below summarise what each document says, which is the
-// honest answer to the only question a reader can have today. The second entry
-// added to either list is a delta against the one before it.
+// A document's FIRST version summarises what the document says, because there
+// is no earlier wording to diff against. Before launch the Terms kept a single
+// entry, edited in place and re-dated, since no one could be shown "what
+// changed". The Organizer Agreement stopped doing that at 2026-11-20 (#663):
+// organizations had accepted 2026-11-18, and AgreementGate shows them "what
+// changed since" the version they accepted, so a re-dated summary would have
+// presented every unchanged clause as new. Every entry after the first is a
+// delta against the one before it.
 
 export interface LegalVersion {
   /** Effective date, ISO. This is the value stored in the database. */
@@ -85,11 +88,19 @@ export const ORGANIZER_AGREEMENT_HISTORY: readonly LegalVersion[] = [
   {
     version: "2026-11-20",
     changes: [
+      "You can now request an early payout while registration is still open. The 50% cap, the limit of two per tournament and approval at the platform's discretion are unchanged.",
+      "If a significant amount owed under claw-back is not repaid on demand, we may take legal action to recover it.",
+      "Disputes go to the courts of Malaysia; the Agreement no longer names Kuala Lumpur.",
+    ],
+  },
+  {
+    version: "2026-11-18",
+    changes: [
       "Entry fees are an administration fee for running the event. They never fund prizes, and every declared prize must name an external source — a sponsor, a grant, or your own funds.",
       "Commission is up to 10%, and you choose per tournament how much your organization absorbs against how much is added to the player's price.",
       "Payouts are your net revenue in full, disbursed automatically three days after the tournament's final scheduled session in the venue's timezone. MYR only, minimum RM 10.",
-      "Early payouts are capped at 50% of net revenue, limited to two per tournament, available even while registration is still open, and granted at the platform's discretion.",
-      "Early payouts are advances: if a tournament is later cancelled or refunded, the shortfall is repayable, and if a significant amount is not repaid on demand we may take legal action to recover it.",
+      "Early payouts are capped at 50% of net revenue, limited to two per tournament, available only after registration closes, and granted at the platform's discretion.",
+      "Early payouts are advances: if a tournament is later cancelled or refunded, the shortfall is repayable.",
       "You may nominate another approved organization to receive a payout, but you remain fully liable regardless of who is paid.",
       "If you appoint MY Chess Tour to distribute a sponsor-funded prize pool, each funder is sent a payment request when you publish, the tournament is listed and opens for registration only once the pool is fully funded, each winner you enter is reviewed before payment, and anything not awarded is returned to the funders pro rata.",
       "On an approved cancellation, every confirmed player is refunded in full including commission, and your revenue for that tournament goes to zero.",
