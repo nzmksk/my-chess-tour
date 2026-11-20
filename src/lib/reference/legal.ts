@@ -83,7 +83,7 @@ export const TERMS_HISTORY: readonly LegalVersion[] = [
  */
 export const ORGANIZER_AGREEMENT_HISTORY: readonly LegalVersion[] = [
   {
-    version: "2026-11-18",
+    version: "2026-11-20",
     changes: [
       "Entry fees are an administration fee for running the event. They never fund prizes, and every declared prize must name an external source — a sponsor, a grant, or your own funds.",
       "Commission is up to 10%, and you choose per tournament how much your organization absorbs against how much is added to the player's price.",
