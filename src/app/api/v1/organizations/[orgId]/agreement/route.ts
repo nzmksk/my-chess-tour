@@ -6,6 +6,7 @@ import {
 import { NextRequest, NextResponse } from "next/server";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,7 +23,7 @@ const UUID_RE =
  * declaration of acceptance and nothing else — a client-supplied version would
  * let an organization claim to have accepted a document it was never shown.
  */
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
 ): Promise<NextResponse> {
@@ -161,3 +162,5 @@ export async function POST(
 
   return NextResponse.json({ data: updated }, { status: 200 });
 }
+
+export const POST = withAuditContext("org.agreement.accept", handlePost);

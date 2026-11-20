@@ -8,6 +8,7 @@ import {
 import type { RegistrationRow } from "../types";
 import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
 import { afterResponse } from "@/lib/http/after-response";
+import { runWithAuditContext } from "@/services/supabase/audit-context";
 
 export type PaymentState = "confirmed" | "pending" | "failed" | "none";
 
@@ -54,8 +55,23 @@ async function expireIfStale(reg: RegistrationRow): Promise<ResolvedPayment> {
  * webhook has processed, so a `pending_payment` registration is reconciled
  * against CHIP (via getChipPurchase) and settled idempotently through the same
  * RPC the webhook uses. Network/CHIP errors degrade gracefully to "pending".
+ *
+ * Runs on a page render rather than in a route handler, so it opens its own
+ * audit scope (#470): whatever it settles or expires is attributed to the
+ * player whose return page this is.
  */
-export async function resolvePaymentState(
+export function resolvePaymentState(
+  tournamentId: string,
+  userId: string,
+): Promise<ResolvedPayment> {
+  return runWithAuditContext(
+    "registration.payment-return",
+    () => resolvePaymentStateInScope(tournamentId, userId),
+    userId,
+  );
+}
+
+async function resolvePaymentStateInScope(
   tournamentId: string,
   userId: string,
 ): Promise<ResolvedPayment> {

@@ -26,6 +26,10 @@
 --   I14 from the invitee's own list (by id), only the invitee can decline
 --   I15 from the invitee's own list (by id), only the invitee can accept
 --   I16 the link-based functions report which invitation they answered
+--   I17 every write is audited (#470): create, re-send, revoke, accept (with the
+--       membership it inserts) and an anonymous decline, each attributed to
+--       the actor and context the server sent, scoped to the organization, and
+--       with token_hash masked
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations (the owner/admin/member roles and their
@@ -58,6 +62,12 @@ DECLARE
   v_hash_e      text := encode(sha256('token-e'::bytea), 'hex');
   v_hash_g      text := encode(sha256('token-g'::bytea), 'hex');
   v_hash_h      text := encode(sha256('token-h'::bytea), 'hex');
+  v_hash_i      text := encode(sha256('token-i'::bytea), 'hex');
+  v_hash_j      text := encode(sha256('token-j'::bytea), 'hex');
+  v_hash_k      text := encode(sha256('token-k'::bytea), 'hex');
+  v_hash_l      text := encode(sha256('token-l'::bytea), 'hex');
+  v_joiner      uuid;
+  v_audit       text;
 BEGIN
   SELECT id INTO v_owner_role  FROM roles WHERE name = 'owner'  AND scope = 'organization';
   SELECT id INTO v_admin_role  FROM roles WHERE name = 'admin'  AND scope = 'organization';
@@ -327,6 +337,90 @@ BEGIN
     RAISE EXCEPTION 'I16 FAIL: accept by link did not name the invitation';
   END IF;
   RAISE NOTICE 'I16 PASS — accept and decline by link report the invitation id';
+
+  -- ---- I17: the audit trail (#470) -------------------------------------------
+  -- The server calls these functions with the service role and names the actor
+  -- and context in the x-audit-* headers; PostgREST exposes them as settings.
+  INSERT INTO users (email, first_name, last_name) VALUES ('inv-joiner@test.local', 'J', 'T')
+    RETURNING id INTO v_joiner;
+  PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+  -- Create, then re-send with a new role and token, then revoke.
+  PERFORM set_config('request.headers',
+    json_build_object('x-audit-actor', v_owner, 'x-audit-context', 'invitation.create')::text, true);
+  v_id := (create_organization_invitation(v_org, 'inv-audit@test.local', 'member', v_owner, v_hash_i) ->> 'id')::uuid;
+  PERFORM create_organization_invitation(v_org, 'inv-audit@test.local', 'admin', v_owner, v_hash_j);
+  PERFORM set_config('request.headers',
+    json_build_object('x-audit-actor', v_owner, 'x-audit-context', 'invitation.revoke')::text, true);
+  PERFORM revoke_organization_invitation(v_id, v_org, v_owner);
+
+  SELECT string_agg(format('%s/%s/%s/%s', action, context, changed_by = v_owner, organization_id = v_org),
+                    ' ' ORDER BY id)
+    INTO v_audit
+    FROM audit_logs WHERE table_name = 'organization_invitations' AND record_id = v_id::text;
+  IF v_audit IS DISTINCT FROM
+     'INSERT/invitation.create/t/t UPDATE/invitation.create/t/t UPDATE/invitation.revoke/t/t' THEN
+    RAISE EXCEPTION 'I17 FAIL: create/resend/revoke audit rows were %', v_audit;
+  END IF;
+
+  -- No snapshot keeps a full token hash; the re-send shows the rotation.
+  IF EXISTS (
+    SELECT 1 FROM audit_logs
+     WHERE table_name = 'organization_invitations' AND record_id = v_id::text
+       AND concat(old_data::text, new_data::text) ~ (v_hash_i || '|' || v_hash_j)
+  ) THEN
+    RAISE EXCEPTION 'I17 FAIL: an audit snapshot holds a full token_hash';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM audit_logs
+     WHERE table_name = 'organization_invitations' AND record_id = v_id::text
+       AND action = 'UPDATE'
+       AND old_data ->> 'token_hash' = '****' || right(v_hash_i, 4)
+       AND new_data ->> 'token_hash' = '****' || right(v_hash_j, 4)
+       AND new_data ->> 'role_id' = v_admin_role::text
+  ) THEN
+    RAISE EXCEPTION 'I17 FAIL: the re-send row does not show the masked token rotating';
+  END IF;
+
+  -- Accepting: the invitation and the membership it inserts, both as the joiner.
+  PERFORM set_config('request.headers',
+    json_build_object('x-audit-actor', v_owner, 'x-audit-context', 'invitation.create')::text, true);
+  v_id := (create_organization_invitation(v_org, 'inv-joiner@test.local', 'member', v_owner, v_hash_k) ->> 'id')::uuid;
+  PERFORM set_config('request.headers',
+    json_build_object('x-audit-actor', v_joiner, 'x-audit-context', 'invitation.accept')::text, true);
+  PERFORM accept_organization_invitation(v_hash_k, v_joiner);
+  IF NOT EXISTS (
+    SELECT 1 FROM audit_logs
+     WHERE table_name = 'organization_invitations' AND record_id = v_id::text
+       AND action = 'UPDATE' AND new_data ->> 'status' = 'accepted'
+       AND changed_by = v_joiner AND context = 'invitation.accept'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM audit_logs
+     WHERE table_name = 'organization_memberships' AND action = 'INSERT'
+       AND new_data ->> 'user_id' = v_joiner::text
+       AND changed_by = v_joiner AND context = 'invitation.accept'
+  ) THEN
+    RAISE EXCEPTION 'I17 FAIL: accepting was not audited as the joiner (invitation and membership)';
+  END IF;
+
+  -- Declining from the email link without signing in: a context, no actor.
+  PERFORM set_config('request.headers',
+    json_build_object('x-audit-actor', v_owner, 'x-audit-context', 'invitation.create')::text, true);
+  v_id := (create_organization_invitation(v_org, 'inv-nobody@test.local', 'member', v_owner, v_hash_l) ->> 'id')::uuid;
+  PERFORM set_config('request.headers', '{"x-audit-context":"invitation.decline"}', true);
+  PERFORM decline_organization_invitation(v_hash_l);
+  IF NOT EXISTS (
+    SELECT 1 FROM audit_logs
+     WHERE table_name = 'organization_invitations' AND record_id = v_id::text
+       AND action = 'UPDATE' AND new_data ->> 'status' = 'declined'
+       AND changed_by IS NULL AND context = 'invitation.decline' AND organization_id = v_org
+  ) THEN
+    RAISE EXCEPTION 'I17 FAIL: an anonymous decline was not audited';
+  END IF;
+
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.headers', '', true);
+  RAISE NOTICE 'I17 PASS — invitation writes are audited, attributed, scoped and masked';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END;

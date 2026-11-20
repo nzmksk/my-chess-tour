@@ -12,8 +12,9 @@ import {
   MAX_VERIFY_ATTEMPTS,
 } from "@/services/rate-limit/auth";
 import { SIGNUP_STEP_COOKIE } from "@/lib/auth/signup-cookie";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   let body: unknown;
 
   try {
@@ -198,3 +199,5 @@ export async function POST(request: NextRequest) {
   response.cookies.delete(SIGNUP_STEP_COOKIE);
   return response;
 }
+
+export const POST = withAuditContext("auth.signup.verify-code", handlePost);

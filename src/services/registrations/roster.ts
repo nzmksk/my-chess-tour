@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
+import { runWithAuditContext } from "@/services/supabase/audit-context";
 
 /**
  * One player on a tournament's roster: a live registration (confirmed, or
@@ -81,9 +82,15 @@ export async function loadRoster(
   tournamentId: string,
   formatType: string | null | undefined,
 ): Promise<RosterResult> {
-  const { error: expireErr } = await supabaseAdmin.rpc(
-    "expire_stale_pending_payments",
-    { p_ttl: PAYMENT_TIMEOUT_INTERVAL, p_tournament_id: tournamentId },
+  // Housekeeping, not the viewer's own action: its own audit scope with no
+  // actor, so the expiries aren't attributed to whoever opened the roster (#470).
+  const { error: expireErr } = await runWithAuditContext(
+    "payment.expire-stale",
+    () =>
+      supabaseAdmin.rpc("expire_stale_pending_payments", {
+        p_ttl: PAYMENT_TIMEOUT_INTERVAL,
+        p_tournament_id: tournamentId,
+      }),
   );
   if (expireErr) {
     console.warn(

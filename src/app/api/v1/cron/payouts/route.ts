@@ -22,6 +22,7 @@ import {
   type FundingSweepStats,
   sweepPrizeFundingRequests,
 } from "@/services/prizes/funding-requests";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Session-less background job (mirrors the CHIP webhook and the FIDE cron): uses
 // supabaseAdmin only, and needs the Node runtime for CHIP Send's HMAC signing and
@@ -69,7 +70,7 @@ async function runPass<T>(
  * that couldn't run at all makes this a 500, so the scheduled job shows as failed,
  * but the counts for the passes that did run are still returned.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     return NextResponse.json(
@@ -131,3 +132,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ data: stats }, { status: 200 });
 }
+
+export const POST = withAuditContext("cron.payouts", handlePost);

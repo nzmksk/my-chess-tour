@@ -4,6 +4,7 @@ import { executePrizeAward } from "@/services/prizes/execute";
 import { NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { authorizePlatformAdmin, errorResponse, UUID_RE } from "../../authorize";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // executePrizeAward can send email, whose templates are read from disk.
 export const runtime = "nodejs";
@@ -15,7 +16,7 @@ export const runtime = "nodejs";
  * doesn't want to wait. Safe to call any number of times: CHIP dedupes on the
  * award id and a settled award is left alone.
  */
-export async function POST(
+async function handlePost(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -46,3 +47,5 @@ export async function POST(
   console.info(`Admin prize send: admin ${auth.userId} re-ran award ${id}: ${outcome}`);
   return NextResponse.json({ data: { award_id: id, outcome } }, { status: 200 });
 }
+
+export const POST = withAuditContext("admin.prize-award.send", handlePost);

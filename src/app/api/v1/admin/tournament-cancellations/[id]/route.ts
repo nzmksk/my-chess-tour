@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
 import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -199,7 +200,7 @@ async function checkAdminAccess(
 // every confirmed player atomically (via the RPC). The refunds are sent to CHIP
 // by the refund sweep (POST /api/v1/cron/refunds, #496), not here: for a large
 // tournament the fan-out could outlast this request's time limit.
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
@@ -380,3 +381,5 @@ export async function PATCH(
 
   return NextResponse.json({ data }, { status: 200 });
 }
+
+export const PATCH = withAuditContext("admin.tournament-cancellation.review", handlePatch);

@@ -12,6 +12,7 @@ import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Where each prize funder's payment link is sent (#523). Separate from the
 // tournament body on purpose: tournaments.prizes is publicly readable once the
@@ -105,7 +106,7 @@ function parseContacts(body: unknown): FunderContact[] | string {
  * funder_email }] }; funders left out lose their address. Editing a tournament
  * is what this is part of, so it takes tournament.edit.
  */
-export async function PUT(
+async function handlePut(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -165,3 +166,5 @@ export async function PUT(
 
   return NextResponse.json({ data: contacts });
 }
+
+export const PUT = withAuditContext("prize-funder-contacts.set", handlePut);

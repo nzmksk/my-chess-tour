@@ -9,6 +9,7 @@ import {
   type FidePlayer,
 } from "@/services/fide/fide";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const VALID_GENDERS = new Set<string>(["male", "female"]);
 
@@ -90,7 +91,7 @@ export async function GET(): Promise<NextResponse> {
   });
 }
 
-export async function PATCH(request: NextRequest): Promise<NextResponse> {
+async function handlePatch(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -424,3 +425,5 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ success: true }, { status: 200 });
 }
+
+export const PATCH = withAuditContext("profile.update", handlePatch);

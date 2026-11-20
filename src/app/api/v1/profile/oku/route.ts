@@ -11,6 +11,7 @@ import {
   hasSensitiveDataConsent,
   withdrawSensitiveDataConsent,
 } from "@/services/consent/sensitive-data";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 const OKU_BUCKET = "oku-documents";
 
@@ -34,7 +35,7 @@ const OKU_MIME_TYPES = [
 // (#451). The storage policy already refused the upload without it; this
 // re-checks before the card is put in front of a reviewer, so a grant
 // withdrawn between upload and registration still stops it here.
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 // card still exists, and until the profile is reset the player still sees the
 // withdraw button and can try again. The service role removes the files
 // because clients have no DELETE policy on the bucket (005_bucket_policies.sql).
-export async function DELETE(): Promise<NextResponse> {
+async function handleDelete(): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -205,3 +206,6 @@ export async function DELETE(): Promise<NextResponse> {
     { status: 200 },
   );
 }
+
+export const DELETE = withAuditContext("profile.oku.remove", handleDelete);
+export const POST = withAuditContext("profile.oku.submit", handlePost);

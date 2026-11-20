@@ -7,6 +7,7 @@ import { validateApplyRequest } from "./validators";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Must match the uploader in ApplyForm. Enforced here as well as there because
 // the browser check is a UX affordance, not a control — the file goes straight
@@ -49,7 +50,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ data: data ?? [] }, { status: 200 });
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -178,3 +179,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ data: org }, { status: 201 });
 }
+
+export const POST = withAuditContext("org.application.create", handlePost);

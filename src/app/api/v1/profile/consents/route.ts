@@ -3,6 +3,7 @@ import { getAuthClaims } from "@/services/supabase/permission";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { currentConsent, isSensitiveDataCategory } from "@/lib/reference/legal";
 import { grantSensitiveDataConsent } from "@/services/consent/sensitive-data";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // Records the user's separate consent to the processing of their health or
 // financial data (#451), from the checkbox shown beside the OKU uploader or the
@@ -15,7 +16,7 @@ import { grantSensitiveDataConsent } from "@/services/consent/sensitive-data";
 // There is no withdrawal here on purpose. Withdrawing consent means the data
 // goes too, so it happens where the data is: DELETE /api/v1/profile/oku, and
 // clearing the details through PATCH /api/v1/profile/banking.
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handlePost(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -67,3 +68,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     { status: 200 },
   );
 }
+
+export const POST = withAuditContext("profile.consent.grant", handlePost);

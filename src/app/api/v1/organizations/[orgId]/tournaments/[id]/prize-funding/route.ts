@@ -13,6 +13,7 @@ import {
 } from "@/lib/tournaments/prize-funding";
 import { NextRequest, NextResponse } from "next/server";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // The platform-managed prize pool, money in (#523). Only for a tournament whose
 // prizes.distribution is "platform". Each funder named in the prizes is sent a
@@ -134,7 +135,7 @@ export async function GET(
  * this is the organizer's Retry when something didn't go through. Owner only
  * (payout.request): it asks for money.
  */
-export async function POST(
+async function handlePost(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; id: string }> },
 ): Promise<NextResponse> {
@@ -193,3 +194,5 @@ export async function POST(
     },
   });
 }
+
+export const POST = withAuditContext("prize-funding.request", handlePost);

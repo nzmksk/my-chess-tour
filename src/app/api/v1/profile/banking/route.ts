@@ -6,6 +6,7 @@ import { validateBankAccountRequest } from "@/app/api/v1/organizations/[orgId]/b
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
 import { sendAwardsAwaitingBank } from "@/services/prizes/execute";
+import { withAuditContext } from "@/services/supabase/audit-context";
 
 // The player's prize destination (player_bank_accounts, #523). Freely editable
 // (bank accounts change), but never updated in place: set_player_bank_account
@@ -23,7 +24,7 @@ import { sendAwardsAwaitingBank } from "@/services/prizes/execute";
 // player withdraws that consent; the RPC records the withdrawal itself.
 //
 // NEVER RETURNS THE FULL ACCOUNT NUMBER: the RPC answers with the last 4 digits.
-export async function PATCH(request: NextRequest): Promise<NextResponse> {
+async function handlePatch(request: NextRequest): Promise<NextResponse> {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -121,3 +122,5 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     { status: 200 },
   );
 }
+
+export const PATCH = withAuditContext("profile.banking.set", handlePatch);
