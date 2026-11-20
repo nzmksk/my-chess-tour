@@ -226,7 +226,9 @@ export default function OrganizerAgreementPage() {
                 already advanced, the difference becomes immediately repayable
                 by you on demand. We may recover it by deducting from payouts
                 due to you on any other tournament, by invoicing you directly,
-                or by both. This obligation survives termination of this
+                or by both. Where a significant amount remains unpaid after we
+                have demanded it, we may also take legal action against you to
+                recover it. This obligation survives termination of this
                 Agreement and applies regardless of whether a beneficiary
                 received the funds.
               </p>
