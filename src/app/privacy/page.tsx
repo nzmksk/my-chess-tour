@@ -311,14 +311,19 @@ export default function PrivacyPage() {
               </p>
               <ul className="text-text-secondary list-disc space-y-1 pl-5">
                 <li>
-                  All data is transmitted over encrypted connections
+                  All data is encrypted in transit, over secure connections
                   (HTTPS/TLS).
                 </li>
                 <li>
-                  Our database and file storage are hosted on encrypted storage
-                  volumes. We do not additionally encrypt individual fields such
-                  as bank account numbers, and we would rather state that
-                  plainly than overstate the protection.
+                  All data we store, including your bank details and any
+                  documents you upload, is encrypted at rest in our database and
+                  file storage.
+                </li>
+                <li>
+                  Once saved, your full bank account number is never shown
+                  again: the platform and our emails show only its last 4
+                  digits. It is also masked in our internal change logs, so no
+                  historical copies of it are kept there.
                 </li>
                 <li>
                   Access is enforced at the database level by row-level
@@ -334,14 +339,10 @@ export default function PrivacyPage() {
                   under Sharing of Data.
                 </li>
                 <li>
-                  Bank account numbers and document paths are masked in our
-                  internal change logs, so historical copies of them are not
-                  retained there.
-                </li>
-                <li>
-                  Verification documents are held in private storage that is not
-                  publicly reachable, and are reviewed only by platform
-                  administrators.
+                  OKU cards and verification documents are held in private
+                  storage that is not publicly reachable, are reviewed only by
+                  platform administrators, and their storage locations are
+                  masked in our internal change logs.
                 </li>
               </ul>
             </section>
