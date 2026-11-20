@@ -693,14 +693,14 @@ describe("POST /api/v1/organizations/applications", () => {
         data: null,
         error: {
           code: "P0001",
-          message: "NAME_TAKEN: an organization with this name already exists",
+          message: "NAME_TAKEN: an approved organization already uses this name",
         },
       });
       const res = await POST(makePostRequest());
       expect(res.status).toBe(409);
       const json = await res.json();
       expect(json.error.code).toBe("NAME_TAKEN");
-      expect(json.error.message).toMatch(/already exists/i);
+      expect(json.error.message).toMatch(/approved organization already uses/i);
     });
 
     it("returns 409 when the account is another organization's destination", async () => {

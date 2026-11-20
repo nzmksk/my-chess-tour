@@ -631,8 +631,8 @@ export async function sendBeneficiaryNominationEmail(
 
 // Tells an organizer applicant the outcome of their organization application —
 // approved (they are now its owner) or declined, with the admin's reason and a
-// link back to their applications so they can apply again. One function with a
-// boolean branch, like sendCancellationReviewEmail.
+// link back to their applications so they can amend and resubmit (#582). One
+// function with a boolean branch, like sendCancellationReviewEmail.
 export async function sendOrganizerApplicationReviewEmail(
   email: string,
   params: {

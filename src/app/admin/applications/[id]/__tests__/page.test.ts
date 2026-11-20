@@ -37,16 +37,19 @@ vi.mock("@/services/supabase/server", () => ({
 }));
 
 // The page now issues three differently-shaped queries (organizations →
-// .is().single(); bank account → .eq().eq().maybeSingle(); documents →
-// .eq().order()), so the builder has to be chainable rather than a fixed chain.
-// The individual spies are still shared, which is what the assertions below
-// read.
+// .is().single(); bank account → .eq().order().limit().maybeSingle();
+// documents → .eq().order()), so the builder has to be chainable rather than a
+// fixed chain. The bank account query gets its own builder, because its
+// .order() continues the chain where the documents query's resolves. The
+// individual spies are still shared, which is what the assertions below read.
 const mockSingle = vi.hoisted(() => vi.fn());
 const mockMaybeSingle = vi.hoisted(() => vi.fn());
 const mockOrder = vi.hoisted(() => vi.fn());
 const mockIs = vi.hoisted(() => vi.fn());
 const mockEq = vi.hoisted(() => vi.fn());
 const mockSelect = vi.hoisted(() => vi.fn());
+const mockBankOrder = vi.hoisted(() => vi.fn());
+const mockBankLimit = vi.hoisted(() => vi.fn());
 const mockFrom = vi.hoisted(() => vi.fn());
 const mockCreateSignedUrl = vi.hoisted(() => vi.fn());
 
@@ -109,7 +112,18 @@ describe("AdminApplicationDetailPage", () => {
     mockSelect.mockReturnValue(builder);
     mockEq.mockReturnValue(builder);
     mockIs.mockReturnValue(builder);
-    mockFrom.mockReturnValue(builder);
+    const bankBuilder = {
+      select: vi.fn(() => bankBuilder),
+      eq: vi.fn(() => bankBuilder),
+      order: mockBankOrder,
+      limit: mockBankLimit,
+      maybeSingle: mockMaybeSingle,
+    };
+    mockBankOrder.mockReturnValue(bankBuilder);
+    mockBankLimit.mockReturnValue(bankBuilder);
+    mockFrom.mockImplementation((table: string) =>
+      table === "organization_bank_accounts" ? bankBuilder : builder,
+    );
 
     // Defaults for the two queries added alongside the KYB review sections.
     mockMaybeSingle.mockResolvedValue({ data: null, error: null });
@@ -245,6 +259,22 @@ describe("AdminApplicationDetailPage", () => {
     expect(rendered).not.toContain("514012345678");
   });
 
+  it("shows the newest bank account, so a rejected application's deactivated one still appears", async () => {
+    // Rejecting an application deactivates its account (#582); filtering on
+    // is_active would show the reviewer "No bank account on file".
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockSingle.mockResolvedValue({ data: makeApplicationDetail(), error: null });
+
+    const AdminApplicationDetailPage = await importPage();
+    await AdminApplicationDetailPage({ params: Promise.resolve({ id: APP_ID }) });
+
+    expect(mockBankOrder).toHaveBeenCalledWith("created_at", {
+      ascending: false,
+    });
+    expect(mockBankLimit).toHaveBeenCalledWith(1);
+  });
+
   it("signs each document URL server-side with a 5-minute expiry", async () => {
     mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
     mockRpc.mockResolvedValue({ data: true, error: null });
@@ -268,5 +298,64 @@ describe("AdminApplicationDetailPage", () => {
       "users/u1/org-kyb/ros.pdf",
       300,
     );
+  });
+
+  it("passes the application's history to the client, oldest first (#582)", async () => {
+    // A resubmission clears the rejection on the application itself, so the
+    // history is where the reviewer sees what was asked for last time.
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockSingle.mockResolvedValue({ data: makeApplicationDetail(), error: null });
+
+    const historyOrder = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "e1",
+          event: "submitted",
+          reason: null,
+          created_at: "2026-02-20T10:00:00Z",
+          actor: { first_name: "Lee", last_name: "Wei Hao" },
+        },
+        {
+          id: "e2",
+          event: "rejected",
+          reason: "SSM certificate unreadable",
+          created_at: "2026-02-21T10:00:00Z",
+          actor: { first_name: "Admin", last_name: "One" },
+        },
+        {
+          id: "e3",
+          event: "resubmitted",
+          reason: null,
+          created_at: "2026-02-22T10:00:00Z",
+          actor: { first_name: "Lee", last_name: "Wei Hao" },
+        },
+      ],
+      error: null,
+    });
+    const historyBuilder = {
+      select: vi.fn(() => historyBuilder),
+      eq: vi.fn(() => historyBuilder),
+      order: historyOrder,
+    };
+    const defaultFrom = mockFrom.getMockImplementation()!;
+    mockFrom.mockImplementation((table: string) =>
+      table === "organization_application_events"
+        ? historyBuilder
+        : defaultFrom(table),
+    );
+
+    const AdminApplicationDetailPage = await importPage();
+    const result = await AdminApplicationDetailPage({
+      params: Promise.resolve({ id: APP_ID }),
+    });
+
+    expect(historyBuilder.eq).toHaveBeenCalledWith("organization_id", APP_ID);
+    expect(historyOrder).toHaveBeenCalledWith("created_at", {
+      ascending: true,
+    });
+    const rendered = JSON.stringify(result);
+    expect(rendered).toContain("SSM certificate unreadable");
+    expect(rendered).toContain("resubmitted");
   });
 });

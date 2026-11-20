@@ -8,7 +8,7 @@ import {
   screen,
   act,
 } from "@testing-library/react";
-import ApplyForm from "../ApplyForm";
+import ApplyForm, { type AmendApplication } from "../ApplyForm";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -502,5 +502,183 @@ describe("ApplyForm", () => {
         resolveFetch({ ok: true, json: async () => ({ data: { name: "X" } }) });
       });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Amending a rejected application (#582)
+// ---------------------------------------------------------------------------
+
+const AMEND: AmendApplication = {
+  id: "bbbbbbbb-0000-0000-0000-000000000001",
+  rejectionReason: "The SSM certificate is unreadable",
+  name: "KL Chess Association",
+  description: "We run weekend rapids",
+  links: [{ label: "Facebook", url: "https://fb.com/klca" }],
+  email: "chess@klca.com",
+  phone: null,
+  pastTournamentRefs: null,
+  entityType: "company",
+  registrationNumber: "202001234567",
+  bank: {
+    bankName: "Maybank",
+    bankCode: "MBBEMYKL",
+    accountHolder: "KL Chess Association",
+    last4: "5678",
+  },
+  documents: [
+    {
+      id: "cccccccc-0000-0000-0000-000000000001",
+      docType: "ssm",
+      originalFilename: "ssm-blurry.pdf",
+    },
+    {
+      id: "cccccccc-0000-0000-0000-000000000002",
+      docType: "other",
+      originalFilename: "flyer.pdf",
+    },
+  ],
+};
+
+describe("ApplyForm — amending a rejected application", () => {
+  function getResubmitButton() {
+    return screen.getByRole("button", {
+      name: "Resubmit Application",
+    }) as HTMLButtonElement;
+  }
+
+  async function submit() {
+    await act(async () => {
+      fireEvent.submit(document.querySelector("form")!);
+    });
+  }
+
+  function sentBody() {
+    return JSON.parse(mockFetch.mock.calls[0][1].body);
+  }
+
+  it("starts from the application, with the rejection reason shown", () => {
+    render(<ApplyForm amend={AMEND} />);
+
+    expect(screen.getByText("Amend Your Application")).toBeDefined();
+    expect(screen.getByText("The SSM certificate is unreadable")).toBeDefined();
+    expect(
+      (
+        screen.getByPlaceholderText(
+          "e.g., KL Chess Association",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("KL Chess Association");
+    expect(
+      (screen.getByPlaceholderText("https://...") as HTMLInputElement).value,
+    ).toBe("https://fb.com/klca");
+    expect(
+      (screen.getByLabelText(/SSM Registration Number/) as HTMLInputElement)
+        .value,
+    ).toBe("202001234567");
+    expect(screen.getByText("ssm-blurry.pdf")).toBeDefined();
+    expect(screen.getByText(/••••\s*5678/)).toBeDefined();
+    // The agreement is accepted again, never carried over.
+    expect(getAgreementCheckbox().checked).toBe(false);
+  });
+
+  it("resubmits with PUT, keeping the account and the documents left in place", async () => {
+    mockFetch.mockResolvedValueOnce(makeSuccessFetch());
+    render(<ApplyForm amend={AMEND} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove flyer.pdf" }));
+    acceptAgreement();
+    await submit();
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `/api/v1/organizations/applications/${AMEND.id}`,
+      expect.objectContaining({ method: "PUT" }),
+    );
+    const body = sentBody();
+    expect(body.keep_bank_account).toBe(true);
+    expect(body.bank_account_number).toBeUndefined();
+    expect(body.keep_document_ids).toEqual([AMEND.documents[0].id]);
+    expect(body.new_documents).toEqual([]);
+    expect(body.agreement_accepted).toBe(true);
+    expect(screen.getByText("Application Resubmitted")).toBeDefined();
+  });
+
+  it("uploads replacement documents and sends them as new documents", async () => {
+    mockFetch.mockResolvedValueOnce(makeSuccessFetch());
+    render(<ApplyForm amend={AMEND} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove ssm-blurry.pdf" }),
+    );
+    fireEvent.change(screen.getByLabelText("Verification documents"), {
+      target: {
+        files: [
+          new File(["%PDF-1.4"], "ssm-clear.pdf", { type: "application/pdf" }),
+        ],
+      },
+    });
+    acceptAgreement();
+    await submit();
+
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+    const body = sentBody();
+    expect(body.keep_document_ids).toEqual([AMEND.documents[1].id]);
+    expect(body.new_documents).toHaveLength(1);
+    expect(body.new_documents[0].doc_type).toBe("ssm");
+    expect(body.new_documents[0].original_filename).toBe("ssm-clear.pdf");
+  });
+
+  it("sends a replacement account once the applicant chooses a different one", async () => {
+    mockFetch.mockResolvedValueOnce(makeSuccessFetch());
+    render(<ApplyForm amend={AMEND} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use a different account" }),
+    );
+    fireEvent.change(screen.getByLabelText("Bank"), {
+      target: { value: "RHBBMYKL" },
+    });
+    fireEvent.change(screen.getByLabelText("Account Holder Name"), {
+      target: { value: "KL Chess Association" },
+    });
+    fireEvent.change(screen.getByLabelText("Account Number"), {
+      target: { value: "2120 0000-1111" },
+    });
+    acceptAgreement();
+    await submit();
+
+    const body = sentBody();
+    expect(body.keep_bank_account).toBeUndefined();
+    expect(body.bank_code).toBe("RHBBMYKL");
+    expect(body.bank_account_number).toBe("212000001111");
+  });
+
+  it("refuses to resubmit when the required document was removed and not replaced", async () => {
+    render(<ApplyForm amend={AMEND} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove ssm-blurry.pdf" }),
+    );
+    acceptAgreement();
+    await submit();
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Please include your SSM registration document."),
+    ).toBeDefined();
+  });
+
+  it("shows the server's error, such as a name now taken by an approved organization", async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeErrorFetch("An approved organization already uses this name"),
+    );
+    render(<ApplyForm amend={AMEND} />);
+    acceptAgreement();
+    await submit();
+
+    expect(
+      screen.getByText("An approved organization already uses this name"),
+    ).toBeDefined();
+    expect(getResubmitButton().disabled).toBe(false);
   });
 });

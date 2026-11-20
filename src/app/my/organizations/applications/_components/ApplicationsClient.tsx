@@ -95,6 +95,23 @@ function ApplicationCard({ application }: { application: OrgApplication }) {
     );
   }
 
+  if (application.approval_status === "rejected") {
+    return (
+      <div className="card flex flex-col gap-3 px-5 py-4">
+        <div className="flex items-center gap-4">
+          <ApplicationCardContent application={application} />
+        </div>
+        {/* A rejected application is amended and resubmitted, not replaced (#582). */}
+        <Link
+          href={`/my/organizations/applications/${application.id}/amend`}
+          className="btn-secondary self-end px-4 py-2 text-xs"
+        >
+          Amend &amp; Resubmit
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="card flex items-center gap-4 px-5 py-4">
       <ApplicationCardContent application={application} />
@@ -131,7 +148,7 @@ export default function ApplicationsClient({ applications }: Props) {
             href="/organizations/apply"
             className="btn-secondary px-4 py-2 text-xs"
           >
-            Apply Again
+            New Application
           </Link>
         )}
       </div>

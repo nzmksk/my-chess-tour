@@ -203,6 +203,34 @@ async function handlePatch(
         { status: 404 },
       );
     }
+    // A rejected application goes back to review only when the applicant
+    // amends and resubmits it (#582).
+    if (error.message?.includes("APPLICATION_REJECTED")) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "APPLICATION_REJECTED",
+            message:
+              "A rejected application cannot be approved until the applicant amends and resubmits it.",
+          },
+        },
+        { status: 409 },
+      );
+    }
+    // Only an approved organization holds its name (#582), so another one with
+    // this name may have been approved since this application was submitted.
+    if (error.message?.includes("NAME_TAKEN")) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "NAME_TAKEN",
+            message:
+              "An approved organization already uses this name. Reject this application so the applicant can amend the name.",
+          },
+        },
+        { status: 409 },
+      );
+    }
     return internalErrorResponse(
       "PATCH /api/v1/admin/applications/[id]: error",
       error,

@@ -108,7 +108,8 @@ async function handlePatch(
     .single();
 
   if (updateError) {
-    // idx_organizations_name_active — case-insensitive unique among active orgs.
+    // idx_organizations_name_active — case-insensitive unique among approved
+    // organizations; pending and rejected applications don't hold a name (#582).
     if (updateError.code === "23505") {
       return NextResponse.json(
         {
