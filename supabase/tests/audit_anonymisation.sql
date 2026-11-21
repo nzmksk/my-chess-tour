@@ -3,7 +3,7 @@
 --
 -- audit_logs keeps full users / player_profiles snapshots, so deleting an
 -- account leaves its personal data behind unless the deletion runbook
--- (wiki/account-deletion.md) also anonymises that history. Financial audit rows
+-- (docs/wiki/account-deletion.md) also anonymises that history. Financial audit rows
 -- must survive untouched: the 7-year obligation overrides the deletion request.
 --
 -- Covers:

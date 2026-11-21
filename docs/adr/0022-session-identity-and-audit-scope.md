@@ -6,7 +6,7 @@
 
 ## Context
 
-[launch-readiness](../../wiki/launch-readiness.md) (S3 and the identity
+[launch-readiness](../wiki/launch-readiness.md) (S3 and the identity
 indirection under S7) records the database side: `users.auth_user_id` is the
 only link to Supabase Auth, every policy goes through `app_user_id()`, and the
 audit trigger trusts `x-audit-actor` and `x-audit-context` headers on

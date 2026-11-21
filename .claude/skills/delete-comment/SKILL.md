@@ -69,7 +69,7 @@ How to tell them apart:
 ## 4. Act
 
 **Decision records.** Group related ones into a single ADR per decision, not
-one per comment. Search `wiki/` and `docs/adr/` first: a decision the wiki already
+one per comment. Search `docs/wiki/` and `docs/adr/` first: a decision the wiki already
 describes needs no ADR. Extend an existing record if it covers the same
 decision, rather than writing a near-duplicate. New records
 follow `docs/adr/template.md`, take the next number, and name the files and
@@ -88,9 +88,9 @@ gh issue create --label refactoring --title "<what to fix>" --body "<where, what
 
 Link the issues in the PR description.
 
-**Docs that point at a comment.** Comments inside `wiki/` itself aren't part of
+**Docs that point at a comment.** Comments inside `docs/wiki/` itself aren't part of
 this cleanup, but the wiki must not send readers to a comment you delete.
-Before deleting, search `wiki/` and `README.md` for the file's path and for
+Before deleting, search `docs/wiki/` and `README.md` for the file's path and for
 "comment" (`header comment`, `see the comment in`, `file.ts:46-51`). Where a page
 relies on one, carry what the comment said into that page or into the ADR you
 wrote, and refer to code by identifier rather than line number.
