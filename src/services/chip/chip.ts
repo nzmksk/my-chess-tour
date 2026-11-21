@@ -56,6 +56,79 @@ export function chipRefundOutcome(
   return "pending";
 }
 
+const MAX_ATTEMPTS = 3;
+const BASE_RETRY_DELAY_MS = 250;
+const MAX_RETRY_AFTER_MS = 2_000;
+const RETRYABLE_STATUSES = new Set([500, 503]);
+
+function chipApiKey(): string {
+  const apiKey = process.env.CHIP_API_KEY;
+  if (!apiKey) {
+    throw new Error("CHIP_API_KEY must be configured");
+  }
+  return apiKey;
+}
+
+function backoffMs(attempt: number): number {
+  const base = BASE_RETRY_DELAY_MS * 3 ** (attempt - 1);
+  return Math.round(base * (0.75 + Math.random() * 0.5));
+}
+
+function retryAfterMs(res: Response, attempt: number): number | null {
+  const header = res.headers?.get("retry-after");
+  if (header == null) return backoffMs(attempt);
+  const seconds = Number(header);
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  const ms = seconds * 1000;
+  return ms <= MAX_RETRY_AFTER_MS ? ms : null;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function chipCollectRequest(
+  method: "GET" | "POST",
+  path: string,
+  { body, apiKey = chipApiKey() }: { body?: unknown; apiKey?: string } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+  if (method === "POST") headers["Idempotency-Key"] = crypto.randomUUID();
+  const init: RequestInit = {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  };
+
+  for (let attempt = 1; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${CHIP_API_URL}${path}`, init);
+    } catch (err) {
+      if (attempt >= MAX_ATTEMPTS) throw err;
+      await sleep(backoffMs(attempt));
+      continue;
+    }
+    if (res.ok) return res;
+
+    const wait =
+      attempt >= MAX_ATTEMPTS
+        ? null
+        : res.status === 429
+          ? retryAfterMs(res, attempt)
+          : RETRYABLE_STATUSES.has(res.status)
+            ? backoffMs(attempt)
+            : null;
+    if (wait === null) {
+      const text = await res.text();
+      throw new Error(`CHIP API error ${res.status}: ${text}`);
+    }
+    await sleep(wait);
+  }
+}
+
 export async function createChipPurchase(
   request: Omit<PurchasesRequest, "brand_id">,
 ): Promise<PurchasesResponse> {
@@ -66,88 +139,30 @@ export async function createChipPurchase(
     throw new Error("CHIP_API_KEY and CHIP_BRAND_ID must be configured");
   }
 
-  const res = await fetch(`${CHIP_API_URL}/purchases/`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ ...request, brand_id: brandId }),
+  const res = await chipCollectRequest("POST", "/purchases/", {
+    apiKey,
+    body: { ...request, brand_id: brandId },
   });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`CHIP API error ${res.status}: ${body}`);
-  }
-
   return res.json() as Promise<PurchasesResponse>;
 }
 
 export async function getChipPurchase(id: string): Promise<PurchasesResponse> {
-  const apiKey = process.env.CHIP_API_KEY;
-  if (!apiKey) {
-    throw new Error("CHIP_API_KEY must be configured");
-  }
-
-  const res = await fetch(`${CHIP_API_URL}/purchases/${id}/`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`CHIP API error ${res.status}: ${body}`);
-  }
-
+  const res = await chipCollectRequest("GET", `/purchases/${id}/`);
   return res.json() as Promise<PurchasesResponse>;
 }
 
 export async function cancelChipPurchase(id: string): Promise<void> {
-  const apiKey = process.env.CHIP_API_KEY;
-  if (!apiKey) {
-    throw new Error("CHIP_API_KEY must be configured");
-  }
-
-  const res = await fetch(`${CHIP_API_URL}/purchases/${id}/cancel/`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`CHIP API error ${res.status}: ${body}`);
-  }
+  await chipCollectRequest("POST", `/purchases/${id}/cancel/`);
 }
 
 export async function refundChipPurchase(
   purchaseId: string,
   request?: RefundRequest,
 ): Promise<RefundResponse> {
-  const apiKey = process.env.CHIP_API_KEY;
-  if (!apiKey) {
-    throw new Error("CHIP_API_KEY must be configured");
-  }
-
-  const res = await fetch(`${CHIP_API_URL}/purchases/${purchaseId}/refund/`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: request == null ? undefined : JSON.stringify(request),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`CHIP API error ${res.status}: ${body}`);
-  }
-
+  const res = await chipCollectRequest(
+    "POST",
+    `/purchases/${purchaseId}/refund/`,
+    { body: request ?? undefined },
+  );
   return res.json() as Promise<RefundResponse>;
 }
