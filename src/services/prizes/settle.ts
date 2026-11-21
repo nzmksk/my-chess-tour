@@ -2,12 +2,6 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { afterResponse } from "@/lib/http/after-response";
 import { notifyPrizePaid } from "./notify";
 
-// Settlement of a prize award (#523) is reached from two paths that must agree:
-// the synchronous send response in executePrizeAward, and the CHIP Send webhook.
-// Both come through settlePrizeAward, so whichever arrives first books the
-// type='player_prize' ledger row and emails the winner, and the other is a no-op
-// (settle_prize_award's processed_at check). The settlePayout twin.
-
 export interface SettlePrizeAwardInput {
   awardId: string;
   chipSendInstructionId: number | null;
@@ -18,9 +12,7 @@ export interface SettlePrizeAwardInput {
 }
 
 export interface SettlePrizeAwardResult {
-  /** Set when the RPC failed; the caller decides whether that is retryable. */
   error: { code?: string; message: string } | null;
-  /** True when this call changed the row (false for a no-op repeat). */
   settled: boolean;
 }
 
@@ -30,12 +22,6 @@ interface SettlePrizeAwardRpcResult {
   paid_after_failed?: boolean;
 }
 
-/**
- * Settles an award via settle_prize_award and, when this call paid it, emails
- * the winner after the response. Money discrepancies are logged at error level:
- * more settled than the pool had, or CHIP completing a transfer on an award
- * already written off. Both need a person.
- */
 export async function settlePrizeAward(
   input: SettlePrizeAwardInput,
 ): Promise<SettlePrizeAwardResult> {
@@ -76,8 +62,6 @@ export async function settlePrizeAward(
     );
     afterResponse(() => notifyPrizePaid(input.awardId));
   } else {
-    // Terminal: the organizer enters the winner again and an admin re-approves.
-    // The admin prizes page and the organizer's panel both show it.
     console.error(
       `Prize award ${input.awardId}: failed (${input.failureReason ?? "send_instruction_failed"})`,
     );

@@ -24,26 +24,6 @@ import { afterResponse } from "@/lib/http/after-response";
 import { notifyAdminsOfPrizes, notifyPrizeAwarded } from "./notify";
 import { settlePrizeAward } from "./settle";
 
-// Sends one approved prize award through CHIP Send (#523): the network half of
-// claim_prize_award_send / settle_prize_award, which can't run inside their
-// transactions. The executePayout twin, with the same outcomes, the same claim
-// discipline and the same retry rules (send-errors.ts). Shared by the admin
-// approve route, the admin retry button, the daily run, and a winner saving or
-// verifying their bank account.
-//
-// Two differences from a payout:
-//   * the recipient is a player, whose bank account may not exist or be verified
-//     yet. A pending account is registered with CHIP here (the first time it is
-//     needed, which is what keeps unwinning players' accounts off CHIP); until it
-//     is verified the award waits, `blocked`, with its money reserved;
-//   * there is no minimum: a RM20 prize is a real prize, and CHIP's RM1 fee comes
-//     from the platform's Send balance, not from the winner.
-//
-// Re-running is always safe: `reference` is the award id, so CHIP returns the
-// existing instruction instead of paying twice, and settle_prize_award no-ops on
-// a settled row.
-
-/** Same outcomes as a payout. `blocked` includes "waiting for the winner's bank account". */
 export type ExecutePrizeAwardResult = ExecutePayoutResult;
 
 interface AwardRow {
@@ -120,7 +100,6 @@ async function failAward(
   return "failed";
 }
 
-/** As awaitBudget for payouts: request budget once, park the award `pending`. */
 async function awaitBudget(
   award: AwardRow,
   amountCents: number,
@@ -174,10 +153,6 @@ async function awaitBudget(
   return "awaiting_budget";
 }
 
-/**
- * Makes sure the winner has a verified account CHIP can pay, registering a
- * pending one now if need be. Returns null when it is ready, else why not.
- */
 async function ensureWinnerAccount(award: AwardRow): Promise<string | null> {
   const { data, error } = await supabaseAdmin
     .from("player_bank_accounts")
@@ -192,17 +167,10 @@ async function ensureWinnerAccount(award: AwardRow): Promise<string | null> {
   if (bank.status === "verified" && bank.chip_bank_account_id !== null) return null;
   if (bank.status === "rejected") return "the winner's bank account could not be verified";
 
-  // Pending: registered with CHIP the first time a prize needs it. A sync
-  // verdict lets this run pay; otherwise the webhook (or the next run) does.
   const outcome = await registerPlayerBankAccount(bank.id);
   return outcome === "verified" ? null : `the winner's bank account is ${outcome === "rejected" ? "rejected" : "awaiting verification"}`;
 }
 
-/**
- * Sends an approved award. NEVER throws: it runs after the approval has
- * committed. Anything transient is logged and the row stays `pending`, still
- * reserving its money, until a re-run.
- */
 export async function executePrizeAward(awardId: string): Promise<ExecutePrizeAwardResult> {
   try {
     return await execute(awardId);
@@ -236,8 +204,6 @@ async function execute(awardId: string): Promise<ExecutePrizeAwardResult> {
     return "skipped";
   }
 
-  // An earlier run claimed it and lost track of the send. CHIP may have the
-  // instruction already, so the same reference goes again, unchecked.
   if (claimed) {
     const chipBankAccountId = award.bank?.chip_bank_account_id;
     const email = award.winner?.email;
@@ -287,8 +253,6 @@ async function execute(awardId: string): Promise<ExecutePrizeAwardResult> {
     return awaitBudget(award, award.amount_cents);
   }
 
-  // Re-checks the tournament and the pool under the tournament lock, snapshots
-  // the verified account, and marks the row `processing`.
   const { data: refusal, error: claimError } = await supabaseAdmin.rpc(
     "claim_prize_award_send",
     { p_award_id: awardId },
@@ -307,7 +271,6 @@ async function execute(awardId: string): Promise<ExecutePrizeAwardResult> {
     return "blocked";
   }
 
-  // The claim chose the account; send to exactly that one.
   const reloaded = await loadAward(awardId);
   const chipBankAccountId =
     "award" in reloaded ? reloaded.award?.bank?.chip_bank_account_id : null;
@@ -398,12 +361,6 @@ async function send(
   return "paid";
 }
 
-/**
- * Sends every approved award still waiting on this winner's bank account.
- * Called after the winner saves their details and when CHIP verifies them, so a
- * prize goes out as soon as it can rather than on the next daily run. Never
- * throws; a winner with nothing waiting costs one query and no CHIP call.
- */
 export async function sendAwardsAwaitingBank(userId: string): Promise<void> {
   try {
     const { data, error } = await supabaseAdmin
@@ -426,11 +383,6 @@ export async function sendAwardsAwaitingBank(userId: string): Promise<void> {
   }
 }
 
-/**
- * Follows CHIP's verdict on a player's prize account: a verified account is
- * paid what it is owed; a rejected one tells the winner of each waiting award
- * to fix their details. Never throws.
- */
 export async function onPlayerBankVerdict(userId: string, verified: boolean): Promise<void> {
   if (verified) {
     await sendAwardsAwaitingBank(userId);

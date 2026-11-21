@@ -1,10 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 
-// Prize funding (#523): a sponsor pays into a platform-distributed prize pool
-// through CHIP Collect, in a purchase whose `reference` is our prize_fundings id.
-// The existing Collect webhook (webhooks/chip/route.ts) settles it here, never
-// as a registration.
-
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -12,11 +7,6 @@ export type FindPrizeFundingResult =
   | { id: string | null }
   | { error: { code?: string; message: string } };
 
-/**
- * The prize_fundings row a Collect delivery is about, or null when the purchase
- * isn't a prize funding. Correlates on the CHIP purchase id (stored as
- * chip_transaction_id once checkout was created), then on our `reference`.
- */
 export async function findPrizeFundingForPurchase(
   purchaseId: string | null | undefined,
   reference: string | null | undefined,
@@ -32,8 +22,6 @@ export async function findPrizeFundingForPurchase(
     if (id) return { id };
   }
 
-  // A registration's reference is a payments id; only a uuid that is a
-  // prize_fundings id matches here.
   if (reference && UUID_RE.test(reference)) {
     const { data, error } = await supabaseAdmin
       .from("prize_fundings")
@@ -50,26 +38,18 @@ export async function findPrizeFundingForPurchase(
 export interface SettlePrizeFundingInput {
   fundingId: string;
   paid: boolean;
-  /** What CHIP charged, in cents. Guards against a stale or re-priced purchase. */
   amountCents?: number | null;
   paymentMethod?: string | null;
 }
 
 export interface SettlePrizeFundingResult {
   error: { code?: string; message: string } | null;
-  /** This call booked the contribution (false for a repeat or a failure). */
   newlyPaid: boolean;
   amountMismatch: boolean;
-  /** This payment completed the pool and listed the tournament. */
   wentLive: boolean;
   tournamentId: string | null;
 }
 
-/**
- * Settles a sponsor's contribution through settle_prize_funding, which books
- * the type='prize_funding' ledger row once however many times it is called.
- * An amount mismatch is left pending for a person and logged at error level.
- */
 export async function settlePrizeFunding(
   input: SettlePrizeFundingInput,
 ): Promise<SettlePrizeFundingResult> {

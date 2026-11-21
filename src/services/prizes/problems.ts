@@ -1,9 +1,5 @@
 import { formatRinggit, parseSentinel } from "@/services/payouts/format";
 
-// Plain-language versions of the prize award refusals raised by enter_prize_award
-// and review_prize_award (006_payment_functions.sql, #523), for organizers and
-// admins. Pure, so pages can use it too.
-
 const NOT_ALLOWED: Record<string, string> = {
   not_platform_distributed:
     "This tournament's winners are paid by the organizer, not through MY Chess Tour.",
@@ -17,7 +13,6 @@ const NOT_ALLOWED: Record<string, string> = {
   winner_missing: "The winner's account no longer exists.",
 };
 
-/** Why a prize award can't be entered or approved, or null for an unknown refusal. */
 export function describePrizeAwardRefusal(message: string | null | undefined): string | null {
   const parsed = parseSentinel(message);
   if (!parsed) return null;
@@ -44,7 +39,6 @@ export function describePrizeAwardRefusal(message: string | null | undefined): s
   }
 }
 
-/** Where an award stands, in words, for both dashboards. */
 export function prizeAwardStateLabel(award: {
   approval: string;
   status: string;

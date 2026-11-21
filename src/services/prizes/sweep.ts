@@ -10,20 +10,6 @@ import { describeSendError } from "@/services/payouts/send-errors";
 import { executePrizeAward, type ExecutePrizeAwardResult } from "./execute";
 import { settlePrizeAward } from "./settle";
 
-// The prize award passes of the daily run (POST /api/v1/cron/payouts), the twins
-// of the payout reconciler and retry pass (src/services/payouts/sweep.ts):
-//
-//   1. reconcileStuckPrizeAwards  `processing` for over PAYOUT_STUCK_HOURS. With an
-//                                 instruction, ask CHIP and settle; without one,
-//                                 resume the send.
-//   2. retryPendingPrizeAwards    approved awards still `pending`: waiting on the
-//                                 winner's bank account (this also registers a
-//                                 pending one with CHIP), parked on budget, or
-//                                 left by a transient error.
-//
-// Both are safe to re-run: CHIP dedupes on `reference` and settle_prize_award
-// no-ops on a settled row. Only failing to load a work list throws.
-
 function emptyStats(checked: number): PassStats {
   return {
     checked,
@@ -64,7 +50,6 @@ async function reconcileFromChip(
 ): Promise<ExecutePrizeAwardResult> {
   let instruction;
   try {
-    // The single-instruction GET: CHIP caches the list endpoint for an hour.
     instruction = await getChipSendInstruction(instructionId);
   } catch (err) {
     console.error(
@@ -96,10 +81,6 @@ async function reconcileFromChip(
   return paid ? "paid" : "failed";
 }
 
-/**
- * Without this, a dropped webhook strands an award in `processing`, where it
- * keeps reserving pool money and the winner is never told.
- */
 export async function reconcileStuckPrizeAwards(now: Date = new Date()): Promise<PassStats> {
   const cutoff = new Date(now.getTime() - PAYOUT_STUCK_HOURS * 3_600_000);
   const { data, error } = await supabaseAdmin
@@ -119,7 +100,6 @@ export async function reconcileStuckPrizeAwards(now: Date = new Date()): Promise
   });
 }
 
-/** Every approved, unsettled award still `pending`, oldest approval first. */
 export async function retryPendingPrizeAwards(): Promise<PassStats> {
   const { data, error } = await supabaseAdmin
     .from("prize_awards")

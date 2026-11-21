@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Mocks: the database (a result queue per table), CHIP Send, the player bank
-// registration, settlement and notifications.
-// ---------------------------------------------------------------------------
-
 const {
   tables,
   updates,
@@ -81,10 +76,6 @@ import { ChipSendError } from "@/services/chip/send";
 import { runAfterCallbacks } from "@/test/after";
 import { executePrizeAward, onPlayerBankVerdict, sendAwardsAwaitingBank } from "../execute";
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
 const AWARD_ID = "award-1";
 
 function award(overrides: Record<string, unknown> = {}) {
@@ -108,7 +99,6 @@ function award(overrides: Record<string, unknown> = {}) {
 
 const verifiedBank = { id: "bank-1", status: "verified", chip_bank_account_id: 930101 };
 
-/** The award, the winner's active account, then the award re-read after the claim. */
 function queueHappyPath(bankRow: unknown = verifiedBank) {
   tables.prize_awards = [
     { data: award(), error: null },
@@ -121,7 +111,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   for (const k of Object.keys(tables)) delete tables[k];
   updates.length = 0;
-  mockRpc.mockResolvedValue({ data: null, error: null }); // claim succeeds
+  mockRpc.mockResolvedValue({ data: null, error: null });
   mockAccounts.mockResolvedValue({ results: [{ currency: "MYR", current_balance: 1000 }] });
   mockCreateInstruction.mockResolvedValue({ id: 7001, state: "accepted", amount: "300.00", receipt_url: null });
   mockSettle.mockResolvedValue({ error: null, settled: true });
@@ -130,10 +120,6 @@ beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
-
-// ---------------------------------------------------------------------------
-// executePrizeAward
-// ---------------------------------------------------------------------------
 
 describe("executePrizeAward", () => {
   it("claims and sends an approved award to the winner's verified account", async () => {
@@ -311,10 +297,6 @@ describe("executePrizeAward", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Following the winner's bank account
-// ---------------------------------------------------------------------------
-
 describe("sendAwardsAwaitingBank", () => {
   it("sends each approved award waiting on the winner", async () => {
     tables.prize_awards = [
@@ -323,7 +305,6 @@ describe("sendAwardsAwaitingBank", () => {
       { data: award({ id: "a2", approval: "pending" }), error: null },
     ];
     await sendAwardsAwaitingBank("user-1");
-    // Both were loaded (and skipped as unapproved in this fixture).
     expect(mockFrom).toHaveBeenCalledTimes(3);
   });
 
