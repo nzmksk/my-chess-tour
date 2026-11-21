@@ -1,7 +1,3 @@
-// The codes payout_recipient_problem, tournament_payout_block_reason and
-// early_payout_problem return (003/006 migrations), in words. Pure, so both routes and client components can
-// use it. An unknown code still reads as a sentence rather than a raw identifier.
-
 const RECIPIENT_PROBLEMS: Record<string, string> = {
   organization_not_approved: "The organization is not approved.",
   entity_type_missing: "The organization has no entity type on file.",
@@ -36,10 +32,6 @@ const EARLY_PAYOUT_PROBLEMS: Record<string, string> = {
   nothing_payable_early: "There is nothing left that can be paid out early yet.",
 };
 
-/**
- * Why an early payout can't be requested, from an early_payout_problem code. The
- * function folds in the block and recipient checks, so their codes are covered too.
- */
 export function describeEarlyPayoutProblem(code: string): string {
   if (EARLY_PAYOUT_PROBLEMS[code]) return EARLY_PAYOUT_PROBLEMS[code];
   if (BLOCK_REASONS[code]) return BLOCK_REASONS[code];

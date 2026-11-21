@@ -31,6 +31,12 @@ folders and re-lists each level until it comes back empty. A pass that removes
 nothing is an error, not a loop; a failure part-way leaves the rest for a
 retry.
 
+Documents are read through signed URLs minted per view, never stored links,
+because the buckets are private. A reviewer's links last
+`DOCUMENT_URL_TTL_SECONDS` (300, `src/services/payouts/review.ts`), as on the
+application review page: these are identity documents, and a signed URL that
+outlives the review is a credential sitting in a browser history.
+
 ## Consequences
 
 - Every new browser-to-storage flow needs both checks: the prefix and

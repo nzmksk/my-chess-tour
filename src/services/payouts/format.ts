@@ -1,7 +1,3 @@
-// Money and database-refusal formatting shared by the payout routes and pages.
-// Pure, so client components can use it too.
-
-/** 123456 -> "RM 1,234.56". */
 export function formatRinggit(cents: number): string {
   return `RM ${(cents / 100).toLocaleString("en-MY", {
     minimumFractionDigits: 2,
@@ -9,10 +5,6 @@ export function formatRinggit(cents: number): string {
   })}`;
 }
 
-/**
- * The payout functions raise "SENTINEL: detail" (006_payment_functions.sql).
- * Returns both halves, or null for a message without a sentinel.
- */
 export function parseSentinel(
   message: string | null | undefined,
 ): { sentinel: string; detail: string } | null {

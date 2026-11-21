@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runAfterCallbacks } from "@/test/after";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const { mockFrom, mockRpc, tables, mockProcessed, mockFailed } = vi.hoisted(() => {
   const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
 
@@ -43,10 +39,6 @@ vi.mock("@/services/email/email", () => ({
 }));
 
 import { settlePayout } from "../settle";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const PAYOUT_ID = "11111111-1111-4111-8111-111111111111";
 const ORG = "22222222-2222-4222-8222-222222222222";
@@ -98,10 +90,6 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("settlePayout", () => {
   it("passes every argument to the RPC", async () => {

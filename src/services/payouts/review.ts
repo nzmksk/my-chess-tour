@@ -4,18 +4,8 @@ import { describePayoutFailure } from "./failure-reason";
 import { describeEarlyPayoutProblem } from "./recipient-problem";
 import { canResend } from "./resend";
 
-// Everything the admin payout review page shows, assembled server-side. The caller
-// gates on platform.manage: this reads through the service role. Account numbers
-// are masked here, so the full number never reaches the browser.
-
-/**
- * How long a reviewer's document links stay live. Matches the application review
- * page: these are identity documents, and a signed URL that outlives the review is
- * a credential sitting in a browser history.
- */
 export const DOCUMENT_URL_TTL_SECONDS = 300;
 
-/** The arithmetic behind the cap (early_payout_cap), so the ceiling is explained. */
 export interface EarlyPayoutCap {
   net_revenue_cents: number;
   paid_payouts_cents: number;
@@ -39,7 +29,6 @@ export interface PayoutReviewDocument {
   id: string;
   doc_type: string;
   original_filename: string | null;
-  /** Short-lived signed URL. Null if it couldn't be minted. */
   url: string | null;
 }
 
@@ -53,9 +42,7 @@ export interface PayoutReview {
   request_seq: number | null;
   reason: string | null;
   rejection_reason: string | null;
-  /** Why it failed, in the words an organizer sees. */
   failure_reason: string | null;
-  /** The stored code or CHIP response behind failure_reason. Admins only. */
   failure_detail: string | null;
   requested_at: string;
   reviewed_at: string | null;
@@ -77,20 +64,12 @@ export interface PayoutReview {
     registration_number: string | null;
     agreement_version: string | null;
     agreement_accepted_at: string | null;
-    /** Whether agreement_version is the one payouts currently require. */
     agreement_current: boolean;
   };
-  /**
-   * Where the money goes: the current active account while the request is
-   * pending (approval re-snapshots it), the one recorded on the payout after.
-   */
   bank_account: PayoutReviewBankAccount | null;
   documents: PayoutReviewDocument[];
-  /** Figures excluding this request's own reservation: the most it could be. */
   cap: EarlyPayoutCap;
-  /** Why approving would be refused right now, in words; null if it wouldn't. */
   approval_blocked: string | null;
-  /** Approved but not out with CHIP, so an admin can re-run the send. */
   can_resend: boolean;
 }
 
@@ -108,8 +87,6 @@ interface RawBank {
   is_active: boolean;
 }
 
-// PostgREST embeds a single-FK relation as an object, but the untyped client widens
-// it to `object | object[]`; collapse either shape to the first element.
 function one<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -131,10 +108,6 @@ const fullName = (u: RawUser) =>
 
 const BANK_COLUMNS = "bank_name, account_holder, account_number, status, is_active";
 
-/**
- * Loads one payout for review. `data` is null when the payout doesn't exist;
- * `error` is set when something failed to load.
- */
 export async function loadPayoutReview(
   payoutId: string,
 ): Promise<{ data: PayoutReview | null; error: string | null }> {
@@ -227,8 +200,6 @@ export async function loadPayoutReview(
   const cap = one(capRes.data as EarlyPayoutCap | EarlyPayoutCap[] | null);
   if (!cap) return { data: null, error: "early_payout_cap returned nothing" };
 
-  // The bucket is private, so a path is not a link. Each URL is signed here and
-  // expires with the review session.
   const documents = await Promise.all(
     ((documentsRes.data ?? []) as {
       id: string;

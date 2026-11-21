@@ -12,9 +12,6 @@ import {
   loadPlatformAdminRecipients,
 } from "./recipients";
 
-// Payout emails other than settlement (settle.ts). Each is best-effort and never
-// throws: it runs after the action it reports on has committed.
-
 interface AlertPayoutRow {
   id: string;
   kind: "automatic" | "early";
@@ -24,11 +21,6 @@ interface AlertPayoutRow {
   organizer: { name: string | null } | null;
 }
 
-/**
- * Tells every platform admin about a payout that needs a person: an early request
- * to review, or a payout parked until CHIP Send budget is approved. `detail` is
- * an extra line; an early request shows the organizer's reason instead.
- */
 export async function notifyAdminsOfPayout(
   payoutId: string,
   alert: AdminPayoutAlert,
@@ -88,11 +80,6 @@ export async function notifyAdminsOfPayout(
   }
 }
 
-/**
- * Asks a nominated organization's payout managers to accept a tournament's
- * payout. Nothing is redirected until one of them does, so an organization that
- * never hears about it simply never receives the money.
- */
 export async function notifyBeneficiaryNominated(
   tournamentId: string,
   nomineeOrgId: string,
@@ -141,11 +128,6 @@ export async function notifyBeneficiaryNominated(
   }
 }
 
-/**
- * Tells the organization the outcome of its early payout request. Goes to the
- * same people as the settlement email, which follows an approval once the money
- * lands.
- */
 export async function notifyPayoutReviewed(payoutId: string): Promise<void> {
   try {
     const { data, error } = await supabaseAdmin
@@ -195,11 +177,6 @@ export async function notifyPayoutReviewed(payoutId: string): Promise<void> {
   }
 }
 
-/**
- * Tells the organizing organization that its payout nominee accepted or declined.
- * `nomineeOrgId` is passed in because a decline has already cleared it from the
- * tournament. Goes to the same people as the other payout emails.
- */
 export async function notifyNominationResponded(
   tournamentId: string,
   nomineeOrgId: string,

@@ -46,3 +46,4 @@ old one `Superseded by NNNN`, and link both ways.
 | 0021 | [The roster shows only what organizers may see](0021-roster-shows-only-what-organizers-may-see.md)     | Accepted |
 | 0022 | [Session identity and audit scope on the server](0022-session-identity-and-audit-scope.md)             | Accepted |
 | 0023 | [Uploads are verified before their path is recorded](0023-uploads-are-verified-before-registration.md) | Accepted |
+| 0024 | [Text sent to and received from CHIP Send](0024-text-to-and-from-chip-send.md)                         | Accepted |

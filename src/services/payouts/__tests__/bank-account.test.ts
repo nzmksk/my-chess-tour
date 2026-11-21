@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runAfterCallbacks } from "@/test/after";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const { mockFrom, mockRpc, tables, updates, mockRegister, mockSendEmail } =
   vi.hoisted(() => {
-    // Per-table queued results; each `from(table)` call consumes the next one.
     const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
     const updates: Array<{ table: string; values: unknown }> = [];
 
@@ -61,10 +56,6 @@ import {
   registerPendingBankAccounts,
   settleBankAccountVerification,
 } from "../bank-account";
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const BANK_ID = "22222222-2222-4222-8222-222222222222";
@@ -123,14 +114,10 @@ beforeEach(() => {
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
-// ---------------------------------------------------------------------------
-// registerOrganizationBankAccount
-// ---------------------------------------------------------------------------
-
 describe("registerOrganizationBankAccount", () => {
   it("registers with our row id as the reference and persists CHIP's id", async () => {
     queue("organization_bank_accounts", { data: pendingRow, error: null });
-    queue("organization_bank_accounts", { data: null, error: null }); // update
+    queue("organization_bank_accounts", { data: null, error: null });
     mockRegister.mockResolvedValue({ id: 84, status: "pending", rejection_reason: null });
 
     await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("pending");
@@ -144,7 +131,6 @@ describe("registerOrganizationBankAccount", () => {
     expect(updates).toEqual([
       { table: "organization_bank_accounts", values: { chip_bank_account_id: 84 } },
     ]);
-    // Pending → wait for the webhook, no settlement.
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
@@ -264,10 +250,6 @@ describe("registerActiveOrganizationBankAccount", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// registerPendingBankAccounts
-// ---------------------------------------------------------------------------
-
 describe("registerPendingBankAccounts", () => {
   const NOW = new Date("2026-11-17T01:00:00Z");
 
@@ -281,7 +263,6 @@ describe("registerPendingBankAccounts", () => {
     expect(builder.select).toHaveBeenCalledWith("id, organizations!inner(approval_status)");
     expect(builder.eq).toHaveBeenCalledWith("is_active", true);
     expect(builder.eq).toHaveBeenCalledWith("status", "pending");
-    // Registered-but-unsettled accounts too: a re-post returns CHIP's current verdict.
     expect(builder.is).not.toHaveBeenCalled();
     expect(builder.eq).toHaveBeenCalledWith("organizations.approval_status", "approved");
     expect(builder.lt).toHaveBeenCalledWith("created_at", "2026-11-17T00:45:00.000Z");
@@ -292,7 +273,6 @@ describe("registerPendingBankAccounts", () => {
     queue(
       "organization_bank_accounts",
       { data: [{ id: BANK_ID }, { id: OTHER_ID }], error: null },
-      // BANK_ID: load, then the chip id update. OTHER_ID: load fails.
       { data: pendingRow, error: null },
       { data: null, error: { message: "db down" } },
       { data: null, error: null },
@@ -316,8 +296,6 @@ describe("registerPendingBankAccounts", () => {
   });
 
   it("settles an account CHIP already has from its current verdict", async () => {
-    // A synchronous verdict whose settle failed earlier: the id was saved, the
-    // row is still pending.
     queue(
       "organization_bank_accounts",
       { data: [{ id: BANK_ID }], error: null },
@@ -359,10 +337,6 @@ describe("registerPendingBankAccounts", () => {
     );
   });
 });
-
-// ---------------------------------------------------------------------------
-// settleBankAccountVerification
-// ---------------------------------------------------------------------------
 
 describe("settleBankAccountVerification", () => {
   it("returns the RPC error without emailing", async () => {
@@ -419,10 +393,6 @@ describe("settleBankAccountVerification", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// notifyBankVerification
-// ---------------------------------------------------------------------------
-
 describe("notifyBankVerification", () => {
   it("emails owner/admin members and the org address, deduped, last4 only", async () => {
     queueNotifyData("rejected", "Name mismatch");
@@ -430,7 +400,6 @@ describe("notifyBankVerification", () => {
     await notifyBankVerification(ORG_ID, BANK_ID);
 
     const to = mockSendEmail.mock.calls.map((c) => c[0]).sort();
-    // owner@x.com (org email) dedupes against Owner@x.com; member is excluded.
     expect(to).toEqual(["Owner@x.com", "admin@x.com"]);
 
     const params = mockSendEmail.mock.calls[0][1];

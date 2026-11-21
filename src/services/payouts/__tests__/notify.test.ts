@@ -185,7 +185,6 @@ describe("notifyBeneficiaryNominated", () => {
       { data: { name: "KL Open", organizer: { name: "KL Chess Club" } }, error: null },
     ];
     tables.organizations = [
-      // The nominee's name, then its contact address for the recipient list.
       { data: { name: "Selangor Chess" }, error: null },
       { data: [{ name: "Selangor Chess", email: "hello@selangor.test" }], error: null },
     ];
@@ -240,7 +239,6 @@ describe("notifyNominationResponded", () => {
       { data: { name: "KL Open", organization_id: ORGANIZER }, error: null },
     ];
     tables.organizations = [
-      // The nominee's name, then the ORGANIZER's contact address.
       { data: { name: "Selangor Chess" }, error: null },
       { data: [{ name: "KL Chess Club", email: "hello@klchess.test" }], error: null },
     ];

@@ -6,9 +6,6 @@ import {
   describeRecipientProblem,
 } from "./recipient-problem";
 
-// The admin payouts screen, shared by the page and GET /api/v1/admin/payouts. The
-// caller gates on platform.manage: this reads through the service role.
-
 export type PayoutStatus = "pending" | "processing" | "paid" | "failed";
 
 export interface AdminPayout {
@@ -17,16 +14,10 @@ export interface AdminPayout {
   status: PayoutStatus;
   approval: "pending" | "approved" | "rejected";
   amount_cents: number;
-  /** Why it failed, in the words an organizer sees. */
   failure_reason: string | null;
-  /**
-   * What was actually stored: our own code, or CHIP's status and (digit-redacted)
-   * message. For admins only; it never goes to an organizer.
-   */
   failure_detail: string | null;
   receipt_url: string | null;
   awaiting_budget: boolean;
-  /** Approved but not out with CHIP, so an admin can re-run the send. */
   can_resend: boolean;
   requested_at: string;
   processed_at: string | null;
@@ -34,7 +25,6 @@ export interface AdminPayout {
   organizer: { id: string; name: string } | null;
   recipient: { id: string; name: string } | null;
   is_beneficiary: boolean;
-  /** Last 4 only. The full number never leaves this module. */
   bank: { name: string; account_last4: string; status: string } | null;
 }
 
@@ -46,7 +36,6 @@ export interface AdminPayoutCandidate {
   recipient: string | null;
   is_beneficiary: boolean;
   available_cents: number;
-  /** Why it can't be paid right now, in words; null when it can. */
   blocked: string | null;
 }
 
@@ -99,8 +88,6 @@ interface RawCandidate {
   recipient_problem: string | null;
 }
 
-// PostgREST embeds a single-FK relation as an object, but the untyped client widens
-// it to `object | object[]`; collapse either shape to the first element.
 function one<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;

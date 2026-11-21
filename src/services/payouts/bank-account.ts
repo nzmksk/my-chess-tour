@@ -8,27 +8,6 @@ import { sendBankVerificationEmail } from "@/services/email/email";
 import { afterResponse } from "@/lib/http/after-response";
 import { BANK_REGISTRATION_GRACE_MINUTES, PAYOUT_CONCURRENCY } from "./constants";
 
-// Payout bank account verification (#519).
-//
-// An organization's bank account is registered with CHIP Send only once the
-// organization is APPROVED — never at application time. Registering an
-// unapproved applicant's account wastes a CHIP verification (which carries a
-// fee) and discloses pending applicants to the PSP.
-//
-// A player's prize account (player_bank_accounts, #523) goes through the same
-// registration and the same settle RPC. For the same reason it is registered
-// only once the player has an approved prize award waiting on it, never just
-// because they saved it.
-//
-// Verification then completes on one of two paths, which must agree:
-//   * synchronously, when POST /send/bank_accounts already answers verified or
-//     rejected (registerOrganizationBankAccount below);
-//   * asynchronously, via the CHIP Send webhook (webhooks/chip/send/route.ts).
-// Both classify with chipBankAccountOutcome and settle through
-// settleBankAccountVerification, whose RPC makes the first verdict stick.
-
-// Owner/admin members are the ones who can act on a payout problem — the same
-// roles notified of cancellation reviews.
 const NOTIFY_ROLES = ["owner", "admin"];
 
 interface MembershipRecipient {
@@ -36,7 +15,6 @@ interface MembershipRecipient {
   roles: { name: string } | null;
 }
 
-/** Whose account it is, which decides the table it lives in. */
 export type BankAccountOwner = "organization" | "player";
 
 const BANK_ACCOUNT_TABLE: Record<BankAccountOwner, string> = {
@@ -55,8 +33,6 @@ interface BankAccountRow {
   chip_bank_account_id: number | null;
 }
 
-// CHIP error bodies can echo the submitted account number; keep long digit runs
-// out of the logs.
 function redactDigits(text: string): string {
   return text.replace(/\d{6,}/g, "[redacted]");
 }
@@ -76,24 +52,11 @@ export interface SettleBankAccountInput {
 }
 
 export interface SettleBankAccountResult {
-  /** Set when the RPC failed — the caller decides whether that is retryable. */
   error: { code?: string; message: string } | null;
-  /** True when this call changed the row (false for a no-op repeat). */
   settled: boolean;
-  /**
-   * Set when this call settled an ACTIVE player prize account (#523), so the
-   * caller can send any prize waiting on it, or tell the winner it was rejected.
-   * Organization accounts are handled here; player follow-up lives with prizes.
-   */
   playerVerdict?: { userId: string; verified: boolean };
 }
 
-/**
- * Settles CHIP's verdict via settle_bank_account_verification and, when this
- * call is the one that changed the row and the account is still the
- * organization's active one, emails the owners/admins. The email is
- * best-effort; only the RPC outcome is reported back.
- */
 export async function settleBankAccountVerification(
   input: SettleBankAccountInput,
 ): Promise<SettleBankAccountResult> {
@@ -121,9 +84,6 @@ export async function settleBankAccountVerification(
 
   if (result.already_processed) return { error: null, settled: false };
 
-  // An account the organizer already replaced: record the verdict, stay quiet.
-  // Sent after the response of whichever request settled it. A player's
-  // account isn't an organization's to hear about.
   if (result.is_active && result.owner !== "player" && result.organization_id) {
     const organizationId = result.organization_id;
     afterResponse(async () => {
@@ -148,11 +108,6 @@ export async function settleBankAccountVerification(
   return { error: null, settled: true };
 }
 
-/**
- * Emails the organization's owner/admin members plus its contact address
- * (organizations.email) about the verdict on a bank account, deduplicated by
- * lowercased address. Failures are logged, never thrown.
- */
 export async function notifyBankVerification(
   organizationId: string,
   bankAccountId: string,
@@ -207,7 +162,6 @@ export async function notifyBankVerification(
     recipients.set(org.email.toLowerCase(), { email: org.email, name: orgName });
   }
 
-  // Last 4 only — the full number never leaves this function.
   const accountLast4 = bank.account_number.slice(-4);
   const verified = bank.status === "verified";
 
@@ -233,15 +187,6 @@ export async function notifyBankVerification(
   }
 }
 
-/**
- * What a registration attempt came to:
- * - `verified` / `rejected`: CHIP answered synchronously and the verdict is
- *   recorded (or already was).
- * - `pending`: CHIP has the account; its verdict comes by webhook.
- * - `skipped`: the row is missing, superseded or no longer pending.
- * - `error`: the row couldn't be loaded, CHIP failed, or the verdict couldn't
- *   be recorded. The row stays `pending`, so a re-run will retry it.
- */
 export type BankRegistrationOutcome =
   | "verified"
   | "rejected"
@@ -249,38 +194,18 @@ export type BankRegistrationOutcome =
   | "skipped"
   | "error";
 
-/**
- * Registers an organization's bank account with CHIP Send. See
- * registerBankAccount. NEVER throws.
- */
 export function registerOrganizationBankAccount(
   bankAccountId: string,
 ): Promise<BankRegistrationOutcome> {
   return registerBankAccount("organization", bankAccountId);
 }
 
-/**
- * Registers a player's prize account with CHIP Send (#523). Same path, same
- * guarantees, as an organization's. NEVER throws.
- */
 export function registerPlayerBankAccount(
   bankAccountId: string,
 ): Promise<BankRegistrationOutcome> {
   return registerBankAccount("player", bankAccountId);
 }
 
-/**
- * Registers a bank account with CHIP Send and records the result:
- *   1. load the row (service role) — skipped unless it is active and pending;
- *   2. POST /send/bank_accounts with `reference` = our row id, so a retry
- *      returns CHIP's existing record instead of creating a second recipient;
- *   3. persist CHIP's integer id as chip_bank_account_id;
- *   4. a synchronous `verified`/`rejected` is settled now; anything else is
- *      left `pending` for the webhook.
- *
- * NEVER throws — it runs after the approval has committed. Failures are logged
- * with the bank account id and the row stays `pending`, so re-running is safe.
- */
 async function registerBankAccount(
   owner: BankAccountOwner,
   bankAccountId: string,
@@ -336,8 +261,6 @@ async function registerBankAccount(
       .update({ chip_bank_account_id: chipAccount.id })
       .eq("id", row.id);
     if (updateError) {
-      // Not fatal: the settle RPC below records the id too, and the webhook
-      // correlates on `reference` (our row id) first.
       console.error(
         `Bank account ${bankAccountId}: failed to persist chip_bank_account_id ${chipAccount.id}`,
         updateError.message,
@@ -375,11 +298,6 @@ async function registerBankAccount(
   }
 }
 
-/**
- * Registers the organization's ACTIVE bank account. The entry point for the
- * application-approval route, which knows the organization but not the row.
- * Never throws.
- */
 export async function registerActiveOrganizationBankAccount(
   organizationId: string,
 ): Promise<void> {
@@ -406,32 +324,9 @@ export async function registerActiveOrganizationBankAccount(
 }
 
 export interface BankRegistrationStats extends Record<BankRegistrationOutcome, number> {
-  /** Rows the pass looked at. */
   checked: number;
 }
 
-/**
- * Re-registers every active, `pending` bank account of an APPROVED
- * organization. Run daily by POST /api/v1/cron/payouts. It recovers each way an
- * account can be left without a verdict:
- *   - the registration never reached CHIP (an outage, a crash, or a timed-out
- *     after-response task from the approval or the organizer's save), so the
- *     row has no chip_bank_account_id;
- *   - CHIP answered verified/rejected on the spot but the settle RPC failed
- *     after the id was saved;
- *   - CHIP's verdict webhook never arrived.
- * Posting an account CHIP already has returns CHIP's existing record for our
- * `reference` (the row id) with its current status, so the last two cases are
- * settled from that answer, and an account CHIP is still verifying stays
- * pending.
- *
- * A row created inside BANK_REGISTRATION_GRACE_MINUTES is left to the request
- * still registering it. Overlapping is safe either way: CHIP dedupes on the
- * reference, and the settle RPC keeps the first verdict.
- *
- * Throws only when the work list can't be loaded. Each registration never
- * throws and logs its own failure with the bank account id.
- */
 export async function registerPendingBankAccounts(
   now: Date = new Date(),
 ): Promise<BankRegistrationStats> {
