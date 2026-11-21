@@ -47,6 +47,30 @@ with `isPendingRefund`. A full refund omits the body entirely. A
 `400 purchase_refund_error` carries no detail; the reason is on the Purchase at
 `transaction_data.attempts[0].error`.
 
+**Collect calls retry what CHIP says is safe to retry, under an idempotency
+key.** Every Collect request goes through `chipCollectRequest`
+(`src/services/chip/chip.ts`), which follows CHIP's
+[errors page](https://docs.chip-in.asia/chip-collect/overview/errors):
+
+- Each write (create, cancel, refund) sends a fresh `Idempotency-Key`. A
+  repeat with the same key and body returns the first result instead of acting
+  twice.
+- A network failure, `500` or `503` is retried with the same key, up to three
+  attempts in all, with exponential backoff and jitter. A `429` is retried
+  after its `Retry-After` when that is at most 2 seconds, and after the backoff
+  when there's no header. A longer wait fails the call, and the caller's own
+  retry path takes over.
+- `502` isn't retried. CHIP says to wait for the webhook, because the bank or
+  card network may still complete the payment. No other `4xx` is retried.
+
+The key lives for one call, not one refund or payment. CHIP replays the first
+result for a key, so a refund key reused after a definite
+`400 purchase_refund_error` would replay that failure forever, when the refund
+is meant to be retried on the same row. A refund re-fired after the stuck
+interval checks the purchase at CHIP first, so a fresh key there can't refund
+twice. The Errors page is the only source for the header; the OpenAPI document
+doesn't list it.
+
 **Send is its own module.** Different host, a three-header auth scheme, string
 amounts on instructions and per-webhook RSA-SHA512 keys instead of one
 RSA-SHA256 key: sharing code with Collect invites the cross-wiring the vendor

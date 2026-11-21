@@ -31,6 +31,7 @@ A CHIP refund is a network call and can't run inside a Postgres transaction, so 
 - **Queue**: `uniq_active_refund_per_registration` + `ON CONFLICT` → re-approving/re-running can't double-create a refund.
 - **Settle**: three guards — `settle_refund` locks the refund and no-ops if `processed_at` is set; the unique `idx_payments_chip_transaction` on the refund Payment id blocks a sync-response + webhook race; `uniq_paid_refund_per_registration` is the belt-and-braces backstop.
 - **Sync vs webhook**: the `200` body has **two shapes** and which one you get tells you whether the refund finished. A **Payment** object *is* the completed refund (it has no `status` field) → settle immediately, and the later `payment.refunded` webhook is a no-op. A **Purchase** with `status: "pending_refund"` means the acquirer is still processing → record nothing and let the webhook settle. Narrow with `isPendingRefund()` (`src/services/chip/interfaces/refund-response.ts`); its `id` is a *purchase* id on the pending shape, so it must not be written to `chip_refund_id`.
+- **The CHIP call**: `refundChipPurchase` sends an `Idempotency-Key`. Within one fire, it retries a network failure, `500` or `503` with that same key, so a refund whose response was lost is returned, not repeated. A `502` or any other `4xx` isn't retried, and the refund stays `pending` for the stuck-refund path. The key is new on every fire, because CHIP replays a key's first result and a failed refund has to be retryable. See [ADR 0025](../adr/0025-chip-clients.md).
 
 ## Who sees what (#511)
 
