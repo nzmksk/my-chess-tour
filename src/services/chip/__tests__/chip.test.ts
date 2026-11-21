@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  chipOutcome,
   chipRefundOutcome,
   createChipPurchase,
   isChipRefundEvent,
@@ -8,6 +9,30 @@ import {
 import { isPendingRefund } from "../interfaces/refund-response";
 
 const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
+
+describe("chipOutcome", () => {
+  it("maps paid, by status or by event", () => {
+    expect(chipOutcome("paid")).toBe("paid");
+    expect(chipOutcome(undefined, "purchase.paid")).toBe("paid");
+    expect(chipOutcome(undefined, "purchase.captured")).toBe("paid");
+  });
+
+  it("treats cleared and settled, which only follow paid, as paid", () => {
+    expect(chipOutcome("cleared")).toBe("paid");
+    expect(chipOutcome("settled", "purchase.settled")).toBe("paid");
+  });
+
+  it("maps failures", () => {
+    expect(chipOutcome("error", "purchase.payment_failure")).toBe("failed");
+    expect(chipOutcome("cancelled", "purchase.cancelled")).toBe("failed");
+  });
+
+  it("treats expired and in-flight states as pending", () => {
+    for (const s of ["created", "viewed", "expired", "pending_execute", undefined]) {
+      expect(chipOutcome(s)).toBe("pending");
+    }
+  });
+});
 
 describe("chipRefundOutcome", () => {
   it("maps refund success (event and status)", () => {

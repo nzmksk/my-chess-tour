@@ -8,7 +8,7 @@ const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
 export const PAYMENT_TIMEOUT_MINUTES = 10;
 export const PAYMENT_TIMEOUT_INTERVAL = `${PAYMENT_TIMEOUT_MINUTES} minutes`;
 
-const SUCCESS_STATUSES = new Set(["paid"]);
+const SUCCESS_STATUSES = new Set(["paid", "cleared", "settled"]);
 const SUCCESS_EVENTS = new Set(["purchase.paid", "purchase.captured"]);
 const FAILURE_STATUSES = new Set(["error", "cancelled"]);
 const FAILURE_EVENTS = new Set([
