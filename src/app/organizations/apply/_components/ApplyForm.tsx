@@ -39,6 +39,8 @@ const ENTITY_TYPES: {
   label: string;
   hint: string;
   registrationLabel: string | null;
+  registeredNameLabel: string;
+  registeredNameHint: string;
   docLabel: string;
 }[] = [
   {
@@ -46,6 +48,9 @@ const ENTITY_TYPES: {
     label: "Company (Sdn Bhd / Enterprise)",
     hint: "Registered with SSM.",
     registrationLabel: "SSM Registration Number",
+    registeredNameLabel: "Registered Company Name",
+    registeredNameHint:
+      "Exactly as on your SSM registration. Payouts only go to a bank account in this name.",
     docLabel: "SSM registration document",
   },
   {
@@ -53,6 +58,9 @@ const ENTITY_TYPES: {
     label: "Society / Association",
     hint: "Registered with the Registry of Societies (ROS).",
     registrationLabel: "ROS Registration Number",
+    registeredNameLabel: "Registered Society Name",
+    registeredNameHint:
+      "Exactly as on your ROS registration. Payouts only go to a bank account in this name.",
     docLabel: "ROS registration document",
   },
   {
@@ -60,6 +68,9 @@ const ENTITY_TYPES: {
     label: "Individual organizer",
     hint: "Organising in your own name, with no registered entity.",
     registrationLabel: null,
+    registeredNameLabel: "Full Name",
+    registeredNameHint:
+      "Exactly as on your identity document. Payouts only go to a bank account in this name.",
     docLabel: "identity document or authorization letter",
   },
 ];
@@ -120,6 +131,7 @@ export interface AmendApplication {
   pastTournamentRefs: string | null;
   entityType: EntityType | null;
   registrationNumber: string | null;
+  registeredName: string | null;
   bank: {
     bankName: string;
     bankCode: string;
@@ -170,6 +182,9 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
   );
   const [registrationNumber, setRegistrationNumber] = useState(
     amend?.registrationNumber ?? "",
+  );
+  const [registeredName, setRegisteredName] = useState(
+    amend?.registeredName ?? "",
   );
   const [keptDocuments, setKeptDocuments] = useState<ExistingDocument[]>(
     amend?.documents ?? [],
@@ -281,6 +296,14 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
       return;
     }
 
+    if (!registeredName.trim()) {
+      setErrorMessage(
+        `Please enter your ${entityConfig.registeredNameLabel.toLowerCase()}.`,
+      );
+      setStatus("error");
+      return;
+    }
+
     const documentError = missingRequiredDocument();
     if (documentError) {
       setErrorMessage(documentError);
@@ -355,6 +378,7 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
         entity_type: entityType,
         registration_number:
           entityType === "individual" ? null : registrationNumber.trim(),
+        registered_name: registeredName.trim(),
         // The version this is recorded against is the server's, not ours.
         agreement_accepted: agreementAccepted,
       };
@@ -705,6 +729,34 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
               />
             </div>
           )}
+
+          <div className="mb-4 flex flex-col gap-1.5">
+            <label
+              className="font-lato text-text-secondary text-sm font-medium"
+              htmlFor="registered_name"
+            >
+              {entityConfig.registeredNameLabel}{" "}
+              <span className="text-error">*</span>
+            </label>
+            <input
+              id="registered_name"
+              type="text"
+              value={registeredName}
+              onChange={(e) => {
+                setRegisteredName(e.target.value);
+                setErrorMessage(null);
+              }}
+              maxLength={255}
+              aria-describedby="registered_name_hint"
+              className="border-border bg-bg-raised font-lato text-text-primary placeholder:text-text-disabled focus:border-gold-bright w-full rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none"
+            />
+            <p
+              id="registered_name_hint"
+              className="font-lato text-text-muted text-xs"
+            >
+              {entityConfig.registeredNameHint}
+            </p>
+          </div>
 
           <div className="flex flex-col gap-2">
             <label

@@ -83,6 +83,7 @@ const VALID_BODY = {
   agreement_accepted: true,
   entity_type: "society",
   registration_number: "PPM-001-14-01012020",
+  registered_name: "Persatuan Catur Kuala Lumpur",
   bank_code: "MBBEMYKL",
   bank_account_holder: "KL Chess Association",
   bank_account_number: "5140 1234-5678",
@@ -554,6 +555,48 @@ describe("POST /api/v1/organizations/applications", () => {
         "create_organization_application",
         expect.objectContaining({ p_registration_number: null }),
       );
+    });
+
+    it("sends the registered name, trimmed and with single spaces", async () => {
+      await POST(
+        makePostRequest({
+          ...VALID_BODY,
+          registered_name: "  Persatuan   Catur  KL ",
+        }),
+      );
+      expect(mockRpc).toHaveBeenCalledWith(
+        "create_organization_application",
+        expect.objectContaining({ p_registered_name: "Persatuan Catur KL" }),
+      );
+    });
+
+    it.each([
+      ["society", undefined, /ROS registration/],
+      ["company", "  ", /SSM registration/],
+      ["individual", "", /identity document/],
+    ])(
+      "returns 400 when a %s gives no registered name",
+      async (entityType, registeredName, message) => {
+        const res = await POST(
+          makePostRequest({
+            ...VALID_BODY,
+            entity_type: entityType,
+            registration_number: "202001234567",
+            registered_name: registeredName,
+          }),
+        );
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error.message).toMatch(message);
+        expect(mockRpc).not.toHaveBeenCalled();
+      },
+    );
+
+    it("returns 400 for a registered name over 255 characters", async () => {
+      const res = await POST(
+        makePostRequest({ ...VALID_BODY, registered_name: "A".repeat(256) }),
+      );
+      expect(res.status).toBe(400);
     });
   });
 

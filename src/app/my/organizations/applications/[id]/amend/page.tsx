@@ -56,7 +56,11 @@ export default async function AmendApplicationPage({
     redirect(APPLICATIONS_PATH);
   }
 
-  const [{ data: bankRow }, { data: documentRows }] = await Promise.all([
+  const [
+    { data: bankRow },
+    { data: documentRows },
+    { data: registeredNameRow },
+  ] = await Promise.all([
     supabaseAdmin
       .from("organization_bank_accounts")
       .select("bank_name, bank_code, account_holder, account_number")
@@ -70,6 +74,11 @@ export default async function AmendApplicationPage({
       .select("id, doc_type, original_filename")
       .eq("organization_id", id)
       .order("created_at", { ascending: true }),
+    supabaseAdmin
+      .from("organization_registered_names")
+      .select("registered_name")
+      .eq("organization_id", id)
+      .maybeSingle(),
   ]);
 
   const amend: AmendApplication = {
@@ -83,6 +92,9 @@ export default async function AmendApplicationPage({
     pastTournamentRefs: org.past_tournament_refs,
     entityType: org.entity_type,
     registrationNumber: org.registration_number,
+    registeredName:
+      (registeredNameRow as { registered_name: string } | null)
+        ?.registered_name ?? null,
     // Masked here, in the server component: the full number never reaches the
     // browser. Keeping the account re-registers it from the database.
     bank: bankRow

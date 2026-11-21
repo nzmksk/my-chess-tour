@@ -140,8 +140,15 @@ describe("AmendApplicationPage", () => {
       data: [{ id: "d1", doc_type: "ssm", original_filename: "ssm.pdf" }],
       calls: [],
     };
+    tables.organization_registered_names = {
+      data: { registered_name: "KL Chess Association Sdn Bhd" },
+      calls: [],
+    };
 
     const rendered = JSON.stringify(await renderPage());
+    expect(rendered).toContain(
+      '"registeredName":"KL Chess Association Sdn Bhd"',
+    );
 
     expect(rendered).toContain("SSM certificate unreadable");
     expect(rendered).toContain('"last4":"5678"');

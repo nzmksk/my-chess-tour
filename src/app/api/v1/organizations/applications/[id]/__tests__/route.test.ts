@@ -57,6 +57,7 @@ const KEEP_BODY = {
   agreement_accepted: true,
   entity_type: "society",
   registration_number: "PPM-001-14-01012020",
+  registered_name: "Persatuan Catur Kuala Lumpur",
   keep_bank_account: true,
   keep_document_ids: [KEPT_DOC_ID],
   new_documents: [
@@ -154,6 +155,7 @@ describe("PUT /api/v1/organizations/applications/[id]", () => {
     expect(args.p_account_number).toBeNull();
     expect(args.p_keep_document_ids).toEqual([KEPT_DOC_ID]);
     expect(args.p_new_documents).toEqual(KEEP_BODY.new_documents);
+    expect(args.p_registered_name).toBe("Persatuan Catur Kuala Lumpur");
   });
 
   it("sends a replacement account, normalised, with the bank name derived from the code", async () => {

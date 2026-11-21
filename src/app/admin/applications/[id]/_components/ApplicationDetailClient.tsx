@@ -430,6 +430,11 @@ export default function ApplicationDetailClient({ application }: Props) {
               <span className="text-text-muted">—</span>
             )}
           </DetailRow>
+          <DetailRow label="Registered Name">
+            {application.registered_name ?? (
+              <span className="text-text-muted">Not given</span>
+            )}
+          </DetailRow>
           <DetailRow label="Documents">
             {application.documents.length === 0 ? (
               <span className="text-text-muted">

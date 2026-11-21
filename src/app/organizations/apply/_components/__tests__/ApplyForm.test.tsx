@@ -107,6 +107,9 @@ function fillPayoutAndKyb() {
   fireEvent.change(screen.getByLabelText(/SSM Registration Number/), {
     target: { value: "202001234567" },
   });
+  fireEvent.change(screen.getByLabelText(/Registered Company Name/), {
+    target: { value: "Test Org Sdn Bhd" },
+  });
   fireEvent.change(screen.getByLabelText("Verification documents"), {
     target: {
       files: [
@@ -413,6 +416,20 @@ describe("ApplyForm", () => {
       render(<ApplyForm />);
       fireEvent.click(screen.getByLabelText(/Individual organizer/));
       expect(screen.queryByLabelText(/Registration Number/)).toBeNull();
+      expect(screen.getByLabelText(/Full Name/)).toBeDefined();
+    });
+
+    it("refuses to submit without the registered name", async () => {
+      await submitWith(() => {
+        fillPayoutAndKyb();
+        fireEvent.change(screen.getByLabelText(/Registered Company Name/), {
+          target: { value: "   " },
+        });
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(
+        screen.getByText("Please enter your registered company name."),
+      ).toBeDefined();
     });
   });
 
@@ -520,6 +537,7 @@ const AMEND: AmendApplication = {
   pastTournamentRefs: null,
   entityType: "company",
   registrationNumber: "202001234567",
+  registeredName: "KL Chess Association Sdn Bhd",
   bank: {
     bankName: "Maybank",
     bankCode: "MBBEMYKL",
