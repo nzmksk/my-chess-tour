@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { getTournamentDateState } from "@/app/tournaments/utils";
 import {
   formatInstantDate,
@@ -79,6 +80,7 @@ function DraftActions({ orgId, tournamentId }: Props) {
         setConfirmPublish(false);
         return;
       }
+      posthog.capture("tournament_published");
       setConfirmPublish(false);
       router.refresh();
     });
@@ -217,6 +219,7 @@ function PublishedActions({
         setError(json.error?.message ?? "Failed to close registration.");
         return;
       }
+      posthog.capture("tournament_registration_closed");
       setConfirmClose(false);
       router.refresh();
     });
@@ -241,6 +244,7 @@ function PublishedActions({
         );
         return;
       }
+      posthog.capture("tournament_cancellation_requested");
       setShowCancelForm(false);
       setCancelReason("");
       router.refresh();

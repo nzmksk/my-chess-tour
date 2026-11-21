@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import posthog from "posthog-js";
 import type { TournamentDetail, Restrictions } from "../../types";
 import {
   formatRm,
@@ -343,11 +344,21 @@ export default function RegisterForm({
       // confirmed server-side and returns a redirect_url to the success page.
       const nextUrl = json.data?.checkout_url ?? json.data?.redirect_url;
       if (res.ok && nextUrl) {
+        posthog.capture("tournament_checkout_started", {
+          fee_tier: selectedTier,
+          payment_required: breakdown.gross_cents > 0,
+          total_cents: breakdown.gross_cents,
+        });
         setStatus("redirecting");
         window.location.href = nextUrl;
         return;
       }
       if (res.ok) {
+        posthog.capture("tournament_checkout_started", {
+          fee_tier: selectedTier,
+          payment_required: false,
+          total_cents: breakdown.gross_cents,
+        });
         setRegistration(json.data);
         setStatus("success");
       } else {
