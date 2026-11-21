@@ -5,7 +5,12 @@ export interface ChipBankAccountRequest {
   reference: string;
 }
 
-export type ChipBankAccountStatus = "pending" | "verified" | "rejected";
+export type ChipBankAccountStatus =
+  | "received"
+  | "pending"
+  | "verified"
+  | "rejected"
+  | "reviewing";
 
 export interface ChipBankAccount {
   id: number;

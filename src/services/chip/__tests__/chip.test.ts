@@ -1,13 +1,40 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  chipOutcome,
   chipRefundOutcome,
+  cancelChipPurchase,
   createChipPurchase,
+  getChipPurchase,
   isChipRefundEvent,
   refundChipPurchase,
 } from "../chip";
 import { isPendingRefund } from "../interfaces/refund-response";
 
 const CHIP_API_URL = "https://gate.chip-in.asia/api/v1";
+
+describe("chipOutcome", () => {
+  it("maps paid, by status or by event", () => {
+    expect(chipOutcome("paid")).toBe("paid");
+    expect(chipOutcome(undefined, "purchase.paid")).toBe("paid");
+    expect(chipOutcome(undefined, "purchase.captured")).toBe("paid");
+  });
+
+  it("treats cleared and settled, which only follow paid, as paid", () => {
+    expect(chipOutcome("cleared")).toBe("paid");
+    expect(chipOutcome("settled", "purchase.settled")).toBe("paid");
+  });
+
+  it("maps failures", () => {
+    expect(chipOutcome("error", "purchase.payment_failure")).toBe("failed");
+    expect(chipOutcome("cancelled", "purchase.cancelled")).toBe("failed");
+  });
+
+  it("treats expired and in-flight states as pending", () => {
+    for (const s of ["created", "viewed", "expired", "pending_execute", undefined]) {
+      expect(chipOutcome(s)).toBe("pending");
+    }
+  });
+});
 
 describe("chipRefundOutcome", () => {
   it("maps refund success (event and status)", () => {
@@ -211,5 +238,147 @@ describe("refundChipPurchase", () => {
     await expect(refundChipPurchase("chip-orig-4")).rejects.toThrow(
       "CHIP_API_KEY must be configured",
     );
+  });
+});
+
+describe("Collect retries and idempotency", () => {
+  const fetchMock = vi.fn();
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+  const ok = (body: unknown = { id: "refund-pay-1", type: "payment" }) => ({
+    ok: true,
+    status: 200,
+    json: async () => body,
+  });
+  const fail = (status: number, headers: Record<string, string> = {}) => ({
+    ok: false,
+    status,
+    headers: new Headers(headers),
+    text: async () => `error ${status}`,
+  });
+  const keyOf = (call: number) =>
+    (fetchMock.mock.calls[call][1].headers as Record<string, string>)[
+      "Idempotency-Key"
+    ];
+
+  async function settle<T>(promise: Promise<T>): Promise<T> {
+    const caught = promise.catch((err: unknown) => err);
+    await vi.runAllTimersAsync();
+    const result = await caught;
+    if (result instanceof Error) throw result;
+    return result as T;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubEnv("CHIP_API_KEY", "test-key");
+    vi.stubEnv("CHIP_BRAND_ID", "test-brand");
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  it("sends an Idempotency-Key on every write and none on a read", async () => {
+    fetchMock.mockResolvedValue(ok());
+    await createChipPurchase({
+      purchase: { products: [{ name: "Entry", price: 5500 }] },
+      client: { email: "player@example.com" },
+    });
+    await refundChipPurchase("chip-1");
+    await cancelChipPurchase("chip-1");
+    await getChipPurchase("chip-1");
+
+    for (const call of [0, 1, 2]) expect(keyOf(call)).toMatch(UUID);
+    expect(new Set([keyOf(0), keyOf(1), keyOf(2)]).size).toBe(3);
+    expect(keyOf(3)).toBeUndefined();
+  });
+
+  it.each([500, 503])(
+    "retries a %i with the same key, then succeeds",
+    async (status) => {
+      fetchMock.mockResolvedValueOnce(fail(status)).mockResolvedValueOnce(ok());
+      await expect(settle(refundChipPurchase("chip-1"))).resolves.toEqual({
+        id: "refund-pay-1",
+        type: "payment",
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(keyOf(1)).toBe(keyOf(0));
+    },
+  );
+
+  it("retries a network failure with the same key", async () => {
+    fetchMock
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(ok());
+    await settle(refundChipPurchase("chip-1"));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(keyOf(1)).toBe(keyOf(0));
+  });
+
+  it("gives up after three attempts", async () => {
+    fetchMock.mockResolvedValue(fail(500));
+    await expect(settle(refundChipPurchase("chip-1"))).rejects.toThrow(
+      "CHIP API error 500: error 500",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("rethrows the network error after three attempts", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    await expect(settle(getChipPurchase("chip-1"))).rejects.toThrow(
+      "fetch failed",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([400, 401, 404, 409, 422])(
+    "does not retry a %i",
+    async (status) => {
+      fetchMock.mockResolvedValue(fail(status));
+      await expect(settle(refundChipPurchase("chip-1"))).rejects.toThrow(
+        `CHIP API error ${status}`,
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not retry a 502: the webhook decides", async () => {
+    fetchMock.mockResolvedValue(fail(502));
+    await expect(settle(refundChipPurchase("chip-1"))).rejects.toThrow(
+      "CHIP API error 502",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits out a short Retry-After on a 429", async () => {
+    fetchMock
+      .mockResolvedValueOnce(fail(429, { "Retry-After": "1" }))
+      .mockResolvedValueOnce(ok());
+    const pending = refundChipPurchase("chip-1");
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(keyOf(1)).toBe(keyOf(0));
+  });
+
+  it("backs off on a 429 with no Retry-After", async () => {
+    fetchMock.mockResolvedValueOnce(fail(429)).mockResolvedValueOnce(ok());
+    await settle(refundChipPurchase("chip-1"));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up at once when Retry-After is longer than a request can wait", async () => {
+    fetchMock.mockResolvedValue(fail(429, { "Retry-After": "60" }));
+    await expect(settle(refundChipPurchase("chip-1"))).rejects.toThrow(
+      "CHIP API error 429",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -211,39 +211,22 @@ export async function getChipSendInstruction(
 
 export type ChipSendOutcome = "completed" | "failed" | "pending";
 
-const SEND_COMPLETED = new Set(["completed", "send_instruction.completed"]);
-const SEND_FAILED = new Set([
-  "rejected",
-  "deleted",
-  "failed",
-  "send_instruction.rejected",
-  "send_instruction.deleted",
-  "send_instruction.failed",
-]);
+const SEND_FAILED = new Set(["rejected", "deleted"]);
 
-export function chipSendOutcome(
-  state?: string,
-  eventType?: string,
-): ChipSendOutcome {
+export function chipSendOutcome(state?: string): ChipSendOutcome {
   const s = (state ?? "").toLowerCase();
-  const e = (eventType ?? "").toLowerCase();
-  if (SEND_COMPLETED.has(s) || SEND_COMPLETED.has(e)) return "completed";
-  if (SEND_FAILED.has(s) || SEND_FAILED.has(e)) return "failed";
+  if (s === "completed") return "completed";
+  if (SEND_FAILED.has(s)) return "failed";
   return "pending";
 }
 
 export type ChipBankAccountOutcome = "verified" | "rejected" | "pending";
 
-const BANK_VERIFIED = new Set(["verified", "bank_account.verified"]);
-const BANK_REJECTED = new Set(["rejected", "bank_account.rejected"]);
-
 export function chipBankAccountOutcome(
   status?: string,
-  eventType?: string,
 ): ChipBankAccountOutcome {
   const s = (status ?? "").toLowerCase();
-  const e = (eventType ?? "").toLowerCase();
-  if (BANK_VERIFIED.has(s) || BANK_VERIFIED.has(e)) return "verified";
-  if (BANK_REJECTED.has(s) || BANK_REJECTED.has(e)) return "rejected";
+  if (s === "verified") return "verified";
+  if (s === "rejected") return "rejected";
   return "pending";
 }

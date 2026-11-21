@@ -709,16 +709,6 @@
       "count": 65
     }
   },
-  "src/app/api/v1/webhooks/chip/send/__tests__/route.test.ts": {
-    "local/no-comments": {
-      "count": 30
-    }
-  },
-  "src/app/api/v1/webhooks/chip/send/route.ts": {
-    "local/no-comments": {
-      "count": 66
-    }
-  },
   "src/app/api/v1/webhooks/github/route.ts": {
     "local/no-comments": {
       "count": 7

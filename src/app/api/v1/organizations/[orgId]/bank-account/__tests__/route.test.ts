@@ -249,6 +249,18 @@ describe("PUT /api/v1/organizations/[orgId]/bank-account", () => {
     },
   );
 
+  it("400 for an account number of the wrong length for the bank", async () => {
+    const res = await PUT(
+      makePut({ ...VALID_BODY, account_number: "5140 1234-56" }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.message).toBe(
+      "Maybank account numbers have 12 digits",
+    );
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
   it("normalizes the account number and derives the bank name server-side", async () => {
     await PUT(makePut(), params());
     expect(mockRpc).toHaveBeenCalledWith("set_organization_bank_account", {

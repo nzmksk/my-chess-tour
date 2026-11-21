@@ -119,8 +119,9 @@ Organization emails go to owners, admins and the contact address (`loadOrganizat
 - **Insufficient balance is a 400 in practice, not the documented 403.** The sandbox answers create-send-instruction with `400 {"message":"Balance not enough. Please increase your Send Limit"}`. `ChipSendError.insufficientBalance` covers both.
 - 401, 408, 429 and 5xx stay retryable. Other 4xx are terminal.
 - **Each successful transfer costs RM1 (`CHIP_SEND_FEE_CENTS`), taken from the Send balance.** The pre-send balance check and the budget request both use payout + fee, or an approved allocation would still leave the payout short.
-- A budget request emails every approver, so a re-run won't send another while one is pending. An expired one is replaced.
-- **The webhook delivery body is undocumented.** The handler assumes the fields of the `SendInstruction` resource, at the top level or under `data`, and falls back to the recorded amount. Check this against a real delivery.
+- A budget request emails every approver, so a re-run won't send another while one is pending. An expired one is replaced, and CHIP's `expiry_reason` is logged: the settlement balance no longer covered it, the 12:00 PM (MYT) approval cut-off passed, a newer request superseded it, or the settlement is on hold.
+- **Rate limits are per API key, per 5 minutes:** 100 send instructions, 60 bank account registrations, 60 budget requests, and 300 for everything else under `/api/send`. A `429` releases the claim, so the payout goes back to `pending` for the next run. The daily run sends `PAYOUT_CONCURRENCY` at a time, which stays far below these limits at today's volume. See CHIP's [rate limits](https://docs.chip-in.asia/chip-send/api-reference/rate-limits).
+- **The webhook** settles from the instruction's `state` and falls back to the recorded amount when CHIP's is unusable. See [chip-webhook.md](./chip-webhook.md#chip-send-webhook).
 
 ## Beneficiary nomination
 

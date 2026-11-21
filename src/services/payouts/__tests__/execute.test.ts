@@ -364,6 +364,23 @@ describe("awaiting budget", () => {
     expect(updates).toContainEqual({ chip_send_limit_id: 78 });
   });
 
+  it("logs why CHIP expired the allocation it replaces", async () => {
+    givenPayout({ chip_send_limit_id: 77 });
+    mockAccounts.mockResolvedValue(balance(1));
+    mockGetLimit.mockResolvedValue({
+      id: 77,
+      status: "expired",
+      expiry_reason: "Superseded by a newer budget allocation request.",
+    });
+    mockIncrease.mockResolvedValue({ id: 78 });
+    await executePayout(ID);
+    expect(console.info).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "send limit 77 is expired (Superseded by a newer budget allocation request.); requesting a new one",
+      ),
+    );
+  });
+
   it("assumes a live allocation when it can't read it", async () => {
     givenPayout({ chip_send_limit_id: 77 });
     mockAccounts.mockResolvedValue(balance(1));

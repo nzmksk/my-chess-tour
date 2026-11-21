@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { BANK_SWIFT_CODES } from "@/lib/reference/malaysian-banks";
+import {
+  BANK_SWIFT_CODES,
+  accountNumberLengthError,
+} from "@/lib/reference/malaysian-banks";
 
 export interface BankAccountRequest {
   bank_code: string;
@@ -52,6 +55,8 @@ export function validateBankAccountRequest(
       "Account number must contain 5 to 20 digits (spaces and dashes allowed)",
     );
   }
+  const lengthError = accountNumberLengthError(b.bank_code, accountNumber);
+  if (lengthError) return fail(lengthError);
 
   return {
     data: {

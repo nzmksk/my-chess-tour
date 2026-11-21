@@ -25,7 +25,8 @@ export interface ChipSendInstruction {
   email: string;
   description: string;
   reference: string;
-  receipt_url: string;
+  receipt_url: string | null;
+  rejection_reason: string | null;
   slug: string;
   created_at: string;
   updated_at: string;
