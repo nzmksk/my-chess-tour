@@ -4,7 +4,11 @@ export interface ChipSendLimitRequest {
   amount: number;
 }
 
-export type ChipSendLimitStatus = "pending" | "approved" | "expired";
+export type ChipSendLimitStatus =
+  | "pending"
+  | "approved"
+  | "expired"
+  | "success";
 
 export interface ChipSendLimit {
   id: number;
@@ -16,6 +20,7 @@ export interface ChipSendLimit {
   net_amount: number;
   from_settlement: string;
   status: ChipSendLimitStatus;
+  expiry_reason: string | null;
   approvals_required: number;
   approvals_received: number;
   created_at: string;

@@ -371,28 +371,21 @@ describe("CHIP Send HTTP calls", () => {
 });
 
 describe("chipBankAccountOutcome", () => {
-  it("maps verified by status or event", () => {
+  it("maps verified and rejected", () => {
     expect(chipBankAccountOutcome("verified")).toBe("verified");
-    expect(chipBankAccountOutcome(undefined, "bank_account.verified")).toBe(
-      "verified",
-    );
     expect(chipBankAccountOutcome("VERIFIED")).toBe("verified");
-  });
-
-  it("maps rejected by status or event", () => {
     expect(chipBankAccountOutcome("rejected")).toBe("rejected");
-    expect(chipBankAccountOutcome(undefined, "bank_account.rejected")).toBe(
-      "rejected",
-    );
   });
 
-  it("treats everything else as pending", () => {
-    expect(chipBankAccountOutcome("pending")).toBe("pending");
+  it("treats every other documented status as pending", () => {
+    for (const s of ["received", "pending", "reviewing", undefined]) {
+      expect(chipBankAccountOutcome(s)).toBe("pending");
+    }
+  });
+
+  it("treats an unknown status as pending", () => {
     expect(chipBankAccountOutcome("unverified")).toBe("pending");
-    expect(chipBankAccountOutcome()).toBe("pending");
-    expect(chipBankAccountOutcome("completed", "send_instruction.completed")).toBe(
-      "pending",
-    );
+    expect(chipBankAccountOutcome("completed")).toBe("pending");
   });
 });
 
@@ -419,18 +412,12 @@ describe("chipSendAmountToCents", () => {
 describe("chipSendOutcome", () => {
   it("only completed is success", () => {
     expect(chipSendOutcome("completed")).toBe("completed");
-    expect(chipSendOutcome(undefined, "send_instruction.completed")).toBe(
-      "completed",
-    );
+    expect(chipSendOutcome("COMPLETED")).toBe("completed");
   });
 
-  it("rejected, deleted and failed are terminal failures", () => {
+  it("rejected and the legacy deleted are terminal failures", () => {
     expect(chipSendOutcome("rejected")).toBe("failed");
     expect(chipSendOutcome("deleted")).toBe("failed");
-    expect(chipSendOutcome(undefined, "send_instruction.rejected")).toBe(
-      "failed",
-    );
-    expect(chipSendOutcome(undefined, "send_instruction.failed")).toBe("failed");
   });
 
   it("in-flight states (incl. accepted) are pending", () => {
@@ -444,7 +431,11 @@ describe("chipSendOutcome", () => {
     ]) {
       expect(chipSendOutcome(s)).toBe("pending");
     }
-    expect(chipSendOutcome("verified", "bank_account.verified")).toBe("pending");
+  });
+
+  it("treats an unknown state as pending", () => {
+    expect(chipSendOutcome("failed")).toBe("pending");
+    expect(chipSendOutcome("verified")).toBe("pending");
   });
 });
 
