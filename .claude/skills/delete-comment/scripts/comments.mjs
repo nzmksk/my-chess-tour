@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -16,16 +16,15 @@ export const DIRECTIVES = [
 const LINTED = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
 export function lintedFiles(paths) {
-  const listed = execSync(
-    `git ls-files -- ${paths.map((p) => `"${p}"`).join(" ")}`,
-    {
-      encoding: "utf8",
-    },
-  )
+  const listed = execFileSync("git", ["ls-files", "--", ...paths], {
+    encoding: "utf8",
+  })
     .split("\n")
     .filter(
       (f) =>
-        LINTED.test(f) && !f.startsWith(".claude/") && !f.startsWith("wiki/"),
+        LINTED.test(f) &&
+        !f.startsWith(".claude/") &&
+        !f.startsWith("docs/wiki/"),
     );
   return listed;
 }
