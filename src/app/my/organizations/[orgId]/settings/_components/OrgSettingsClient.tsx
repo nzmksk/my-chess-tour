@@ -50,11 +50,16 @@ const BANK_STATUS: Record<
     label: "Rejected",
     className: "bg-danger/15 text-danger border border-danger/20",
   },
+  name_mismatch: {
+    label: "Under review",
+    className: "bg-warning/15 text-warning border border-warning/20",
+  },
 };
 
 interface Props {
   organization: OrgProfile;
   bankAccount: MaskedBankAccount | null;
+  registeredName: string | null;
   canManageBank: boolean;
   documents: OrgDocumentSummary[];
 }
@@ -88,6 +93,7 @@ function Card({
 export default function OrgSettingsClient({
   organization,
   bankAccount,
+  registeredName,
   canManageBank,
   documents,
 }: Props) {
@@ -415,6 +421,15 @@ export default function OrgSettingsClient({
                     {bankAccount.rejection_reason}
                   </p>
                 )}
+              {bankAccount.status === "name_mismatch" && (
+                <p className="font-lato text-warning mb-3 text-sm">
+                  Your bank holds this account under a different name from{" "}
+                  {registeredName ?? bankAccount.account_holder}. Our team is
+                  checking it, and payouts wait until then. If the account
+                  isn&apos;t in your organization&apos;s name, change it to one
+                  that is.
+                </p>
+              )}
               <dl className="font-lato text-sm">
                 <div className="border-border grid grid-cols-[140px_1fr] border-b py-2">
                   <dt className="text-text-muted text-xs">Bank</dt>
@@ -426,6 +441,14 @@ export default function OrgSettingsClient({
                     {bankAccount.account_holder}
                   </dd>
                 </div>
+                {bankAccount.bank_holder_name && (
+                  <div className="border-border grid grid-cols-[140px_1fr] border-b py-2">
+                    <dt className="text-text-muted text-xs">Name at the bank</dt>
+                    <dd className="text-text-primary">
+                      {bankAccount.bank_holder_name}
+                    </dd>
+                  </div>
+                )}
                 <div className="grid grid-cols-[140px_1fr] py-2">
                   <dt className="text-text-muted text-xs">Account Number</dt>
                   <dd className="text-text-primary">
@@ -434,6 +457,13 @@ export default function OrgSettingsClient({
                 </div>
               </dl>
             </div>
+          )}
+
+          {registeredName && (
+            <p className="font-lato text-text-muted mb-4 text-xs">
+              Payouts only go to an account held in the name of{" "}
+              <span className="text-text-primary">{registeredName}</span>.
+            </p>
           )}
 
           {!editingBank && !bankAccount && (

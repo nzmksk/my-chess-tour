@@ -11,6 +11,7 @@ interface Props {
   accountNumberLast4: string | null;
   status: BankAccountStatus | null;
   rejectionReason: string | null;
+  bankHolderName: string | null;
 }
 
 // A player's account is checked with their bank only when a prize is to be
@@ -31,6 +32,11 @@ const STATUS_COPY: Record<BankAccountStatus, { label: string; note: string; clas
     note: "Please check the details and save them again, or prizes can't be sent to you.",
     className: "text-danger",
   },
+  name_mismatch: {
+    label: "Under review",
+    note: "Your bank holds this account under a different name from the account holder you gave. We're checking it before any prize is sent.",
+    className: "text-warning",
+  },
 };
 
 // Banking / payout details card. Kept outside the main profile edit form because
@@ -48,7 +54,9 @@ export default function BankingCard({
   accountNumberLast4: initialLast4,
   status: initialStatus,
   rejectionReason: initialRejectionReason,
+  bankHolderName: initialBankHolderName,
 }: Props) {
+  const [bankHolderName, setBankHolderName] = useState(initialBankHolderName);
   const [display, setDisplay] = useState<BankingDisplay>({
     bank_name: initialBankName,
     bank_code: initialBankCode,
@@ -73,6 +81,7 @@ export default function BankingCard({
 
   function handleSaved(masked: BankingDisplay) {
     setDisplay(masked);
+    setBankHolderName(null);
     setEditing(false);
   }
 
@@ -104,6 +113,7 @@ export default function BankingCard({
         bank_account_status: null,
         bank_account_rejection_reason: null,
       });
+      setBankHolderName(null);
       setConfirmingRemove(false);
     } catch {
       setRemoveError("A network error occurred. Please try again.");
@@ -151,6 +161,16 @@ export default function BankingCard({
                 {display.bank_account_holder || "—"}
               </span>
             </div>
+            {bankHolderName && (
+              <div className="border-border flex flex-col gap-0.5 border-b py-3">
+                <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
+                  Name at Your Bank
+                </span>
+                <span className="font-lato text-text-body text-sm">
+                  {bankHolderName}
+                </span>
+              </div>
+            )}
             <div className="border-border flex flex-col gap-0.5 border-b py-3">
               <span className="font-cinzel text-gold-muted text-xs font-semibold tracking-widest uppercase">
                 Account Number

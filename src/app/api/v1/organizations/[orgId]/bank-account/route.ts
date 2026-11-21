@@ -115,7 +115,7 @@ export async function GET(
   const { data, error } = await supabaseAdmin
     .from("organization_bank_accounts")
     .select(
-      "bank_name, bank_code, account_holder, account_number, status, rejection_reason, verified_at",
+      "bank_name, bank_code, account_holder, account_number, status, rejection_reason, verified_at, bank_holder_name",
     )
     .eq("organization_id", orgId)
     .eq("is_active", true)

@@ -724,6 +724,7 @@ export default function ProfileClient({ profile }: Props) {
             accountNumberLast4={current.bank_account_number_last4}
             status={current.bank_account_status}
             rejectionReason={current.bank_account_rejection_reason}
+            bankHolderName={current.bank_holder_name}
           />
 
           {/* Chess Details */}
