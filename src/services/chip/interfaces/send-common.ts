@@ -1,9 +1,3 @@
-// Types shared by the CHIP Send payloads. Source of truth:
-// https://docs.chip-in.asia/openapi/chip-send.yaml — CHIP Send is a different
-// API from Collect (different host, three-header auth, per-webhook RSA keys), so none
-// of the Collect types in common.ts apply here.
-
-/** Pagination block on CHIP Send list responses (`meta.pagination`). */
 export interface ChipSendPagination {
   current_page: number;
   prev_page: number | null;
@@ -12,7 +6,6 @@ export interface ChipSendPagination {
   total_count: number;
 }
 
-/** Envelope of every CHIP Send list endpoint. */
 export interface ChipSendList<T> {
   results: T[];
   meta: { pagination: ChipSendPagination };
