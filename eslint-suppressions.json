@@ -1539,61 +1539,6 @@
       "count": 18
     }
   },
-  "src/lib/export/__tests__/spreadsheet.test.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/lib/export/spreadsheet.ts": {
-    "local/no-comments": {
-      "count": 41
-    }
-  },
-  "src/lib/http/__tests__/after-response.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/lib/http/__tests__/internal-error.test.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/lib/http/__tests__/request-ip.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/lib/http/after-response.ts": {
-    "local/no-comments": {
-      "count": 8
-    }
-  },
-  "src/lib/http/internal-error.ts": {
-    "local/no-comments": {
-      "count": 13
-    }
-  },
-  "src/lib/http/origin-policy.ts": {
-    "local/no-comments": {
-      "count": 13
-    }
-  },
-  "src/lib/http/request-ip.ts": {
-    "local/no-comments": {
-      "count": 8
-    }
-  },
-  "src/lib/http/self-fetch.ts": {
-    "local/no-comments": {
-      "count": 3
-    }
-  },
-  "src/lib/http/server-to-server.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
   "src/lib/reference/__tests__/legal.test.ts": {
     "local/no-comments": {
       "count": 23
@@ -1622,16 +1567,6 @@
   "src/lib/reference/malaysian-banks.ts": {
     "local/no-comments": {
       "count": 40
-    }
-  },
-  "src/lib/refunds/state.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/lib/refunds/stuck-after.ts": {
-    "local/no-comments": {
-      "count": 2
     }
   },
   "src/lib/release-notes.ts": {

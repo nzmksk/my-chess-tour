@@ -29,3 +29,22 @@ from a variable named `e`, `err`, `error` or ending in `Err` / `Error`.
   (`src/services/sentry/server.ts`), so nothing is lost.
 - The lint selectors match names, not types. An error held in a differently
   named variable slips through, so review still has to watch for it.
+
+## Logging the detail
+
+`logInternalError` is the logging half, for code that reports a failure
+without building a response (loaders shared by a page and a route, server
+actions). How it logs is deliberate:
+
+- `console.error` formats its first argument printf-style whenever more
+  arguments follow, and `context` often carries request values. A `%c` in an
+  id from the URL would swallow the error detail. So it logs either one
+  string, which is never formatted, or the context with `%` escaped.
+- An `Error` stays a separate argument, so the log keeps its stack and Sentry
+  records it as an exception rather than a message.
+- Supabase errors are plain `{ code, message, details, hint }` objects that
+  would print as `[object Object]` once Sentry stringifies them, so they are
+  flattened to one line.
+- `context` names the route and operation (for example
+  `"Org applications: create_organization_application failed"`) so the Sentry
+  event can be found.

@@ -5,7 +5,6 @@ function requestWith(headers: Record<string, string>): NextRequest {
   return new NextRequest("http://localhost/api/v1/x", { headers });
 }
 
-// The module remembers whether it already warned, so each test loads it fresh.
 async function loadGetClientIp() {
   vi.resetModules();
   return (await import("../request-ip")).getClientIp;

@@ -1,25 +1,6 @@
-/**
- * Dependency-free CSV and XLSX writers for small tabular exports (a roster of
- * a few hundred rows). The first row is the header.
- *
- * XLSX is the minimum Office Open XML workbook Excel, LibreOffice, Google
- * Sheets and Numbers all open: one sheet of inline strings and numbers, a bold
- * header, packed in an uncompressed ZIP. Nothing here supports formulas, so a
- * cell can never be evaluated.
- */
-
 type Cell = string | number | null | undefined;
 export type Row = Cell[];
 
-// ---------------------------------------------------------------------------
-// CSV
-// ---------------------------------------------------------------------------
-
-/**
- * A text cell starting with one of these is read as a formula by Excel and
- * friends ("CSV injection"). Names are typed by players, so prefix them with a
- * quote, which spreadsheets show as plain text. Numbers are written as-is.
- */
 const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
 
 function csvCell(cell: Cell): string {
@@ -31,20 +12,11 @@ function csvCell(cell: Cell): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/**
- * RFC 4180 CSV, CRLF line endings, with a UTF-8 byte-order mark so Excel
- * doesn't read non-ASCII names as mojibake.
- */
 export function toCsv(rows: Row[]): string {
   const body = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
   return `﻿${body}\r\n`;
 }
 
-// ---------------------------------------------------------------------------
-// XLSX
-// ---------------------------------------------------------------------------
-
-// Characters XML 1.0 forbids outright; Excel refuses the file if one appears.
 const INVALID_XML_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g;
 
 function xmlEscape(text: string): string {
@@ -56,7 +28,6 @@ function xmlEscape(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** 0 → "A", 25 → "Z", 26 → "AA". */
 function columnName(index: number): string {
   let name = "";
   for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
@@ -68,7 +39,6 @@ function columnName(index: number): string {
 function sheetXml(rows: Row[]): string {
   const rowXml = rows
     .map((row, r) => {
-      // Style 1 (bold) for the header row; see STYLES_XML.
       const style = r === 0 ? ' s="1"' : "";
       const cells = row
         .map((cell, c) => {
@@ -86,7 +56,6 @@ function sheetXml(rows: Row[]): string {
     })
     .join("");
 
-  // Freeze the header so it stays visible while scrolling a long roster.
   const pane =
     rows.length > 1
       ? '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
@@ -122,7 +91,6 @@ const WORKBOOK_RELS_XML =
   '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
   "</Relationships>";
 
-// Two cell formats: 0 is the default, 1 is bold (the header row).
 const STYLES_XML =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
   '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
@@ -133,9 +101,6 @@ const STYLES_XML =
   '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>' +
   "</styleSheet>";
 
-/**
- * Excel caps sheet names at 31 characters and forbids : \ / ? * [ ].
- */
 function sheetName(name: string): string {
   const cleaned = name
     .replace(/[:\\/?*[\]]/g, " ")
@@ -153,7 +118,6 @@ function workbookXml(name: string): string {
   );
 }
 
-/** A single-sheet .xlsx workbook. */
 export function toXlsx(rows: Row[], name = "Sheet1"): Uint8Array<ArrayBuffer> {
   return zipStored([
     { name: "[Content_Types].xml", content: CONTENT_TYPES_XML },
@@ -164,10 +128,6 @@ export function toXlsx(rows: Row[], name = "Sheet1"): Uint8Array<ArrayBuffer> {
     { name: "xl/worksheets/sheet1.xml", content: sheetXml(rows) },
   ]);
 }
-
-// ---------------------------------------------------------------------------
-// ZIP (stored, no compression)
-// ---------------------------------------------------------------------------
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -185,16 +145,9 @@ function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-// 1980-01-01 00:00, the earliest DOS timestamp. A fixed time keeps the output
-// byte-for-byte reproducible; nothing reads the entry times of an xlsx.
 const DOS_TIME = 0;
 const DOS_DATE = (0 << 9) | (1 << 5) | 1;
 
-/**
- * A ZIP archive with every entry stored uncompressed. Enough for an xlsx of a
- * few hundred rows; past the 4 GiB ZIP32 limit it would need ZIP64, which a
- * roster never approaches.
- */
 function zipStored(
   entries: { name: string; content: string }[],
 ): Uint8Array<ArrayBuffer> {
@@ -218,17 +171,17 @@ function zipStored(
 
   for (const f of files) {
     offsets.push(offset);
-    view.setUint32(offset, 0x04034b50, true); // local file header signature
-    view.setUint16(offset + 4, 20, true); // version needed (2.0)
-    view.setUint16(offset + 6, 0x0800, true); // flags: UTF-8 names
-    view.setUint16(offset + 8, 0, true); // method: stored
+    view.setUint32(offset, 0x04034b50, true);
+    view.setUint16(offset + 4, 20, true);
+    view.setUint16(offset + 6, 0x0800, true);
+    view.setUint16(offset + 8, 0, true);
     view.setUint16(offset + 10, DOS_TIME, true);
     view.setUint16(offset + 12, DOS_DATE, true);
     view.setUint32(offset + 14, f.crc, true);
-    view.setUint32(offset + 18, f.data.length, true); // compressed size
-    view.setUint32(offset + 22, f.data.length, true); // uncompressed size
+    view.setUint32(offset + 18, f.data.length, true);
+    view.setUint32(offset + 22, f.data.length, true);
     view.setUint16(offset + 26, f.name.length, true);
-    view.setUint16(offset + 28, 0, true); // extra field length
+    view.setUint16(offset + 28, 0, true);
     out.set(f.name, offset + 30);
     out.set(f.data, offset + 30 + f.name.length);
     offset += 30 + f.name.length + f.data.length;
@@ -236,28 +189,27 @@ function zipStored(
 
   const centralStart = offset;
   files.forEach((f, i) => {
-    view.setUint32(offset, 0x02014b50, true); // central directory signature
-    view.setUint16(offset + 4, 20, true); // version made by
-    view.setUint16(offset + 6, 20, true); // version needed
-    view.setUint16(offset + 8, 0x0800, true); // flags: UTF-8 names
-    view.setUint16(offset + 10, 0, true); // method: stored
+    view.setUint32(offset, 0x02014b50, true);
+    view.setUint16(offset + 4, 20, true);
+    view.setUint16(offset + 6, 20, true);
+    view.setUint16(offset + 8, 0x0800, true);
+    view.setUint16(offset + 10, 0, true);
     view.setUint16(offset + 12, DOS_TIME, true);
     view.setUint16(offset + 14, DOS_DATE, true);
     view.setUint32(offset + 16, f.crc, true);
     view.setUint32(offset + 20, f.data.length, true);
     view.setUint32(offset + 24, f.data.length, true);
     view.setUint16(offset + 28, f.name.length, true);
-    // extra, comment, disk number, internal + external attributes: all zero
-    view.setUint32(offset + 42, offsets[i], true); // local header offset
+    view.setUint32(offset + 42, offsets[i], true);
     out.set(f.name, offset + 46);
     offset += 46 + f.name.length;
   });
 
-  view.setUint32(offset, 0x06054b50, true); // end of central directory
-  view.setUint16(offset + 8, files.length, true); // entries on this disk
-  view.setUint16(offset + 10, files.length, true); // entries in total
-  view.setUint32(offset + 12, offset - centralStart, true); // directory size
-  view.setUint32(offset + 16, centralStart, true); // directory offset
+  view.setUint32(offset, 0x06054b50, true);
+  view.setUint16(offset + 8, files.length, true);
+  view.setUint16(offset + 10, files.length, true);
+  view.setUint32(offset + 12, offset - centralStart, true);
+  view.setUint32(offset + 16, centralStart, true);
 
   return out;
 }
