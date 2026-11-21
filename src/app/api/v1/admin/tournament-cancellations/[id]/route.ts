@@ -353,7 +353,7 @@ async function handlePatch(
 
     // A platform-distributed pool stops collecting: every open sponsor link is
     // withdrawn (and its CHIP purchase cancelled). Money already paid in is
-    // returned to the funders by the residual-funds step (wiki/prize-flow.md).
+    // returned to the funders by the residual-funds step (docs/wiki/prize-flow.md).
     const funding = await syncPrizeFundingRequests(tournamentId, null);
     if (funding.error) {
       console.error(

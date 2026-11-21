@@ -26,7 +26,7 @@ exercised locally.
 
 ## How limits count
 
-The rules and their numbers are in [api-design](../../wiki/api-design.md#5-rate-limiting)
+The rules and their numbers are in [api-design](../wiki/api-design.md#5-rate-limiting)
 and `src/services/rate-limit/limits.ts`. Underneath them:
 
 - **One primitive.** `hitWindow` (`src/services/rate-limit/window.ts`) runs

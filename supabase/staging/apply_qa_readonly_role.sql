@@ -32,7 +32,7 @@
 -- It ends in ROLLBACK, so it is a dry run until that line is changed to COMMIT.
 --
 -- HOW TO RUN: Supabase SQL editor (or psql as postgres), against STAGING only.
--- Then add testers with add_qa_tester.sql. See wiki/staging-db-access.md.
+-- Then add testers with add_qa_tester.sql. See docs/wiki/staging-db-access.md.
 -- =============================================================================
 
 BEGIN;

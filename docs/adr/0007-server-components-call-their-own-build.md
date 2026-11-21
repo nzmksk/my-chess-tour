@@ -7,7 +7,7 @@
 ## Context
 
 Some server components fetch this app's own API routes. `NEXT_PUBLIC_SITE_URL`
-is the canonical public URL ([site-url](../../wiki/site-url.md)); on a branch
+is the canonical public URL ([site-url](../wiki/site-url.md)); on a branch
 deploy, a deploy preview or a dev server on another port it names a
 _different_ build, whose routes may be older. That's how the organizer
 dashboard once read a staging API without `bank_account` and told an org with

@@ -37,4 +37,4 @@ can show it without importing the server-side fire path.
 
 - The fifteen minutes is one constant shared by the UI and the database calls.
 
-See also [refund-flow](../../wiki/refund-flow.md).
+See also [refund-flow](../wiki/refund-flow.md).

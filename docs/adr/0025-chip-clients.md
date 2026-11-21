@@ -9,9 +9,9 @@
 Money comes in through CHIP Collect (`src/services/chip/chip.ts`) and goes out
 through CHIP Send (`src/services/chip/send.ts`). Both are reached from two
 directions, a synchronous API response and a webhook, and both have behavior
-their documentation doesn't spell out. [chip-webhook](../../wiki/chip-webhook.md)
+their documentation doesn't spell out. [chip-webhook](../wiki/chip-webhook.md)
 covers signature verification and key formatting, and
-[payment-flow](../../wiki/payment-flow.md) the single payment window and why
+[payment-flow](../wiki/payment-flow.md) the single payment window and why
 CHIP's `expired` isn't a failure for us.
 
 ## Decision

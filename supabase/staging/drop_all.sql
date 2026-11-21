@@ -13,7 +13,7 @@
 --
 -- DESTRUCTIVE. Intended for local/staging resets only. Run in the Supabase SQL
 -- editor or psql, then rebuild with `supabase db push` and load
--- supabase/staging/seed.sql (wiki/database-migrations.md).
+-- supabase/staging/seed.sql (docs/wiki/database-migrations.md).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------

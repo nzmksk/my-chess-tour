@@ -34,7 +34,7 @@
 -- To extend access:    ALTER ROLE qa_<name> VALID UNTIL '<date>';
 --
 -- HOW TO RUN: Supabase SQL editor (or psql as postgres), against STAGING only.
--- See wiki/staging-db-access.md for how the tester then connects.
+-- See docs/wiki/staging-db-access.md for how the tester then connects.
 -- =============================================================================
 
 BEGIN;

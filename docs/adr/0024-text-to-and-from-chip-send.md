@@ -6,7 +6,7 @@
 
 ## Context
 
-[payout-flow](../../wiki/payout-flow.md) records how payouts and prize awards
+[payout-flow](../wiki/payout-flow.md) records how payouts and prize awards
 move money and which CHIP answers are retried. Two kinds of text cross the
 boundary with CHIP Send, and neither can be trusted as-is: free text we send
 it, and error bodies it sends back.

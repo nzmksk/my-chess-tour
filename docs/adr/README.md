@@ -5,7 +5,7 @@ the code: what was decided, why, and what it costs. They replace the
 explanatory code comments that [ADR 0001](0001-no-code-comments.md) bans.
 
 Flows that span many files (payments, refunds, payouts, authentication,
-releases) are written up in [`wiki/`](../../wiki). A decision already recorded
+releases) are written up in [`docs/wiki/`](../wiki). A decision already recorded
 there isn't repeated here.
 
 ## Writing one

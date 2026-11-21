@@ -6,7 +6,7 @@
 
 ## Context
 
-[prize-flow](../../wiki/prize-flow.md) records the governing rules: entry
+[prize-flow](../wiki/prize-flow.md) records the governing rules: entry
 fees never fund prizes, and the platform never pays out prize money it hasn't
 collected. A few rules about the shape of `tournaments.prizes` sit underneath
 them and are checked at publish.
