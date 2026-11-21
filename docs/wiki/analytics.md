@@ -13,16 +13,17 @@ The code is in place and does **nothing** until `NEXT_PUBLIC_POSTHOG_KEY` is set
 | `$autocapture` | Clicks on links and buttons, form submits        | Element tag, classes, `href`. **No page text** (`mask_all_text`) and never input values |
 | `$web_vitals`  | Core Web Vitals, if enabled in the project       | Project setting, off unless you turn it on                                              |
 
-All of it is browser-only, initialised in `src/instrumentation-client.ts` next to Sentry, configured in `src/services/posthog/options.ts`. No server-side events, no custom events yet. Funnels such as _tournament page → `/register` → `/register/success`_ can be built from `$pageview` URLs alone.
+All of it is browser-only, initialised in `src/instrumentation-client.ts` next to Sentry, configured in `src/services/posthog/options.ts`. No server-side events, no custom events yet. `defaults` is pinned to a date so that upgrading `posthog-js` can't silently change what gets captured; move it forward deliberately, after reading PostHog's changelog for the new defaults. Funnels such as _tournament page → `/register` → `/register/success`_ can be built from `$pageview` URLs alone.
 
 ### Privacy design
 
 The privacy policy says we use no tracking cookies, and the platform asks for nothing it doesn't need. The setup keeps both true without a consent banner:
 
 - **Cookieless (`cookieless_mode: "always"`).** No cookies, `localStorage` or `sessionStorage`. PostHog counts unique visitors with a hash of IP + user agent + a salt that rotates daily, computed on its servers. Trade-off: the same person is a new visitor each day, and across devices. Daily and weekly unique counts and funnels within a visit still work. **The project setting in step 3 is required, or PostHog silently drops every event.**
+- **No page text (`mask_all_text`).** Autocapture records which element was clicked but not its text: names, emails and ratings are rendered as text throughout the app.
 - **Never identified.** The code never calls `posthog.identify`, so events can't be tied to an account and no person profiles are created. Don't add `identify` without revisiting the privacy policy. Cookieless mode can't keep an identity between page loads anyway.
 - **URLs are scrubbed before sending** (`src/services/posthog/scrub.ts`, a `before_send` hook):
-  - the fragment is dropped (Supabase puts session tokens in it on password-recovery redirects);
+  - the fragment is dropped (Supabase puts session tokens in it on password-recovery and magic-link redirects);
   - query parameters are **allowlisted** (`tab`, `status`, `sort`, `order`, `page`, `utm_*`); everything else goes, including auth codes, `token_hash`, `redirectTo`/`next`, error messages and free-text search;
   - `/invitations/<token>` becomes `/invitations/:token` (the token is a bearer secret);
   - a referrer from another site is cut to its origin (e.g. the CHIP payment page path names a purchase).
