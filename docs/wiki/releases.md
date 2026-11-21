@@ -104,7 +104,7 @@ To fix the notes later, edit the release on GitHub. Both sites pick up the chang
 
 Netlify only builds on branch pushes and pull requests; it can't build when a tag is created. So the **Redeploy staging on release** workflow (`.github/workflows/release-deploy.yml`, #689) runs when a release is published, pre-releases included, and POSTs to a Netlify build hook that builds `staging`'s head. If `staging` has moved past the tag, the footer shows the tag plus the newer commit, as for any build between releases.
 
-To redeploy by hand, run the workflow from the Actions tab, or use Netlify → staging site → Deploys → **Trigger deploy → Deploy site**.
+A release event runs the workflow file in the tagged commit, so this works for any release tagged on `staging` once the workflow is there. To redeploy by hand, use Netlify → staging site → Deploys → **Trigger deploy → Deploy site**, or run the workflow from the Actions tab (GitHub only offers that once the workflow is on `master`, the default branch).
 
 **Never use "Publish deploy" on an existing deploy to pick up a new tag.** It serves that deploy's old build, whose version was fixed when it was built, so the footer keeps the previous release. It also locks auto-publishing, so later builds finish but never go live until you click **Unlock to start auto publishing** on the Deploys page.
 
