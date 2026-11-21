@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
@@ -18,6 +18,10 @@ import {
   type IssueContext,
 } from "@/services/bug-reports/format";
 import { createBugReportIssue } from "@/services/bug-reports/github";
+import {
+  flushPostHogLogs,
+  logFeedbackSubmission,
+} from "@/services/posthog/logs";
 
 /**
  * POST /api/v1/feedback — the in-app bug report (#616).
@@ -126,6 +130,12 @@ function appVersion(): string {
   return commit ? `${version} (${commit})` : version;
 }
 
+function flushPostHogLogsAfterResponse() {
+  after(async () => {
+    await flushPostHogLogs();
+  });
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   let body: unknown;
   try {
@@ -180,6 +190,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .single();
 
   if (saveError || !saved) {
+    logFeedbackSubmission("save_failed");
+    flushPostHogLogsAfterResponse();
     return internalErrorResponse(
       "Feedback: saving the bug report failed",
       saveError,
@@ -221,6 +233,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         markError,
       );
     }
+    logFeedbackSubmission("filing_failed");
+    flushPostHogLogsAfterResponse();
     return NextResponse.json(
       {
         reference,
@@ -251,5 +265,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  logFeedbackSubmission("filed");
+  flushPostHogLogsAfterResponse();
   return NextResponse.json({ reference }, { status: 201 });
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { createClient } from "@/services/supabase/client";
 import BankAccountFields, {
   normalizeAccountNumber,
@@ -390,6 +391,12 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
       const json = await res.json();
 
       if (res.ok) {
+        posthog.capture("organization_application_submitted", {
+          application_type: amend ? "amendment" : "new",
+          entity_type: entityType,
+          document_count: documents.length + keptDocuments.length,
+          has_links: filteredLinks.length > 0,
+        });
         setPendingOrg({ name: json.data.name });
         setStatus("success");
       } else {

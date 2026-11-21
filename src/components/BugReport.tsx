@@ -3,6 +3,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { Bug } from "lucide-react";
 import { lastEventId } from "@sentry/nextjs";
+import posthog from "posthog-js";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,7 @@ export function BugReport() {
       } | null;
 
       if (res.ok && json?.reference) {
+        posthog.capture("bug_report_submitted", { filing_status: "filed" });
         setStatus({
           kind: "sent",
           reference: json.reference,
@@ -79,6 +81,7 @@ export function BugReport() {
         return;
       }
       if (json?.error?.code === "FILING_FAILED" && json.reference) {
+        posthog.capture("bug_report_submitted", { filing_status: "saved_only" });
         setStatus({ kind: "sent", reference: json.reference, savedOnly: true });
         return;
       }

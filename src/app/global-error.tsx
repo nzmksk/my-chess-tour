@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import posthog from "posthog-js";
 import * as Sentry from "@sentry/nextjs";
 import "@/styles/globals.css";
 
@@ -20,6 +21,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     Sentry.captureException(error);
+    posthog.captureException(error);
   }, [error]);
 
   return (
