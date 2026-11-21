@@ -642,7 +642,7 @@ describe("ApplyForm — amending a rejected application", () => {
       target: { value: "KL Chess Association" },
     });
     fireEvent.change(screen.getByLabelText("Account Number"), {
-      target: { value: "2120 0000-1111" },
+      target: { value: "2120 0000-1111 22" },
     });
     acceptAgreement();
     await submit();
@@ -650,7 +650,7 @@ describe("ApplyForm — amending a rejected application", () => {
     const body = sentBody();
     expect(body.keep_bank_account).toBeUndefined();
     expect(body.bank_code).toBe("RHBBMYKL");
-    expect(body.bank_account_number).toBe("212000001111");
+    expect(body.bank_account_number).toBe("21200000111122");
   });
 
   it("refuses to resubmit when the required document was removed and not replaced", async () => {
