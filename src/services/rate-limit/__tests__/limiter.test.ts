@@ -21,7 +21,6 @@ import {
 } from "../limiter";
 import { RATE_LIMITS } from "../limits";
 
-// Seconds to wait per key; anything not listed is within its limit.
 function waitsByKey(waits: Record<string, number>) {
   mockHitWindow.mockImplementation(async (key: string) => waits[key] ?? 0);
 }

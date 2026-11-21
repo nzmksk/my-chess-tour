@@ -3,11 +3,6 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 
-// email.test.ts mocks the filesystem, so nothing there reads a real template.
-// These checks read every template from disk and catch one that was cut short:
-// a missing footer or an unclosed element still renders, just badly, and a
-// placeholder that isn't in the template silently drops what the caller passed.
-
 const TEMPLATES_DIR = path.join(process.cwd(), "src/services/email/templates");
 
 const templates = fs
@@ -44,8 +39,6 @@ describe("email templates", () => {
       expect(count(html, "</div>")).toBe(count(html, "<div"));
     });
 
-    // Templates are static HTML, so they can't import SUPPORT_EMAIL. Any email
-    // address one hard-codes must be the one the app tells people to use.
     it("names only the shared support address", () => {
       const addresses = html.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g) ?? [];
       for (const address of addresses) {
@@ -54,7 +47,6 @@ describe("email templates", () => {
     });
   });
 
-  // The placeholders a decline/rejection email exists to carry.
   it.each([
     ["payout-request-rejected.html", "{{rejectionReason}}"],
     ["tournament-cancellation-rejected.html", "{{rejectionReason}}"],

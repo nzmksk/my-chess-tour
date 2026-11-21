@@ -2,39 +2,18 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { PAYMENT_TIMEOUT_INTERVAL } from "@/services/chip/chip";
 import { runWithAuditContext } from "@/services/supabase/audit-context";
 
-/**
- * One player on a tournament's roster: a live registration (confirmed, or
- * pending payment) joined to the player's name and chess identity.
- *
- * Only what the privacy policy's "Sharing of Data" section says organisers
- * receive — name, title, FIDE/MCF IDs and ratings, gender, date of birth,
- * nationality and whether the player is verified OKU — plus the registration's
- * own fields. Never contact details, and never a pending or rejected OKU
- * application. The manage page and the
- * participant export both read this, so they always agree on who is on it.
- */
 export interface RosterEntry {
-  /** 1-based position in registration order. */
   index: number;
   registration_id: string;
   user_id: string;
   first_name: string | null;
   last_name: string | null;
-  /** FIDE title (GM, WIM, …). */
   title: string | null;
   gender: "male" | "female" | null;
-  /** Calendar date, "YYYY-MM-DD". */
   date_of_birth: string | null;
-  /** As stored: a country name from the CountryDropdown. */
   nationality: string | null;
-  /**
-   * Verified OKU (admin-checked card), for OKU categories and special prizes.
-   * Pending and rejected applications both read as false: an organiser learns
-   * only the outcome that counts, as on the public profile.
-   */
   is_oku: boolean;
   fide_id: number | null;
-  /** The FIDE rating for the tournament's format; see pickFideRating. */
   fide_rating: number | null;
   mcf_id: number | null;
   national_rating: number | null;
@@ -47,14 +26,8 @@ export type RosterResult =
   | { ok: true; entries: RosterEntry[] }
   | { ok: false; context: string; error: unknown };
 
-/** The registration statuses that hold a place on the roster. */
 const ROSTER_STATUSES = ["confirmed", "pending_payment"] as const;
 
-/**
- * The FIDE rating a tournament of this format seeds by. A blitz or rapid
- * player without a rating in that time control falls back to the next slower
- * one, as FIDE's own rating lists are commonly used for seeding.
- */
 export function pickFideRating(
   ratings: Record<string, number> | null | undefined,
   formatType: string | null | undefined,
@@ -69,21 +42,10 @@ export function pickFideRating(
   return ratings.standard ?? null;
 }
 
-/**
- * Loads a tournament's roster in registration order. Performs NO access check
- * — callers gate first.
- *
- * Lapsed pending checkouts are terminalized first, so a pending_payment row is
- * one that can still be paid (CHIP sends no expiry event). The sweep skips the
- * per-row CHIP cancel — the purchase `due` already makes the link unpayable —
- * and is best-effort: a failed sweep never blocks the roster.
- */
 export async function loadRoster(
   tournamentId: string,
   formatType: string | null | undefined,
 ): Promise<RosterResult> {
-  // Housekeeping, not the viewer's own action: its own audit scope with no
-  // actor, so the expiries aren't attributed to whoever opened the roster (#470).
   const { error: expireErr } = await runWithAuditContext(
     "payment.expire-stale",
     () =>
@@ -151,8 +113,6 @@ export async function loadRoster(
         .in("user_id", userIds),
     ]);
 
-    // A roster with every name missing is worse than an error: an organizer
-    // exporting it would seed pairings with "Unknown".
     if (usersRes.error) {
       return { ok: false, context: "users", error: usersRes.error };
     }
@@ -199,7 +159,6 @@ export async function loadRoster(
   return { ok: true, entries };
 }
 
-/** "First Last", or "Unknown" for a player whose account is gone. */
 export function rosterDisplayName(entry: RosterEntry): string {
   const name = [entry.first_name, entry.last_name]
     .filter((part) => part && part.trim())

@@ -232,7 +232,6 @@ describe("loadRoster", () => {
     },
   );
 
-  // The privacy policy promises organisers never see these.
   it("never reads the OKU card, contact or bank details", async () => {
     builders.registrations.result = {
       data: [
@@ -296,7 +295,6 @@ describe("loadRoster audit scope (#470)", () => {
       return { data: null, error: null };
     });
 
-    // Opened by an organizer's request, whose actor must not be borrowed.
     await runWithAuditContext(
       "tournament.manage",
       () => loadRoster(TOUR_ID, "standard"),

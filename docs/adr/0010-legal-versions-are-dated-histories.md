@@ -62,6 +62,13 @@ each document is current.
   the explicit consent the PDPA asks for. The grant is recorded before the
   data is sent, and a failure stops the submission, because the database
   refuses an OKU upload or a bank-details save without it.
+  `grantSensitiveDataConsent` (`src/services/consent/sensitive-data.ts`)
+  takes the version from `legal.ts` on the server, never from the request:
+  what matters is which statement the server showed, and a version the client
+  sends proves nothing. A withdrawal is recorded only after the data is
+  deleted, since a withdrawal recorded while the data still exists would be a
+  false record; if recording fails, the data is already gone and the user can
+  withdraw again.
 
 ## Consequences
 

@@ -17,16 +17,6 @@ interface ConfirmedRegistrationRow {
   payment: { gross_amount_cents: number } | null;
 }
 
-/**
- * Emails a player that their registration is confirmed: tournament, dates, venue
- * and the entry fee they paid.
- *
- * Call it only when settle_registration_payment reports `newly_confirmed`, which
- * exactly one settling call does however many paths race to settle (the webhook,
- * the success page's reconcile, a free checkout), so the player gets one email.
- *
- * Best-effort and never throws: the registration is already confirmed.
- */
 export async function notifyRegistrationConfirmed(registrationId: string): Promise<void> {
   try {
     const { data, error } = await supabaseAdmin

@@ -142,7 +142,6 @@ describe("notifyMemberInvited", () => {
     recipient: Record<string, unknown> | null = { first_name: "Farid" },
   ) {
     tables.organizations = [{ data: { name: "KL Chess Club" }, error: null }];
-    // Promise.all starts the inviter lookup before the recipient's.
     tables.users = [
       { data: inviter, error: null },
       { data: recipient, error: null },

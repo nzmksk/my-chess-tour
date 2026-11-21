@@ -1394,36 +1394,6 @@
       "count": 3
     }
   },
-  "src/services/auth/__tests__/auth-validation.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/services/auth/__tests__/verification-code.test.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/auth/auth-validation.ts": {
-    "local/no-comments": {
-      "count": 3
-    }
-  },
-  "src/services/auth/verification-code.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/services/bug-reports/format.ts": {
-    "local/no-comments": {
-      "count": 13
-    }
-  },
-  "src/services/bug-reports/github.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
   "src/services/chip/__tests__/chip.test.ts": {
     "local/no-comments": {
       "count": 4
@@ -1504,94 +1474,9 @@
       "count": 70
     }
   },
-  "src/services/consent/sensitive-data.ts": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "src/services/email/__tests__/email.test.ts": {
-    "local/no-comments": {
-      "count": 23
-    }
-  },
-  "src/services/email/__tests__/templates.test.ts": {
-    "local/no-comments": {
-      "count": 7
-    }
-  },
-  "src/services/email/email.ts": {
-    "local/no-comments": {
-      "count": 74
-    }
-  },
-  "src/services/email/recipients.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/services/fide/__tests__/fide.test.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/services/fide/fide.ts": {
-    "local/no-comments": {
-      "count": 25
-    }
-  },
-  "src/services/github/__tests__/releases.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/services/github/releases.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/github/repo.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
   "src/services/oku/notify.ts": {
     "local/no-comments": {
       "count": 1
-    }
-  },
-  "src/services/organizations/__tests__/invitations.test.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/services/organizations/__tests__/notify.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/services/organizations/invitations.ts": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "src/services/organizations/notify.ts": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "src/services/payments/__tests__/fees.test.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/payments/fees.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/services/payments/paid-registration.ts": {
-    "local/no-comments": {
-      "count": 2
     }
   },
   "src/services/payouts/__tests__/bank-account.test.ts": {
@@ -1749,46 +1634,6 @@
       "count": 16
     }
   },
-  "src/services/rate-limit/__tests__/limiter.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/services/rate-limit/__tests__/window.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/services/rate-limit/auth.ts": {
-    "local/no-comments": {
-      "count": 19
-    }
-  },
-  "src/services/rate-limit/limiter.ts": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "src/services/rate-limit/limits.ts": {
-    "local/no-comments": {
-      "count": 23
-    }
-  },
-  "src/services/rate-limit/window.ts": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "src/services/redis/__tests__/redis.test.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/redis/redis.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
   "src/services/refunds/__tests__/fire.test.ts": {
     "local/no-comments": {
       "count": 2
@@ -1817,36 +1662,6 @@
   "src/services/refunds/sweep.ts": {
     "local/no-comments": {
       "count": 29
-    }
-  },
-  "src/services/registrations/__tests__/roster.test.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/services/registrations/notify.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/services/registrations/roster.ts": {
-    "local/no-comments": {
-      "count": 15
-    }
-  },
-  "src/services/sentry/flush-after-response.ts": {
-    "local/no-comments": {
-      "count": 3
-    }
-  },
-  "src/services/sentry/options.ts": {
-    "local/no-comments": {
-      "count": 3
-    }
-  },
-  "src/services/sentry/server.ts": {
-    "local/no-comments": {
-      "count": 1
     }
   },
   "src/services/supabase/__tests__/admin.test.ts": {

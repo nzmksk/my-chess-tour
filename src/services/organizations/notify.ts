@@ -21,15 +21,6 @@ interface ReviewedApplicationRow {
   applicant: { email: string | null; first_name: string | null } | null;
 }
 
-/**
- * Tells the applicant the outcome of their organization application: approved, or
- * declined with the admin's reason. Also goes to the contact address given on the
- * application when it differs, since that is where the organization expects mail.
- *
- * Best-effort and never throws: it runs after review_organization_application has
- * committed, and reads the outcome back from the row rather than trusting the
- * caller.
- */
 export async function notifyApplicationReviewed(orgId: string): Promise<void> {
   try {
     const { data, error } = await supabaseAdmin
@@ -55,8 +46,6 @@ export async function notifyApplicationReviewed(orgId: string): Promise<void> {
       return;
     }
 
-    // The applicant first, so someone who also gave their own address as the
-    // contact is greeted by name.
     const recipients = new Map<string, EmailRecipient>();
     addRecipient(recipients, org.applicant?.email, org.applicant?.first_name);
     addRecipient(recipients, org.email, org.name);
@@ -85,14 +74,6 @@ export async function notifyApplicationReviewed(orgId: string): Promise<void> {
   }
 }
 
-/**
- * Emails an invitation to join an organization. `email` need not belong to an
- * account yet; when it does, the email greets them by name.
- *
- * Runs after the invitation is written, and never throws: the invitation stands
- * either way and can be resent from the members page. Resolves to whether the
- * email went out, so the inviter can be told when it didn't.
- */
 export async function notifyMemberInvited(params: {
   orgId: string;
   inviterId: string;
@@ -166,15 +147,6 @@ interface RespondedInvitationRow {
   responder: { first_name: string | null; last_name: string | null } | null;
 }
 
-/**
- * Tells whoever sent an invitation that it was accepted or declined. Call it
- * only for a fresh answer, not a repeated one (already_accepted /
- * already_declined), so the inviter hears once.
- *
- * Best-effort and never throws: the answer has already been recorded. Reads the
- * outcome back from the row rather than trusting the caller, and sends nothing
- * when the inviter's account is gone.
- */
 export async function notifyInvitationResponded(invitationId: string): Promise<void> {
   try {
     const { data, error } = await supabaseAdmin

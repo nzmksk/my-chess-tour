@@ -1,16 +1,8 @@
-// Fan-out helpers shared by every notification that emails a group of people
-// after the action it reports on has committed (payouts, reviews, nominations).
-
 export interface EmailRecipient {
   email: string;
   name: string;
 }
 
-/**
- * Adds a recipient keyed by lowercased address, keeping the first entry for an
- * address so a person reached two ways (e.g. a member who is also the
- * organization's contact address) is emailed once, by their own name.
- */
 export function addRecipient(
   recipients: Map<string, EmailRecipient>,
   email: string | null | undefined,
@@ -22,10 +14,6 @@ export function addRecipient(
   recipients.set(key, { email, name: name ?? "there" });
 }
 
-/**
- * Sends one email per recipient, best-effort, and logs any that failed. Never
- * throws: the caller's action has already happened.
- */
 export async function sendToAll(
   recipients: Map<string, EmailRecipient>,
   send: (recipient: EmailRecipient) => Promise<unknown>,

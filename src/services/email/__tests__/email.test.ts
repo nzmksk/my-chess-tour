@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Mocks — must be hoisted so vi.mock factories can reference them
-// ---------------------------------------------------------------------------
-
 const { mockReadFileSync, mockSend } = vi.hoisted(() => ({
   mockReadFileSync: vi.fn(),
   mockSend: vi.fn(),
@@ -44,18 +40,12 @@ import {
   sendVerificationEmail,
 } from "../email";
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("sendVerificationEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue("<html>{{code}}</html>");
     mockSend.mockResolvedValue({ error: null });
   });
-
-  // --- Template loading -----------------------------------------------------
 
   it("loads the verification.html template from the filesystem", async () => {
     await sendVerificationEmail("player@example.com", "ABC123");
@@ -74,8 +64,6 @@ describe("sendVerificationEmail", () => {
     expect(filePath).toMatch(/templates/);
   });
 
-  // --- Code injection -------------------------------------------------------
-
   it("injects the code into the template", async () => {
     await sendVerificationEmail("player@example.com", "ABC123");
 
@@ -89,8 +77,6 @@ describe("sendVerificationEmail", () => {
     const { html } = mockSend.mock.calls[0][0];
     expect(html).not.toContain("{{code}}");
   });
-
-  // --- Email fields ---------------------------------------------------------
 
   it("sends to the correct email address", async () => {
     await sendVerificationEmail("player@example.com", "ABC123");
@@ -106,8 +92,6 @@ describe("sendVerificationEmail", () => {
     const { subject } = mockSend.mock.calls[0][0];
     expect(subject).toMatch(/verification code/i);
   });
-
-  // --- Error handling -------------------------------------------------------
 
   it("throws when Resend returns an error", async () => {
     mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
@@ -133,8 +117,6 @@ describe("sendPasswordResetEmail", () => {
     mockSend.mockResolvedValue({ error: null });
   });
 
-  // --- Template loading -----------------------------------------------------
-
   it("loads the reset-password.html template from the filesystem", async () => {
     await sendPasswordResetEmail(
       "player@example.com",
@@ -148,8 +130,6 @@ describe("sendPasswordResetEmail", () => {
     );
   });
 
-  // --- Link injection -------------------------------------------------------
-
   it("replaces all {{resetLink}} placeholders with the actual link", async () => {
     const link = "https://example.com/reset?token=abc";
     await sendPasswordResetEmail("player@example.com", link);
@@ -158,8 +138,6 @@ describe("sendPasswordResetEmail", () => {
     expect(html).not.toContain("{{resetLink}}");
     expect(html).toContain(link);
   });
-
-  // --- Email fields ---------------------------------------------------------
 
   it("sends to the correct email address", async () => {
     await sendPasswordResetEmail(
@@ -181,8 +159,6 @@ describe("sendPasswordResetEmail", () => {
     const { subject } = mockSend.mock.calls[0][0];
     expect(subject).toMatch(/reset/i);
   });
-
-  // --- Error handling -------------------------------------------------------
 
   it("throws when Resend returns an error", async () => {
     mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
@@ -210,8 +186,6 @@ describe("sendTournamentCancellationEmail", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
   });
 
-  // --- Template loading -----------------------------------------------------
-
   it("loads the tournament-cancellation.html template", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
       playerName: "Ali",
@@ -223,8 +197,6 @@ describe("sendTournamentCancellationEmail", () => {
       "utf-8",
     );
   });
-
-  // --- Placeholder injection ------------------------------------------------
 
   it("injects player name, tournament name, and browse URL", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
@@ -253,8 +225,6 @@ describe("sendTournamentCancellationEmail", () => {
     expect(html).toContain("Rook &amp; Roll &lt;b&gt;2026&lt;/b&gt;");
   });
 
-  // --- Email fields ---------------------------------------------------------
-
   it("sends to the correct email address", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
       playerName: "Ali",
@@ -276,8 +246,6 @@ describe("sendTournamentCancellationEmail", () => {
     expect(subject).toMatch(/KL Open 2026/);
     expect(subject).toMatch(/cancelled/i);
   });
-
-  // --- Error handling -------------------------------------------------------
 
   it("throws when Resend returns an error", async () => {
     mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
@@ -311,8 +279,6 @@ describe("sendCancellationReviewEmail", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
   });
 
-  // --- Template selection ---------------------------------------------------
-
   it("loads the approved template and subject when approved", async () => {
     await sendCancellationReviewEmail("owner@example.com", {
       recipientName: "Olivia",
@@ -344,8 +310,6 @@ describe("sendCancellationReviewEmail", () => {
     const { subject } = mockSend.mock.calls[0][0];
     expect(subject).toMatch(/declined/i);
   });
-
-  // --- Placeholder injection ------------------------------------------------
 
   it("injects recipient, tournament, dashboard URL, and rejection reason", async () => {
     await sendCancellationReviewEmail("owner@example.com", {
@@ -379,8 +343,6 @@ describe("sendCancellationReviewEmail", () => {
     expect(html).toContain("Rook &amp; Roll");
   });
 
-  // --- Email fields ---------------------------------------------------------
-
   it("sends to the correct email address", async () => {
     await sendCancellationReviewEmail("owner@example.com", {
       recipientName: "Olivia",
@@ -392,8 +354,6 @@ describe("sendCancellationReviewEmail", () => {
       expect.objectContaining({ to: "owner@example.com" }),
     );
   });
-
-  // --- Error handling -------------------------------------------------------
 
   it("throws when Resend returns an error", async () => {
     mockSend.mockResolvedValue({ error: { message: "Sending failed" } });
@@ -858,7 +818,6 @@ describe("sendOkuReviewEmail", () => {
     expect(sent().to).toBe("p@example.com");
     expect(sent().subject).toBe("Your OKU status is verified");
     expect(sent().html).toContain("Farid|");
-    // browseUrl is the site root, where the tournament list lives.
     expect(sent().html).toMatch(/\/settings\|https?:\/\/[^|/]+\/\|/);
   });
 

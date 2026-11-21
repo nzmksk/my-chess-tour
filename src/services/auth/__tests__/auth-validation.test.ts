@@ -101,7 +101,6 @@ describe("getPasswordStrength", () => {
   });
 
   it("returns the count of requirements met", () => {
-    // "abc123": lowercase=true, number=true, minLength=false (6 chars), uppercase=false, symbol=false → 2
     expect(getPasswordStrength("abc123")).toBe(2);
   });
 

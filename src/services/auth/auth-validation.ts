@@ -110,8 +110,6 @@ export function isRegistrationFormSubmittable(
   );
 }
 
-// ── Login ──────────────────────────────────────────────────────────────────
-
 export type LoginFields = {
   email: string;
   password: string;
@@ -146,8 +144,6 @@ export function isLoginFormSubmittable(fields: LoginFields): boolean {
   return validateEmail(fields.email) && fields.password.length > 0;
 }
 
-// ── Update Password ────────────────────────────────────────────────────────
-
 export type UpdatePasswordErrors = {
   password?: string;
   confirmPassword?: string;
@@ -175,8 +171,6 @@ export function validateUpdatePasswordForm(
 
   return { errors, isValid: Object.keys(errors).length === 0 };
 }
-
-// ── Forgot Password ────────────────────────────────────────────────────────
 
 export type ForgotPasswordErrors = {
   email?: string;
