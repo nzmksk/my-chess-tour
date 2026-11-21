@@ -1,0 +1,30 @@
+name: Redeploy staging on release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: staging-release-deploy
+  cancel-in-progress: true
+
+jobs:
+  redeploy:
+    name: Trigger a staging build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the Netlify build hook
+        env:
+          BUILD_HOOK: ${{ secrets.NETLIFY_STAGING_BUILD_HOOK }}
+          TITLE: ${{ github.event.release.tag_name && format('Release {0}', github.event.release.tag_name) || 'Manual redeploy from GitHub Actions' }}
+        run: |
+          if [ -z "$BUILD_HOOK" ]; then
+            echo "::error::NETLIFY_STAGING_BUILD_HOOK is not set. See docs/wiki/releases.md."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error --retry 3 \
+            --request POST --data '{}' \
+            --url "$BUILD_HOOK" --url-query "trigger_title=$TITLE"
