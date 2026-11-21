@@ -16,8 +16,6 @@ const SPONSORED = { source: "sponsor" as const, funder_name: "ACME Sdn Bhd" };
 
 describe("funding sources", () => {
   it("never accepts entry fees as a prize funding source", () => {
-    // The whole design rests on this: entry fees are an administration fee and
-    // prize money must come from outside the pool of competitors.
     expect(PRIZE_FUNDING_SOURCES).not.toContain("entry_fees");
     expect(isPrizeFundingSource("entry_fees")).toBe(false);
   });
@@ -113,7 +111,6 @@ describe("validatePrizeFunding", () => {
   });
 
   it("ignores a category with no money attached", () => {
-    // An empty category is a structural placeholder, not a promise to pay.
     const prizes: PrizesJson = {
       categories: [{ name: "Open", entries: [{ place: "1st" }] }],
     };
@@ -173,7 +170,6 @@ describe("validatePrizeStructure", () => {
     expect(validatePrizeStructure({ special: SPECIAL })).toHaveLength(1);
   });
 
-  // A named category with no entries is a placeholder, not a prize.
   it("rejects special prizes when every category is empty", () => {
     const prizes: PrizesJson = {
       categories: [{ name: "Open", entries: [] }, { name: "Under-12" }],

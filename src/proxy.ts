@@ -6,9 +6,6 @@ import { applyCorsHeaders, enforceApiOrigin } from "@/lib/http/origin-policy";
 import { enforceApiBaseline } from "@/services/rate-limit/limiter";
 
 export async function proxy(request: NextRequest) {
-  // CORS and origin policy for the API (#614): answer preflights and refuse
-  // writes from other origins before any session work, then add the CORS
-  // headers to whatever response comes back.
   const refused = enforceApiOrigin(request);
   if (refused) return refused;
   return applyCorsHeaders(request, await handleRequest(request));
@@ -17,8 +14,6 @@ export async function proxy(request: NextRequest) {
 async function handleRequest(request: NextRequest): Promise<NextResponse> {
   let supabaseResponse = NextResponse.next({ request });
 
-  // Honor the user's "Keep me signed in" choice on token refresh: when the
-  // marker is present, keep the refreshed auth cookies session-scoped.
   const sessionOnly = request.cookies.get(SESSION_ONLY_COOKIE)?.value === "1";
 
   const supabase = createServerClient(
@@ -43,22 +38,12 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     },
   );
 
-  // Validate + refresh the session. getClaims() verifies the JWT locally (a
-  // WebCrypto check against the project JWKS when asymmetric signing keys are
-  // used — no auth-server round trip), and still refreshes an expired token via
-  // getSession() under the hood, writing the new cookies through setAll above.
-  // IMPORTANT: do not remove this — it is what keeps the session fresh.
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims ?? null;
 
-  // Baseline API rate limit for signed-in users (#613); routes with costly
-  // side effects add their own, tighter rules.
   const limited = await enforceApiBaseline(request, user?.sub ?? null);
   if (limited) return limited;
 
-  // Prevent sign-up step-skipping: the verify step is only reachable once an
-  // account has been created (the create-account / re-verify paths set the
-  // cookie). After verification the user is signed in and lands in the app.
   const { pathname } = request.nextUrl;
   const signupStep = request.cookies.get(SIGNUP_STEP_COOKIE)?.value;
 
@@ -68,7 +53,6 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Guard the password-reset form: only a recovery-link session may access it.
   if (pathname.startsWith("/auth/update-password")) {
     if (!user) {
       return NextResponse.redirect(
@@ -84,7 +68,6 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Redirect authenticated users away from guest-only auth pages.
   const guestOnlyPaths = [
     "/auth/forgot-password",
     "/auth/login",
@@ -95,9 +78,6 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // Protect routes that require auth. Note the trailing slash on
-  // "/organizations/" — the bare "/organizations" landing ("Become an
-  // Organizer") is public; only its sub-routes (apply, dashboards, etc.) gate.
   const protectedPaths = ["/admin", "/my", "/organizations/", "/settings"];
   const isProtected = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path),

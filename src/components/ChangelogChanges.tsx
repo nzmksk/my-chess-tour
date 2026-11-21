@@ -1,9 +1,5 @@
 import { CHANGE_GROUPS, type ChangelogEntry } from "@/lib/changelog";
 
-/**
- * One release's changes, grouped as New / Improved / Fixed (#622). Shared by
- * the /changelogs page and the "What's new" dialog. Empty groups are left out.
- */
 export function ChangelogChanges({
   entry,
   headingLevel: Heading = "h3",

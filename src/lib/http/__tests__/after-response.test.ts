@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { after, runAfterCallbacks } from "@/test/after";
 import { afterResponse, inOrderAfterResponse } from "../after-response";
 
-/** A task whose completion the test controls. */
 function deferredTask(log: string[], name: string) {
   let finish!: () => void;
   const task = vi.fn(() => {

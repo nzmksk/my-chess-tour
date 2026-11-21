@@ -52,9 +52,6 @@ export function CountryDropdown({
   const [open, setOpen] = React.useState(false);
   const [selectedAlpha3, setSelectedAlpha3] = React.useState(defaultValue);
 
-  // A new defaultValue from the parent overrides whatever the user picked
-  // last. Adjusting state during render (rather than in an effect) avoids
-  // rendering one frame with the stale selection.
   const [prevDefaultValue, setPrevDefaultValue] = React.useState(defaultValue);
   if (defaultValue !== prevDefaultValue) {
     setPrevDefaultValue(defaultValue);

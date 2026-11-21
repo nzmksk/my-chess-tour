@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// src/test/setup.ts installs a global stub for this module so route tests don't
-// have to model the identity lookup. This file is the one place that exercises
-// the REAL implementation, so the stub has to be lifted here.
 vi.unmock("@/services/supabase/identity");
 
 const { mockMaybeSingle, mockEq, mockFrom } = vi.hoisted(() => {
@@ -40,9 +37,6 @@ describe("lookupAppUserId", () => {
     await lookupAppUserId(AUTH_ID);
 
     expect(mockFrom).toHaveBeenCalledWith("users");
-    // The whole point of the indirection: filtering on `id` would silently work
-    // today (self-signup writes id = auth_user_id) and break the moment a record
-    // is created without a login, or claimed by a new one.
     expect(mockEq).toHaveBeenCalledWith("auth_user_id", AUTH_ID);
   });
 

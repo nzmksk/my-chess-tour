@@ -10,7 +10,6 @@ const { mockExec, mockIncr, mockExpire, mockTtl, mockGet, mockDel } =
     mockDel: vi.fn(),
   }));
 
-// The test setup stubs this module for every other test.
 vi.unmock("@/services/rate-limit/window");
 
 vi.mock("@/services/redis/redis", () => {

@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const {
   mockStartResendCooldown,
   mockStoreVerificationCode,
@@ -38,10 +34,6 @@ beforeEach(() => {
   mockClearResendCooldown.mockResolvedValue(undefined);
   mockSendVerificationEmail.mockResolvedValue(undefined);
 });
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("generateCode", () => {
   it("returns a 6-character uppercase alphanumeric code", () => {

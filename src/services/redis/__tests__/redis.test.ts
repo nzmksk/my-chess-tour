@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Mocks — use vi.hoisted so references are available inside vi.mock factory
-// ---------------------------------------------------------------------------
-
 const { mockSet, mockGet, mockDel } = vi.hoisted(() => ({
   mockSet: vi.fn(),
   mockGet: vi.fn(),
@@ -26,10 +22,6 @@ import {
   verifyKey,
   deleteVerificationCode,
 } from "../redis";
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 beforeEach(() => {
   vi.clearAllMocks();

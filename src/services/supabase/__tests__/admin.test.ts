@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The real client, so this proves supabase-js actually routes its requests
-// through the custom fetch with the audit headers on them (#470).
 const ACTOR = "11111111-1111-4111-8111-111111111111";
 
 const fetchMock = vi.fn(
@@ -12,9 +10,6 @@ const fetchMock = vi.fn(
     }),
 );
 
-// The client reads its env at import, so it is imported fresh per test, and
-// the scope helper from the same module registry: a second copy of
-// audit-context would be a second AsyncLocalStorage the client never sees.
 async function loadAdmin() {
   vi.resetModules();
   const { supabaseAdmin } = await import("../admin");
@@ -61,7 +56,6 @@ describe("supabaseAdmin", () => {
     const headers = lastRequestHeaders();
     expect(headers.get("x-audit-context")).toBe("tournament.publish");
     expect(headers.get("x-audit-actor")).toBe(ACTOR);
-    // The client's own auth headers survive.
     expect(headers.get("apikey")).toBe("sb_secret_test");
   });
 

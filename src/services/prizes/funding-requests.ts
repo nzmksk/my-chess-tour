@@ -17,31 +17,13 @@ import { funderKey, type PrizesJson } from "@/lib/tournaments/prize-funding";
 import { loadPrizePoolPosition } from "./pool";
 import { prizeLabel } from "./notify";
 
-// Automatic prize-funding requests (#523). A platform-distributed tournament is
-// published into 'pending_funding', hidden from the public, and every funder
-// its prizes name is sent a CHIP payment link for their share. The pool fills
-// as they pay; the payment that completes it lists the tournament.
-//
-// The split of work:
-//   * reconcile_prize_funding_requests (006) decides, under the tournament
-//     lock, which requests should be open and records them as rows.
-//   * this module does the network half outside that transaction: cancels the
-//     CHIP purchases of superseded requests, creates the purchases of new ones,
-//     and emails each funder their link.
-// A request whose purchase couldn't be created stays open without a link and
-// is retried by the next sync (the organizer's Retry, or the daily run).
-
 type DbError = { code?: string; message: string };
 
 export interface SyncPrizeFundingResult {
   error: DbError | null;
-  /** This sync listed the tournament (its pool is now funded). */
   released: boolean;
-  /** Requests that got their CHIP link (and were emailed) on this sync. */
   linked: number;
-  /** Requests still without a link because CHIP refused or failed. */
   unlinked: number;
-  /** Funders the prizes name with no address on file, so nothing was sent. */
   missingContacts: string[];
 }
 
@@ -52,12 +34,6 @@ interface ReconcileResult {
   released: boolean;
 }
 
-/**
- * Brings a tournament's funding requests in line with its prizes and contacts,
- * then does the CHIP and email work that follows. Call after publishing, after
- * any edit to the prizes or funder contacts, and after a cancellation. Never
- * throws; a database failure is returned, CHIP and email failures are logged.
- */
 export async function syncPrizeFundingRequests(
   tournamentId: string,
   actorId: string | null,
@@ -96,7 +72,6 @@ export async function syncPrizeFundingRequests(
   };
 }
 
-/** Best-effort: a superseded link that is paid anyway is still booked. */
 async function cancelPurchases(
   cancelled: { id: string; chip_transaction_id: string | null }[],
 ): Promise<void> {
@@ -129,7 +104,6 @@ interface RequestTournament {
   organization: { name: string | null } | null;
 }
 
-/** The prizes a funder pays for, as the email lists them. */
 export function prizesFundedBy(prizes: PrizesJson | null, funderName: string): string {
   const key = funderKey(funderName);
   const labels: string[] = [];
@@ -146,11 +120,6 @@ export function prizesFundedBy(prizes: PrizesJson | null, funderName: string): s
   return labels.join(", ");
 }
 
-/**
- * Creates the CHIP purchase for every open request that has none yet, and
- * emails each funder their link once it is recorded. Scoped to one tournament,
- * or every tournament for the daily run.
- */
 export async function createMissingFundingLinks({
   tournamentId,
 }: { tournamentId?: string } = {}): Promise<{ linked: number; failed: number }> {
@@ -215,7 +184,6 @@ export async function createMissingFundingLinks({
   return { linked, failed };
 }
 
-/** The request's CHIP checkout link, or null when it couldn't be made or kept. */
 async function createLink(row: UnlinkedRow, tournamentName: string): Promise<string | null> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   let purchase: { id: string; checkout_url: string };
@@ -226,12 +194,10 @@ async function createLink(row: UnlinkedRow, tournamentName: string): Promise<str
         products: [{ name: `Prize fund — ${tournamentName}`, price: row.amount_cents, quantity: "1" }],
       },
       client: { email: row.funder_email, full_name: row.funder_name },
-      // The webhook correlates on this when the purchase id wasn't recorded.
       reference: row.id,
       success_redirect: `${siteUrl}/prize-funding/thank-you`,
       failure_redirect: `${siteUrl}/prize-funding/thank-you?status=failed`,
       send_receipt: true,
-      // No `due`: there is no seat being held, and a sponsor may take days.
     });
   } catch (err) {
     console.error(
@@ -241,8 +207,6 @@ async function createLink(row: UnlinkedRow, tournamentName: string): Promise<str
     return null;
   }
 
-  // Only a request that is still open and still unlinked takes the link: a
-  // concurrent sync may have linked it, or a reconcile cancelled it, meanwhile.
   const { data, error } = await supabaseAdmin
     .from("prize_fundings")
     .update({ chip_transaction_id: purchase.id, checkout_url: purchase.checkout_url })
@@ -268,14 +232,9 @@ async function createLink(row: UnlinkedRow, tournamentName: string): Promise<str
   return purchase.checkout_url;
 }
 
-/**
- * A tournament has just been listed because its pool is funded: refresh the
- * public pages now, and tell the organizer after the response.
- */
 export async function onTournamentListed(tournamentId: string): Promise<void> {
   afterResponse(() => notifyTournamentListed(tournamentId));
   revalidateTag(TOURNAMENTS_LIST_TAG, PURGE_PROFILE);
-  // The detail page is tagged by slug, which only the database knows here.
   const { data, error } = await supabaseAdmin
     .from("tournaments")
     .select("slug")
@@ -334,20 +293,12 @@ async function notifyTournamentListed(tournamentId: string): Promise<void> {
 }
 
 export interface FundingSweepStats {
-  /** Tournaments waiting for their pool that were reconciled. */
   tournaments: number;
   linked: number;
   unlinked: number;
-  /** Tournaments listed by this run. */
   released: number;
 }
 
-/**
- * The daily run's funding pass: reconciles every tournament still waiting for
- * its pool, which re-asks a funder whose payment failed and retries any link
- * CHIP refused, then creates any link still missing elsewhere (a top-up on a
- * listed tournament). Throws when it can't load its work list.
- */
 export async function sweepPrizeFundingRequests(): Promise<FundingSweepStats> {
   const { data, error } = await supabaseAdmin
     .from("tournaments")

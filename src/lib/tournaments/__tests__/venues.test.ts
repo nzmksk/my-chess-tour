@@ -30,9 +30,6 @@ describe("SUPPORTED_COUNTRIES", () => {
     }
   });
 
-  // A region's zone is written straight to tournaments.timezone and then read
-  // back by resolveTimeZone, which silently swaps anything off the picklist for
-  // the default. A typo here would relocate a venue's clock without a word.
   it("gives every region a timezone the platform recognises", () => {
     for (const c of SUPPORTED_COUNTRIES) {
       for (const r of c.regions) {
@@ -59,10 +56,6 @@ describe("findCountry / isSupportedCountry", () => {
     expect(isSupportedCountry(undefined)).toBe(false);
   });
 
-  // These arrive from `await request.json()`, where the declared field type is
-  // a claim about well-behaved clients and nothing more. Guarding only
-  // falsiness would let every truthy non-string reach .toUpperCase() and throw,
-  // turning a bad request body into a 500.
   it("rejects non-string codes instead of throwing", () => {
     for (const bad of [123, true, {}, ["MY"], () => "MY"]) {
       expect(() => findCountry(bad)).not.toThrow();
@@ -100,17 +93,12 @@ describe("regionsForCountry / isValidRegion", () => {
 describe("timeZoneForRegion", () => {
   it("resolves a region to the zone its dates are read in", () => {
     expect(timeZoneForRegion("MY", "Selangor")).toBe("Asia/Kuala_Lumpur");
-    // East Malaysia keeps the same clock as the peninsula.
     expect(timeZoneForRegion("MY", "Sarawak")).toBe("Asia/Kuala_Lumpur");
   });
 
-  // Callers write the result straight to tournaments.timezone, so it has to be
-  // a zone Intl can format — throwing or returning "" would take down every
-  // page that renders one of the tournament's dates.
   it("falls back to the platform default rather than failing", () => {
     expect(timeZoneForRegion("MY", "Atlantis")).toBe(DEFAULT_TIME_ZONE);
     expect(timeZoneForRegion("ZZ", "Selangor")).toBe(DEFAULT_TIME_ZONE);
-    // An unfinished draft has no state yet.
     expect(timeZoneForRegion("MY", "")).toBe(DEFAULT_TIME_ZONE);
     expect(timeZoneForRegion(null, null)).toBe(DEFAULT_TIME_ZONE);
     expect(() => timeZoneForRegion(123, {})).not.toThrow();

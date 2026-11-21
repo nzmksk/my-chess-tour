@@ -31,7 +31,6 @@ const { results, filters, mockFrom, mockExecute, mockSettle, mockGetInstruction 
 
 vi.mock("@/services/supabase/admin", () => ({ supabaseAdmin: { from: mockFrom } }));
 vi.mock("../execute", () => ({ executePrizeAward: mockExecute }));
-// PayoutPassError lives with the payout sweep; keep its email-sending neighbours out.
 vi.mock("@/services/payouts/execute", () => ({ executePayout: vi.fn() }));
 vi.mock("@/services/payouts/settle", () => ({ settlePayout: vi.fn() }));
 vi.mock("../settle", () => ({ settlePrizeAward: mockSettle }));

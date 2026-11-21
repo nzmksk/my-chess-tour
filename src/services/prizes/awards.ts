@@ -1,9 +1,5 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 
-// Read models for prize awards (#523), shared by the organizer and admin routes
-// and pages so both show the same rows the same way. No account numbers, only
-// whether the winner has a verified account.
-
 export interface PrizeAwardView {
   id: string;
   tournament_id: string;
@@ -23,7 +19,6 @@ export interface PrizeAwardView {
   entered_at: string;
   reviewed_at: string | null;
   processed_at: string | null;
-  /** The winner's active account: null when they have none. */
   winner_bank_status: "pending" | "verified" | "rejected" | null;
 }
 
@@ -73,7 +68,6 @@ async function toViews(rows: AwardRow[]): Promise<AwardsResult> {
   };
 }
 
-/** Every award of one tournament, newest first. */
 export async function listTournamentAwards(tournamentId: string): Promise<AwardsResult> {
   const { data, error } = await supabaseAdmin
     .from("prize_awards")
@@ -84,11 +78,6 @@ export async function listTournamentAwards(tournamentId: string): Promise<Awards
   return toViews((data ?? []) as unknown as AwardRow[]);
 }
 
-/**
- * The admin queue: awards awaiting review, approved ones not yet settled (so
- * a stalled send can be retried), and the most recent settled or rejected ones
- * for context. Oldest first within each.
- */
 export async function listAdminAwards(): Promise<AwardsResult> {
   const [open, recent] = await Promise.all([
     supabaseAdmin
@@ -109,7 +98,6 @@ export async function listAdminAwards(): Promise<AwardsResult> {
   return toViews([...(open.data ?? []), ...(recent.data ?? [])] as unknown as AwardRow[]);
 }
 
-/** Whether an admin's "Retry send" can do anything for this award. */
 export function canRetryAward(award: {
   approval: string;
   status: string;

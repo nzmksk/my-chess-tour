@@ -14,39 +14,14 @@ import {
 import { type ExecutePayoutResult, executePayout } from "./execute";
 import { settlePayout } from "./settle";
 
-// The three passes of the daily payout run (POST /api/v1/cron/payouts), in the
-// order the route runs them:
-//
-//   1. reconcileStuckPayouts  rows `processing` for over PAYOUT_STUCK_HOURS. With
-//                             an instruction, ask CHIP and settle; without one,
-//                             resume the send.
-//   2. retryPendingPayouts    approved rows still `pending`: parked on budget, held
-//                             by a block that may have cleared, or left by a
-//                             transient error.
-//   3. sweepPayableTournaments queue and send the automatic payout of every
-//                             tournament list_payable_tournaments says is due.
-//
-// The sweep runs last so a payout it parks on budget isn't retried a moment later.
-//
-// Every pass is safe to re-run at any time: queue_payout's ON CONFLICT DO NOTHING,
-// list_payable_tournaments' in-flight filters, CHIP's `reference` dedupe and
-// settle_payout's processed_at no-op each make a repeat a no-op on their own.
-//
-// Per-payout failures are counted and the pass moves on. Only failing to load a
-// pass's work list throws, so the route can report the run as failed.
-
-/** How many payouts ended up in each executePayout outcome. */
 export type OutcomeTally = Record<ExecutePayoutResult, number>;
 
 export interface PassStats extends OutcomeTally {
-  /** Rows the pass looked at. */
   checked: number;
 }
 
 export interface SweepStats extends OutcomeTally {
-  /** Tournaments list_payable_tournaments returned. */
   swept: number;
-  /** Automatic payouts created. A tournament that already had one is `skipped`. */
   queued: number;
 }
 
@@ -62,7 +37,6 @@ function emptyTally(): OutcomeTally {
   };
 }
 
-/** Raised when a pass can't load what it should work on. */
 export class PayoutPassError extends Error {
   constructor(message: string, cause: unknown) {
     super(message, { cause });
@@ -80,11 +54,6 @@ function describeError(err: unknown): string {
   return String(err);
 }
 
-/**
- * Runs `fn` over `items`, PAYOUT_CONCURRENCY at a time, as the cancellation route
- * does with REFUND_CONCURRENCY. `fn` reports an outcome; a throw counts as `error`
- * and never stops the rest.
- */
 async function tallyInBatches<T>(
   items: T[],
   label: (item: T) => string,
@@ -109,23 +78,11 @@ async function tallyInBatches<T>(
   }
 }
 
-// ---------------------------------------------------------------------------
-// 1. Stuck payouts
-// ---------------------------------------------------------------------------
-
 interface StuckRow {
   id: string;
   chip_send_instruction_id: number | null;
 }
 
-/**
- * Settles a stuck row from CHIP's own record of its instruction.
- *
- * The single-instruction GET, never the list endpoint: CHIP caches the list for an
- * hour, which could report a transfer as pending after it has completed.
- * Classified and settled exactly as the webhook would, so whichever lands first
- * books it and the other is a no-op.
- */
 async function reconcileFromChip(
   payoutId: string,
   instructionId: number,
@@ -173,15 +130,6 @@ async function reconcileFromChip(
   return paid ? "paid" : "failed";
 }
 
-/**
- * Without this, a dropped `send_instruction.completed` webhook strands a payout in
- * `processing` forever, and available_payout_cents keeps reserving its money: the
- * organizer silently stops being paid.
- *
- * A row claimed with no instruction never reached CHIP as far as we know, so there
- * is nothing to look up. executePayout resumes it by sending the same reference
- * again, which returns the existing instruction if CHIP did take it.
- */
 export async function reconcileStuckPayouts(
   now: Date = new Date(),
 ): Promise<PassStats> {
@@ -211,20 +159,6 @@ export async function reconcileStuckPayouts(
   return stats;
 }
 
-// ---------------------------------------------------------------------------
-// 2. Pending payouts
-// ---------------------------------------------------------------------------
-
-/**
- * Re-runs executePayout on every approved, unsettled `pending` payout: the rows
- * canResend offers an admin, less the claimed ones, which pass 1 owns.
- *
- * For a payout parked on budget, executePayout re-reads the Send balance and sends
- * once an approved allocation has landed. While the allocation is still waiting it
- * leaves the row alone without emailing anyone again, and an expired one is
- * replaced. A block or a lapsed recipient is re-checked and held again if it
- * still stands.
- */
 export async function retryPendingPayouts(): Promise<PassStats> {
   const { data, error } = await supabaseAdmin
     .from("payouts")
@@ -248,19 +182,11 @@ export async function retryPendingPayouts(): Promise<PassStats> {
   return stats;
 }
 
-// ---------------------------------------------------------------------------
-// 3. The sweep
-// ---------------------------------------------------------------------------
-
 interface PayableTournament {
   tournament_id: string;
   available_cents: number;
 }
 
-/**
- * Queues one tournament's automatic payout and sends it. `queued` is set only when
- * this call created the row.
- */
 async function payTournament(
   tournament: PayableTournament,
   counters: { queued: number },
@@ -270,13 +196,10 @@ async function payTournament(
     p_tournament_id: tournamentId,
     p_kind: "automatic",
     p_amount_cents: null,
-    // No person asked for it.
     p_requested_by: null,
   });
 
   if (error) {
-    // A refusal: something changed since the list was read (a refund was
-    // requested, the recipient lapsed). The next run sees it again if it clears.
     if (error.code === "P0001") {
       console.warn(
         `Payout sweep: queue_payout refused tournament ${tournamentId}: ${error.message}`,
@@ -289,7 +212,6 @@ async function payTournament(
     return "error";
   }
 
-  // NULL: a live automatic payout already exists, e.g. a concurrent run made it.
   if (!payoutId) {
     console.info(
       `Payout sweep: tournament ${tournamentId} already has an automatic payout`,
@@ -305,11 +227,6 @@ async function payTournament(
   return outcome;
 }
 
-/**
- * Pays every tournament whose automatic payout is due. Emails go out from the
- * layers below, best-effort: settlement emails both organizations, and a payout
- * parked on budget alerts the platform admins once per budget request.
- */
 export async function sweepPayableTournaments(): Promise<SweepStats> {
   const { data, error } = await supabaseAdmin.rpc("list_payable_tournaments", {
     p_hold_days: PAYOUT_HOLD_DAYS,

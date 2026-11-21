@@ -12,7 +12,7 @@ if (!url || !token) {
 export const redis = new Redis({ url, token });
 
 const VERIFY_PREFIX = "verify:";
-export const VERIFY_TTL_SECONDS = 15 * 60; // 15 minutes
+export const VERIFY_TTL_SECONDS = 15 * 60;
 
 export function verifyKey(email: string) {
   return `${VERIFY_PREFIX}${email.toLowerCase()}`;
@@ -26,7 +26,6 @@ export async function getVerificationCode(email: string) {
   return redis.get<string>(verifyKey(email));
 }
 
-// Consume the code so it can't be replayed after a successful verification.
 export async function deleteVerificationCode(email: string): Promise<void> {
   await redis.del(verifyKey(email));
 }

@@ -6,7 +6,6 @@ const { mockPaginate, mockOctokit, mockUnstableCache } = vi.hoisted(() => {
     this.paginate = mockPaginate;
     this.rest = { repos: { listReleases: "listReleases" } };
   });
-  // Pass the function through, recording how it was cached.
   const mockUnstableCache = vi.fn((fn: unknown) => fn);
   return { mockPaginate, mockOctokit, mockUnstableCache };
 });

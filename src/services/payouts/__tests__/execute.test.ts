@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runAfterCallbacks } from "@/test/after";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const {
   mockFrom,
   mockRpc,
@@ -81,10 +77,6 @@ vi.mock("../notify", () => ({ notifyAdminsOfPayout: mockNotifyAdmins }));
 
 import { ChipSendError } from "@/services/chip/send";
 import { executePayout } from "../execute";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const ID = "11111111-1111-4111-8111-111111111111";
 
@@ -167,10 +159,6 @@ beforeEach(() => {
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
-// ---------------------------------------------------------------------------
-// Guards
-// ---------------------------------------------------------------------------
-
 describe("nothing to do", () => {
   it.each([
     ["already settled", { processed_at: "2026-11-01T00:00:00Z" }],
@@ -223,9 +211,6 @@ describe("blocks", () => {
     },
   );
 
-  // The bug this covers: queue_payout vets the recipient once, at queue time, so a
-  // payout parked on budget would still reach CHIP after the organization was
-  // unapproved or a new Organizer Agreement went unaccepted.
   it.each(["organization_not_approved", "entity_type_missing", "agreement_not_current"])(
     "holds, without failing, when the recipient has lapsed: %s",
     async (problem) => {
@@ -278,10 +263,6 @@ describe("blocks", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Amount
-// ---------------------------------------------------------------------------
-
 describe("amount", () => {
   it("asks for the balance excluding this payout's own reservation", async () => {
     givenPayout();
@@ -324,10 +305,6 @@ describe("amount", () => {
     expect(mockAccounts).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Budget
-// ---------------------------------------------------------------------------
 
 describe("awaiting budget", () => {
   it("requests budget and leaves the row pending when the balance is short", async () => {
@@ -423,10 +400,6 @@ describe("awaiting budget", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Sending
-// ---------------------------------------------------------------------------
 
 describe("sending", () => {
   it("sends with the row id as the idempotent reference", async () => {
@@ -569,11 +542,6 @@ describe("sending", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Claiming: the last block check and `processing` happen together, under the
-// tournament lock, so a cancellation can't slip in before the send
-// ---------------------------------------------------------------------------
-
 describe("claiming", () => {
   it("claims the row after its checks and before calling CHIP", async () => {
     givenPayout();
@@ -651,7 +619,6 @@ describe("claiming", () => {
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ reference: ID, amountCents: 9000, bank_account_id: 42 }),
     );
-    // Committed at the claim: nothing is re-checked, and it isn't claimed twice.
     expect(mockRpc).not.toHaveBeenCalled();
     expect(mockAccounts).not.toHaveBeenCalled();
     expect(updates).toContainEqual({ chip_send_instruction_id: 8, status: "processing" });
@@ -664,10 +631,6 @@ describe("claiming", () => {
     expect(mockSettle).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Logging: every way a payout fails or stalls leaves a line saying why
-// ---------------------------------------------------------------------------
 
 function logged(level: "error" | "warn" | "info"): string {
   return vi

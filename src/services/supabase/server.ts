@@ -2,9 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { stripPersistence } from "@/lib/auth/session-cookie";
 
-// `sessionOnly` writes the Supabase auth cookies without `maxAge`/`expires`, so
-// the session clears when the browser closes (used when the user did not check
-// "Keep me signed in").
 export async function createClient(opts?: { sessionOnly?: boolean }) {
   const cookieStore = await cookies();
 
@@ -24,11 +21,7 @@ export async function createClient(opts?: { sessionOnly?: boolean }) {
             toSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),
             );
-          } catch {
-            // The `setAll` method is called from a Server Component
-            // which cannot set cookies. This can be ignored if
-            // middleware handles refreshing.
-          }
+          } catch {}
         },
       },
     },

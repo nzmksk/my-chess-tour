@@ -33,7 +33,6 @@ describe("toCsv", () => {
   });
 });
 
-/** Reads the entries of a stored (uncompressed) ZIP via its central directory. */
 function unzip(bytes: Uint8Array): Map<string, { text: string; crc: number }> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const eocd = bytes.length - 22;
@@ -45,7 +44,7 @@ function unzip(bytes: Uint8Array): Map<string, { text: string; crc: number }> {
   const entries = new Map<string, { text: string; crc: number }>();
   for (let i = 0; i < count; i++) {
     expect(view.getUint32(p, true)).toBe(0x02014b50);
-    expect(view.getUint16(p + 10, true)).toBe(0); // stored
+    expect(view.getUint16(p + 10, true)).toBe(0);
     const crc = view.getUint32(p + 16, true);
     const size = view.getUint32(p + 20, true);
     const nameLen = view.getUint16(p + 28, true);
@@ -90,10 +89,8 @@ describe("toXlsx", () => {
     expect(sheet).toContain(
       '<c r="B2" t="inlineStr"><is><t xml:space="preserve">Ålice &lt;Tan&gt; &amp; &quot;Co&quot;</t></is></c>',
     );
-    // Text, never a formula: no <f> element anywhere.
     expect(sheet).toContain(">=HYPERLINK()</t>");
     expect(sheet).not.toContain("<f>");
-    // An empty cell is simply absent.
     expect(sheet).not.toContain('r="C3"');
   });
 

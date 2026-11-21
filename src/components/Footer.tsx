@@ -6,12 +6,6 @@ import {
 } from "@/app/components/Icons";
 import { isReleaseVersion } from "@/lib/changelog";
 
-/**
- * The release this build belongs to, so testers can say which one they were on
- * when they report a bug (#621). Both values are inlined at build time by
- * next.config.ts. Outside production the short commit is appended, so builds
- * between two releases can be told apart.
- */
 function releaseLabel(): { text: string; href: string } | null {
   const version = process.env.APP_VERSION;
   if (!version) return null;
@@ -20,8 +14,6 @@ function releaseLabel(): { text: string; href: string } | null {
     commit && process.env.NEXT_PUBLIC_ENVIRONMENT !== "production";
   return {
     text: showCommit ? `${version} · ${commit}` : version,
-    // This release's entry on the changelog (#622); a local `dev` build has
-    // no entry to point at.
     href: isReleaseVersion(version) ? `/changelogs#${version}` : "/changelogs",
   };
 }
@@ -31,10 +23,6 @@ export default function Footer() {
   const release = releaseLabel();
 
   return (
-    // Hidden on any page that marks itself with data-no-footer, such as the
-    // 404 page (#643). The root layout renders the footer and can't tell a
-    // 404 from any other path, so the page opts out instead. CSS rather than
-    // a client check, so the footer never flashes in before being removed.
     <footer className="bg-bg-sunken border-border border-t-2 [body:has([data-no-footer])_&]:hidden">
       <div className="mx-auto max-w-300 px-6 py-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">

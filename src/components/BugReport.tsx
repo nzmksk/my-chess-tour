@@ -24,12 +24,6 @@ type Status =
 const GENERIC_ERROR =
   "We couldn't send your report. Please try again in a moment.";
 
-/**
- * "Report a bug" (#616): a floating button on every page that opens a short
- * form. The report is filed as an issue on our public GitHub repo by
- * POST /api/v1/feedback, without the reporter's identity, and the reporter is
- * shown a reference rather than the issue link.
- */
 export function BugReport() {
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
@@ -43,7 +37,6 @@ export function BugReport() {
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
-    // Start fresh after a report went through; keep an unsent draft.
     if (!next && status.kind === "sent") {
       setDescription("");
       setDetails("");
@@ -85,8 +78,6 @@ export function BugReport() {
         });
         return;
       }
-      // Saved, but not yet passed on to GitHub: support files it by hand, so
-      // from the reporter's side it is done.
       if (json?.error?.code === "FILING_FAILED" && json.reference) {
         setStatus({ kind: "sent", reference: json.reference, savedOnly: true });
         return;
@@ -202,7 +193,6 @@ export function BugReport() {
                 />
               </div>
 
-              {/* Honeypot: hidden from people and assistive tech; bots fill it. */}
               <div
                 aria-hidden="true"
                 className="absolute -left-[9999px] h-0 w-0 overflow-hidden"

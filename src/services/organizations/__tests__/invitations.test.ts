@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockFrom, result, builder, queue } = vi.hoisted(() => {
   const result: { data: unknown; error: unknown } = { data: null, error: null };
-  // When non-empty, each awaited query takes the next result from here instead.
   const queue: Array<{ data: unknown; error: unknown }> = [];
   const builder: Record<string, unknown> = {};
   for (const m of ["select", "eq", "is", "gt", "order", "maybeSingle"]) {
@@ -70,7 +69,6 @@ describe("invitation tokens", () => {
   });
 
   it("hashes to the SHA-256 hex the database stores", () => {
-    // sha256("abc")
     expect(hashInvitationToken("abc")).toBe(
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     );

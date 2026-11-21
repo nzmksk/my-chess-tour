@@ -20,9 +20,6 @@ import {
   syncFidePlayer,
 } from "../fide";
 
-// Minimal HTML mirroring the real ratings.fide.com profile markup the parser
-// keys off of (verified live in 2026): player-title header, profile-info-title,
-// and the three profile-*/profile-game rating blocks whose first <p> is the ELO.
 const titledHtml = `
 <html><head><title>Carlsen, Magnus FIDE Profile</title></head><body>
   <h1 class="player-title">Carlsen, Magnus</h1>
@@ -41,7 +38,6 @@ const untitledUnratedHtml = `
   <div class="profile-blitz profile-game "><img><p>1650</p><p>BLITZ</p></div>
 </body></html>`;
 
-// FIDE's not-found shell has no player-title and no rating blocks.
 const notFoundHtml = `<html><body><div class="content">nothing here</div></body></html>`;
 
 function okResponse(html: string) {

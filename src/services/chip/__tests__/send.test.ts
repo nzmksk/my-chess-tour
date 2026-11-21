@@ -23,28 +23,13 @@ const API_KEY = "mct-test-key-0001";
 const API_SECRET = "mct-test-secret-0001";
 const STAGING_URL = "https://staging-api.chip-in.asia/api";
 
-// ---------------------------------------------------------------------------
-// Checksum
-// ---------------------------------------------------------------------------
-
 describe("chipSendChecksum", () => {
-  // Our OWN pinned vector: a fixed secret plus a digest computed once and
-  // hardcoded. This is the primary regression guard.
   it("matches the project's pinned vector", () => {
     expect(chipSendChecksum("1700000000", API_KEY, API_SECRET)).toBe(
       "7f05dd2003045197f833e4387a151269d3684a6ba056646db2c5c53f407212ff5be5b32b894254207a7a82af82dff91ad18bc6f4e45ad3314a5d1d67eb266f24",
     );
   });
 
-  // The vendor fixture from https://docs.chip-in.asia/openapi/chip-send.yaml.
-  //
-  // History, so nobody "fixes" this the wrong way: older revisions of the CHIP
-  // Send docs published the epoch, API key and expected digest but NOT the API
-  // Secret, which made the vector unreproducible (HMAC needs the key). Issue #519
-  // was written against that revision. The spec as of 2026-11-01 states the
-  // secret (a118729e-…) and the digest reproduces, so it is asserted here. If
-  // the vendor ever rotates the example again, update all four constants
-  // together from the spec — never just the digest.
   it("reproduces the vendor's published example", () => {
     expect(
       chipSendChecksum(
@@ -65,7 +50,6 @@ describe("chipSendChecksum", () => {
       .digest("hex");
     expect(chipSendChecksum(epoch, API_KEY, API_SECRET)).toBe(independent);
 
-    // Every plausible separator produces a different digest.
     for (const sep of [":", "|", " ", "\n", ","]) {
       const withSep = crypto
         .createHmac("sha512", API_SECRET)
@@ -74,7 +58,6 @@ describe("chipSendChecksum", () => {
       expect(chipSendChecksum(epoch, API_KEY, API_SECRET)).not.toBe(withSep);
     }
 
-    // Order matters: apiKey + epoch is wrong.
     const reversed = crypto
       .createHmac("sha512", API_SECRET)
       .update(API_KEY + epoch)
@@ -107,10 +90,6 @@ describe("chipSendChecksum", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Headers
-// ---------------------------------------------------------------------------
-
 describe("chipSendHeaders", () => {
   beforeEach(() => {
     vi.stubEnv("CHIP_SEND_API_KEY", API_KEY);
@@ -127,7 +106,7 @@ describe("chipSendHeaders", () => {
     vi.setSystemTime(new Date(1_700_000_000_500));
     const h = chipSendHeaders();
     expect(h.Authorization).toBe(`Bearer ${API_KEY}`);
-    expect(h.epoch).toBe("1700000000"); // seconds, floored
+    expect(h.epoch).toBe("1700000000");
     expect(h.checksum).toBe(chipSendChecksum("1700000000", API_KEY, API_SECRET));
     expect(h["Content-Type"]).toBe("application/json");
   });
@@ -159,10 +138,6 @@ describe("chipSendHeaders", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Amount conversion
-// ---------------------------------------------------------------------------
-
 describe("amount conversion", () => {
   it("send limit amount is a JSON number", () => {
     expect(toChipSendLimitAmount(12345)).toBe(123.45);
@@ -184,10 +159,6 @@ describe("amount conversion", () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// HTTP calls
-// ---------------------------------------------------------------------------
 
 describe("CHIP Send HTTP calls", () => {
   const fetchMock = vi.fn();
@@ -335,8 +306,6 @@ describe("CHIP Send HTTP calls", () => {
   });
 
   it("the sandbox's 400 'Balance not enough' is insufficient balance", async () => {
-    // Exactly what POST /send/send_instructions answered in the CHIP sandbox when
-    // asked for more than current_balance (checked for #520).
     fetchMock.mockResolvedValue(
       new Response(
         '{"message":"Balance not enough. Please increase your Send Limit","code":400,"data":{}}',
@@ -401,10 +370,6 @@ describe("CHIP Send HTTP calls", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Outcome classifiers
-// ---------------------------------------------------------------------------
-
 describe("chipBankAccountOutcome", () => {
   it("maps verified by status or event", () => {
     expect(chipBankAccountOutcome("verified")).toBe("verified");
@@ -440,7 +405,6 @@ describe("chipSendAmountToCents", () => {
   });
 
   it("does not lose a sen to float rounding", () => {
-    // 19.99 * 100 is 1998.9999999999998 in a double.
     expect(chipSendAmountToCents("19.99")).toBe(1999);
     expect(chipSendAmountToCents(19.99)).toBe(1999);
   });

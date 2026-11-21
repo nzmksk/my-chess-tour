@@ -7,12 +7,6 @@ import {
 import { sendToAll, type EmailRecipient } from "@/services/email/recipients";
 import { loadPlatformAdminRecipients } from "@/services/payouts/recipients";
 
-// Who hears about a prize award (#523), and when. Every function here runs after
-// the action it reports on has committed, so none of them throws: failures are
-// logged with the award or tournament id. Following the email.ts discipline, an
-// account number never leaves as more than its last 4 digits.
-
-/** "Open — 1st", or a special prize's own name. */
 export function prizeLabel(category: string, place: string | null): string {
   return place ? `${category} — ${place}` : category;
 }
@@ -48,12 +42,6 @@ async function loadAward(awardId: string): Promise<AwardEmailRow | null> {
   return data as unknown as AwardEmailRow;
 }
 
-/**
- * Tells the winner they have been awarded a prize, once an admin approved it.
- * Says which account it will go to, or asks them to add or fix their bank
- * details. `accountRejected` is for a re-send after their account failed
- * verification.
- */
 export async function notifyPrizeAwarded(
   awardId: string,
   { accountRejected = false }: { accountRejected?: boolean } = {},
@@ -81,8 +69,6 @@ export async function notifyPrizeAwarded(
       tournamentName: award.tournament?.name ?? "your tournament",
       prizeName: prizeLabel(award.category, award.place),
       amountCents: award.amount_cents,
-      // A pending account is still where the prize will go; only a rejected or
-      // missing one needs the winner to act.
       accountLast4: rejected || !account ? null : account.account_number.slice(-4),
       accountRejected: rejected,
     });
@@ -94,7 +80,6 @@ export async function notifyPrizeAwarded(
   }
 }
 
-/** Tells the winner their prize has been sent. */
 export async function notifyPrizePaid(awardId: string): Promise<void> {
   try {
     const award = await loadAward(awardId);
@@ -125,10 +110,6 @@ interface TournamentAlertRow {
   organizer: { name: string | null } | null;
 }
 
-/**
- * Alerts every platform admin to prize money that needs a person: winners
- * waiting for review, or an award parked on CHIP Send budget.
- */
 export async function notifyAdminsOfPrizes(
   tournamentId: string,
   alert: "prize_review" | "awaiting_budget",

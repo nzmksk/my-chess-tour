@@ -1,35 +1,11 @@
-/**
- * Turning an in-app bug report into a GitHub issue (#616).
- *
- * The repo is PUBLIC, so everything here is written for publication:
- *
- * - The reporter's own text goes into fenced code blocks. GitHub does not
- *   process @mentions, #issue references, HTML, images or links inside code,
- *   so a report can't ping anyone, cross-link into other issues, or hide
- *   content in an HTML comment. The fence is always longer than any backtick
- *   run in the text, so the text can't close it early.
- * - Characters that hide or reorder text (controls, zero-width, bidi
- *   overrides) are stripped before anything else sees the text.
- * - The context table carries no identity: no email, name, user id or IP.
- *   The page path has invitation tokens and ids masked.
- *
- * Who sent the report is kept privately in bug_reports, never here.
- */
-
 export const DESCRIPTION_MAX_LENGTH = 4000;
 export const DETAILS_MAX_LENGTH = 4000;
 const TITLE_SUMMARY_MAX_LENGTH = 80;
 const CONTEXT_VALUE_MAX_LENGTH = 300;
 
-// C0/C1 controls (keeping \t and \n), zero-width and joiner characters, bidi
-// embeddings/overrides/isolates, and the BOM.
 const HIDDEN_CHARACTERS =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 
-/**
- * Normalise user-typed text: one newline style, no hidden characters, no runs
- * of blank lines, no surrounding whitespace. Length limits apply to the result.
- */
 export function cleanText(input: string): string {
   return input
     .replace(/\r\n?/g, "\n")
@@ -38,7 +14,6 @@ export function cleanText(input: string): string {
     .trim();
 }
 
-/** Text as a fenced code block that nothing inside it can close. */
 export function codeBlock(text: string): string {
   const longestRun = Math.max(
     0,
@@ -48,8 +23,6 @@ export function codeBlock(text: string): string {
   return `${fence}text\n${text}\n${fence}`;
 }
 
-// A table cell value: one line, in a code span, with pipes escaped (GFM splits
-// cells on "|" even inside code spans).
 function codeSpan(value: string): string {
   const oneLine = value.replace(/\s+/g, " ").trim();
   const longestRun = Math.max(
@@ -62,12 +35,6 @@ function codeSpan(value: string): string {
   return `${ticks}${inner.replaceAll("|", "\\|")}${ticks}`;
 }
 
-/**
- * `[User report] <first line of the description>`, truncated.
- *
- * Titles are plain text, but GitHub still links #123 in them, so @ and #
- * references are broken with a zero-width space.
- */
 export function issueTitle(description: string): string {
   const firstLine =
     description
@@ -86,15 +53,6 @@ export function issueTitle(description: string): string {
 const UUID_SEGMENT =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Mask the secrets a page path can carry. An invitation link's token grants
- * the membership it was sent for (only its hash is stored), so it never
- * leaves the browser intact, not even into bug_reports.
- *
- * Generic rule as well as the known route: a long base64url-looking segment
- * (mixed case or underscores, or long hex) is masked. Tournament slugs are
- * lowercase words and digits joined by hyphens, so they survive.
- */
 export function stripPathSecrets(path: string): string {
   const segments = path.split("/");
   return segments
@@ -111,10 +69,6 @@ export function stripPathSecrets(path: string): string {
     .join("/");
 }
 
-/**
- * The path as published in the issue: secrets masked, and record ids too,
- * since /profile/<id> names a person. The private row keeps the ids.
- */
 export function publicPath(path: string): string {
   return stripPathSecrets(path)
     .split("/")
@@ -122,10 +76,6 @@ export function publicPath(path: string): string {
     .join("/");
 }
 
-/**
- * Reduce whatever the browser sent as its location to a path: no origin, no
- * query string and no fragment (both can carry tokens or an email address).
- */
 export function toPathname(location: string): string | null {
   try {
     const url = new URL(location, "https://placeholder.invalid");
@@ -135,7 +85,6 @@ export function toPathname(location: string): string | null {
   }
 }
 
-/** Everything published about the circumstances of a report. */
 export type IssueContext = {
   reference: string;
   path: string | null;
@@ -189,11 +138,6 @@ export function issueBody(
   return sections.join("\n\n");
 }
 
-/**
- * The reference shown to the reporter and quoted in the issue: the first
- * eight hex digits of the bug_reports id. Short enough to read out, and
- * support finds the row with `id::text LIKE '<hex>%'`.
- */
 export function reportReference(reportId: string): string {
   return `BR-${reportId.replaceAll("-", "").slice(0, 8).toUpperCase()}`;
 }

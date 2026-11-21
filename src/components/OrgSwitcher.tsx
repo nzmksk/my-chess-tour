@@ -22,7 +22,6 @@ import { useAuthStore } from "@/stores/auth-store";
 import { logout } from "@/app/auth/logout/_actions/logout";
 import { cn } from "@/lib/utils";
 
-/** First letters of an org name, for the fallback avatar when there's no image. */
 function orgInitials(name: string): string {
   const letters = name
     .split(/\s+/)
@@ -71,11 +70,6 @@ function Avatar({
   );
 }
 
-// The navbar Account & Organization switcher. Shows the current context
-// (personal account or the org in the URL) and lets the user jump between their
-// personal surfaces and any organization they're a member of. Active org is
-// read from the URL — org context lives entirely in the /my/organizations/[orgId]
-// path, so the switcher stays in sync with the page without any extra state.
 export default function OrgSwitcher() {
   const pathname = usePathname();
   const router = useRouter();
@@ -86,8 +80,6 @@ export default function OrgSwitcher() {
   const avatarUrl = useAuthStore((s) => s.avatarUrl);
   const organizations = useAuthStore((s) => s.organizations);
 
-  // NavBar already guards on auth, but keep this defensive so the switcher never
-  // renders a broken trigger.
   if (!user) return null;
 
   const match = pathname?.match(/^\/my\/organizations\/([^/]+)/);
@@ -101,7 +93,6 @@ export default function OrgSwitcher() {
     router.push(href);
   };
 
-  // Sign out immediately (no confirmation) — mirrors the previous avatar menu.
   const handleSignOut = () => {
     setOpen(false);
     startSignOut(() => {

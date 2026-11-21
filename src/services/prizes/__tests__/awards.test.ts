@@ -82,7 +82,6 @@ describe("listTournamentAwards", () => {
 
     expect(calls[0].table).toBe("prize_awards");
     expect(calls[0].ops).toContainEqual(["eq", "tournament_id", "t1"]);
-    // One bank lookup for the distinct winners, active accounts only.
     expect(calls[1].table).toBe("player_bank_accounts");
     expect(calls[1].ops).toContainEqual(["in", "user_id", ["u1", "u2"]]);
     expect(calls[1].ops).toContainEqual(["eq", "is_active", true]);

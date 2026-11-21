@@ -2,8 +2,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { broadcastAvatar, subscribeAvatar } from "../avatar-cache";
 
-// vi.fn() used as a constructor requires 'function' or 'class' syntax, not arrow functions.
-
 afterEach(() => {
   vi.unstubAllGlobals();
 });

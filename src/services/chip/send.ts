@@ -15,45 +15,7 @@ import type {
   ChipSendInstructionRequest,
 } from "./interfaces/send-instruction";
 
-// CHIP Send client — payouts. Deliberately a separate module from chip.ts
-// (Collect): different host, a three-header auth scheme, string amounts on send
-// instructions, and per-webhook RSA-SHA512 keys instead of one RSA-SHA256 key. Sharing code
-// between the two invites exactly the cross-wiring the vendor warns about.
-//
-// Spec (the source of truth — re-check it before adding an endpoint):
-//   https://docs.chip-in.asia/openapi/chip-send.yaml
-//
-// THREE LANDMINES, each pinned by src/services/chip/__tests__/send.test.ts:
-//
-//   1. `send_limits.amount` is a JSON NUMBER; `send_instructions.amount` is a
-//      STRING. The exported functions take integer cents and do the conversion,
-//      so no caller ever builds either body by hand.
-//
-//   2. The epoch + checksum must be recomputed for EVERY request. CHIP rejects an
-//      epoch more than ~30 s off its clock, and the vendor calls a memoized
-//      checksum the single most common integration bug. chipSendHeaders() is
-//      therefore a function, called per request, and must never be cached.
-//
-//   3. INSUFFICIENT BALANCE has two faces. The docs describe a 403 on
-//      create-send-instruction, but the sandbox actually answers that call (and
-//      bank account registration) with a 400 saying "Balance not enough. Please
-//      increase your Send Limit". ChipSendError.insufficientBalance flags both, so
-//      a payout waits for budget (increaseChipSendLimit) instead of being treated
-//      as a rejected request and failing for good.
-//
-// UNITS: the spec documents every Send amount in RINGGIT ("1 for RM 1"; send
-// instruction amounts are "floating point with maximum of 2 decimal places",
-// e.g. "12.44") — whereas CHIP's skill notes describe them as MYR × 100 like
-// Collect. The spec wins, and it is also the safe side of the ambiguity: if the
-// skill notes were right, converting cents → ringgit makes us send 1/100 of the
-// intended amount (a payout that is visibly too small) rather than 100× (money
-// gone). Confirm against the sandbox before the first real payout (Phase 5).
-
 function chipSendBaseUrl(): string {
-  // Unlike chip.ts, not hardcoded: staging and production are different hosts
-  // and the credentials are per-environment. Deliberately NO fallback: a
-  // default host would let an environment with the variable unset quietly
-  // talk to the wrong CHIP environment instead of failing loudly.
   const url = process.env.CHIP_SEND_API_URL;
   if (!url) {
     throw new Error("CHIP_SEND_API_URL must be configured");
@@ -72,10 +34,6 @@ function chipSendCredentials(): { apiKey: string; apiSecret: string } {
   return { apiKey, apiSecret };
 }
 
-/**
- * The CHIP Send request checksum: lowercase hex HMAC-SHA512, keyed on the API
- * Secret, over `epoch + apiKey` concatenated with NO separator.
- */
 export function chipSendChecksum(
   epoch: string | number,
   apiKey: string,
@@ -87,10 +45,6 @@ export function chipSendChecksum(
     .digest("hex");
 }
 
-/**
- * The three auth headers (plus Content-Type) for one CHIP Send request, with a
- * fresh epoch. Call it per request — never memoize the result (landmine 2).
- */
 export function chipSendHeaders(): Record<string, string> {
   const { apiKey, apiSecret } = chipSendCredentials();
   const epoch = Math.floor(Date.now() / 1000).toString();
@@ -102,16 +56,9 @@ export function chipSendHeaders(): Record<string, string> {
   };
 }
 
-/**
- * A non-2xx response from CHIP Send. Carries the HTTP status and response body
- * for diagnosis, and deliberately NOTHING about the request: the headers hold
- * the bearer key and a checksum derived from the secret, and this error is
- * written to logs.
- */
 export class ChipSendError extends Error {
   readonly status: number;
   readonly body: string;
-  /** The account can't cover this right now, not a bad request — see landmine 3. */
   readonly insufficientBalance: boolean;
 
   constructor(status: number, body: string, insufficientBalance = false) {
@@ -161,16 +108,11 @@ function assertCents(amountCents: number): void {
   }
 }
 
-/** Cents → the JSON number a send limit takes (ringgit). 12345 → 123.45. */
 export function toChipSendLimitAmount(amountCents: number): number {
   assertCents(amountCents);
   return amountCents / 100;
 }
 
-/**
- * Cents → the string a send instruction takes (ringgit, exactly 2 dp). Built
- * with integer arithmetic, not toFixed on a float. 12345 → "123.45".
- */
 export function toChipSendInstructionAmount(amountCents: number): string {
   assertCents(amountCents);
   const ringgit = Math.floor(amountCents / 100);
@@ -178,12 +120,6 @@ export function toChipSendInstructionAmount(amountCents: number): string {
   return `${ringgit}.${sen}`;
 }
 
-/**
- * A Send amount in ringgit (`"12.44"`, or a JSON number) → integer cents, or null
- * if it isn't a usable amount. Parsed from the digits rather than multiplied, so
- * a value like 19.99 can't land a sen short through float rounding. Null lets the
- * caller fall back to the amount it recorded instead of booking a wrong one.
- */
 export function chipSendAmountToCents(amount: unknown): number | null {
   const text = typeof amount === "number" ? String(amount) : amount;
   if (typeof text !== "string") return null;
@@ -193,18 +129,12 @@ export function chipSendAmountToCents(amount: unknown): number | null {
   return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
 }
 
-/** `GET /send/accounts` — balances and fees. Also the cheapest auth smoke test. */
 export async function getChipSendAccounts(): Promise<
   ChipSendList<ChipSendAccount>
 > {
   return chipSendRequest("GET", "/send/accounts");
 }
 
-/**
- * `POST /send/send_limits` — convert upcoming settlement into send budget.
- * Every approver is emailed; the allocation stays `pending` until all approve
- * (and expires if not approved by 12 PM MYT the next day).
- */
 export async function increaseChipSendLimit(
   amountCents: number,
 ): Promise<ChipSendLimit> {
@@ -214,7 +144,6 @@ export async function increaseChipSendLimit(
   return chipSendRequest("POST", "/send/send_limits", body);
 }
 
-/** `GET /send/send_limits/{id}` — has this allocation been approved or expired? */
 export async function getChipSendLimit(id: number): Promise<ChipSendLimit> {
   return chipSendRequest(
     "GET",
@@ -222,7 +151,6 @@ export async function getChipSendLimit(id: number): Promise<ChipSendLimit> {
   );
 }
 
-/** `POST /send/send_limits/{id}/resend_approval_requests`. */
 export async function resendChipSendLimitApproval(
   id: number,
 ): Promise<ChipSendResendApprovalResponse> {
@@ -232,32 +160,15 @@ export async function resendChipSendLimitApproval(
   );
 }
 
-/**
- * `POST /send/bank_accounts` — register a payout recipient. Idempotent on
- * `reference`. The response `status` may already be `verified`; otherwise the
- * outcome arrives via the bank-account webhook. Classify it with
- * `chipBankAccountOutcome`, never by reading `status` directly.
- */
 export async function registerChipBankAccount(
   request: ChipBankAccountRequest,
 ): Promise<ChipBankAccount> {
   return chipSendRequest("POST", "/send/bank_accounts", request);
 }
 
-// The characters CHIP accepts in a send instruction's description. Anything else is
-// a 422 ("Description only allows alphanumeric characters, period, space,
-// underscore, hyphen, forward slash, at symbol, and parentheses"). The OpenAPI spec
-// doesn't say so; staging found it, when "MY Chess Tour payout: <name>" failed every
-// payout on its colon. 140 is CHIP's documented maximum length.
 const DESCRIPTION_DISALLOWED = /[^A-Za-z0-9 ._\-/@()]+/g;
 const DESCRIPTION_MAX_LENGTH = 140;
 
-/**
- * Makes free text (a tournament name, say) safe for a send instruction's
- * description: accents folded (é → e), apostrophes dropped, any other disallowed
- * run turned into one space, then trimmed to 140. Never returns an empty string,
- * since CHIP requires one.
- */
 export function toChipSendDescription(text: string, fallback = "Payout"): string {
   const cleaned = text
     .normalize("NFKD")
@@ -273,15 +184,9 @@ export function toChipSendDescription(text: string, fallback = "Payout"): string
 
 export interface CreateChipSendInstructionInput
   extends Omit<ChipSendInstructionRequest, "amount"> {
-  /** Integer cents — formatted into the string CHIP expects. */
   amountCents: number;
 }
 
-/**
- * `POST /send/send_instructions` — pay a registered recipient. Idempotent on
- * `reference`. Throws a ChipSendError with `insufficientBalance: true` when the
- * balance can't cover it (landmine 3).
- */
 export async function createChipSendInstruction(
   input: CreateChipSendInstructionInput,
 ): Promise<ChipSendInstruction> {
@@ -295,7 +200,6 @@ export async function createChipSendInstruction(
   });
 }
 
-/** `GET /send/send_instructions/{id}`. */
 export async function getChipSendInstruction(
   id: number,
 ): Promise<ChipSendInstruction> {
@@ -304,17 +208,6 @@ export async function getChipSendInstruction(
     `/send/send_instructions/${encodeURIComponent(String(id))}`,
   );
 }
-
-// ---------------------------------------------------------------------------
-// Outcome classifiers. Same reason chipOutcome / chipRefundOutcome exist in
-// chip.ts: the webhook path and the synchronous-response path must classify
-// identically, so these are the ONLY places a Send state is interpreted.
-//
-// Each accepts a resource status and/or a webhook event type. The spec only
-// names the subscription topics (bank_account_status, send_instruction_status),
-// not the per-delivery event names, so both the status values and dotted
-// event names (bank_account.verified, …) are recognised.
-// ---------------------------------------------------------------------------
 
 export type ChipSendOutcome = "completed" | "failed" | "pending";
 
@@ -328,12 +221,6 @@ const SEND_FAILED = new Set([
   "send_instruction.failed",
 ]);
 
-/**
- * Maps a send-instruction `state` and/or webhook event to an outcome. Only
- * `completed` is success; `rejected`/`deleted`/`failed` are terminal failures. Every
- * other state — including `accepted`, which can still end `rejected` after
- * review — is `"pending"`.
- */
 export function chipSendOutcome(
   state?: string,
   eventType?: string,
@@ -350,11 +237,6 @@ export type ChipBankAccountOutcome = "verified" | "rejected" | "pending";
 const BANK_VERIFIED = new Set(["verified", "bank_account.verified"]);
 const BANK_REJECTED = new Set(["rejected", "bank_account.rejected"]);
 
-/**
- * Maps a bank-account `status` and/or webhook event to an outcome. Anything
- * unrecognised — `pending`, `unverified`, missing — is `"pending"`: we wait for
- * the webhook rather than guess.
- */
 export function chipBankAccountOutcome(
   status?: string,
   eventType?: string,

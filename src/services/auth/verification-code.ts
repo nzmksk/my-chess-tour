@@ -12,10 +12,6 @@ export function generateCode(): string {
   return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
 
-// Send a fresh signup verification code, respecting the per-email resend
-// cooldown so this can't be used to spam an address. No-op while on cooldown
-// (the recently-sent code is still valid). Rolls the cooldown back and rethrows
-// if storing or sending fails.
 export async function sendSignupVerificationCode(email: string): Promise<void> {
   const cooldown = await startResendCooldown(email);
   if (cooldown > 0) return;

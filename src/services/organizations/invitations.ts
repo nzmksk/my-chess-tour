@@ -2,11 +2,6 @@ import { createHash, randomBytes } from "crypto";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import type { MemberInvitationRole } from "@/services/email/email";
 
-// Organization invitations (organization_invitations, functions in 003). The
-// emailed link carries a random token; the database only ever sees its SHA-256,
-// so a leaked table row can't be turned back into a working link.
-
-/** 32 random bytes, base64url: always 43 characters from [A-Za-z0-9_-]. */
 export const INVITATION_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
 export function generateInvitationToken(): string {
@@ -17,17 +12,11 @@ export function hashInvitationToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** The page the invitation email links to. An outbound link: NEXT_PUBLIC_SITE_URL. */
 export function invitationUrl(token: string): string {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   return `${siteUrl}/invitations/${token}`;
 }
 
-/**
- * Where an invitation stands for whoever holds its link. `expired` is derived:
- * the row is still pending but expires_at has passed, which is exactly when the
- * accept and decline functions start refusing it.
- */
 export type InvitationState =
   | "pending"
   | "expired"
@@ -41,7 +30,6 @@ export interface InvitationView {
   role: MemberInvitationRole;
   state: InvitationState;
   expiresAt: string;
-  /** Whole days until expiry, rounded up; 0 once expired. */
   daysLeft: number;
   organization: { id: string; name: string; available: boolean };
   inviterName: string | null;
@@ -113,11 +101,6 @@ function toInvitationView(row: InvitationRow): InvitationView | null {
   };
 }
 
-/**
- * Looks up the invitation a link's token belongs to. Null for a malformed token
- * or one that matches nothing; throws on a database error so the caller can
- * tell "no such invitation" from "couldn't check".
- */
 export async function getInvitationByToken(
   token: string,
 ): Promise<InvitationView | null> {
@@ -137,12 +120,6 @@ export async function getInvitationByToken(
   return toInvitationView(data as unknown as InvitationRow);
 }
 
-/**
- * The invitations a signed-in user can answer right now: pending, not expired,
- * addressed to their account's email, from an organization that can still take
- * members. Newest first. Matched on users.email, the same address
- * accept_organization_invitation_by_id checks. Throws on a database error.
- */
 export async function listInvitationsForUser(
   userId: string,
 ): Promise<InvitationView[]> {

@@ -15,7 +15,6 @@ export interface RateLimitSubject {
   userId: string | null;
 }
 
-/** Thrown for a fail-closed rule when the limit couldn't be checked. */
 export class RateLimitUnavailableError extends Error {
   constructor(name: string, cause: unknown) {
     super(`Rate limit "${name}" could not be checked`, { cause });
@@ -23,15 +22,6 @@ export class RateLimitUnavailableError extends Error {
   }
 }
 
-/**
- * Count one request against every bucket of the named rule. Returns the
- * seconds to wait (for Retry-After) when any bucket is over its limit, or 0
- * when the request may go ahead.
- *
- * If Redis can't be reached the request is allowed and the failure logged,
- * unless the rule is fail-closed, in which case RateLimitUnavailableError is
- * thrown.
- */
 export async function checkRateLimit(
   name: RateLimitName,
   { ip, userId }: RateLimitSubject,
@@ -45,8 +35,6 @@ export async function checkRateLimit(
       hitWindow(`${base}user:${userId}`, rule.perUser, rule.windowSeconds),
     );
   }
-  // No trustworthy IP (see getClientIp) means no IP bucket: one shared
-  // "unknown" bucket would rate limit every visitor together.
   if (ip) {
     if (rule.perIp) {
       hits.push(hitWindow(`${base}ip:${ip}`, rule.perIp, rule.windowSeconds));
@@ -75,7 +63,6 @@ export async function checkRateLimit(
   }
 }
 
-/** "a minute", "12 minutes", "an hour", "3 hours". */
 export function describeWait(seconds: number): string {
   if (seconds <= 60) return "a minute";
   if (seconds < 60 * 60) return `${Math.ceil(seconds / 60)} minutes`;
@@ -83,10 +70,6 @@ export function describeWait(seconds: number): string {
   return hours === 1 ? "an hour" : `${hours} hours`;
 }
 
-/**
- * The one 429 shape every limited route returns: the usual error envelope,
- * whose message the UI shows as is, plus Retry-After.
- */
 export function rateLimitedResponse(
   retryAfter: number,
   message: string,
@@ -104,20 +87,10 @@ export function rateLimitedResponse(
   );
 }
 
-/**
- * Whether the proxy's baseline limit applies to this path: every API route
- * except the server-to-server ones (webhooks, cron).
- */
 export function isBaselineLimitedPath(pathname: string): boolean {
   return isBrowserApiPath(pathname);
 }
 
-/**
- * The baseline every API route gets, applied in the proxy so a new route is
- * covered without opting in. `authUserId` is the session's JWT subject (the
- * proxy has no users.id), or null when signed out, in which case nothing is
- * counted here.
- */
 export async function enforceApiBaseline(
   request: NextRequest,
   authUserId: string | null,
@@ -128,14 +101,6 @@ export async function enforceApiBaseline(
   return enforceRateLimit("api", request, authUserId);
 }
 
-/**
- * Apply the named rule to a route request. Returns the response to send when
- * the request is refused (429, or 500 when a fail-closed rule can't be
- * checked), or null when it may go ahead.
- *
- *   const limited = await enforceRateLimit("checkout", request, userId);
- *   if (limited) return limited;
- */
 export async function enforceRateLimit(
   name: RateLimitName,
   request: NextRequest,

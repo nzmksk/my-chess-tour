@@ -25,9 +25,6 @@ const HISTORIES = {
 
 describe("legal version constants", () => {
   it.each(Object.entries(VERSIONS))("%s is date-shaped", (_name, version) => {
-    // The value is written verbatim into a varchar(20) column and compared for
-    // equality to decide whether a payout may proceed, so its shape is a
-    // contract, not cosmetics.
     expect(version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
@@ -53,13 +50,6 @@ describe("legal version constants", () => {
 
 describe("current_organizer_agreement_version()", () => {
   it("matches ORGANIZER_AGREEMENT_VERSION", () => {
-    // The money functions refuse a stale agreement in SQL, which can't import
-    // this module. Bump both together: if they drift, every payout is refused
-    // (SQL older) or stale organizations are paid (SQL newer than nothing).
-    //
-    // Migrations are append-only, so a bump is a new migration replacing the
-    // function. The one in force is the last definition in filename order,
-    // which is the order the CLI applies them in.
     const dir = path.join(process.cwd(), "supabase/migrations");
     const versions = fs
       .readdirSync(dir)
@@ -86,8 +76,6 @@ describe("formatLegalVersion", () => {
   });
 
   it("does not shift the day (calendar date, not an instant)", () => {
-    // Parsing "2026-01-01" into a Date and formatting it in a negative-offset
-    // zone would print 31 December. These are calendar dates and must not move.
     expect(formatLegalVersion("2026-01-01")).toBe("1 January 2026");
     expect(formatLegalVersion("2026-12-31")).toBe("31 December 2026");
   });
@@ -99,8 +87,6 @@ describe("formatLegalVersion", () => {
   });
 
   it("returns malformed input unchanged rather than throwing", () => {
-    // A bad constant should surface as odd text on the page, never as a render
-    // crash on a document users are required to read.
     expect(formatLegalVersion("v1.2.3")).toBe("v1.2.3");
     expect(formatLegalVersion("")).toBe("");
     expect(formatLegalVersion("2026-13-02")).toBe("2026-13-02");
@@ -109,9 +95,6 @@ describe("formatLegalVersion", () => {
 
 describe("version histories", () => {
   it.each(Object.entries(HISTORIES))("%s is newest first", (_name, history) => {
-    // changesSince relies on string comparison of ISO dates and on entry 0
-    // being current. An out-of-order history would silently send the wrong
-    // changelog to everyone.
     const versions = history.map((entry) => entry.version);
     const sorted = [...versions].sort().reverse();
     expect(versions).toEqual(sorted);
@@ -158,8 +141,6 @@ describe("changesSince", () => {
   });
 
   it("covers every version a reader skipped, not just the latest", () => {
-    // The whole reason the history exists: someone two versions behind must be
-    // told about both, and a single-release summary would be wrong for them.
     expect(changesSince(HISTORY, "2025-06-01")).toEqual(["c3a", "c3b", "c2"]);
   });
 
@@ -194,8 +175,6 @@ describe("sensitive data consent statements", () => {
   it.each(Object.entries(SENSITIVE_DATA_CONSENT_HISTORY))(
     "%s is newest first, with date-shaped unique versions",
     (_category, history) => {
-      // The version is stored with every grant (varchar(20)) and must name the
-      // statement the user actually saw.
       const versions = history.map((entry) => entry.version);
       expect(versions.length).toBeGreaterThan(0);
       expect(versions).toEqual([...versions].sort().reverse());
@@ -218,8 +197,6 @@ describe("sensitive data consent statements", () => {
   });
 
   it("each statement says how to withdraw", () => {
-    // PDPA consent must be withdrawable, and the user should learn that before
-    // agreeing, not from the privacy policy afterwards.
     expect(currentConsent("health").statement).toMatch(/withdraw/i);
     expect(currentConsent("financial").statement).toMatch(/withdraw/i);
   });

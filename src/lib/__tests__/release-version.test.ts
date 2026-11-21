@@ -3,7 +3,6 @@ import { resolveReleaseVersion } from "../release-version";
 
 type Responses = Record<string, string | Error>;
 
-/** A fake git keyed by subcommand; unknown subcommands throw. */
 function fakeGit(responses: Responses) {
   return vi.fn((args: string[]) => {
     const key = args[0] === "fetch" ? `fetch ${args.at(-1)}` : args[0];

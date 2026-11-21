@@ -17,7 +17,6 @@ const file = (name: string) => ({ id: `id-${name}`, name });
 const folder = (name: string) => ({ id: null, name });
 const page = (entries: unknown[]) => ({ data: entries, error: null });
 
-// Echo back what was asked for, as Storage does for objects it deleted.
 function removeSucceeds() {
   mockRemove.mockImplementation(async (paths: string[]) => ({
     data: paths.map((name) => ({ name })),
@@ -56,7 +55,6 @@ describe("removeAllUnder", () => {
   });
 
   it("recurses into sub-folders, wherever the files are", async () => {
-    // An in-memory bucket: list shows one level, folders are virtual.
     const objects = new Set([
       "users/u/oku/1.png",
       "users/u/oku/deep/x.pdf",

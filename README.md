@@ -109,6 +109,7 @@ supabase/
   tests/             SQL regression suites and run.sh
   staging/           Seed data and staging-only scripts (never run on production)
 wiki/                Design docs and runbooks (index below)
+docs/adr/            Architecture decision records: the why behind non-obvious code
 .github/workflows/   CI, staging migrations and the scheduled jobs
 ```
 
@@ -122,6 +123,7 @@ wiki/                Design docs and runbooks (index below)
 - **Dates:** a tournament's dates and "today" are in the venue's timezone (`tournaments.timezone`), never the server's.
 - **Schema changes are new migration files.** Never edit one that has been applied. See [wiki/database-migrations.md](wiki/database-migrations.md).
 - **A new sensitive column** must be added to `redact_audit_snapshot()` in the same PR.
+- **No code comments.** ESLint (`local/no-comments`) rejects them, with per-file counts ratcheted in `eslint-suppressions.json`. Make the code say it, or record the decision in [docs/adr/](docs/adr/README.md). `/delete-comment` works through the comments that predate the rule.
 - **A route handler that writes** is exported through `withAuditContext("area.action", handler)` from `@/services/supabase/audit-context`, so `audit_logs` records what was done and, through `getAuthClaims()`, by whom (#470). Writes outside a route handler (a page render) open a scope with `runWithAuditContext`.
 
 ## Testing
@@ -269,3 +271,4 @@ curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
 | Account deletion runbook                                        | [account-deletion.md](wiki/account-deletion.md)                                                                                                                                                     |
 | QA access to the staging database                               | [staging-db-access.md](wiki/staging-db-access.md)                                                                                                                                                   |
 | Visual design                                                   | [design-system.md](wiki/design-system.md)                                                                                                                                                           |
+| Why the code is the way it is (decision records)                | [docs/adr/](docs/adr/README.md)                                                                                                                                                                     |

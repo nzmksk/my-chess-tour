@@ -2,7 +2,6 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { sendRefundOutcomeEmail } from "@/services/email/email";
 import { describePaymentMethod } from "@/services/chip/payment-method-label";
 
-/** The part of settle_refund's result that says whether this call did the work. */
 export interface SettleRefundResult {
   newly_settled?: boolean;
   newly_failed?: boolean;
@@ -17,18 +16,6 @@ interface RefundEmailRow {
   } | null;
 }
 
-/**
- * Emails the player how their refund turned out, if settle_refund says this
- * call is the one that settled it (`newly_settled`) or first recorded its
- * failure (`newly_failed`). Every other call (the sync response and the webhook
- * both settling one refund, a redelivered failure) sends nothing, so the player
- * gets one email per outcome.
- *
- * Both settle paths call it: the admin cancellation route on a terminal CHIP
- * response, and the CHIP webhook. Best-effort and never throws: a failed send
- * must not fail the webhook (CHIP would redeliver the whole settle) or the
- * admin's PATCH (the cancellation is already committed).
- */
 export async function notifyRefundSettlement(
   refundId: string,
   result: SettleRefundResult | null | undefined,
@@ -68,7 +55,6 @@ export async function notifyRefundSettlement(
       playerName: row.registration?.user?.first_name ?? "Player",
       tournamentName: row.registration?.tournament?.name ?? "your tournament",
       amountCents: row.refund_amount_cents,
-      // The method the player paid with, which is where the refund goes back to.
       paymentMethod: describePaymentMethod(row.registration?.payment?.payment_method),
       completed,
     });

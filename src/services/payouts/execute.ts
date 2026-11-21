@@ -22,26 +22,6 @@ import { notifyAdminsOfPayout } from "./notify";
 import { settlePayout } from "./settle";
 import { afterResponse } from "@/lib/http/after-response";
 
-// Sends one queued payout through CHIP Send. Shared by the admin trigger, the
-// approve path (Phase 6) and the sweep (Phase 7). The money state lives in
-// queue_payout and settle_payout; this is only the network half, because a network
-// call can't run inside their transactions.
-//
-// Re-running is always safe. `reference` is our row id, so CHIP returns the existing
-// instruction instead of paying twice, and settle_payout no-ops on a settled row.
-
-/**
- * What happened, for the caller to report or count:
- *   sent             CHIP accepted it; the webhook will settle it.
- *   paid             CHIP completed it synchronously; settled.
- *   failed           terminal; a retry is a new row.
- *   awaiting_budget  not enough Send balance; left `pending`, budget requested.
- *   blocked          a cancellation or refund is in the way, or the recipient
- *                    has lapsed (unapproved, outdated agreement); left `pending`.
- *   skipped          nothing to do: settled, unapproved, in flight or missing.
- *   error            a transient failure; safe to re-run. Left `pending`, or
- *                    `processing` with no instruction if CHIP may have taken it.
- */
 export type ExecutePayoutResult =
   | "sent"
   | "paid"
@@ -70,13 +50,6 @@ interface PayoutRow {
   } | null;
 }
 
-/**
- * Hands a claimed row back to `pending` once CHIP has definitely not taken the
- * transfer, so a cancellation is no longer held up by it. Guarded so it can only
- * undo a claim: never a row with an instruction, and never a settled one. If the
- * write fails, the row stays claimed, which holds the cancellation and is
- * otherwise harmless: the next run resumes it.
- */
 async function releaseClaim(payoutId: string): Promise<void> {
   const { error } = await supabaseAdmin
     .from("payouts")
@@ -93,12 +66,6 @@ async function releaseClaim(payoutId: string): Promise<void> {
   }
 }
 
-/**
- * Terminal failure with no transfer. Reports `error` rather than `failed` if the
- * write itself didn't land, since the row is then still `pending`.
- *
- * `detail` is for the log only. `reason` is what is stored, and organizers see it.
- */
 async function failPayout(
   payoutId: string,
   reason: string,
@@ -130,15 +97,6 @@ async function failPayout(
   return "failed";
 }
 
-/**
- * Parks a payout that the balance can't cover: requests budget, and leaves the row
- * `pending`. A payout must never block on an approver's inbox, and a budget hiccup
- * must never burn the row, so nothing here can fail it.
- *
- * An allocation emails every approver, so a re-run must not request another while
- * one is still waiting on them. Only an expired one is replaced, or one that was
- * approved and has since been spent.
- */
 async function awaitBudget(
   payout: PayoutRow,
   amountCents: number,
@@ -156,7 +114,6 @@ async function awaitBudget(
         `Payout ${payout.id}: send limit ${limit.id} is ${limit.status}; requesting a new one`,
       );
     } catch (err) {
-      // Can't tell, so assume it is still live rather than email approvers again.
       console.error(
         `Payout ${payout.id}: could not read send limit ${payout.chip_send_limit_id}`,
         describeError(err),
@@ -165,8 +122,6 @@ async function awaitBudget(
     }
   }
 
-  // CHIP takes its fee from the same balance, so budget for the payout alone would
-  // still leave it short.
   const requestCents = amountCents + CHIP_SEND_FEE_CENTS;
   try {
     const limit = await increaseChipSendLimit(requestCents);
@@ -184,9 +139,6 @@ async function awaitBudget(
     console.warn(
       `Payout ${payout.id}: requested send limit ${limit.id} for ${requestCents} cents (${amountCents} payout + ${CHIP_SEND_FEE_CENTS} fee); left pending until it is approved`,
     );
-    // Once per budget request, like CHIP's own approver email: a re-run that
-    // finds this limit still pending returns above without alerting again.
-    // Sent after the response.
     afterResponse(() =>
       notifyAdminsOfPayout(
         payout.id,
@@ -204,11 +156,6 @@ async function awaitBudget(
   return "awaiting_budget";
 }
 
-/**
- * Sends a queued payout. NEVER throws: it runs after the queueing transaction has
- * committed, like processCancellationRefund. Anything transient is logged and the
- * row stays `pending`, still reserving its money, until a re-run.
- */
 export async function executePayout(
   payoutId: string,
 ): Promise<ExecutePayoutResult> {
@@ -246,8 +193,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     return "skipped";
   }
 
-  // `processing` with an instruction is out with CHIP. The stuck-payout reconciler
-  // owns it from here (Phase 7), via GET rather than by re-sending.
   const claimed =
     payout.status === "processing" && payout.chip_send_instruction_id === null;
   if (
@@ -261,11 +206,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     return "skipped";
   }
 
-  // An earlier run claimed this row and then lost track of the send: it timed out,
-  // CHIP answered with a 5xx, or the process died. CHIP may already have the
-  // instruction, so nothing is re-checked: the same reference is sent again, which
-  // returns the existing instruction if there is one. The amount was clamped
-  // before the claim.
   if (claimed) {
     const chipBankAccountId = payout.bank?.chip_bank_account_id;
     const recipientEmail = payout.recipient?.email;
@@ -279,9 +219,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     return send(payout, chipBankAccountId, recipientEmail, payout.amount_cents);
   }
 
-  // Re-checked because a payout can wait days for budget. A cancelled tournament
-  // will never pay, so that one is terminal; a pending cancellation or refund may
-  // yet resolve, so those wait, with the money still reserved.
   const { data: blocked, error: blockError } = await supabaseAdmin.rpc(
     "tournament_payout_block_reason",
     { p_tournament_id: payout.tournament_id },
@@ -298,12 +235,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     return "blocked";
   }
 
-  // queue_payout vetted the recipient, but that was before any wait for budget, and
-  // an organization can be unapproved or fall behind on the Organizer Agreement in
-  // the meantime. Those can be put right, and the dashboard already says what is
-  // wrong, so the row waits with its money reserved rather than failing. The bank
-  // account is left to the check below: that one is about the account this row
-  // snapshotted, not whichever is current.
   const { data: problem, error: problemError } = await supabaseAdmin.rpc(
     "payout_recipient_problem",
     { p_org_id: payout.recipient_organization_id },
@@ -322,8 +253,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     return "blocked";
   }
 
-  // A superseded account must not be paid: the organizer replaced it for a reason.
-  // Failing the row lets the retry pick up the current one.
   const bank = payout.bank;
   if (
     !bank ||
@@ -338,8 +267,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     });
   }
 
-  // Never trust the amount snapshotted at request time: days may have passed and
-  // refunds may have landed.
   const { data: available, error: availableError } = await supabaseAdmin.rpc(
     "available_payout_cents",
     { p_tournament_id: payout.tournament_id, p_exclude_payout_id: payoutId },
@@ -359,7 +286,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     });
   }
 
-  // Recorded before the send, so nothing can settle or reserve the stale figure.
   if (amountCents !== payout.amount_cents) {
     console.info(
       `Payout ${payoutId}: amount reduced from ${payout.amount_cents} to ${amountCents} cents to fit what is available`,
@@ -377,7 +303,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
 
   const recipientEmail = payout.recipient?.email;
   if (!recipientEmail) {
-    // CHIP requires an address. Fixable by the organization, so not terminal.
     console.error(`Payout ${payoutId}: recipient organization has no email; left pending`);
     return "error";
   }
@@ -397,8 +322,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     console.error(`Payout ${payoutId}: no MYR CHIP Send account; left pending`);
     return "error";
   }
-  // current_balance is a JSON number in ringgit.
-  // The fee comes out of the same balance, so it has to cover both.
   const balanceCents = Math.round(account.current_balance * 100);
   const neededCents = amountCents + CHIP_SEND_FEE_CENTS;
   if (balanceCents < neededCents) {
@@ -408,9 +331,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
     return awaitBudget(payout, amountCents);
   }
 
-  // The checks above ran without a lock, and a cancellation could have been
-  // approved since. The claim re-checks the blocks under the tournament lock and
-  // marks the row `processing`, after which a cancellation is refused instead.
   const { data: claimRefusal, error: claimError } = await supabaseAdmin.rpc(
     "claim_payout_send",
     { p_payout_id: payoutId },
@@ -434,10 +354,6 @@ async function execute(payoutId: string): Promise<ExecutePayoutResult> {
   return send(payout, bank.chip_bank_account_id, recipientEmail, amountCents);
 }
 
-/**
- * Asks CHIP for the transfer of a row this run, or an earlier one, has claimed,
- * and records what came back.
- */
 async function send(
   payout: PayoutRow,
   chipBankAccountId: number,
@@ -450,13 +366,11 @@ async function send(
     instruction = await createChipSendInstruction({
       bank_account_id: chipBankAccountId,
       amountCents,
-      // Tournament names are free text, and CHIP 422s on most punctuation.
       description: toChipSendDescription(
         `MY Chess Tour - ${payout.tournament?.name ?? "tournament payout"}`,
       ),
       email: recipientEmail,
       reference: payoutId,
-      // CHIP emails its own authoritative receipt, and our email points at it.
       send_recipient_receipt: true,
     });
   } catch (err) {
@@ -488,10 +402,6 @@ async function send(
     return "error";
   }
 
-  // The claim already made the row `processing`; this records the instruction.
-  // Guarded on processed_at: the webhook can beat this write, and a settled row
-  // must not be overwritten. A failure here isn't fatal, since the webhook
-  // correlates on `reference` and a re-run gets the same instruction back.
   const { error: persistError } = await supabaseAdmin
     .from("payouts")
     .update({ chip_send_instruction_id: instruction.id, status: "processing" })
@@ -522,14 +432,10 @@ async function send(
     payoutId,
     chipSendInstructionId: instruction.id,
     paid: true,
-    // What CHIP says it sent. Not always ours: a duplicate reference returns the
-    // original instruction, whatever amount it was created for.
     amountCents: chipSendAmountToCents(instruction.amount) ?? amountCents,
     receiptUrl: instruction.receipt_url,
   });
   if (settleError) {
-    // The money has left, so this is not a retryable send. The webhook re-delivers,
-    // and settle_payout will book it then.
     console.error(
       `Payout ${payoutId}: instruction ${instruction.id} completed but settle_payout failed`,
       describeDbError(settleError),

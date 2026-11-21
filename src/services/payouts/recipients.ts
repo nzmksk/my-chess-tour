@@ -1,11 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import type { EmailRecipient } from "@/services/email/recipients";
 
-// Who hears about a payout. Shared by settlement, review, the budget alert and
-// nominations, so every payout email reaches the same people.
-
-// The members who can act on a payout problem, as for bank verification and
-// cancellation reviews.
 const NOTIFY_ROLES = ["owner", "admin"];
 
 interface MembershipRecipient {
@@ -13,11 +8,6 @@ interface MembershipRecipient {
   roles: { name: string } | null;
 }
 
-/**
- * Owner/admin members of each organization plus its contact address, deduped by
- * address. Throws if the members can't be loaded; carries on without the contact
- * addresses if only those fail, since the members can still be told.
- */
 export async function loadOrganizationRecipients(
   organizationIds: string[],
 ): Promise<Map<string, EmailRecipient>> {
@@ -63,7 +53,6 @@ export async function loadOrganizationRecipients(
   return recipients;
 }
 
-/** Every platform admin (platform.manage), deduped by address. Throws on failure. */
 export async function loadPlatformAdminRecipients(): Promise<Map<string, EmailRecipient>> {
   const { data, error } = await supabaseAdmin.rpc("list_global_permission_holders", {
     p_permission: "platform.manage",

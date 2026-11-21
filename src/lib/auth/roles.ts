@@ -1,11 +1,5 @@
-// Single source of truth for organization roles and their badge styling, shared
-// by the members list and the org switcher so the two never drift.
-
 export type Role = "owner" | "admin" | "member";
 
-// An organization the signed-in user belongs to, as surfaced in the navbar
-// switcher. Defined here (not in permission.ts) so the auth store can import the
-// type without pulling in server-only Supabase code.
 export type UserOrganization = {
   id: string;
   name: string;

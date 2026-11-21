@@ -1,20 +1,10 @@
 import { Octokit } from "@octokit/rest";
 import { REPO } from "@/services/github/repo";
 
-/** `user-reported` must exist on the repo; `bug` is GitHub's default label. */
 const BUG_REPORT_LABELS = ["bug", "user-reported"];
 
-// Short enough that a slow GitHub can't hold the request until the function
-// itself times out, so the route still answers and records the failure.
 const GITHUB_TIMEOUT_MS = 8000;
 
-/**
- * File a bug report as an issue on the repo and return its number.
- *
- * GITHUB_TOKEN should be a fine-grained token scoped to this repo with
- * Issues: write and nothing else. Throws when the token is missing or GitHub
- * refuses; the caller records the failure on the bug_reports row.
- */
 export async function createBugReportIssue(
   title: string,
   body: string,

@@ -76,8 +76,6 @@ describe("sweepUnfiredRefunds", () => {
 
   it("stops starting batches once the budget is spent and says there is more", async () => {
     listReturns(refunds(12));
-    // Each batch "takes" 4 seconds of a 6-second budget: the first batch starts
-    // at 0, the second at 4, and the third would start at 8.
     let clock = 0;
     const now = () => clock;
     mockFireRefund.mockImplementation(async (id: string) => {

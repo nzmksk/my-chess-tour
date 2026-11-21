@@ -7,11 +7,6 @@ interface ReviewedOkuRow {
   user: { email: string | null; first_name: string | null } | null;
 }
 
-/**
- * Tells a player the outcome of their OKU card review. Best-effort and never
- * throws: it runs after the review has been saved, and reads the outcome back
- * from the profile rather than trusting the caller.
- */
 export async function notifyOkuReviewed(userId: string): Promise<void> {
   try {
     const { data, error } = await supabaseAdmin

@@ -89,7 +89,6 @@ describe("BugReport", () => {
       sentryEventId: "0123456789abcdef0123456789abcdef",
       website: "",
     });
-    // Nothing about GitHub reaches the reporter.
     expect(document.body.textContent).not.toMatch(/github\.com/);
   });
 

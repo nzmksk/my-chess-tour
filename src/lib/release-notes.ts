@@ -1,30 +1,3 @@
-/**
- * The GitHub release notes are the changelog (#640): this turns a release
- * into a ChangelogEntry. Pure, so the parsing rules are tested without
- * GitHub; src/services/github/releases.ts does the fetching.
- *
- * The notes are written for players and organizers, in this shape:
- *
- *     Optional one-line headline.
- *
- *     ### New
- *     - What people can do now that they couldn't before.
- *     ### Improved
- *     - What works better.
- *     ### Fixed
- *     - What was broken and now works.
- *
- *     <!-- developer notes -->
- *     ## What's Changed
- *     * PR titles from GitHub's "Generate release notes" ...
- *
- * Everything from the developer notes marker on is never shown. GitHub's own
- * generated sections ("## What's Changed", "**Full Changelog**") end the
- * user-facing part too, so a release published before anyone wrote notes
- * shows nothing rather than a list of PR titles. Items are plain text:
- * links keep their text, and bold or code formatting is dropped.
- */
-
 import {
   CHANGE_GROUPS,
   isReleaseVersion,
@@ -34,25 +7,19 @@ import { toCalendarDateInTimeZone } from "@/lib/tournaments/datetime";
 
 type ChangeKey = (typeof CHANGE_GROUPS)[number]["key"];
 
-/** The part of a release's notes the site shows. */
 export type ReleaseNotes = Omit<ChangelogEntry, "version" | "date">;
 
 const END_OF_USER_NOTES = [
-  // <!-- developer notes -->: where the notes for users end.
   /<!--\s*developer notes\s*-->/i,
-  // GitHub's "Generate release notes" output.
   /^#{1,6}[ \t]+What's Changed[ \t]*$/im,
   /^#{1,6}[ \t]+New Contributors[ \t]*$/im,
   /^\*\*Full Changelog\*\*/m,
 ];
 
-// <!-- silent -->: list the release on /changelogs, but never announce it in
-// the "What's new" dialog. A release with no items is silent without it.
 const SILENT_PATTERN = /<!--\s*silent\s*-->/i;
 const HEADING = /^ {0,3}#{1,6}[ \t]+(.*?)[ \t#]*$/;
 const LIST_ITEM = /^ {0,3}[-*+][ \t]+(.*)$/;
 
-/** The notes up to where the developer notes begin, with \n line endings. */
 function userNotes(body: string | null | undefined): string {
   const text = (body ?? "").replace(/\r\n?/g, "\n");
   let end = text.length;
@@ -63,7 +30,6 @@ function userNotes(body: string | null | undefined): string {
   return text.slice(0, end);
 }
 
-/** Markdown inline formatting → the plain text the site renders. */
 function plainText(text: string): string {
   return text
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
@@ -74,7 +40,6 @@ function plainText(text: string): string {
     .trim();
 }
 
-/** Remove HTML comments repeatedly so nested/overlapping markers cannot survive. */
 function stripHtmlComments(text: string): string {
   let previous: string;
   let current = text;
@@ -106,9 +71,7 @@ export function parseReleaseNotes(
     fixed: [],
   };
   let seenHeading = false;
-  // The group items are going into; null under a heading that isn't one.
   let group: ChangeKey | null = null;
-  // The item a wrapped line continues, until a blank line ends it.
   let open: { items: string[]; index: number } | null = null;
 
   for (const line of stripHtmlComments(text).split("\n")) {
@@ -157,7 +120,6 @@ export function parseReleaseNotes(
   return notes;
 }
 
-/** The fields of a GitHub release the changelog reads. */
 export interface GitHubRelease {
   tag_name: string;
   draft: boolean;
@@ -165,12 +127,6 @@ export interface GitHubRelease {
   body?: string | null;
 }
 
-/**
- * A published release as a changelog entry, or null for a draft or a tag
- * that isn't a release version (the footer's resolver ignores those too).
- * The date is the day it was published in Malaysia, the platform's home time
- * zone.
- */
 export function toChangelogEntry(
   release: GitHubRelease,
 ): ChangelogEntry | null {

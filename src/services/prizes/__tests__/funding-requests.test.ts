@@ -14,8 +14,6 @@ const {
   mockRecipients,
   mockPool,
 } = vi.hoisted(() => {
-  // One queued result per awaited query, in order; each builder records the
-  // table, filters and update payload it was given.
   const results: Array<{ data: unknown; error: unknown }> = [];
   const calls: Array<{ table: string; update?: unknown; filters: Record<string, unknown> }> = [];
   function makeBuilder(table: string) {
@@ -143,7 +141,6 @@ describe("prizesFundedBy", () => {
       ],
       distribution: "platform" as const,
     };
-    // A category or special with no name still lists, as an empty label.
     expect(prizesFundedBy(prizes as never, "acme")).toBe(", ");
     expect(prizesFundedBy({ distribution: "platform" } as never, "acme")).toBe("");
   });
@@ -152,9 +149,9 @@ describe("prizesFundedBy", () => {
 describe("createMissingFundingLinks", () => {
   it("creates the purchase, records it on the open request, and emails the funder after", async () => {
     results.push(
-      { data: [ROW], error: null }, // unlinked requests
+      { data: [ROW], error: null },
       { data: { name: "Merdeka Open", prizes: PRIZES, organization: { name: "KL Chess" } }, error: null },
-      { data: [{ id: "f-1" }], error: null }, // the guarded update
+      { data: [{ id: "f-1" }], error: null },
     );
 
     const out = await createMissingFundingLinks({ tournamentId: "t-1" });
@@ -212,7 +209,7 @@ describe("createMissingFundingLinks", () => {
     results.push(
       { data: [ROW], error: null },
       { data: { name: "Merdeka Open", prizes: PRIZES, organization: null }, error: null },
-      { data: [], error: null }, // the guarded update matched nothing
+      { data: [], error: null },
     );
 
     const out = await createMissingFundingLinks();
@@ -330,7 +327,7 @@ describe("syncPrizeFundingRequests", () => {
       error: null,
     });
     results.push(
-      { data: [], error: null }, // nothing unlinked
+      { data: [], error: null },
       { data: { slug: "merdeka-open" }, error: null },
     );
 
@@ -449,7 +446,6 @@ describe("onTournamentListed", () => {
   });
 
   it("logs a failure to send instead of throwing", async () => {
-    // Both slug reads run before either after-response email.
     results.push(
       { data: null, error: null },
       { data: null, error: null },
@@ -477,10 +473,10 @@ describe("sweepPrizeFundingRequests", () => {
       })
       .mockResolvedValueOnce({ data: null, error: { message: "locked" } });
     results.push(
-      { data: [{ id: "t-1" }, { id: "t-2" }], error: null }, // pending tournaments
-      { data: [], error: null }, // t-1: nothing unlinked
-      { data: { slug: "t-one" }, error: null }, // t-1 listed: slug for the page
-      { data: [], error: null }, // the leftover pass
+      { data: [{ id: "t-1" }, { id: "t-2" }], error: null },
+      { data: [], error: null },
+      { data: { slug: "t-one" }, error: null },
+      { data: [], error: null },
     );
 
     const stats = await sweepPrizeFundingRequests();

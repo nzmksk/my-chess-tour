@@ -1,44 +1,5 @@
-// The banks an organizer can nominate as a payout destination, keyed by
-// SWIFT/BIC — which is what CHIP Send's `bank_code` field takes.
-//
-// The pairing matters: the client submits only a SWIFT code, and the server
-// derives the display name from this table before writing
-// organization_bank_accounts.bank_name. A client-supplied display name could
-// disagree with the code it was sent alongside, and the row would then say
-// "Maybank" while the money went to CIMB.
-//
-// RECONCILED against CHIP Send's BankCode schema (2026-11-05):
-//   https://docs.chip-in.asia/openapi/chip-send.yaml
-// This list is a 1:1 mirror of it — same 37 codes, no more, no fewer. The
-// schema's description ("the complete set of codes accepted by POST
-// /send/bank_accounts") is authoritative. Its `enum` has lagged behind the
-// description before (#519); today the two agree, but if they diverge again,
-// follow the description.
-// Mirroring rather than curating is deliberate: a code we accept that CHIP
-// rejects is a FAILED PAYOUT (discovered after a tournament, with an organizer
-// waiting on money), whereas a code CHIP accepts that we omit is only a bank
-// missing from a dropdown. Every judgement call about which banks are
-// "plausible" trades the cheap error for the expensive one, so we make none —
-// which is why the corporate and custody banks below are kept even though no
-// chess organizer is likely to nominate one.
-//
-// Do not add an entry without confirming it against CHIP's BankCode list first
-// — the unit test pins the exact set and will fail.
-//
-// Two CHIP-side details worth not "fixing" back:
-//   - MBSB Bank is AFBQMYKL, the legacy Asian Finance Bank code CHIP still
-//     keys it by, NOT the intuitive MBSBMYKL.
-//   - Finexus Cards and Touch 'n Go eWallet are e-money issuers, not banks.
-//     CHIP accepts them as destinations, so they stay; the field is labelled
-//     "bank" in the UI, which is a slight misnomer for those two.
-//
-// Citibank (CITIMYKL) was dropped in the 2026-08-16 reconciliation because
-// CHIP's list didn't have it then. CHIP has since added it back, so it's back.
-
 export interface MalaysianBank {
-  /** Display name stored on the bank account row. */
   name: string;
-  /** SWIFT/BIC. 8 chars, or 11 with a branch suffix. */
   swift: string;
 }
 
@@ -85,18 +46,10 @@ export const MALAYSIAN_BANKS: readonly MalaysianBank[] = [
   { name: "UOB Bank", swift: "UOVBMYKL" },
 ] as const;
 
-/** Membership test for validators — O(1) instead of scanning the array. */
 export const BANK_SWIFT_CODES: ReadonlySet<string> = new Set(
   MALAYSIAN_BANKS.map((bank) => bank.swift),
 );
 
-/**
- * The display name for a SWIFT code, or `undefined` if it isn't one we accept.
- *
- * Callers persisting a bank account must treat `undefined` as a validation
- * failure rather than falling back to the submitted code: an unknown code is
- * one CHIP Send will not recognise either.
- */
 export function bankNameForSwift(swift: string): string | undefined {
   return MALAYSIAN_BANKS.find((bank) => bank.swift === swift)?.name;
 }

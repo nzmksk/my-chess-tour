@@ -2,28 +2,11 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 
 export interface UploadConstraints {
   maxBytes: number;
-  /** Allowed content types, as reported by storage. */
   mimeTypes: readonly string[];
 }
 
 export type UploadCheck = { ok: true } | { ok: false; reason: string };
 
-/**
- * Verify that an object a client claims to have uploaded actually exists and is
- * within the size/type limits, before its path is recorded in the database.
- *
- * Every private-document flow here is browser→storage then a path-registration
- * POST: the file never passes through the API, so the API never sees its size
- * or type. Enforcing those in the uploader component is a UX affordance, not a
- * control — a client that skips the component can register a path to a 500MB
- * blob, or to nothing at all, and the row is then a dangling reference an admin
- * discovers only when a signed URL 404s.
- *
- * Storage RLS already stops a user WRITING outside their own folder. It cannot
- * stop them CLAIMING a path, which is why callers must ALSO check the path
- * prefix against the caller's id (see the org-document and OKU validators).
- * This function answers a different question: is there a sane file there?
- */
 export async function assertUploadedObject(
   bucket: string,
   path: string,
@@ -40,9 +23,6 @@ export async function assertUploadedObject(
     return { ok: false, reason: `each file must be ${limitMb}MB or smaller` };
   }
 
-  // contentType is set from the upload request. Treat a missing one as a
-  // failure rather than a pass: an object with no declared type is not one we
-  // put there through the normal path.
   if (!data.contentType || !mimeTypes.includes(data.contentType)) {
     return {
       ok: false,
@@ -53,23 +33,8 @@ export async function assertUploadedObject(
   return { ok: true };
 }
 
-// Supabase Storage lists one level at a time, at most this many entries.
 const LIST_PAGE_SIZE = 1000;
 
-/**
- * Delete every object under `prefix`, however many there are and however deep.
- *
- * `list` returns one page of one level: files, plus an entry with a null id for
- * each sub-folder. A single call is not "everything in the folder": a client
- * with an INSERT policy can upload as many files as it likes, at any depth
- * the policy's prefix check allows. So this recurses into sub-folders and, at
- * each level, lists and removes the first page until a list comes back empty.
- * Re-listing from the start works because each pass deletes what it listed.
- * A pass that removes nothing is an error, not a loop.
- *
- * Returns null once nothing is left under `prefix`, or the error that stopped
- * it. A failure part-way leaves the rest in place, so the caller can retry.
- */
 export async function removeAllUnder(
   bucket: string,
   prefix: string,

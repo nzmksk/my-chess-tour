@@ -12,8 +12,6 @@ function loadTemplate(name: string): string {
   );
 }
 
-// Escapes user-supplied values before they are interpolated into an HTML email
-// template, so a player name or tournament title can't inject markup.
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -83,9 +81,6 @@ export async function sendTournamentCancellationEmail(
   }
 }
 
-// Notifies an organization member (owner/admin) of the outcome of the
-// cancellation request they can act on — approved (tournament cancelled) or
-// declined (tournament stays live, with the admin's reason).
 export async function sendCancellationReviewEmail(
   email: string,
   params: {
@@ -133,13 +128,6 @@ export async function sendCancellationReviewEmail(
   }
 }
 
-// Notifies an organization owner/admin of CHIP Send's verdict on their payout
-// bank account — verified, or could not be verified (with the reason and a link
-// to fix the details). One function with a boolean branch, like
-// sendCancellationReviewEmail.
-//
-// Only the last 4 digits of the account number are ever passed in or rendered:
-// an email is a copy of the data we no longer control.
 export async function sendBankVerificationEmail(
   email: string,
   params: {
@@ -159,7 +147,6 @@ export async function sendBankVerificationEmail(
     ? "bank-account-verified.html"
     : "bank-account-verification-failed.html";
 
-  // Defence in depth: whatever a caller passes, render at most 4 digits.
   const last4 = params.accountLast4.replace(/\D/g, "").slice(-4);
 
   let html = loadTemplate(template)
@@ -200,8 +187,6 @@ function formatRinggit(cents: number): string {
   })}`;
 }
 
-// CHIP's receipt link comes from a webhook body, so it only becomes a link if it
-// really is an https URL.
 function safeHttpsUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
@@ -211,9 +196,6 @@ function safeHttpsUrl(value: string | null | undefined): string | null {
   }
 }
 
-// Tells an organization its payout has been sent. Shared by automatic and early
-// payouts, which differ only in the subject. Only the last 4 digits of the account
-// number are ever passed in or rendered.
 export async function sendPayoutProcessedEmail(
   email: string,
   params: {
@@ -228,7 +210,6 @@ export async function sendPayoutProcessedEmail(
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const dashboardUrl = `${siteUrl}/my/organizations`;
   const receiptUrl = safeHttpsUrl(params.receiptUrl);
-  // Defence in depth: whatever a caller passes, render at most 4 digits.
   const last4 = params.accountLast4.replace(/\D/g, "").slice(-4);
 
   const html = loadTemplate("payout-processed.html")
@@ -257,8 +238,6 @@ export async function sendPayoutProcessedEmail(
   }
 }
 
-// Tells an organization its payout failed, in plain language (see
-// describePayoutFailure) with a prompt to check bank details or contact support.
 export async function sendPayoutFailedEmail(
   email: string,
   params: {
@@ -290,10 +269,6 @@ export async function sendPayoutFailedEmail(
   }
 }
 
-// Tells a winner they have been awarded a prize from a platform-distributed
-// prize pool (#523), once a platform admin has approved it and before the money
-// moves. Says where it will be sent (last 4 digits only), or asks them to add or
-// fix their bank details when there is no verified account yet.
 export async function sendPrizeAwardedEmail(
   email: string,
   params: {
@@ -301,15 +276,12 @@ export async function sendPrizeAwardedEmail(
     tournamentName: string;
     prizeName: string;
     amountCents: number;
-    /** Last 4 of the account the prize will go to; null when there isn't one yet. */
     accountLast4: string | null;
-    /** The player's account exists but couldn't be verified. */
     accountRejected?: boolean;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const settingsUrl = `${siteUrl}/settings`;
-  // Defence in depth: whatever a caller passes, render at most 4 digits.
   const last4 = params.accountLast4?.replace(/\D/g, "").slice(-4) || null;
 
   const bankLine = params.accountRejected
@@ -346,8 +318,6 @@ export async function sendPrizeAwardedEmail(
   }
 }
 
-// Tells a winner their prize has been sent (#523), pointing at CHIP's receipt
-// when there is one.
 export async function sendPrizePaidEmail(
   email: string,
   params: {
@@ -362,7 +332,6 @@ export async function sendPrizePaidEmail(
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const settingsUrl = `${siteUrl}/settings`;
   const receiptUrl = safeHttpsUrl(params.receiptUrl);
-  // Defence in depth: whatever a caller passes, render at most 4 digits.
   const last4 = params.accountLast4.replace(/\D/g, "").slice(-4);
 
   const html = loadTemplate("prize-paid.html")
@@ -388,10 +357,6 @@ export async function sendPrizePaidEmail(
   }
 }
 
-// Asks a sponsor to pay their share of a platform-distributed prize pool
-// (#523). Sent automatically when the tournament is published, and again with
-// a fresh link if their share changes or a payment fails. The checkout link is
-// CHIP's, so it only becomes a button if it really is an https URL.
 export async function sendPrizeFundingRequestEmail(
   email: string,
   params: {
@@ -399,7 +364,6 @@ export async function sendPrizeFundingRequestEmail(
     organizerName: string;
     tournamentName: string;
     amountCents: number;
-    /** The prizes this contribution funds, e.g. "Open — 1st, Open — 2nd". */
     prizeList: string;
     checkoutUrl: string;
   },
@@ -432,15 +396,12 @@ export async function sendPrizeFundingRequestEmail(
   }
 }
 
-// Tells an organization its platform-distributed tournament is now listed,
-// because the payment that completed its prize pool has settled (#523).
 export async function sendTournamentListedEmail(
   email: string,
   params: {
     recipientName: string;
     orgName: string;
     tournamentName: string;
-    /** The public page, when the tournament has a slug. */
     tournamentUrl: string | null;
     fundedCents: number;
   },
@@ -468,10 +429,6 @@ export async function sendTournamentListedEmail(
   }
 }
 
-// Tells an organization the outcome of its early payout request. Approval means
-// the transfer is being sent, not that it has landed: sendPayoutProcessedEmail
-// follows once it settles. One function with a boolean branch, like
-// sendCancellationReviewEmail.
 export async function sendPayoutReviewEmail(
   email: string,
   params: {
@@ -518,11 +475,6 @@ export async function sendPayoutReviewEmail(
   }
 }
 
-/**
- * What a platform admin is being alerted to:
- *   early_request    an organizer filed an early payout request to review
- *   awaiting_budget  a payout is parked until a CHIP Send budget request is approved
- */
 export type AdminPayoutAlert = "early_request" | "awaiting_budget" | "prize_review";
 
 const ADMIN_ALERTS: Record<
@@ -551,8 +503,6 @@ const ADMIN_ALERTS: Record<
   },
 };
 
-// Alerts a platform admin to a payout that needs a person. `path` is where the
-// button leads, relative to the site (e.g. /admin/payouts/<id>).
 export async function sendAdminPayoutAlertEmail(
   email: string,
   params: {
@@ -593,9 +543,6 @@ export async function sendAdminPayoutAlertEmail(
   }
 }
 
-// Asks a nominated organization to accept a tournament's payout. Sent to the
-// NOMINEE: nothing is redirected until one of its payout managers accepts on the
-// dashboard this links to.
 export async function sendBeneficiaryNominationEmail(
   email: string,
   params: {
@@ -629,10 +576,6 @@ export async function sendBeneficiaryNominationEmail(
   }
 }
 
-// Tells an organizer applicant the outcome of their organization application —
-// approved (they are now its owner) or declined, with the admin's reason and a
-// link back to their applications so they can amend and resubmit (#582). One
-// function with a boolean branch, like sendCancellationReviewEmail.
 export async function sendOrganizerApplicationReviewEmail(
   email: string,
   params: {
@@ -687,8 +630,6 @@ export async function sendOrganizerApplicationReviewEmail(
 
 export type MemberInvitationRole = "admin" | "member";
 
-// What each assignable role can do, written to finish "you'd be able to …". Mirrors the
-// role_permissions rows in supabase/migrations/007_rbac.sql.
 const MEMBER_ROLE_COPY: Record<
   MemberInvitationRole,
   { label: string; summary: string }
@@ -704,9 +645,6 @@ const MEMBER_ROLE_COPY: Record<
   },
 };
 
-// Invites someone to join an organization's team. Nothing is granted yet: the
-// link opens the invitation, where they accept or decline it (signing up first
-// if they have no account). Expires 30 days after it is sent.
 export async function sendMemberInvitationEmail(
   email: string,
   params: {
@@ -742,9 +680,6 @@ export async function sendMemberInvitationEmail(
   }
 }
 
-// Tells the inviter how their invitation was answered. `inviteeName` is the
-// invitee's name when they have one on file, else their address (someone who
-// declines from the link needs no account).
 export async function sendInvitationResponseEmail(
   email: string,
   params: {
@@ -790,9 +725,6 @@ export async function sendInvitationResponseEmail(
   }
 }
 
-// Tells a player the outcome of their OKU card review — verified, or rejected
-// with the admin's reason and a link back to settings to upload a new copy. One
-// function with a boolean branch, like sendCancellationReviewEmail.
 export async function sendOkuReviewEmail(
   email: string,
   params: {
@@ -834,9 +766,6 @@ export async function sendOkuReviewEmail(
   }
 }
 
-// Confirms a player's place in a tournament once their registration is confirmed
-// (paid, or free). `tournamentDates` arrives formatted in the venue's timezone by
-// the caller; `feePaidCents` is what the player actually paid, 0 for free entry.
 export async function sendRegistrationConfirmationEmail(
   email: string,
   params: {
@@ -880,10 +809,6 @@ export async function sendRegistrationConfirmationEmail(
   }
 }
 
-// Tells a player how the refund promised by the cancellation email turned out:
-// completed (the money is on its way back) or failed (contact support). One
-// function with a boolean branch, like sendCancellationReviewEmail.
-// `paymentMethod` is already in words (describePaymentMethod).
 export async function sendRefundOutcomeEmail(
   email: string,
   params: {
@@ -923,9 +848,6 @@ export async function sendRefundOutcomeEmail(
   }
 }
 
-// Tells the organizing organization how its payout nominee responded: accepted
-// (the payout now goes to the nominee) or declined (it stays with the organizer).
-// One function with a boolean branch, like sendCancellationReviewEmail.
 export async function sendNominationResponseEmail(
   email: string,
   params: {

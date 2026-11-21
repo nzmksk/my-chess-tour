@@ -13,7 +13,6 @@ vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { rpc: mockRpc },
 }));
 
-// Keep the real refund outcome mapper; only stub the network calls.
 vi.mock("@/services/chip/chip", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services/chip/chip")>();
   return {
@@ -48,7 +47,6 @@ beforeEach(() => {
     if (name === "settle_refund") return Promise.resolve(settleResult);
     throw new Error(`unexpected rpc ${name}`);
   });
-  // A completed refund is a Payment object, with no `status`.
   mockRefundChipPurchase.mockResolvedValue({ type: "payment", id: "refund-pay-1" });
   mockGetChipPurchase.mockResolvedValue({ id: "purchase-1", status: "paid" });
 });

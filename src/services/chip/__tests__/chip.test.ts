@@ -24,7 +24,6 @@ describe("chipRefundOutcome", () => {
       "pending",
     );
     expect(chipRefundOutcome()).toBe("pending");
-    // A registration status must not be read as a refund outcome.
     expect(chipRefundOutcome("paid", "purchase.paid")).toBe("pending");
   });
 });
@@ -146,7 +145,6 @@ describe("refundChipPurchase", () => {
   });
 
   it("issues a full refund with no body and returns the refund Payment", async () => {
-    // Completed refund → a Payment object. Note it carries no `status`.
     const payment = {
       type: "payment",
       id: "refund-pay-1",
@@ -186,8 +184,6 @@ describe("refundChipPurchase", () => {
   });
 
   it("returns the Purchase shape when the acquirer is still processing", async () => {
-    // Slow refund → the original Purchase with status pending_refund, NOT a
-    // Payment. Its `id` is the purchase id; no refund Payment exists yet.
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ id: "chip-orig-5", status: "pending_refund" }),

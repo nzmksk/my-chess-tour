@@ -54,8 +54,6 @@ describe("internalErrorResponse", () => {
     expect(consoleError).toHaveBeenLastCalledWith("Ctx plain");
   });
 
-  // The context often interpolates request values; console.error would read
-  // "%c" in it as a directive and drop the next argument from the log.
   it("does not let format directives in the context swallow the detail", () => {
     internalErrorResponse("Payout %c lookup failed", { code: "23503", message: "fk" });
     expect(consoleError).toHaveBeenLastCalledWith("Payout %c lookup failed 23503: fk");
