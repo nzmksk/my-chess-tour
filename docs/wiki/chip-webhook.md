@@ -19,6 +19,12 @@ Key formatting gotcha: in a `.env` file the PEM may be a double-quoted single li
 But host env UIs (e.g. **Netlify**) store the value **verbatim**: copy that quoted/escaped form in and the surrounding quotes break PEM parsing, so every delivery fails signature verification (HTTP 401).
 On those platforms paste the **raw multi-line PEM with no surrounding quotes**. `verifySignature` in `src/app/api/v1/webhooks/chip/route.ts` also defensively trims quotes and expands literal `\n`, and logs the failure reason (missing header / no key / parse error / mismatch) so misconfiguration is visible in logs.
 
+## Delivery and retries
+
+A delivery counts as delivered only when we answer 2xx. CHIP makes up to 8 attempts, the nth at 3^(n − 1) − 1 minutes after the first, so the last comes 36 hours 26 minutes after the first. Nothing is sent after that, so `GET /purchases/{id}/` is the source of truth for a purchase whose callbacks were lost.
+
+Delivery is at least once, so every settlement path is idempotent. Delivery is also ordered per purchase: CHIP holds back a purchase's later events until the earlier ones are delivered. That's why events we don't act on are acknowledged, not refused. See CHIP's [delivery protocol](https://docs.chip-in.asia/chip-collect/overview/delivery-protocol).
+
 ## Event types
 
 The registration settlement path consumes `purchase.paid` / `purchase.captured` / `purchase.payment_failure` (see [payment-flow.md](./payment-flow.md)); the refund path consumes `payment.refunded` / `purchase.refund_failure` / `purchase.pending_refund` (see [refund-flow.md](./refund-flow.md)). A purchase that is a sponsor's prize-pool contribution (a `prize_fundings` row, matched by purchase id then reference) is routed out ahead of registration settlement and settled by `settle_prize_funding` (see [prize-flow.md](./prize-flow.md)).

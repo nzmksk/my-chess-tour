@@ -23,6 +23,9 @@ The webhook and the synchronous path both call them, so they can't classify
 differently. Anything unrecognised is `"pending"`: we wait for the webhook
 rather than guess. In particular:
 
+- A purchase that is `cleared` or `settled` counts as paid. Some card payments
+  move on from `paid` to these states, and CHIP reaches them only through
+  `paid`.
 - Refund events (`payment.refunded`, `purchase.refund_failure`) never match the
   registration mapper; `isChipRefundEvent` routes them to the refund path.
 - A send instruction succeeds only when `completed`. `accepted` can still end
