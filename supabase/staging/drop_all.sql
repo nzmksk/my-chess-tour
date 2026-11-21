@@ -92,6 +92,7 @@ DROP TABLE IF EXISTS public.organization_invitations CASCADE;
 DROP TABLE IF EXISTS public.organization_memberships CASCADE;
 DROP TABLE IF EXISTS public.organization_documents  CASCADE;
 DROP TABLE IF EXISTS public.organization_bank_accounts CASCADE;
+DROP TABLE IF EXISTS public.organization_registered_names CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
 DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
 DROP TABLE IF EXISTS public.sensitive_data_consents CASCADE;

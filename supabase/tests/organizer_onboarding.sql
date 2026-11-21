@@ -24,7 +24,8 @@
 --       old row retained with is_active = false
 --   B7  one account cannot be the active destination for two organizations
 --   B8  the same account IS reusable once the other org's row is superseded
---   C1  create_organization_application creates org + bank + documents together
+--   C1  create_organization_application creates org + bank + documents together,
+--       and records the registered name (#374)
 --   C2  a company with no SSM/ROS document raises P0001 and rolls back WHOLLY —
 --       the name stays free
 --   C3  an approved organization's name raises NAME_TAKEN, not a raw unique
@@ -40,7 +41,8 @@
 --   R2  rejecting deactivates the bank account and records the event; amending
 --       and resubmitting keeps the account and chosen documents, drops the
 --       rest (returning their paths), adds new ones, re-stamps the agreement
---       and returns the application to pending
+--       and returns the application to pending; a new registered name
+--       replaces the old one and a blank one keeps it (#374)
 --   R3  resubmit refuses: another user's application, one that isn't rejected,
 --       an approved organization's name, documents that don't match the entity
 --       (another application's document ids don't count), and a bank account
@@ -240,10 +242,16 @@ BEGIN
     p_account_holder      => 'Onboarding Applicant',
     p_account_number      => '1112223334',
     p_documents           => '[{"doc_type":"ros","storage_path":"users/x/org-kyb/ros.pdf","original_filename":"ros.pdf"}]'::jsonb,
-    p_registration_number => 'PPM-001-14-01012020'
+    p_registration_number => 'PPM-001-14-01012020',
+    p_registered_name     => '  Persatuan Catur Onboarding  '
   );
 
   v_id := (v_result->>'id')::uuid;
+
+  IF (SELECT registered_name FROM organization_registered_names WHERE organization_id = v_id)
+     IS DISTINCT FROM 'Persatuan Catur Onboarding' THEN
+    RAISE EXCEPTION 'C1 FAIL: registered name not recorded (trimmed)';
+  END IF;
 
   SELECT count(*) INTO v_count
     FROM organization_bank_accounts WHERE organization_id = v_id AND is_active;
@@ -509,8 +517,14 @@ BEGIN
     p_agreement_version => '2026-11-20',
     p_keep_bank_account => true,
     p_keep_document_ids => ARRAY[v_doc_keep],
-    p_new_documents     => '[{"doc_type":"authorization_letter","storage_path":"users/y/org-kyb/letter.pdf","original_filename":"letter.pdf"}]'::jsonb
+    p_new_documents     => '[{"doc_type":"authorization_letter","storage_path":"users/y/org-kyb/letter.pdf","original_filename":"letter.pdf"}]'::jsonb,
+    p_registered_name   => 'Second Applicant'
   );
+
+  IF (SELECT registered_name FROM organization_registered_names WHERE organization_id = v_org_b)
+     IS DISTINCT FROM 'Second Applicant' THEN
+    RAISE EXCEPTION 'R2 FAIL: the amended registered name was not saved';
+  END IF;
 
   SELECT approval_status::text INTO v_status FROM organizations WHERE id = v_org_b;
   IF v_status <> 'pending' THEN
@@ -659,6 +673,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM organization_bank_accounts
                   WHERE organization_id = v_org_b AND is_active AND account_number = '8889990003') THEN
     RAISE EXCEPTION 'R4 FAIL: the replacement bank account is not the active one';
+  END IF;
+  -- No registered name given on this resubmission: the one on file stays.
+  IF (SELECT registered_name FROM organization_registered_names WHERE organization_id = v_org_b)
+     IS DISTINCT FROM 'Second Applicant' THEN
+    RAISE EXCEPTION 'R4 FAIL: a resubmission without a registered name cleared the one on file';
   END IF;
 
   -- now() is fixed for the whole test transaction, so every event has the same

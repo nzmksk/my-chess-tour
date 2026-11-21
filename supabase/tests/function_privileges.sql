@@ -35,6 +35,7 @@ DECLARE
     'record_sensitive_data_consent',
     'create_organization_application',
     'resubmit_organization_application',
+    'set_organization_registered_name',
     'assert_org_name_available',
     'assert_org_entity_documents',
     'review_organization_application',
