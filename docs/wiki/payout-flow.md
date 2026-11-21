@@ -47,7 +47,7 @@ The claim closes a race. Without it, a cancellation approved after `executePayou
 | 408, 5xx, network failure | `processing`, no instruction | The request may have landed |
 | Other 4xx | `failed` | Terminal |
 
-A re-run of a claimed row checks nothing and sends the same reference again, which returns the existing instruction if there is one. The claim was the commitment point.
+A re-run of a claimed row checks nothing and sends the same reference again, on the assumption that CHIP then returns the existing instruction if there is one. CHIP requires instruction references to be unique but doesn't document the answer to a repeat, so this is [unverified](./chip-api.md#open-question-repeated-send-instruction-references). The claim was the commitment point.
 
 The [daily run](#the-daily-run) re-runs these rows on its own: every approved `pending` payout each day, and a claimed one once it has been `processing` for `PAYOUT_STUCK_HOURS`. An admin needn't wait for it: **Retry send** on `/admin/payouts` or the review page (`POST /api/v1/admin/payouts/[id]/send`) does the same for any approved payout that is `pending` or claimed without an instruction (`canResend`).
 
@@ -71,7 +71,7 @@ Per-payout failures are counted and the run moves on. The response gives each pa
 
 **What the sweep lists.** Published; past its end instant plus the hold; no cancellation under review or refund unsettled (`tournament_payout_block_reason`); recipient payable (`payout_recipient_problem`); no payout of either kind in flight, a rejected early request aside; no live automatic payout (a failed one is retried); at least the minimum available. These are the rules `queue_payout` applies, so a listed tournament is one it accepts unless something changed in between, which it refuses itself. A tournament left off because its recipient can't be paid still shows on the admin candidates list with the reason.
 
-**Re-running is always safe**, on four independent layers: `queue_payout`'s `ON CONFLICT DO NOTHING`, the sweep's two in-flight filters, CHIP's `reference` dedupe, and `settle_payout`'s `processed_at` no-op.
+**Re-running is always safe**, on four independent layers: `queue_payout`'s `ON CONFLICT DO NOTHING`, the sweep's two in-flight filters, CHIP's `reference` uniqueness ([unverified](./chip-api.md#open-question-repeated-send-instruction-references) for send instructions), and `settle_payout`'s `processed_at` no-op.
 
 ## Early payouts
 
@@ -109,7 +109,7 @@ Organization emails go to owners, admins and the contact address (`loadOrganizat
 
 ## Deliberate differences from refunds
 
-- **A failed payout is terminal, and a retry is a new row** linked via `superseded_by`. A failed refund stays `pending` for a retry on the same row. CHIP Send dedupes on `reference`, so re-sending the same payout id after a hard failure would return the failed instruction forever.
+- **A failed payout is terminal, and a retry is a new row** linked via `superseded_by`. A failed refund stays `pending` for a retry on the same row. CHIP requires a send instruction's `reference` to be unique, so the same payout id can't be sent again after a hard failure.
 - **`payments.organization_id` is always the organizing org**, even when a beneficiary is paid, because the summary view groups on it. A row carrying the beneficiary's id would never drain the organizer's balance. The recipient is on `payouts.recipient_organization_id`.
 - **`chip_transaction_id` is `send_<id>`.** The unique index on that column spans all payment types, and a Send id is a small integer sharing the namespace with Collect purchase uuids.
 - **More settled than available is booked anyway**, flagged `over_payout` and logged at error level. The money has left, so refusing to record it would make the ledger lie.

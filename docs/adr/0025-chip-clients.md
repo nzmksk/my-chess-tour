@@ -12,7 +12,8 @@ directions, a synchronous API response and a webhook, and both have behavior
 their documentation doesn't spell out. [chip-webhook](../wiki/chip-webhook.md)
 covers both webhooks: signatures, key formatting, events and responses.
 [payment-flow](../wiki/payment-flow.md) covers the single payment window and why
-CHIP's `expired` isn't a failure for us.
+CHIP's `expired` isn't a failure for us. [chip-api](../wiki/chip-api.md) lists
+every call, its idempotency and its retries.
 
 ## Decision
 

@@ -83,7 +83,7 @@ One case is left uncovered. A payment made just before its link lapsed may have 
 3. **Send.** `executePrizeAward` (`src/services/prizes/execute.ts`) is the `executePayout` twin. It has the same outcomes (`sent`, `paid`, `failed`, `awaiting_budget`, `blocked`, `skipped`, `error`), the same claim discipline (`claim_prize_award_send` re-checks the tournament and the pool under the lock and snapshots the winner's verified account), the same retry rules (`src/services/payouts/send-errors.ts`) and the same budget parking. `reference` is the award id.
 4. **Settle.** `settle_prize_award` books one `type='player_prize'` row (`user_id` = the winner, `chip_transaction_id` = `send_<instruction id>`), from the synchronous response or the Send webhook, whichever comes first. The winner gets `prize-paid` with CHIP's receipt. An over-settled award is booked anyway and logged at error level, as for payouts.
 
-A **failed** award is terminal, as a failed payout is. CHIP dedupes on `reference`, so the organizer enters the winner again (failed and rejected awards free their prize) and an admin approves the new row. **Retry send** on `/admin/prizes` re-runs an approved award that hasn't gone out.
+A **failed** award is terminal, as a failed payout is. CHIP requires a send instruction's `reference` to be unique, so the award id can't be sent again: the organizer enters the winner again (failed and rejected awards free their prize) and an admin approves the new row. **Retry send** on `/admin/prizes` re-runs an approved award that hasn't gone out.
 
 ### What stops an award
 
