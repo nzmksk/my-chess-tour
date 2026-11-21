@@ -5,7 +5,7 @@ export interface LegalVersion {
 
 export const TERMS_HISTORY: readonly LegalVersion[] = [
   {
-    version: "2026-11-20",
+    version: "2026-11-22",
     changes: [
       "You must be at least 18 years old. If you are under 18, you may use the platform only with a parent's or legal guardian's consent; they accept these terms for you and are responsible for your use of it, including payments. Your name must match your MyKad or passport — it is used for official tournament records and FIDE/MCF registration.",
       "Tournaments follow the FIDE Laws of Chess. You agree to abide by the arbiter's decisions, to compete without computer assistance, and to accept results as final unless you appeal within the time the arbiter sets.",
@@ -20,7 +20,7 @@ export const TERMS_HISTORY: readonly LegalVersion[] = [
       "Privacy Policy: what we collect (account, player profile, financial, business verification and tournament data), how long we keep it, and your rights under the PDPA.",
       "Privacy Policy: your OKU card (health data) and your bank details (financial data) are each collected only with their own explicit consent, a separate checkbox shown when you give us that data and never part of accepting these terms. You can withdraw either at any time in Settings, which deletes the OKU card or removes the bank details.",
       "Privacy Policy: how your data is protected. All of it, your bank details and documents included, is encrypted in transit (HTTPS) and at rest, with access controlled row by row. Once saved, your full bank account number is never shown again — only its last 4 digits — and it is masked in our change logs.",
-      "Privacy Policy: who your data is shared with — FIDE and the MCF for rating and registration, the organisers of tournaments you enter (your name, title, FIDE/MCF IDs and ratings, gender, date of birth, nationality and whether you are verified OKU — never your OKU card or contact details) for pairing, categories and special prizes, CHIP as our payment processor, and Sentry for error monitoring (servers in the United States; reports deleted after 30 days). Business verification documents are not shared with third parties.",
+      "Privacy Policy: who your data is shared with — FIDE and the MCF for rating and registration, the organisers of tournaments you enter (your name, title, FIDE/MCF IDs and ratings, gender, date of birth, nationality and whether you are verified OKU — never your OKU card or contact details) for pairing, categories and special prizes, CHIP as our payment processor, Sentry for error monitoring (servers in the United States; reports deleted after 30 days), and PostHog for usage analytics (no cookies, not linked to your account; servers in the United States; deleted after 1 year). Business verification documents are not shared with third parties.",
     ],
   },
 ];

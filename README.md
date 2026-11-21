@@ -16,6 +16,7 @@ A platform for chess tournaments in Malaysia. Organizers list their events, play
 | Email           | Resend, with HTML templates in `src/services/email/templates/`                           |
 | Rate limits     | Upstash Redis                                                                            |
 | Monitoring      | Sentry (inert until a DSN is set)                                                        |
+| Analytics       | PostHog, cookieless (inert until a project key is set)                                   |
 | Hosting         | Netlify (`next build` / `next start`); scheduled jobs are GitHub Actions                 |
 
 > **Next.js 16 differs from older versions** (`src/proxy.ts` replaces `middleware.ts`, among other changes). Read the relevant guide in `node_modules/next/dist/docs/` before writing framework code. See [AGENTS.md](AGENTS.md).
@@ -48,6 +49,7 @@ npm run dev        # http://localhost:3000
 | `GITHUB_TOKEN`                                                                                                  | Filing in-app bug reports as GitHub issues, and reading the releases for the changelog                                                                  |
 | `GITHUB_WEBHOOK_SECRET`                                                                                         | Signature of the GitHub release webhook that refreshes the cached changelog. See [docs/wiki/releases.md](docs/wiki/releases.md#how-the-site-reads-them) |
 | `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Optional. Leave the DSN unset locally and nothing is sent. See [docs/wiki/error-monitoring.md](docs/wiki/error-monitoring.md)                           |
+| `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`                                                           | Optional. Leave the key unset locally and nothing is sent. See [docs/wiki/analytics.md](docs/wiki/analytics.md)                                         |
 
 `APP_VERSION` and `APP_COMMIT` aren't set anywhere: the build works them out from git.
 
@@ -177,6 +179,7 @@ Set every Netlify variable as described in [On Netlify](#on-netlify): secret or 
 - [ ] **GitHub token for bug reports:** fine-grained, this repository only, Issues read and write, as `GITHUB_TOKEN`. Create the `user-reported` label on the repo.
 - [ ] **GitHub release webhook** to `https://staging.mychesstour.com/api/v1/webhooks/github` (Releases event, JSON), with its secret as `GITHUB_WEBHOOK_SECRET`. It refreshes the cached changelog ([releases.md](docs/wiki/releases.md#how-the-site-reads-them)).
 - [ ] **Sentry** (optional on staging, needed before launch): steps 1–7 of [error-monitoring.md](docs/wiki/error-monitoring.md#setup).
+- [ ] **PostHog** (optional on staging, needed before launch): steps 1–5 of [analytics.md](docs/wiki/analytics.md#setup).
 
 **Netlify (staging site)**
 
@@ -214,13 +217,14 @@ curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
 - [ ] Payout: once a tournament is 3 days past its end, call `/cron/payouts` → send instruction → `paid` → email. Do the same for a platform-distributed prize award.
 - [ ] A bug report from the site files an issue.
 - [ ] Sentry: step 9 of [error-monitoring.md](docs/wiki/error-monitoring.md#9-verify-on-staging).
+- [ ] PostHog: step 6 of [analytics.md](docs/wiki/analytics.md#6-verify-on-staging).
 
 ### Production
 
 **Services** (separate from staging's)
 
 - [ ] **Supabase** project for production, with the same auth settings. No seed data and no QA role, ever.
-- [ ] **Upstash** database, **Resend** sender (the same verified domain is fine) and **Sentry** (the same project; `NEXT_PUBLIC_SENTRY_ENVIRONMENT=production`).
+- [ ] **Upstash** database, **Resend** sender (the same verified domain is fine) **Sentry** (the same project; `NEXT_PUBLIC_SENTRY_ENVIRONMENT=production`) and **PostHog** (the same project key).
 - [ ] **CHIP Collect live** keys (#123) and a webhook to `https://www.mychesstour.com/api/v1/webhooks/chip` with the same events and its own public key.
 - [ ] **CHIP Send production** (`CHIP_SEND_API_URL=https://api.chip-in.asia/api`), webhook registered to the production callback, and the Send balance funded with budget approvers in place.
 - [ ] **Uptime monitor** on `https://www.mychesstour.com` (#572).
@@ -252,6 +256,7 @@ curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
 - [ ] Run each scheduled workflow once from the Actions tab (refunds, payouts, FIDE ratings) and check it succeeds.
 - [ ] Smoke-test with a real small payment, then refund it (#129).
 - [ ] Sentry: repeat step 9.1 against production.
+- [ ] PostHog: repeat step 6 against production.
 - [ ] Close the remaining items in [launch-readiness.md](docs/wiki/launch-readiness.md#10-pre-launch-review-checklist) §10 (privacy wording review, the CHIP Send sandbox run, the one-time database rebuild).
 
 ## Docs
@@ -269,6 +274,7 @@ curl -fsS -X POST -H "Authorization: Bearer $STAGING_CRON_SECRET" \
 | Releases, the version and the changelog                         | [releases.md](docs/wiki/releases.md)                                                                                                                                                                                                                               |
 | Public links vs internal API calls                              | [site-url.md](docs/wiki/site-url.md)                                                                                                                                                                                                                               |
 | Error monitoring                                                | [error-monitoring.md](docs/wiki/error-monitoring.md)                                                                                                                                                                                                               |
+| Product analytics                                               | [analytics.md](docs/wiki/analytics.md)                                                                                                                                                                                                                             |
 | Account deletion runbook                                        | [account-deletion.md](docs/wiki/account-deletion.md)                                                                                                                                                                                                               |
 | QA access to the staging database                               | [staging-db-access.md](docs/wiki/staging-db-access.md)                                                                                                                                                                                                             |
 | Visual design                                                   | [design-system.md](docs/wiki/design-system.md)                                                                                                                                                                                                                     |
