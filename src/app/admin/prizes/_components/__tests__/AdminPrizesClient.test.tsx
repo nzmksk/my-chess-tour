@@ -51,6 +51,24 @@ describe("AdminPrizesClient", () => {
     expect(screen.getByText(/No bank account/)).toBeTruthy();
   });
 
+  it("shows the bank's holder name for the winner's account, and links a mismatch to review", () => {
+    render(
+      <AdminPrizesClient
+        awards={[
+          award({
+            winner_bank_status: "name_mismatch",
+            winner_bank_holder_name: "SOMEONE ELSE",
+            winner_bank_name_check: "mismatch",
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText(/waiting for review/)).toBeTruthy();
+    expect(screen.getByText(/SOMEONE ELSE/)).toBeTruthy();
+    expect(screen.getByText("(doesn't match)")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Review →" }).getAttribute("href")).toBe("/admin/bank-accounts");
+  });
+
   it("approves and reports what the send came to", async () => {
     mockFetch.mockResolvedValue({
       ok: true,

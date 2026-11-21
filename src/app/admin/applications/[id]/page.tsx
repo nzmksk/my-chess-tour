@@ -5,6 +5,10 @@ import { createClient } from "@/services/supabase/server";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import ApplicationDetailClient from "./_components/ApplicationDetailClient";
+import {
+  checkHolderName,
+  type HolderNameCheck,
+} from "@/services/payouts/holder-name";
 
 export const metadata: Metadata = {
   title: "Application Review",
@@ -48,8 +52,10 @@ export interface ApplicationBankAccount {
   bank_code: string;
   account_holder: string;
   account_number_last4: string;
-  status: "pending" | "verified" | "rejected";
+  status: "pending" | "verified" | "rejected" | "name_mismatch";
   rejection_reason: string | null;
+  bank_holder_name: string | null;
+  name_check: HolderNameCheck;
 }
 
 export interface ApplicationDocument {
@@ -152,7 +158,7 @@ export default async function AdminApplicationDetailPage({
     supabaseAdmin
       .from("organization_bank_accounts")
       .select(
-        "bank_name, bank_code, account_holder, account_number, status, rejection_reason",
+        "bank_name, bank_code, account_holder, account_number, status, rejection_reason, bank_holder_name",
       )
       .eq("organization_id", id)
       // The newest row, not the active one: rejecting an application
@@ -185,6 +191,10 @@ export default async function AdminApplicationDetailPage({
 
   // Masked here, in the server component, so the full number never reaches the
   // client bundle — the same rule the API follows.
+  const registeredName =
+    (registeredNameRow as { registered_name: string } | null)
+      ?.registered_name ?? null;
+
   const bankAccount = bankRow
     ? {
         bank_name: bankRow.bank_name,
@@ -193,6 +203,11 @@ export default async function AdminApplicationDetailPage({
         account_number_last4: (bankRow.account_number as string).slice(-4),
         status: bankRow.status,
         rejection_reason: bankRow.rejection_reason,
+        bank_holder_name: bankRow.bank_holder_name as string | null,
+        name_check: checkHolderName(
+          bankRow.bank_holder_name as string | null,
+          registeredName ?? (bankRow.account_holder as string),
+        ),
       }
     : null;
 
@@ -219,9 +234,7 @@ export default async function AdminApplicationDetailPage({
         application={
           {
             ...data,
-            registered_name:
-              (registeredNameRow as { registered_name: string } | null)
-                ?.registered_name ?? null,
+            registered_name: registeredName,
             bank_account: bankAccount,
             documents,
             history: historyRows ?? [],

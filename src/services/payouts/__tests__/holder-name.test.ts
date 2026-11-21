@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { holderNamesMatch, normalizeHolderName } from "../holder-name";
+import {
+  checkHolderName,
+  holderNamesMatch,
+  normalizeHolderName,
+} from "../holder-name";
 
 describe("normalizeHolderName", () => {
   it("uppercases, strips accents and punctuation, and collapses whitespace", () => {
@@ -105,5 +109,17 @@ describe("holderNamesMatch", () => {
     ["BIN", "Binti"],
   ])("never matches a missing or empty name (%s, %s)", (bank, expected) => {
     expect(holderNamesMatch(bank, expected)).toBe(false);
+  });
+});
+
+describe("checkHolderName", () => {
+  it("reports a name CHIP never returned as not recorded", () => {
+    expect(checkHolderName(null, "Ahmad")).toBe("not_recorded");
+    expect(checkHolderName("  ", "Ahmad")).toBe("not_recorded");
+  });
+
+  it("reports whether a returned name matches", () => {
+    expect(checkHolderName("AHMAD BIN ALI", "Ahmad Ali")).toBe("match");
+    expect(checkHolderName("SITI", "Ahmad Ali")).toBe("mismatch");
   });
 });

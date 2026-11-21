@@ -3,6 +3,7 @@ import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
 import { describePayoutFailure } from "./failure-reason";
 import { describeEarlyPayoutProblem } from "./recipient-problem";
 import { canResend } from "./resend";
+import { checkHolderName, type HolderNameCheck } from "./holder-name";
 
 export const DOCUMENT_URL_TTL_SECONDS = 300;
 
@@ -21,8 +22,10 @@ export interface PayoutReviewBankAccount {
   bank_name: string;
   account_holder: string;
   account_number_last4: string;
-  status: "pending" | "verified" | "rejected";
+  status: "pending" | "verified" | "rejected" | "name_mismatch";
   is_active: boolean;
+  bank_holder_name: string | null;
+  name_check: HolderNameCheck;
 }
 
 export interface PayoutReviewDocument {
@@ -65,6 +68,7 @@ export interface PayoutReview {
     agreement_version: string | null;
     agreement_accepted_at: string | null;
     agreement_current: boolean;
+    registered_name: string | null;
   };
   bank_account: PayoutReviewBankAccount | null;
   documents: PayoutReviewDocument[];
@@ -85,6 +89,7 @@ interface RawBank {
   account_number: string;
   status: PayoutReviewBankAccount["status"];
   is_active: boolean;
+  bank_holder_name: string | null;
 }
 
 function one<T>(value: T | T[] | null | undefined): T | null {
@@ -92,7 +97,10 @@ function one<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-function mask(bank: RawBank | null): PayoutReviewBankAccount | null {
+function mask(
+  bank: RawBank | null,
+  registeredName: string | null,
+): PayoutReviewBankAccount | null {
   if (!bank) return null;
   return {
     bank_name: bank.bank_name,
@@ -100,13 +108,19 @@ function mask(bank: RawBank | null): PayoutReviewBankAccount | null {
     account_number_last4: bank.account_number.slice(-4),
     status: bank.status,
     is_active: bank.is_active,
+    bank_holder_name: bank.bank_holder_name ?? null,
+    name_check: checkHolderName(
+      bank.bank_holder_name,
+      registeredName ?? bank.account_holder,
+    ),
   };
 }
 
 const fullName = (u: RawUser) =>
   [u.first_name, u.last_name].filter(Boolean).join(" ") || "Unknown";
 
-const BANK_COLUMNS = "bank_name, account_holder, account_number, status, is_active";
+const BANK_COLUMNS =
+  "bank_name, account_holder, account_number, status, is_active, bank_holder_name";
 
 export async function loadPayoutReview(
   payoutId: string,
@@ -153,8 +167,8 @@ export async function loadPayoutReview(
     reviewer: RawUser | RawUser[] | null;
     tournament: PayoutReview["tournament"] | PayoutReview["tournament"][] | null;
     recipient:
-      | Omit<PayoutReview["organization"], "agreement_current">
-      | Omit<PayoutReview["organization"], "agreement_current">[]
+      | Omit<PayoutReview["organization"], "agreement_current" | "registered_name">
+      | Omit<PayoutReview["organization"], "agreement_current" | "registered_name">[]
       | null;
     bank: RawBank | RawBank[] | null;
   };
@@ -167,7 +181,7 @@ export async function loadPayoutReview(
 
   const pending = p.approval === "pending";
 
-  const [capRes, problemRes, activeBankRes, documentsRes] = await Promise.all([
+  const [capRes, problemRes, activeBankRes, documentsRes, registeredNameRes] = await Promise.all([
     supabaseAdmin.rpc("early_payout_cap", {
       p_tournament_id: p.tournament_id,
       p_exclude_payout_id: p.id,
@@ -191,10 +205,19 @@ export async function loadPayoutReview(
       .select("id, doc_type, storage_path, original_filename")
       .eq("organization_id", p.recipient_organization_id)
       .order("created_at", { ascending: true }),
+    supabaseAdmin
+      .from("organization_registered_names")
+      .select("registered_name")
+      .eq("organization_id", p.recipient_organization_id)
+      .maybeSingle(),
   ]);
 
   const loadError =
-    capRes.error ?? problemRes.error ?? activeBankRes.error ?? documentsRes.error;
+    capRes.error ??
+    problemRes.error ??
+    activeBankRes.error ??
+    documentsRes.error ??
+    registeredNameRes.error;
   if (loadError) return { data: null, error: loadError.message };
 
   const cap = one(capRes.data as EarlyPayoutCap | EarlyPayoutCap[] | null);
@@ -219,6 +242,8 @@ export async function loadPayoutReview(
     }),
   );
 
+  const registeredName =
+    (registeredNameRes.data as { registered_name: string } | null)?.registered_name ?? null;
   const requester = one(p.requester);
   const reviewer = one(p.reviewer);
   const problem = problemRes.data as string | null;
@@ -246,8 +271,12 @@ export async function loadPayoutReview(
       organization: {
         ...recipient,
         agreement_current: recipient.agreement_version === ORGANIZER_AGREEMENT_VERSION,
+        registered_name: registeredName,
       },
-      bank_account: mask(pending ? (activeBankRes.data as RawBank | null) : one(p.bank)),
+      bank_account: mask(
+        pending ? (activeBankRes.data as RawBank | null) : one(p.bank),
+        registeredName,
+      ),
       documents,
       cap: {
         net_revenue_cents: Number(cap.net_revenue_cents),

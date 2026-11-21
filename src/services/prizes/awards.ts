@@ -1,4 +1,8 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
+import {
+  checkHolderName,
+  type HolderNameCheck,
+} from "@/services/payouts/holder-name";
 
 export interface PrizeAwardView {
   id: string;
@@ -19,12 +23,19 @@ export interface PrizeAwardView {
   entered_at: string;
   reviewed_at: string | null;
   processed_at: string | null;
-  winner_bank_status: "pending" | "verified" | "rejected" | null;
+  winner_bank_status: "pending" | "verified" | "rejected" | "name_mismatch" | null;
+  winner_bank_holder_name?: string | null;
+  winner_bank_name_check?: HolderNameCheck | null;
 }
 
 interface AwardRow extends Omit<
   PrizeAwardView,
-  "tournament_name" | "organization_name" | "winner_name" | "winner_bank_status"
+  | "tournament_name"
+  | "organization_name"
+  | "winner_name"
+  | "winner_bank_status"
+  | "winner_bank_holder_name"
+  | "winner_bank_name_check"
 > {
   tournament: { name: string | null; organization: { name: string | null } | null } | null;
   winner: { first_name: string | null; last_name: string | null } | null;
@@ -40,31 +51,52 @@ export type AwardsResult =
   | { ok: true; awards: PrizeAwardView[] }
   | { ok: false; error: { code?: string; message: string } };
 
-async function toViews(rows: AwardRow[]): Promise<AwardsResult> {
+interface WinnerBank {
+  user_id: string;
+  status: PrizeAwardView["winner_bank_status"];
+  account_holder?: string;
+  bank_holder_name?: string | null;
+}
+
+async function toViews(
+  rows: AwardRow[],
+  { withHolderNames = false }: { withHolderNames?: boolean } = {},
+): Promise<AwardsResult> {
   const userIds = [...new Set(rows.map((r) => r.user_id).filter((id): id is string => !!id))];
-  const bankStatus = new Map<string, PrizeAwardView["winner_bank_status"]>();
+  const banks = new Map<string, WinnerBank>();
   if (userIds.length > 0) {
     const { data, error } = await supabaseAdmin
       .from("player_bank_accounts")
-      .select("user_id, status")
+      .select(
+        withHolderNames ? "user_id, status, account_holder, bank_holder_name" : "user_id, status",
+      )
       .in("user_id", userIds)
       .eq("is_active", true);
     if (error) return { ok: false, error: { code: error.code, message: error.message } };
-    for (const b of (data ?? []) as { user_id: string; status: PrizeAwardView["winner_bank_status"] }[]) {
-      bankStatus.set(b.user_id, b.status);
+    for (const b of (data ?? []) as unknown as WinnerBank[]) {
+      banks.set(b.user_id, b);
     }
   }
 
   return {
     ok: true,
-    awards: rows.map(({ tournament, winner, ...r }) => ({
-      ...r,
-      tournament_name: tournament?.name ?? null,
-      organization_name: tournament?.organization?.name ?? null,
-      winner_name:
-        [winner?.first_name, winner?.last_name].filter(Boolean).join(" ") || "Deleted account",
-      winner_bank_status: r.user_id ? (bankStatus.get(r.user_id) ?? null) : null,
-    })),
+    awards: rows.map(({ tournament, winner, ...r }) => {
+      const bank = r.user_id ? banks.get(r.user_id) : undefined;
+      return {
+        ...r,
+        tournament_name: tournament?.name ?? null,
+        organization_name: tournament?.organization?.name ?? null,
+        winner_name:
+          [winner?.first_name, winner?.last_name].filter(Boolean).join(" ") || "Deleted account",
+        winner_bank_status: bank?.status ?? null,
+        ...(withHolderNames && {
+          winner_bank_holder_name: bank?.bank_holder_name ?? null,
+          winner_bank_name_check: bank
+            ? checkHolderName(bank.bank_holder_name, bank.account_holder)
+            : null,
+        }),
+      };
+    }),
   };
 }
 
@@ -95,7 +127,9 @@ export async function listAdminAwards(): Promise<AwardsResult> {
   ]);
   const error = open.error ?? recent.error;
   if (error) return { ok: false, error: { code: error.code, message: error.message } };
-  return toViews([...(open.data ?? []), ...(recent.data ?? [])] as unknown as AwardRow[]);
+  return toViews([...(open.data ?? []), ...(recent.data ?? [])] as unknown as AwardRow[], {
+    withHolderNames: true,
+  });
 }
 
 export function canRetryAward(award: {

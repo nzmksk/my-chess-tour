@@ -85,6 +85,8 @@ describe("listTournamentAwards", () => {
     expect(calls[1].table).toBe("player_bank_accounts");
     expect(calls[1].ops).toContainEqual(["in", "user_id", ["u1", "u2"]]);
     expect(calls[1].ops).toContainEqual(["eq", "is_active", true]);
+    expect(calls[1].ops).toContainEqual(["select", "user_id, status"]);
+    expect(result.awards[0]).not.toHaveProperty("winner_bank_holder_name");
   });
 
   it("names a deleted winner and skips the bank lookup when nobody has an account id", async () => {
@@ -158,6 +160,31 @@ describe("listAdminAwards", () => {
     expect(calls[0].ops).toContainEqual(["is", "processed_at", null]);
     expect(calls[1].ops).toContainEqual(["or", "processed_at.not.is.null,approval.eq.rejected"]);
     expect(calls[1].ops).toContainEqual(["limit", 50]);
+  });
+
+  it("adds each winner's bank holder name and whether it matches the submitted holder", async () => {
+    results.push(
+      { data: [row({ id: "a1", user_id: "u1" }), row({ id: "a2", user_id: "u2" })], error: null },
+      { data: [], error: null },
+      {
+        data: [
+          { user_id: "u1", status: "verified", account_holder: "Aina Rahman", bank_holder_name: "AINA BINTI RAHMAN" },
+          { user_id: "u2", status: "name_mismatch", account_holder: "Ben", bank_holder_name: "SOMEONE ELSE" },
+        ],
+        error: null,
+      },
+    );
+
+    const result = await listAdminAwards();
+
+    expect(calls[2].ops).toContainEqual(["select", "user_id, status, account_holder, bank_holder_name"]);
+    expect(
+      result.ok &&
+        result.awards.map((a) => [a.id, a.winner_bank_status, a.winner_bank_holder_name, a.winner_bank_name_check]),
+    ).toEqual([
+      ["a1", "verified", "AINA BINTI RAHMAN", "match"],
+      ["a2", "name_mismatch", "SOMEONE ELSE", "mismatch"],
+    ]);
   });
 
   it("copes with null data from both queries", async () => {

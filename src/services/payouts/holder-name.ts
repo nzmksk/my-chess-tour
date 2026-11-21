@@ -100,3 +100,13 @@ export function holderNamesMatch(
     expectedCompact.startsWith(bankCompact)
   );
 }
+
+export type HolderNameCheck = "match" | "mismatch" | "not_recorded";
+
+export function checkHolderName(
+  bankName: string | null | undefined,
+  expectedName: string | null | undefined,
+): HolderNameCheck {
+  if (!bankName?.trim()) return "not_recorded";
+  return holderNamesMatch(bankName, expectedName) ? "match" : "mismatch";
+}

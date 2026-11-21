@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import BankHolderNameCheck from "@/components/BankHolderNameCheck";
 import type {
   ApplicationDetail,
   ApplicationEvent,
@@ -30,6 +31,7 @@ const BANK_STATUS_LABELS: Record<string, string> = {
   pending: "Awaiting verification",
   verified: "Verified",
   rejected: "Rejected",
+  name_mismatch: "Holder name doesn't match: waiting for review",
 };
 
 const STATUS_CONFIG: Record<
@@ -384,6 +386,15 @@ export default function ApplicationDetailClient({ application }: Props) {
               </DetailRow>
               <DetailRow label="Account Holder">
                 {application.bank_account.account_holder}
+              </DetailRow>
+              <DetailRow label="Bank's Holder Name">
+                <BankHolderNameCheck
+                  bankHolderName={application.bank_account.bank_holder_name}
+                  check={application.bank_account.name_check}
+                  underReview={
+                    application.bank_account.status === "name_mismatch"
+                  }
+                />
               </DetailRow>
               {/* Last 4 only. No surface in this application ever renders or
                   returns the full number. */}
