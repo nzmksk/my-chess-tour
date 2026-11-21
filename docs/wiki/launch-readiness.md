@@ -368,7 +368,8 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 
 ### S6. Observability (error monitoring / analytics) — ⚠️ Partial (Sentry code built, not switched on)
 - **Sentry is wired in (#125)** but sends nothing until `NEXT_PUBLIC_SENTRY_DSN` is set. It covers thrown server errors (`onRequestError`), every handled `console.error` (`captureConsoleIntegration`), so P10's "logged for manual ops" reconciliations and failed refund settlements (#499) now surface, plus uncaught browser errors and the root error boundary. The remaining work is account and Netlify setup: [error-monitoring.md](./error-monitoring.md) §Setup, including a privacy-policy addition that needs review.
-- **Gaps:** no uptime monitor (#572); no analytics (Plausible/Umami), which is 🟢.
+- **PostHog analytics is wired in (#126)**, browser-only and cookieless, and sends nothing until `NEXT_PUBLIC_POSTHOG_KEY` is set. Pageviews, page leaves and click autocapture with page text masked; visitors are never identified; URLs are scrubbed of tokens before sending. The remaining work is account and Netlify setup: [analytics.md](./analytics.md) §Setup, including a privacy-policy addition that needs review.
+- **Gaps:** no uptime monitor (#572).
 - **Priority:** 🔴 (operational) — complete the Sentry setup + add an uptime check before launch.
 
 ### S7. Schema groundwork (identity indirection + ledger integrity) — ✅ Built, not yet applied

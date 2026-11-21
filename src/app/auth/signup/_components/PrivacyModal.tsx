@@ -260,6 +260,10 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
                 <td>30 days, then deleted automatically</td>
               </tr>
               <tr>
+                <td>Usage analytics (PostHog)</td>
+                <td>1 year, then deleted automatically</td>
+              </tr>
+              <tr>
                 <td>Business verification documents (organisers)</td>
                 <td>Up to 1 year after the organiser partnership ends</td>
               </tr>
@@ -376,6 +380,17 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
               these reports are processed outside Malaysia. We do not send your
               IP address or cookies, and reports are deleted after 30 days.
             </li>
+            <li>
+              <strong>PostHog (posthog.com)</strong> — our usage-analytics
+              service. It receives which pages you visit and what you click on
+              them, your browser and device type, and an approximate location
+              worked out from your IP address, which PostHog does not store. It
+              works without cookies or anything else stored on your device, it
+              is not linked to your account, and we remove sign-in codes and
+              other private details from page addresses before they are sent.
+              PostHog&apos;s servers are in the United States, so this data is
+              processed outside Malaysia.
+            </li>
           </ul>
           <p className="modal-paragraph">
             Business verification documents are not shared with third parties.
@@ -386,7 +401,9 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
           <h3 className="modal-section-title">8. Cookies</h3>
           <p className="modal-paragraph">
             We use session cookies essential for authentication and platform
-            functionality. We do not use advertising or tracking cookies.
+            functionality. We do not use advertising or tracking cookies. Our
+            usage analytics (PostHog, section 7) works without cookies or any
+            other storage on your device.
           </p>
 
           <h3 className="modal-section-title">9. Changes to This Policy</h3>

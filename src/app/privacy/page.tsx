@@ -289,6 +289,14 @@ export default function PrivacyPage() {
                       </td>
                     </tr>
                     <tr>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        Usage analytics (PostHog)
+                      </td>
+                      <td className="border-border text-text-secondary border-b px-3 py-2">
+                        1 year, then deleted automatically
+                      </td>
+                    </tr>
+                    <tr>
                       <td className="text-text-secondary px-3 py-2">
                         Business verification documents (organisers)
                       </td>
@@ -425,6 +433,17 @@ export default function PrivacyPage() {
                   outside Malaysia. We do not send your IP address or cookies,
                   and reports are deleted after 30 days.
                 </li>
+                <li>
+                  <strong>PostHog (posthog.com)</strong> — our usage-analytics
+                  service. It receives which pages you visit and what you click
+                  on them, your browser and device type, and an approximate
+                  location worked out from your IP address, which PostHog does
+                  not store. It works without cookies or anything else stored on
+                  your device, it is not linked to your account, and we remove
+                  sign-in codes and other private details from page addresses
+                  before they are sent. PostHog&apos;s servers are in the United
+                  States, so this data is processed outside Malaysia.
+                </li>
               </ul>
               <p className="text-text-secondary mt-2">
                 Business verification documents are not shared with third
@@ -440,6 +459,8 @@ export default function PrivacyPage() {
               <p className="text-text-secondary">
                 We use session cookies essential for authentication and platform
                 functionality. We do not use advertising or tracking cookies.
+                Our usage analytics (PostHog, section 7) works without cookies
+                or any other storage on your device.
               </p>
             </section>
 
