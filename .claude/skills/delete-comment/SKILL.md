@@ -71,8 +71,9 @@ How to tell them apart:
 **Decision records.** Group related ones into a single ADR per decision, not
 one per comment. Search `docs/adr/` first and extend an existing record if it
 covers the same decision, rather than writing a near-duplicate. New records
-follow `docs/adr/template.md`, take the next number, name the files and
-identifiers they govern, and go in the index in `docs/adr/README.md`. Write
+follow `docs/adr/template.md`, take the next number, and name the files and
+identifiers they govern. Regenerate the index in `docs/adr/README.md` with
+`node .claude/skills/delete-comment/scripts/adr-index.mjs`. Write
 them for someone who hasn't seen the comment: the decision, the reason, and
 what a change must preserve. Drop issue-tracker chatter but keep the issue
 number.
@@ -87,7 +88,8 @@ gh issue create --label refactoring --title "<what to fix>" --body "<where, what
 Link the issues in the PR description.
 
 **Delete.** Put the keys of every comment to remove, including the ones moved to
-ADRs, one per line in a file in the scratchpad (`# notes` after a key are
+ADRs, one per line in a file in the scratchpad (`list-comments.mjs --keys <path ...>`
+prints every key in a path) (`# notes` after a key are
 ignored), then:
 
 ```sh

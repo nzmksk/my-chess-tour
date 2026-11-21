@@ -3,7 +3,8 @@ import { commentsIn, lintedFiles } from "./comments.mjs";
 
 const args = process.argv.slice(2);
 const summary = args[0] === "--summary";
-const rest = summary ? args.slice(1) : args;
+const keysOnly = args[0] === "--keys";
+const rest = summary || keysOnly ? args.slice(1) : args;
 const paths = rest.length ? rest : ["."];
 
 const counts = [];
@@ -24,6 +25,10 @@ for (const file of lintedFiles(paths)) {
       .replace(/^\s*\}/, "");
     if (!before.trim() && !after.trim()) ownLines += c.endLine - c.line + 1;
     if (summary) continue;
+    if (keysOnly) {
+      console.log(c.key);
+      continue;
+    }
 
     const next = lines
       .slice(c.endLine)
