@@ -386,7 +386,7 @@ BEGIN
     RAISE EXCEPTION 'C1 FAIL: a pending bank account was accepted';
   END IF;
 
-  v_res := settle_bank_account_verification(v_bank1, 930101, true);
+  v_res := settle_bank_account_verification(v_bank1, 930101, true, NULL, 'PLAYER ONE', true);
   IF v_res->>'owner' <> 'player' OR (v_res->>'user_id')::uuid <> v_p[1]
      OR v_res->>'organization_id' IS NOT NULL OR (v_res->>'already_processed')::boolean THEN
     RAISE EXCEPTION 'C1 FAIL: player verification settle: %', v_res;
@@ -445,7 +445,7 @@ BEGIN
   PERFORM review_prize_award(v_award2, v_admin, 'approve', NULL);
   PERFORM record_sensitive_data_consent(v_p[2], 'financial', true, '2026-11-19');
   v_bank2 := (set_player_bank_account(v_p[2], 'CIBBMYKL', 'CIMB Bank', 'Player Two', '800000000202') ->> 'id')::uuid;
-  PERFORM settle_bank_account_verification(v_bank2, 930202, true);
+  PERFORM settle_bank_account_verification(v_bank2, 930202, true, NULL, 'PLAYER TWO', true);
   IF claim_prize_award_send(v_award2) IS NOT NULL THEN
     RAISE EXCEPTION 'S2 FAIL: could not claim award 2';
   END IF;

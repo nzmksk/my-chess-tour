@@ -51,6 +51,7 @@ DECLARE
     'claim_refund_fire',
     'list_stuck_refunds',
     'settle_bank_account_verification',
+    'review_bank_account_name',
     'payout_recipient_problem',
     'nominate_payout_beneficiary',
     'accept_payout_nomination',
