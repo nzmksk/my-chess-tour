@@ -67,6 +67,6 @@ callers pass the deadline as the fallback. "Closed early" is
 
 - None of the picklist zones observe DST, but nothing assumes it: offsets are
   always looked up against a concrete instant.
-- See [api-design](../../wiki/api-design.md) for the wire
-  format, and [tournament-editing](../../wiki/tournament-editing.md) for how
+- See [api-design](../wiki/api-design.md) for the wire
+  format, and [tournament-editing](../wiki/tournament-editing.md) for how
   the stages use the venue's today.

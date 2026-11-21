@@ -40,7 +40,7 @@ lowered with `npx eslint --prune-suppressions`. The `/delete-comment` skill
 
 SQL (`supabase/`), shell, YAML and HTML templates aren't linted by ESLint and
 are outside the rule. The migrations in `supabase/migrations` are append-only
-([database-migrations](../../wiki/database-migrations.md)), so their comments
+([database-migrations](../wiki/database-migrations.md)), so their comments
 stay as written.
 
 ## Consequences

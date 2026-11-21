@@ -1,7 +1,7 @@
 name: Staging database migrations
 
 # Applies the migrations in supabase/migrations that the staging database
-# hasn't run yet (#631). See wiki/database-migrations.md.
+# hasn't run yet (#631). See docs/wiki/database-migrations.md.
 #
 # No pull_request trigger: a PR runs the workflow file from its own branch, so
 # it could be edited to leak the database URL. The URL is a secret of the

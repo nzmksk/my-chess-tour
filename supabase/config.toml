@@ -2,7 +2,7 @@
 #
 # Only `supabase db start` uses this: it runs the Supabase Postgres image with
 # the auth and storage schemas and applies supabase/migrations, which is what
-# the database tests run against (wiki/database-migrations.md). Every setting
+# the database tests run against (docs/wiki/database-migrations.md). Every setting
 # left out takes the CLI's default.
 #
 # `supabase db push --db-url` (staging and production) ignores everything here.
