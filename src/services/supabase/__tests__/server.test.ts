@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const { mockGetAll, mockSet, mockCreateServerClient } = vi.hoisted(() => ({
   mockGetAll: vi.fn().mockReturnValue([]),
   mockSet: vi.fn(),
@@ -24,10 +20,6 @@ vi.mock("@supabase/ssr", () => ({
 }));
 
 import { createClient } from "../server";
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("createClient", () => {
   beforeEach(() => {

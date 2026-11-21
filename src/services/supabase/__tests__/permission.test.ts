@@ -13,7 +13,6 @@ import { lookupAppUserId } from "@/services/supabase/identity";
 import { appIdFor } from "@/test/identity";
 import { runWithAuditContext, withAuditHeaders } from "../audit-context";
 
-// Stubbed globally in src/test/setup.ts to return the auth id unchanged.
 const mockLookupAppUserId = vi.mocked(lookupAppUserId);
 
 vi.mock("next/headers", () => ({
@@ -32,9 +31,6 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 const createClient = vi.mocked(supabaseServer.createClient);
 const mockAdmin = vi.mocked(supabaseAdmin);
 
-// getNavUser issues two admin reads: the users avatar lookup and the org
-// memberships query (getUserOrganizations). Route by table so both chains
-// resolve independently.
 function mockAdminNavQueries(
   avatarData: { avatar_url?: string } | null,
   orgRows: unknown[] = [],
@@ -46,7 +42,6 @@ function mockAdminNavQueries(
       }),
     }),
   };
-  // organization_memberships: select → eq → eq → is → order → { data }
   const membershipsChain = {
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
@@ -63,10 +58,6 @@ function mockAdminNavQueries(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeClient({
   claims = null as unknown,
   rpcResult = null as unknown,
@@ -78,10 +69,6 @@ function makeClient({
     },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("getNavUser", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -105,10 +92,6 @@ describe("getNavUser", () => {
 
     expect(result).toEqual({
       claims: {
-        // id is the public.users.id resolved from the JWT sub via
-        // users.auth_user_id; authUserId keeps the raw auth id. The global test
-        // stub deliberately makes them differ so a route conflating the two
-        // fails (src/test/setup.ts).
         id: appIdFor("u1"),
         authUserId: "u1",
         email: "alice@example.com",
@@ -261,14 +244,6 @@ describe("requireGlobalPermission", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Identity indirection (#501)
-//
-// The JWT carries an AUTH id; every application table keys off public.users.id.
-// resolveAuthClaims is the only place that bridges the two, so these cover the
-// bridge itself rather than any one route.
-// ---------------------------------------------------------------------------
-
 describe("identity resolution", () => {
   const claims = {
     sub: "auth-abc",
@@ -289,16 +264,12 @@ describe("identity resolution", () => {
 
     const identity = await getCurrentUser();
 
-    // The two differ here on purpose — that is the whole point of the column.
     expect(identity?.id).toBe("app-xyz");
     expect(identity?.authUserId).toBe("auth-abc");
     expect(mockLookupAppUserId).toHaveBeenCalledWith("auth-abc");
   });
 
   it("fails closed when a valid session has no linked users row", async () => {
-    // Only reachable if the handle_new_user trigger failed, leaving a signup
-    // half-provisioned. Returning an identity here would let callers write rows
-    // against an id that does not exist.
     mockLookupAppUserId.mockResolvedValue(null);
     createClient.mockResolvedValue(makeClient({ claims }) as never);
 
@@ -326,11 +297,6 @@ describe("identity resolution", () => {
     expect(await getAppUserId()).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Audit attribution (#470): resolving the session names the request's actor,
-// so every write the route makes through supabaseAdmin is attributed to it.
-// ---------------------------------------------------------------------------
 
 describe("audit actor", () => {
   const claims = {

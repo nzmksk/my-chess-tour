@@ -1474,11 +1474,6 @@
       "count": 70
     }
   },
-  "src/services/oku/notify.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
   "src/services/payouts/__tests__/bank-account.test.ts": {
     "local/no-comments": {
       "count": 26
@@ -1632,91 +1627,6 @@
   "src/services/prizes/sweep.ts": {
     "local/no-comments": {
       "count": 16
-    }
-  },
-  "src/services/refunds/__tests__/fire.test.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/services/refunds/__tests__/sweep.test.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/services/refunds/fire.ts": {
-    "local/no-comments": {
-      "count": 21
-    }
-  },
-  "src/services/refunds/notify.ts": {
-    "local/no-comments": {
-      "count": 3
-    }
-  },
-  "src/services/refunds/stuck.ts": {
-    "local/no-comments": {
-      "count": 3
-    }
-  },
-  "src/services/refunds/sweep.ts": {
-    "local/no-comments": {
-      "count": 29
-    }
-  },
-  "src/services/supabase/__tests__/admin.test.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/supabase/__tests__/identity.test.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/supabase/__tests__/permission.test.ts": {
-    "local/no-comments": {
-      "count": 30
-    }
-  },
-  "src/services/supabase/__tests__/server.test.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/supabase/__tests__/storage.test.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/services/supabase/admin.ts": {
-    "local/no-comments": {
-      "count": 7
-    }
-  },
-  "src/services/supabase/audit-context.ts": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "src/services/supabase/identity.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/services/supabase/permission.ts": {
-    "local/no-comments": {
-      "count": 42
-    }
-  },
-  "src/services/supabase/server.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/services/supabase/storage.ts": {
-    "local/no-comments": {
-      "count": 7
     }
   }
 }
