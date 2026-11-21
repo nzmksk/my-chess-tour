@@ -24,22 +24,16 @@ export default function NavBar() {
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerOpen = getIsDrawerOpen(drawerState, pathname ?? "");
 
-  // User + orgs come from the shared auth store (seeded by AuthProvider and
-  // kept live there) — no per-navigation fetch here. The avatar is read inside
-  // OrgSwitcher, which owns the desktop account control.
   const authUser = useAuthStore((s) => s.user);
   const organizations = useAuthStore((s) => s.organizations);
   const [, startSignOut] = useTransition();
 
-  // Sign out immediately — no confirmation. The action clears the session and
-  // redirects to the signed-out screen.
   function handleSignOut() {
     startSignOut(() => {
       logout();
     });
   }
 
-  // Prevent body scroll when drawer is open
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? "hidden" : "";
     return () => {
@@ -47,7 +41,6 @@ export default function NavBar() {
     };
   }, [drawerOpen]);
 
-  // Hide closed drawer from keyboard and assistive tech
   useEffect(() => {
     const el = drawerRef.current;
     if (!el) return;
@@ -62,7 +55,6 @@ export default function NavBar() {
     <>
       <nav className="bg-bg-sunken border-border sticky top-0 z-50 border-b">
         <div className="mx-auto flex h-16 max-w-300 items-center justify-between px-10">
-          {/* Brand logo */}
           <Link href="/" className="flex shrink-0 items-center">
             <Image
               src="/mct-logo-horizontal.svg"
@@ -73,7 +65,6 @@ export default function NavBar() {
             />
           </Link>
 
-          {/* Desktop nav */}
           <div className="hidden items-center gap-2 sm:flex">
             {NAV_LINKS.map(({ href, label, ghost }) => (
               <Link
@@ -92,10 +83,6 @@ export default function NavBar() {
             <ThemeToggle />
 
             {authUser ? (
-              // Account & organization switcher — the single authed control.
-              // It carries the personal account, org switching, and the account
-              // actions (Settings / Sign Out) that used to live in a separate
-              // avatar menu.
               <OrgSwitcher />
             ) : (
               <>
@@ -109,7 +96,6 @@ export default function NavBar() {
             )}
           </div>
 
-          {/* Hamburger button — visible on small screens only */}
           <button
             className="text-text-secondary flex cursor-pointer items-center border-0 bg-transparent p-2 sm:hidden"
             onClick={() => setDrawerState(openDrawer(pathname ?? ""))}
@@ -122,7 +108,6 @@ export default function NavBar() {
         </div>
       </nav>
 
-      {/* Backdrop */}
       <div
         className={
           drawerOpen ? "nav-backdrop nav-backdrop--open" : "nav-backdrop"
@@ -130,7 +115,6 @@ export default function NavBar() {
         onClick={() => setDrawerState((current) => closeDrawer(current))}
       />
 
-      {/* Slide-in drawer from right */}
       <div
         id="nav-drawer"
         ref={drawerRef}
@@ -139,7 +123,6 @@ export default function NavBar() {
         role="dialog"
         aria-label="Navigation menu"
       >
-        {/* Close button */}
         <div className="mb-8 flex justify-end">
           <button
             onClick={() => setDrawerState((current) => closeDrawer(current))}
@@ -150,7 +133,6 @@ export default function NavBar() {
           </button>
         </div>
 
-        {/* Theme toggle in drawer */}
         <div className="mb-4 flex items-center gap-3 px-1">
           <ThemeToggle />
           <span className="text-text-muted) font-lato text-sm tracking-widest uppercase">
@@ -158,7 +140,6 @@ export default function NavBar() {
           </span>
         </div>
 
-        {/* Drawer nav links */}
         <div className="flex flex-col gap-1">
           {NAV_LINKS.map(({ href, label }) => (
             <Link
@@ -192,9 +173,6 @@ export default function NavBar() {
                 My Tournaments
               </Link>
 
-              {/* Mobile equivalent of the desktop OrgSwitcher: the popover is
-                  desktop-oriented, so in the drawer the memberships render as a
-                  flat list of links. */}
               <p className="font-cinzel text-text-muted mt-2 px-1 text-xs font-bold tracking-widest uppercase">
                 Organizations
               </p>

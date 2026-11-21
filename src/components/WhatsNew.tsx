@@ -20,21 +20,11 @@ import {
 } from "@/lib/changelog";
 import { formatLegalVersion } from "@/lib/reference/legal";
 
-/** The last release this browser was told about. Works signed out too. */
 export const LAST_SEEN_KEY = "mct:lastSeenVersion";
 
-/**
- * Flows the dialog would get in the way of. It waits for the next ordinary
- * page instead: nothing is read or stored on these.
- */
 const QUIET_PATHS = [
-  // Checkout and the payment success / failure pages it returns to.
   /^\/tournaments\/[^/]+\/register(\/|$)/,
-  // Signing in, signing up, verifying and resetting a password. Sign-in is
-  // part of checkout too: a signed-out player opening /register is sent to
-  // /auth/login?next=..., and the release would be marked seen mid-flow.
   /^\/auth(\/|$)/,
-  // Sponsors returning from paying into a prize pool.
   /^\/prize-funding(\/|$)/,
 ];
 
@@ -42,7 +32,6 @@ export function isQuietPath(pathname: string): boolean {
   return QUIET_PATHS.some((pattern) => pattern.test(pathname));
 }
 
-/** `undefined` when storage can't be read (private mode, blocked). */
 function readLastSeen(): string | null | undefined {
   try {
     return window.localStorage.getItem(LAST_SEEN_KEY);
@@ -62,10 +51,6 @@ function writeLastSeen(version: string): boolean {
 
 type Shown = { entry: ChangelogEntry; missed: number; open: boolean };
 
-/**
- * The releases newer than `after` that this build carries, from the GitHub
- * release notes (#640). Throws when they can't be loaded.
- */
 export async function fetchMissedReleases(
   after: string,
 ): Promise<readonly ChangelogEntry[]> {
@@ -79,18 +64,6 @@ export async function fetchMissedReleases(
   return body.data.entries;
 }
 
-/**
- * "What's new" (#622): the first ordinary page view after a new release shows
- * that release's changelog entry, once. A first-ever visit stores the version
- * quietly instead, and several skipped releases still mean one dialog, for
- * the newest. Decided in an effect, so nothing renders during SSR or
- * hydration. Radix's dialog traps focus, closes on Esc, returns focus where
- * it was, and labels itself by its title.
- *
- * The releases are only fetched when this browser has missed one (#640). If
- * that fails, nothing is stored or shown, and the next ordinary page tries
- * again.
- */
 export function WhatsNew({
   version = process.env.APP_VERSION ?? "",
   loadEntries = fetchMissedReleases,
@@ -100,8 +73,6 @@ export function WhatsNew({
 }) {
   const pathname = usePathname();
   const decided = useRef(false);
-  // Radix returns focus to a DialogTrigger, and this dialog opens without
-  // one, so it would drop focus on <body>. Return it where it was instead.
   const returnFocus = useRef<HTMLElement | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
 
@@ -115,9 +86,6 @@ export function WhatsNew({
     const act = (announcement: Announcement) => {
       if (announcement.kind === "none") return;
 
-      // Stored as soon as it's decided, so neither closing nor reloading
-      // brings it back. Storage that won't keep it means no dialog at all,
-      // rather than the same one on every page.
       if (!writeLastSeen(version)) return;
 
       if (announcement.kind === "show") {
@@ -146,15 +114,11 @@ export function WhatsNew({
         if (!cancelled) act(pickAnnouncement(lastSeen, version, entries));
       })
       .catch(() => {
-        // Already logged on the server. Stay quiet, and try again on the next
-        // ordinary page: client-side navigation keeps this component mounted.
         settled = true;
         decided.current = false;
       });
 
     return () => {
-      // Navigated away before the releases arrived, possibly into checkout:
-      // drop the answer and decide again on the next ordinary page.
       if (!settled) {
         cancelled = true;
         decided.current = false;

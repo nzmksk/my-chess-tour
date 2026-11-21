@@ -12,11 +12,6 @@ interface Props {
   disabled?: boolean;
 }
 
-// The separate consent checkbox for health or financial data (#451). Its label
-// is the consent statement from legal.ts, word for word, because the version
-// recorded with the grant is the version of that text. Never pre-ticked, and
-// never folded into another checkbox: bundled or default-on consent is not the
-// explicit consent the PDPA asks for.
 export default function SensitiveDataConsent({
   category,
   checked,
@@ -44,11 +39,6 @@ export default function SensitiveDataConsent({
   );
 }
 
-/**
- * Record the user's consent before the data is sent. The database refuses an
- * OKU upload or a bank-details save without it, so a failure here must stop
- * the submission. Returns an error message, or null on success.
- */
 export async function recordSensitiveDataConsent(
   category: SensitiveDataCategory,
 ): Promise<string | null> {

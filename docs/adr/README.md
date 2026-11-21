@@ -37,3 +37,5 @@ old one `Superseded by NNNN`, and link both ways.
 | 0012 | [Tournament dates belong to the venue](0012-tournament-dates-belong-to-the-venue.md)             | Accepted |
 | 0013 | [Tournament pages are cached and purged by tag](0013-tournament-page-caching.md)                 | Accepted |
 | 0014 | [What a prize declaration must hold](0014-prize-declarations.md)                                 | Accepted |
+| 0015 | [Global test doubles](0015-global-test-doubles.md)                                               | Accepted |
+| 0016 | [Pages opt out of site chrome](0016-pages-opt-out-of-site-chrome.md)                             | Accepted |

@@ -12,8 +12,6 @@ import SensitiveDataConsent, {
   recordSensitiveDataConsent,
 } from "@/components/SensitiveDataConsent";
 
-// Masked view of a player's banking details — what the API returns and what the
-// UI renders. The full account number is never held here.
 export type BankingDisplay = {
   bank_name: string | null;
   bank_code: string | null;
@@ -39,20 +37,6 @@ interface Props {
   submitLabel?: string;
 }
 
-// Reusable banking-details collector. Submits to the shared
-// PATCH /api/v1/profile/banking endpoint. Used by the settings BankingCard and
-// available for a future just-in-time prize-claim / refund surface. The account
-// number is always re-entered in full (the existing value is masked and never
-// sent back to the client).
-//
-// The fields and their rules live in BankAccountFields, shared with the
-// organization payout destination. The bank is chosen from the same list,
-// because a platform-distributed prize is sent to this account through CHIP
-// Send (#523), which only knows banks by SWIFT code.
-//
-// Bank details need the player's separate financial-data consent (#451): the
-// checkbox must be ticked on every save, and the grant is recorded before the
-// details are sent, because set_player_bank_account refuses them without it.
 export default function BankingForm({
   initial,
   onSaved,
@@ -110,7 +94,6 @@ export default function BankingForm({
         setError(json?.error?.message ?? "Save failed. Please try again.");
         return;
       }
-      // What the server stored, masked: a changed account comes back pending.
       const saved = json?.data as SavedBankAccount | null;
       onSaved({
         bank_name: saved?.bank_name ?? null,

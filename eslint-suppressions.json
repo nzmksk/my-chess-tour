@@ -1,9 +1,4 @@
 {
-  "next.config.ts": {
-    "local/no-comments": {
-      "count": 13
-    }
-  },
   "src/app/__tests__/RootLayout.test.tsx": {
     "local/no-comments": {
       "count": 1
@@ -1394,104 +1389,9 @@
       "count": 54
     }
   },
-  "src/components/AuthProvider.tsx": {
-    "local/no-comments": {
-      "count": 15
-    }
-  },
-  "src/components/BankAccountFields.tsx": {
-    "local/no-comments": {
-      "count": 18
-    }
-  },
-  "src/components/BankingForm.tsx": {
-    "local/no-comments": {
-      "count": 17
-    }
-  },
-  "src/components/BugReport.tsx": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "src/components/ChangelogChanges.tsx": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/components/Footer.tsx": {
-    "local/no-comments": {
-      "count": 7
-    }
-  },
-  "src/components/HideOnAdmin.tsx": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/components/NavBar.tsx": {
-    "local/no-comments": {
-      "count": 20
-    }
-  },
-  "src/components/OrgSwitcher.tsx": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "src/components/RoleBadge.tsx": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/components/SensitiveDataConsent.tsx": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/components/ThemeProvider.tsx": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/components/WhatsNew.tsx": {
-    "local/no-comments": {
-      "count": 19
-    }
-  },
-  "src/components/__tests__/AuthProvider.test.tsx": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/components/__tests__/BugReport.test.tsx": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/components/__tests__/Footer.test.tsx": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
   "src/components/ui/country-dropdown.tsx": {
     "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/instrumentation-client.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/instrumentation.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/proxy.ts": {
-    "local/no-comments": {
-      "count": 20
+      "count": 3
     }
   },
   "src/services/auth/__tests__/auth-validation.test.ts": {
@@ -2002,31 +1902,6 @@
   "src/services/supabase/storage.ts": {
     "local/no-comments": {
       "count": 7
-    }
-  },
-  "src/stores/auth-store.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/test/after.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/test/appRoutes.ts": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "src/test/identity.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/test/setup.ts": {
-    "local/no-comments": {
-      "count": 3
     }
   }
 }

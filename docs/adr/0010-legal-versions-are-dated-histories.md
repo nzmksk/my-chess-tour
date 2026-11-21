@@ -57,6 +57,11 @@ each document is current.
   label word for word, and states that consent can be withdrawn, so the user
   learns it before agreeing. A reworded statement is a new entry at the top,
   so the wording behind every recorded version stays in the code.
+  `SensitiveDataConsent` renders it as its own checkbox, never pre-ticked
+  and never folded into another one: bundled or default-on consent isn't
+  the explicit consent the PDPA asks for. The grant is recorded before the
+  data is sent, and a failure stops the submission, because the database
+  refuses an OKU upload or a bank-details save without it.
 
 ## Consequences
 

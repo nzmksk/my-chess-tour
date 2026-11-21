@@ -96,7 +96,7 @@ describe("AuthProvider", () => {
         <span />
       </AuthProvider>,
     );
-    await Promise.resolve(); // flush microtasks
+    await Promise.resolve();
     expect(mocks.setState).toHaveBeenCalledWith({
       user: initialUser,
       avatarUrl: "https://example.com/avatar.png",

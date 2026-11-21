@@ -2,45 +2,19 @@
 
 import type { MalaysianBank } from "@/lib/reference/malaysian-banks";
 
-// The three fields that identify a payout destination, plus the rules that
-// govern them. Extracted from BankingForm so the organizer application, the
-// organization settings page and the player settings card all collect the same
-// shape and validate it identically — a player's account number and an
-// organization's must obey the same digit rule, because they end up on the same
-// payment rails.
-//
-// Deliberately presentation-only: it owns no submit. The player card PATCHes
-// one endpoint, the settings card PUTs another, and the application form sends
-// these fields inside a much larger POST. A component that owned the request
-// could only serve the first of those.
-
 export interface BankAccountValues {
-  /** Display name. In select mode the server derives this from bankCode. */
   bankName: string;
-  /** SWIFT/BIC. Empty in free-text mode. */
   bankCode: string;
   accountHolder: string;
   accountNumber: string;
 }
 
-/**
- * Spaces and dashes are how people write account numbers off a bank statement;
- * the column stores digits only. Identical to the rule in
- * PATCH /api/v1/profile/banking, which is the point of it being here.
- */
 export function normalizeAccountNumber(raw: string): string {
   return raw.replace(/[\s-]/g, "");
 }
 
 export const ACCOUNT_NUMBER_PATTERN = /^\d{5,20}$/;
 
-/**
- * Returns the first problem with these values, or null if they're fine.
- *
- * `requireBankCode` is what distinguishes an organization payout destination
- * (must be a bank CHIP Send knows, chosen from the list) from a player's
- * free-text bank name.
- */
 export function validateBankAccount(
   values: BankAccountValues,
   { requireBankCode }: { requireBankCode: boolean },
@@ -64,14 +38,8 @@ export function validateBankAccount(
 interface Props {
   values: BankAccountValues;
   onChange: (patch: Partial<BankAccountValues>) => void;
-  /**
-   * Present → the bank is chosen from this list and `bankCode` is what the
-   * caller submits. Absent → free-text `bankName`, the player-profile shape.
-   */
   banks?: readonly MalaysianBank[];
-  /** Last 4 of an already-stored number, shown as the placeholder. */
   existingLast4?: string | null;
-  /** Distinguishes input ids when more than one instance is on a page. */
   idPrefix?: string;
   disabled?: boolean;
 }

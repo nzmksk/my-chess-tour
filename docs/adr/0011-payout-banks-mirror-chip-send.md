@@ -40,6 +40,21 @@ checking CHIP first fails there instead of at payout time. It also checks
 codes against `chk_bank_code_format` and names against
 `bank_name varchar(100)`.
 
+## Bank details forms
+
+`BankAccountFields` (`src/components/BankAccountFields.tsx`) is the one set
+of bank, holder and account-number fields, used by the organizer application,
+the organization settings and the player settings card, so every bank account
+is collected and validated the same way. Players choose from the same list,
+because a platform-distributed prize is sent to their account through CHIP
+Send (#523). Account numbers are stored as digits only; people copy them off
+a statement with spaces and dashes, so the same rule strips them on the client
+and in `PATCH /api/v1/profile/banking`. The component is presentation-only and
+owns no submit, because each caller sends the fields to a different endpoint,
+one of them inside a much larger POST. A stored account number is never sent
+back to the browser in full: the forms show its last four digits and ask for
+the whole number again on every change.
+
 ## Consequences
 
 - Adding or removing a bank starts with CHIP's schema, then both the list and
