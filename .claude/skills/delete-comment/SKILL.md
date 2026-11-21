@@ -69,7 +69,9 @@ How to tell them apart:
 ## 4. Act
 
 **Decision records.** Group related ones into a single ADR per decision, not
-one per comment. Search `docs/adr/` first and extend an existing record if it
+one per comment. Search `wiki/` and `docs/adr/` first: a decision the wiki already
+describes needs no ADR (the wiki is outside this cleanup, so don't edit it).
+Extend an existing record if it
 covers the same decision, rather than writing a near-duplicate. New records
 follow `docs/adr/template.md`, take the next number, and name the files and
 identifiers they govern. Regenerate the index in `docs/adr/README.md` with
