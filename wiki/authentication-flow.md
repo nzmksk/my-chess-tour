@@ -84,11 +84,12 @@ The session lives in **httpOnly `sb-*` cookies** (set by `@supabase/ssr`), not i
 Key point: **the middleware is what keeps the session fresh.** On every matched
 request it calls `supabase.auth.getClaims()`, which (a) verifies the current
 access token locally and (b) refreshes it via `getSession()` under the hood when
-expired, writing the new cookies back through the `setAll` cookie adapter. The
-comment in `src/proxy.ts:46-51` flags this as load-bearing — don't remove it.
+expired, writing the new cookies back through the `setAll` cookie adapter. This
+call is load-bearing: without it nothing refreshes the session, so don't remove
+it even where its result looks unused.
 
-The matcher (`src/proxy.ts:117`) covers essentially everything except static
-assets, so both pages and `/api/*` are refreshed.
+The matcher (`config.matcher` in `src/proxy.ts`) covers essentially everything
+except static assets, so both pages and `/api/*` are refreshed.
 
 ---
 
