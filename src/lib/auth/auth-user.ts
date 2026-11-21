@@ -1,5 +1,3 @@
-// The signed-in user's navbar identity, held in the auth store. Defined here
-// (not in the store) so lib code can build it without depending on stores.
 export type AuthUser = {
   id: string;
   email: string;
@@ -7,9 +5,6 @@ export type AuthUser = {
   initials: string;
 };
 
-// Accepts either a JWT claims object (`sub`) or a Supabase session user (`id`),
-// both of which carry `user_metadata`, so the navbar identity is derived the
-// same way on the server (from getClaims) and the client (from auth events).
 type MetadataSource = {
   id?: string;
   sub?: string;

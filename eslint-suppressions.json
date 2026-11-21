@@ -1489,56 +1489,6 @@
       "count": 2
     }
   },
-  "src/lib/__tests__/release-version.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/lib/auth/__tests__/avatar-cache.test.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/lib/auth/__tests__/session-cookie.test.ts": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
-  "src/lib/auth/auth-user.ts": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "src/lib/auth/avatar-cache.ts": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "src/lib/auth/roles.ts": {
-    "local/no-comments": {
-      "count": 5
-    }
-  },
-  "src/lib/auth/session-cookie.ts": {
-    "local/no-comments": {
-      "count": 6
-    }
-  },
-  "src/lib/auth/signup-cookie.ts": {
-    "local/no-comments": {
-      "count": 1
-    }
-  },
-  "src/lib/auth/signup-storage.ts": {
-    "local/no-comments": {
-      "count": 9
-    }
-  },
-  "src/lib/changelog.ts": {
-    "local/no-comments": {
-      "count": 18
-    }
-  },
   "src/lib/reference/__tests__/legal.test.ts": {
     "local/no-comments": {
       "count": 23
@@ -1567,16 +1517,6 @@
   "src/lib/reference/malaysian-banks.ts": {
     "local/no-comments": {
       "count": 40
-    }
-  },
-  "src/lib/release-notes.ts": {
-    "local/no-comments": {
-      "count": 13
-    }
-  },
-  "src/lib/release-version.ts": {
-    "local/no-comments": {
-      "count": 7
     }
   },
   "src/lib/tournaments/__tests__/datetime.test.ts": {

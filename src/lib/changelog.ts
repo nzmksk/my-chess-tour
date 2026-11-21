@@ -1,22 +1,7 @@
-/**
- * The user-facing changelog (#622): types and the pure rules for which
- * releases to list and which one to announce. The entries themselves are the
- * GitHub release notes (#640): src/lib/release-notes.ts parses them and
- * src/services/github/releases.ts fetches them. Safe for client components:
- * no Node APIs.
- */
-
 export interface ChangelogEntry {
-  /** The release's git tag, exactly as the footer shows it (#621). */
   version: string;
-  /** Release date, YYYY-MM-DD. */
   date: string;
-  /** Optional one-line summary shown above the items. */
   headline?: string;
-  /**
-   * No user-visible changes worth interrupting anyone for: listed on
-   * /changelogs, but never announced in the "What's new" dialog.
-   */
   silent?: boolean;
   new?: readonly string[];
   improved?: readonly string[];
@@ -49,7 +34,6 @@ function parseVersion(version: string): ParsedVersion | null {
   };
 }
 
-/** True for a release tag such as `v0.11.0-alpha`; false for `dev` or junk. */
 export function isReleaseVersion(version: string): boolean {
   return parseVersion(version) !== null;
 }
@@ -58,18 +42,11 @@ function compareIdentifiers(a: string, b: string): number {
   const aNumeric = /^\d+$/.test(a);
   const bNumeric = /^\d+$/.test(b);
   if (aNumeric && bNumeric) return Number(a) - Number(b);
-  // Semver: numeric identifiers sort before alphanumeric ones.
   if (aNumeric) return -1;
   if (bNumeric) return 1;
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/**
- * Semver precedence of two release tags: negative when `a` is older, positive
- * when newer, 0 when equal. A pre-release sorts before its release
- * (`v1.0.0-alpha` < `v1.0.0`). Throws on anything that isn't a release tag;
- * check untrusted input with isReleaseVersion first.
- */
 export function compareVersions(a: string, b: string): number {
   const pa = parseVersion(a);
   const pb = parseVersion(b);
@@ -93,12 +70,6 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/**
- * The entries a build may show: those released at or before `currentVersion`.
- * An entry written ahead of its tag (the release PR merges before the tag is
- * cut) stays hidden until a build that carries the tag. A build without a
- * release version (`dev`, locally) shows everything, unreleased included.
- */
 export function releasedEntries(
   entries: readonly ChangelogEntry[],
   currentVersion: string,
@@ -109,13 +80,8 @@ export function releasedEntries(
   );
 }
 
-/** Releases per page on /changelogs (#640). */
 const CHANGELOG_PAGE_SIZE = 10;
 
-/**
- * The `page` query parameter of /changelogs: 1 when it's absent, null when
- * it isn't a whole number from 1 up (the page answers 404).
- */
 export function parsePageParam(
   value: string | string[] | undefined,
 ): number | null {
@@ -127,11 +93,9 @@ export function parsePageParam(
 export interface ChangelogPage {
   entries: ChangelogEntry[];
   page: number;
-  /** At least 1: an empty changelog is one empty page. */
   pageCount: number;
 }
 
-/** One page of entries, or null for a page past the last one. */
 export function paginateEntries(
   entries: readonly ChangelogEntry[],
   page: number,
@@ -148,19 +112,10 @@ export function paginateEntries(
 }
 
 export type Announcement =
-  /** Leave storage alone and show nothing. */
   | { kind: "none" }
-  /** Store the current version without showing anything. */
   | { kind: "remember" }
-  /** Show `entry`; `missed` counts every release since the last one seen. */
   | { kind: "show"; entry: ChangelogEntry; missed: number };
 
-/**
- * Whether this browser has missed a release since its last visit, and so
- * whether the "What's new" dialog needs the releases to decide (#640). False
- * on a first visit, when it is up to date, and on a build without a release
- * version: pickAnnouncement decides those without any entries.
- */
 export function hasMissedRelease(
   lastSeen: string | null,
   currentVersion: string,
@@ -173,16 +128,6 @@ export function hasMissedRelease(
   );
 }
 
-/**
- * Decides what the "What's new" dialog does on this visit.
- *
- * - First visit (nothing stored, or something unreadable): remember the
- *   current version quietly, so new visitors aren't greeted by release notes.
- * - Already seen this release (or a newer one): nothing.
- * - Otherwise announce the newest unseen release that isn't silent, once,
- *   however many releases were skipped. If every unseen one is silent,
- *   remember the current version quietly.
- */
 export function pickAnnouncement(
   lastSeen: string | null,
   currentVersion: string,

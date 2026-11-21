@@ -46,8 +46,6 @@ describe("stripPersistence", () => {
   });
 
   it("handles sb- cookies with no options object", () => {
-    // Annotated so `options` is part of the inferred generic, as it is for
-    // the @supabase/ssr cookie objects this runs against in production.
     const cookie: {
       name: string;
       value: string;

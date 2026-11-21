@@ -23,3 +23,8 @@ it. Code that both `lib` and a higher layer need moves down into `lib`.
   Next.
 - A helper that needs a component or store doesn't belong in `lib`; it lives
   next to its caller instead.
+- Types that stores share with server code live in `lib` too: `AuthUser`
+  (`src/lib/auth/auth-user.ts`), `Role` and `UserOrganization`
+  (`src/lib/auth/roles.ts`). Defining them in a store would make `lib` depend
+  on stores, and defining them in `src/services/supabase/permission.ts` would
+  pull server-only Supabase code into the browser bundle.
