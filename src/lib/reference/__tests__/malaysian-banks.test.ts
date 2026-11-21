@@ -5,15 +5,6 @@ import {
   bankNameForSwift,
 } from "@/lib/reference/malaysian-banks";
 
-// Shape assertions, plus one that pins the exact set. MALAYSIAN_BANKS is a 1:1
-// mirror of CHIP Send's documented BankCode list, so drift in either direction
-// is a bug: a code CHIP does not know is a failed payout, and one we drop is a
-// bank an organizer cannot pick.
-// https://docs.chip-in.asia/openapi/chip-send.yaml (BankCode, 2026-11-05)
-// Copied from the BankCode schema, in its order. Its description is
-// authoritative if it ever disagrees with its `enum`. Kept as a literal, not
-// derived from MALAYSIAN_BANKS, so that editing the list without checking CHIP
-// first fails here instead of at payout time.
 const CHIP_SEND_BANK_CODES = [
   "ACDBMYK2",
   "PHBMMYKL",
@@ -66,13 +57,11 @@ describe("MALAYSIAN_BANKS", () => {
   });
 
   it.each(MALAYSIAN_BANKS)("$name has a well-formed SWIFT code", (bank) => {
-    // The DB CHECK is chk_bank_code_format: ^[A-Z0-9]{8}([A-Z0-9]{3})?$
     expect(bank.swift).toMatch(/^[A-Z0-9]{8}([A-Z0-9]{3})?$/);
   });
 
   it.each(MALAYSIAN_BANKS)("$swift has a non-empty display name", (bank) => {
     expect(bank.name.trim()).not.toBe("");
-    // varchar(100) on organization_bank_accounts.bank_name
     expect(bank.name.length).toBeLessThanOrEqual(100);
   });
 
@@ -82,7 +71,6 @@ describe("MALAYSIAN_BANKS", () => {
   });
 
   it("has no duplicate display names", () => {
-    // Two entries with the same name would be indistinguishable in the picker.
     const names = MALAYSIAN_BANKS.map((b) => b.name);
     expect(new Set(names).size).toBe(names.length);
   });

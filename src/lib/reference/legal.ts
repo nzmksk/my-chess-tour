@@ -1,64 +1,8 @@
-// The versions of the documents a user or an organization can be bound by, and
-// the one place that decides what "current" means.
-//
-// Acceptance used to be a checkbox and nothing else: the signup form validated
-// termsAccepted client-side and threw it away, so there was no record that
-// anyone had agreed to anything and no version pinned to the agreement they saw.
-// Tolerable for a free signup; not for a document that governs money movement
-// and makes a claw-back enforceable.
-//
-// Every legal surface renders its effective date from the same constant that
-// gets written to the database, so the rendered document and the recorded
-// version cannot drift apart. Before this module the date was a hardcoded
-// literal in four files, which is exactly the drift this prevents.
-//
-// Bumping a constant IS the re-acceptance mechanism. An organization whose
-// agreement_version is older than ORGANIZER_AGREEMENT_VERSION is shown a
-// blocking panel, and the payout machinery (Phases 5-6) refuses to move money
-// until it matches — a stale agreement stops a payout rather than failing
-// silently.
-//
-// The values are date-stamped rather than semver: a legal document has an
-// effective date, not a feature level, and "which wording did they agree to?"
-// is answered by a date. varchar(20) in the schema; ISO first so string
-// comparison and chronological order agree.
-//
-// Each document is a HISTORY, not a bare constant, and the current version is
-// derived from the newest entry so the two cannot disagree. The history exists
-// because "what changed?" is a question about the gap between the version
-// someone accepted and the current one — not about whatever the last release
-// happened to touch. A notice that hardcodes one release's changes is wrong for
-// everyone who skipped a version, and silently rots the moment the next version
-// ships.
-//
-// Every document is at its FIRST version: the Terms of Service, the Privacy
-// Policy (versioned with the Terms; it renders TERMS_VERSION) and the
-// Organizer Agreement. There is no earlier wording to diff against, so each
-// entry below summarises what its document says, which is the honest answer to
-// the only question a reader can have today. The second entry added to either
-// list is a delta against the one before it.
-//
-// An acceptance stored against a version that isn't in a history predates it.
-// changesSince returns the whole history for it, and AgreementGate presents
-// that as what the agreement covers, not as what changed.
-
 export interface LegalVersion {
-  /** Effective date, ISO. This is the value stored in the database. */
   version: string;
-  /**
-   * Written for the person who has to read it, not as a commit log.
-   *
-   * The FIRST version of a document summarises what the document says, because
-   * there is nothing to compare it to. Every version after it lists what that
-   * version changed relative to the one before.
-   */
   changes: readonly string[];
 }
 
-/**
- * Terms of Service, newest first. Accepted at signup; stored on
- * users.terms_version.
- */
 export const TERMS_HISTORY: readonly LegalVersion[] = [
   {
     version: "2026-11-20",
@@ -81,11 +25,6 @@ export const TERMS_HISTORY: readonly LegalVersion[] = [
   },
 ];
 
-/**
- * Organizer Agreement, newest first. Accepted when applying to organize and
- * again whenever a new version is published; stored on
- * organizations.agreement_version.
- */
 export const ORGANIZER_AGREEMENT_HISTORY: readonly LegalVersion[] = [
   {
     version: "2026-11-20",
@@ -104,24 +43,11 @@ export const ORGANIZER_AGREEMENT_HISTORY: readonly LegalVersion[] = [
   },
 ];
 
-/** The version currently in force. Derived, so it cannot drift from the history. */
 export const TERMS_VERSION = TERMS_HISTORY[0].version;
 
-/** The version currently in force. Derived, so it cannot drift from the history. */
 export const ORGANIZER_AGREEMENT_VERSION =
   ORGANIZER_AGREEMENT_HISTORY[0].version;
 
-/**
- * What changed between the version someone accepted and the current one.
- *
- * Takes the version they are ON, and returns the changes from every version
- * published since — so a reader who skipped two versions is told about both,
- * and a reader who is already current is told nothing. A null `acceptedVersion`
- * (accepted before we recorded versions, or never accepted) returns the whole
- * history, which is the honest answer to "what am I agreeing to?".
- *
- * Newest changes first, matching the order of the history itself.
- */
 export function changesSince(
   history: readonly LegalVersion[],
   acceptedVersion: string | null,
@@ -129,37 +55,18 @@ export function changesSince(
   const relevant =
     acceptedVersion === null
       ? history
-      : // ISO dates compare correctly as strings, which is why the format is ISO.
-        history.filter((entry) => entry.version > acceptedVersion);
+      : history.filter((entry) => entry.version > acceptedVersion);
 
   return relevant.flatMap((entry) => [...entry.changes]);
 }
 
-// ---------------------------------------------------------------------------
-// Sensitive data consent (#451)
-//
-// Health data (an OKU card and the disability status it proves) and financial
-// data (a player's bank details) are each held only with their own explicit
-// consent. Agreeing to the Terms at signup is not consent to either: each is
-// asked for on its own, with its own checkbox, at the moment the data is
-// collected, and recorded in sensitive_data_consents.
-//
-// The statement is the checkbox label, word for word, and the version stored
-// with a grant is the version of the statement the user saw. Same history
-// rule as the documents above: a reworded statement is a new entry at the top,
-// so the wording behind every recorded version stays in the code.
-// ---------------------------------------------------------------------------
-
 export type SensitiveDataCategory = "health" | "financial";
 
 export interface ConsentVersion {
-  /** Effective date, ISO. Stored with each grant. */
   version: string;
-  /** The checkbox label: exactly what the user agrees to. */
   statement: string;
 }
 
-/** Each category's consent statements, newest first. */
 export const SENSITIVE_DATA_CONSENT_HISTORY: Readonly<
   Record<SensitiveDataCategory, readonly ConsentVersion[]>
 > = {
@@ -179,7 +86,6 @@ export const SENSITIVE_DATA_CONSENT_HISTORY: Readonly<
   ],
 };
 
-/** The consent statement currently in force for a category. */
 export function currentConsent(
   category: SensitiveDataCategory,
 ): ConsentVersion {
@@ -209,15 +115,6 @@ const MONTHS = [
   "December",
 ] as const;
 
-/**
- * Renders a version constant as the human date shown under a document's title —
- * "2026-08-02" becomes "2 August 2026".
- *
- * Deliberately not Intl.DateTimeFormat: these strings are calendar dates, not
- * instants, and parsing one into a Date would read it in the server's zone and
- * can shift the day. Returns the input unchanged if it isn't date-shaped, so a
- * malformed constant shows up in the page rather than throwing during render.
- */
 export function formatLegalVersion(version: string): string {
   const match = LEGAL_VERSION_PATTERN.exec(version);
   if (!match) return version;

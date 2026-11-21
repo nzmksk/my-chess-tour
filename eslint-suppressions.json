@@ -1489,36 +1489,6 @@
       "count": 2
     }
   },
-  "src/lib/reference/__tests__/legal.test.ts": {
-    "local/no-comments": {
-      "count": 23
-    }
-  },
-  "src/lib/reference/__tests__/malaysian-banks.test.ts": {
-    "local/no-comments": {
-      "count": 12
-    }
-  },
-  "src/lib/reference/contact.ts": {
-    "local/no-comments": {
-      "count": 7
-    }
-  },
-  "src/lib/reference/countries.ts": {
-    "local/no-comments": {
-      "count": 4
-    }
-  },
-  "src/lib/reference/legal.ts": {
-    "local/no-comments": {
-      "count": 70
-    }
-  },
-  "src/lib/reference/malaysian-banks.ts": {
-    "local/no-comments": {
-      "count": 40
-    }
-  },
   "src/lib/tournaments/__tests__/datetime.test.ts": {
     "local/no-comments": {
       "count": 8

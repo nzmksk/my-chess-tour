@@ -32,3 +32,5 @@ old one `Superseded by NNNN`, and link both ways.
 | 0007 | [Server components call their own build's API](0007-server-components-call-their-own-build.md)   | Accepted |
 | 0008 | [Side effects run after the response](0008-side-effects-run-after-the-response.md)               | Accepted |
 | 0009 | [Refund states and stuck refunds](0009-refund-states.md)                                         | Accepted |
+| 0010 | [Legal versions are dated histories](0010-legal-versions-are-dated-histories.md)                 | Accepted |
+| 0011 | [Payout banks mirror CHIP Send's list](0011-payout-banks-mirror-chip-send.md)                    | Accepted |
