@@ -95,10 +95,25 @@ GitHub sends a `ping` when the webhook is created; its Recent Deliveries tab sho
 1. Merge the release's PRs into `staging` and wait for the staging deploy to finish.
 2. Draft a GitHub pre-release with a new tag on `staging`. The tag must start with `v` and a digit (`vMAJOR.MINOR.PATCH-alpha`), or the resolver and the changelog ignore it. Press **Generate release notes**, then write the notes for users above the generated list, with `<!-- developer notes -->` between them ([format](#writing-the-notes)). Drafts never show on the site, so take your time.
 3. **Publish** the release.
-4. **Redeploy staging** (Netlify → staging site → Deploys → Trigger deploy → Deploy site). The deploy from step 1 was built before the tag existed, so until this redeploy the footer still shows the previous release plus the commit, and the new release stays hidden.
+4. **Wait for the staging redeploy.** The deploy from step 1 was built before the tag existed, so until staging is rebuilt the footer still shows the previous release plus the commit, and the new release stays hidden. Publishing the release starts that rebuild on its own ([below](#redeploying-staging-on-release)); it shows in Netlify's deploy list as "Release v…".
 5. On `staging.mychesstour.com`, check that the footer shows the new tag, that `/changelogs` lists it with your notes, and that the "What's new" dialog appears (set `mct:lastSeenVersion` to the previous version first).
 
 To fix the notes later, edit the release on GitHub. Both sites pick up the change through the webhook, without a deploy.
+
+### Redeploying staging on release
+
+Netlify only builds on branch pushes and pull requests; it can't build when a tag is created. So the **Redeploy staging on release** workflow (`.github/workflows/release-deploy.yml`, #689) runs when a release is published, pre-releases included, and POSTs to a Netlify build hook that builds `staging`'s head. If `staging` has moved past the tag, the footer shows the tag plus the newer commit, as for any build between releases.
+
+To redeploy by hand, run the workflow from the Actions tab, or use Netlify → staging site → Deploys → **Trigger deploy → Deploy site**.
+
+**Never use "Publish deploy" on an existing deploy to pick up a new tag.** It serves that deploy's old build, whose version was fixed when it was built, so the footer keeps the previous release. It also locks auto-publishing, so later builds finish but never go live until you click **Unlock to start auto publishing** on the Deploys page.
+
+**Setting up the hook**, once:
+
+1. Netlify → staging site → Site configuration → Build & deploy → Continuous deployment → Build hooks → **Add build hook**, branch `staging`.
+2. Save its URL as the repository secret `NETLIFY_STAGING_BUILD_HOOK` (GitHub → Settings → Secrets and variables → Actions). It's a repository secret, not a secret of the `staging` environment, because that environment only admits the `staging` branch and a release event runs on the tag. Anyone holding the URL can start a staging build, nothing more.
+
+Without the secret, the workflow fails with an error naming it, and staging has to be redeployed by hand.
 
 ### Promoting to production
 

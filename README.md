@@ -183,6 +183,7 @@ Set every Netlify variable as described in [On Netlify](#on-netlify): secret or 
 - [ ] The site builds `staging` and serves `staging.mychesstour.com`.
 - [ ] Every variable from [Environment](#environment), set as in [On Netlify](#on-netlify) (secrets for Production, Deploy Previews and Branch deploys), with `NEXT_PUBLIC_SITE_URL=https://staging.mychesstour.com`, `NEXT_PUBLIC_ENVIRONMENT=staging` and staging's own `CRON_SECRET`.
 - [ ] A release tag (`v…`) is reachable from `staging`. Without one the build fails ([releases.md](docs/wiki/releases.md)).
+- [ ] A build hook for `staging`, saved as the repository secret `NETLIFY_STAGING_BUILD_HOOK`, so publishing a release rebuilds staging ([releases.md](docs/wiki/releases.md#redeploying-staging-on-release)).
 
 **Database**
 
