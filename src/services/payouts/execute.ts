@@ -111,7 +111,7 @@ async function awaitBudget(
         return "awaiting_budget";
       }
       console.info(
-        `Payout ${payout.id}: send limit ${limit.id} is ${limit.status}; requesting a new one`,
+        `Payout ${payout.id}: send limit ${limit.id} is ${limit.status}${limit.expiry_reason ? ` (${limit.expiry_reason})` : ""}; requesting a new one`,
       );
     } catch (err) {
       console.error(

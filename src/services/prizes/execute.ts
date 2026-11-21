@@ -113,6 +113,9 @@ async function awaitBudget(
         );
         return "awaiting_budget";
       }
+      console.info(
+        `Prize award ${award.id}: send limit ${limit.id} is ${limit.status}${limit.expiry_reason ? ` (${limit.expiry_reason})` : ""}; requesting a new one`,
+      );
     } catch (err) {
       console.error(
         `Prize award ${award.id}: could not read send limit ${award.chip_send_limit_id}`,

@@ -7,7 +7,7 @@ Two routes receive CHIP webhooks, one per CHIP product:
 | `POST /api/v1/webhooks/chip`      | CHIP **Collect** (money in) | Registration payments, sponsor prize-pool payments, refunds                                           | `CHIP_WEBHOOK_PUBLIC_KEY`, RSA over SHA-256                           | 401                 |
 | `POST /api/v1/webhooks/chip/send` | CHIP **Send** (money out)   | Bank account verification, budget allocations, send instructions (organizer payouts and prize awards) | `CHIP_SEND_WEBHOOK_PUBLIC_KEY`, RSA over SHA-512, one key per webhook | 200 (acked, logged) |
 
-The rest of this page is about the Collect webhook. The Send webhook is described in its route's header comment and in [payout-flow.md](./payout-flow.md).
+Most of this page covers the Collect webhook. The Send webhook has its own section at the end: [CHIP Send webhook](#chip-send-webhook).
 
 ## Signature verification & key formatting
 
@@ -86,3 +86,48 @@ Available event types and when they are emitted:
 `payment.chargeback_reversed`: Emitted when a Payment chargeback is reversed.
 
 Available options: `purchase.created`, `purchase.paid`, `purchase.payment_failure`, `purchase.refund_failure`, `purchase.capture_failure`, `purchase.release_failure`, `purchase.pending_execute`, `purchase.pending_charge`, `purchase.cancelled`, `purchase.hold`, `purchase.captured`, `purchase.pending_capture`, `purchase.released`, `purchase.pending_release`, `purchase.preauthorized`, `purchase.pending_recurring_token_delete`, `purchase.recurring_token_deleted`, `purchase.pending_refund`, `payment.refunded`, `payout.pending`, `payout.failed`, `payout.success`, `payment.charged_back`, `purchase.viewed`, `purchase.settled`, `payout.created`, `payment.chargeback_reversed`
+
+## CHIP Send webhook
+
+`POST /api/v1/webhooks/chip/send` (`src/app/api/v1/webhooks/chip/send/route.ts`) is a separate route from Collect's, because the two products sign differently and send different things. CHIP's references are [Event Types and Payloads](https://docs.chip-in.asia/chip-send/api-reference/webhooks/events), [Validating Webhooks](https://docs.chip-in.asia/chip-send/api-reference/webhooks/validation) and [Delivery Protocol](https://docs.chip-in.asia/chip-send/api-reference/webhooks/delivery-protocol).
+
+### Signature
+
+`X-Signature` is a base64 RSA PKCS#1 v1.5 signature over the **SHA-512** digest of the raw body (Collect uses SHA-256). Every Send webhook has its own key pair. The public half is that webhook's `public_key` (`GET /api/webhooks/{id}`), set as `CHIP_SEND_WEBHOOK_PUBLIC_KEY`. There is no account-wide key, and deleting and recreating the webhook issues a new key, so the variable has to change with it. The key formatting rules above apply here too (`normalizePublicKey`).
+
+The route test verifies CHIP's published fixture: its key, its signature and the 387-byte body. A change that breaks verification fails there, not in production.
+
+### Responses
+
+| Situation                                           | Response                   | Why                                                                                                                                                                                         |
+| --------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bad or missing signature                            | 200, logged, not processed | CHIP retries any non-2xx, 25 times over about three weeks, and a forged or misrouted delivery won't become valid on a retry. This differs from Collect's 401 on purpose, so don't "fix" it. |
+| `CHIP_SEND_WEBHOOK_PUBLIC_KEY` missing or not a PEM | 500                        | It's our misconfiguration: CHIP keeps retrying until the key is fixed, instead of the events being dropped.                                                                                 |
+| A signed body that isn't JSON                       | 200, logged                | A redelivery can't fix it.                                                                                                                                                                  |
+| A database lookup or settle fails                   | 500                        | CHIP redelivers. The money may already have moved, so the failure must not be swallowed.                                                                                                    |
+| The row vanished before settling (`P0002`)          | 200                        | There's nothing left to retry for.                                                                                                                                                          |
+
+### Events
+
+CHIP names the event in the `Event-Type` header. The body is the bare resource as it is after the change, sent as compact JSON.
+
+| `Event-Type`               | Handling                                                                                                                                                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bank_account_status`      | `verified` and `rejected` settle the account through `settle_bank_account_verification`, with CHIP's `rejection_reason`. `received`, `pending` and `reviewing` are acknowledged and nothing changes.                                           |
+| `send_instruction_status`  | `completed` settles the transfer as paid. `rejected` and the legacy `deleted` settle it as failed, with `failure_reason` `send_instruction_<state>`. Every other state is acknowledged. `accepted` isn't success: it can still end `rejected`. |
+| `budget_allocation_status` | Acknowledged and ignored. A payout parked on budget re-checks its allocation on its next run ([payout-flow.md](./payout-flow.md#the-daily-run)).                                                                                               |
+
+The body's `status` or `state` decides the outcome, not the event name. `chipBankAccountOutcome` and `chipSendOutcome` read nothing else, and any state they don't recognise counts as pending. When there's no `Event-Type` header, the route goes by the body's shape: a bank account has `account_number` and `bank_code` at the top level, and an instruction has a `state`.
+
+Each instruction delivery is logged with its state, CHIP id, reference, outcome and `rejection_reason`. Long digit runs in the reason are redacted with `redactDigits`. The log never includes the amount, email or account details.
+
+### Matching a delivery to our rows
+
+- **Bank accounts:** first by `reference` (our row id) in `organization_bank_accounts` and then `player_bank_accounts`, and only after that by CHIP's `id` in each table. Both tables are searched by reference before either is searched by id, because an organization and a player can register the same real account, and CHIP may give both registrations the same id. For the same reason, a match by CHIP id takes the newest row.
+- **Send instructions:** `payouts` by `reference` (the payout id), then by `chip_send_instruction_id`. If neither matches, `prize_awards` is searched the same way (#523).
+- A verdict on a player's account runs `onPlayerBankVerdict` after the response, so CHIP never waits on our own send.
+- A delivery that matches nothing is acknowledged and logged.
+
+### Delivery
+
+A failed delivery is retried up to 25 times over about 21 days, then CHIP emails the webhook's address. CHIP can skip intermediate states, and a retry can arrive after a newer delivery. Settlement therefore keeps the first terminal verdict, and the daily run reconciles anything a lost delivery left stuck ([payout-flow.md](./payout-flow.md#the-daily-run)).
