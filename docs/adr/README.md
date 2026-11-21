@@ -1,0 +1,24 @@
+# Architecture Decision Records
+
+Each file here records one decision about the code that isn't obvious from
+the code: what was decided, why, and what it costs. They replace the
+explanatory code comments that [ADR 0001](0001-no-code-comments.md) bans.
+
+## Writing one
+
+1. Copy [`template.md`](template.md) to `NNNN-short-title.md`, numbered after
+   the last record below.
+2. Keep it to one decision. Name the files and identifiers it governs so a
+   reader can grep from the record to the code.
+3. Add it to the index below.
+
+A record isn't edited when the decision changes. Write a new one, mark the
+old one `Superseded by NNNN`, and link both ways.
+
+## Index
+
+| #    | Decision                                                                           | Status   |
+| ---- | ---------------------------------------------------------------------------------- | -------- |
+| 0001 | [No code comments](0001-no-code-comments.md)                                       | Accepted |
+| 0002 | [`src/lib` is the bottom layer](0002-src-lib-is-the-bottom-layer.md)               | Accepted |
+| 0003 | [No database error text in responses](0003-no-database-error-text-in-responses.md) | Accepted |
