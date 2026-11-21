@@ -1,6 +1,6 @@
 # CHIP webhooks
 
-Two routes receive CHIP webhooks, one per CHIP product:
+Two routes receive CHIP webhooks, one per CHIP product. For the calls we make to CHIP, and how each is kept from happening twice, see [chip-api.md](./chip-api.md).
 
 | Route                             | Product                     | Carries                                                                                               | Key                                                                   | Bad signature       |
 | --------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------- |
