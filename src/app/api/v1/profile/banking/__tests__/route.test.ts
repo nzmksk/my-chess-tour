@@ -40,7 +40,7 @@ function makeReq(body: unknown) {
 const VALID = {
   bank_code: "MBBEMYKL",
   account_holder: "Ahmad bin Ali",
-  account_number: "1234567890",
+  account_number: "123456787890",
 };
 
 const SAVED = {
@@ -123,7 +123,7 @@ describe("PATCH /api/v1/profile/banking", () => {
       p_bank_code: "MBBEMYKL",
       p_bank_name: "Maybank",
       p_account_holder: "Ahmad bin Ali",
-      p_account_number: "1234567890",
+      p_account_number: "123456787890",
     });
   });
 
@@ -131,13 +131,13 @@ describe("PATCH /api/v1/profile/banking", () => {
     const res = await PATCH(makeReq(VALID));
     const json = await res.json();
     expect(json.data).toEqual(SAVED);
-    expect(JSON.stringify(json)).not.toContain("1234567890");
+    expect(JSON.stringify(json)).not.toContain("123456787890");
   });
 
   it("strips spaces and dashes from the account number before storing", async () => {
-    const res = await PATCH(makeReq({ ...VALID, account_number: "1234-5678 90" }));
+    const res = await PATCH(makeReq({ ...VALID, account_number: "1234-5678 7890" }));
     expect(res.status).toBe(200);
-    expect(mockRpc.mock.calls[0][1].p_account_number).toBe("1234567890");
+    expect(mockRpc.mock.calls[0][1].p_account_number).toBe("123456787890");
   });
 
   it("clears the account when every field is null", async () => {

@@ -36,7 +36,7 @@ function fillValidDetails() {
     target: { value: "Ahmad bin Ali" },
   });
   fireEvent.change(screen.getByLabelText("Account Number"), {
-    target: { value: "1234567890" },
+    target: { value: "123456787890" },
   });
 }
 

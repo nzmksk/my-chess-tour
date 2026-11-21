@@ -17,7 +17,7 @@ missing from a dropdown.
 `MALAYSIAN_BANKS` (`src/lib/reference/malaysian-banks.ts`) is a 1:1 mirror of
 the `BankCode` schema in CHIP Send's OpenAPI document
 (<https://docs.chip-in.asia/openapi/chip-send.yaml>), last reconciled on
-2026-11-05: same 37 codes, no more and no fewer. We don't curate it, because
+2026-11-21: same 37 codes, no more and no fewer. We don't curate it, because
 every judgement about which banks are "plausible" trades the cheap error for
 the expensive one. So corporate and custody banks stay, as do Finexus Cards
 and Touch 'n Go eWallet, which are e-money issuers labelled "bank" in the UI.
@@ -40,6 +40,21 @@ checking CHIP first fails there instead of at payout time. It also checks
 codes against `chk_bank_code_format` and names against
 `bank_name varchar(100)`.
 
+## Account number lengths
+
+CHIP Send checks an account number's length against its bank when the account
+is registered. A wrong length is refused then, which happens after the form
+was saved, with the organizer or winner gone and a payout waiting. So each
+entry also carries `accountDigits`, the range from CHIP's
+[supported banks](https://docs.chip-in.asia/chip-send/api-reference/bank-accounts/supported-banks)
+table. `accountNumberLengthError` checks it in `validateBankAccount` on the
+client, and in the organization bank account and organizer application
+validators on the server (`PATCH /api/v1/profile/banking` uses the former). The
+message names the bank and the expected digits. The database keeps the
+looser 5 to 20 digits (`chk_bank_account_number_digits`), so a correction
+from CHIP is a code change, not a migration. A number of the right length
+can still fail CHIP's verification with the bank.
+
 ## Bank details forms
 
 `BankAccountFields` (`src/components/BankAccountFields.tsx`) is the one set
@@ -58,4 +73,7 @@ the whole number again on every change.
 ## Consequences
 
 - Adding or removing a bank starts with CHIP's schema, then both the list and
-  the test.
+  the test. So does a change to a bank's account number length, which starts
+  from CHIP's supported banks table.
+- Bank accounts saved before the length check can still have the wrong
+  length. CHIP refuses them at registration, as before.

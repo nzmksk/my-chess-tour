@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BANK_SWIFT_CODES,
+  accountNumberLengthError,
   MALAYSIAN_BANKS,
   bankNameForSwift,
 } from "@/lib/reference/malaysian-banks";
@@ -107,5 +108,55 @@ describe("bankNameForSwift", () => {
 
   it("is case-sensitive — SWIFT codes are uppercase", () => {
     expect(bankNameForSwift("mbbemykl")).toBeUndefined();
+  });
+});
+
+describe("accountDigits", () => {
+  it.each(MALAYSIAN_BANKS)(
+    "$name's range fits chk_bank_account_number_digits (5 to 20)",
+    (bank) => {
+      const [min, max] = bank.accountDigits;
+      expect(min).toBeGreaterThanOrEqual(5);
+      expect(max).toBeLessThanOrEqual(20);
+      expect(min).toBeLessThanOrEqual(max);
+    },
+  );
+
+  it.each([
+    ["MBBEMYKL", [12, 12]],
+    ["CIBBMYKL", [10, 14]],
+    ["PBBEMYKL", [10, 10]],
+    ["RHBBMYKL", [14, 14]],
+    ["HLBBMYKL", [11, 13]],
+    ["BOTKMYKX", [6, 6]],
+    ["SCBLMYKX", [5, 17]],
+  ])("%s matches CHIP Send's supported-banks table", (swift, digits) => {
+    expect(
+      MALAYSIAN_BANKS.find((b) => b.swift === swift)?.accountDigits,
+    ).toEqual(digits);
+  });
+});
+
+describe("accountNumberLengthError", () => {
+  it("accepts a number of the bank's length", () => {
+    expect(accountNumberLengthError("MBBEMYKL", "514012345678")).toBeNull();
+    expect(accountNumberLengthError("CIBBMYKL", "8000123456")).toBeNull();
+    expect(accountNumberLengthError("CIBBMYKL", "80001234567890")).toBeNull();
+  });
+
+  it("names the one length a fixed-length bank expects", () => {
+    expect(accountNumberLengthError("MBBEMYKL", "5140123456")).toBe(
+      "Maybank account numbers have 12 digits",
+    );
+  });
+
+  it("names the range a variable-length bank expects", () => {
+    expect(accountNumberLengthError("CIBBMYKL", "800012345")).toBe(
+      "CIMB Bank account numbers have 10 to 14 digits",
+    );
+  });
+
+  it("leaves an unknown code to the bank-code check", () => {
+    expect(accountNumberLengthError("NOTABANK", "1")).toBeNull();
   });
 });

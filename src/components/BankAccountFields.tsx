@@ -1,6 +1,9 @@
 "use client";
 
-import type { MalaysianBank } from "@/lib/reference/malaysian-banks";
+import {
+  accountNumberLengthError,
+  type MalaysianBank,
+} from "@/lib/reference/malaysian-banks";
 
 export interface BankAccountValues {
   bankName: string;
@@ -30,8 +33,13 @@ export function validateBankAccount(
     return "Please enter the account holder name.";
   if (values.accountHolder.trim().length > 255)
     return "Account holder name must be 255 characters or fewer.";
-  if (!ACCOUNT_NUMBER_PATTERN.test(normalizeAccountNumber(values.accountNumber)))
+  const accountNumber = normalizeAccountNumber(values.accountNumber);
+  if (!ACCOUNT_NUMBER_PATTERN.test(accountNumber))
     return "Account number must contain 5 to 20 digits.";
+  if (requireBankCode) {
+    const lengthError = accountNumberLengthError(values.bankCode, accountNumber);
+    if (lengthError) return `${lengthError}.`;
+  }
   return null;
 }
 
