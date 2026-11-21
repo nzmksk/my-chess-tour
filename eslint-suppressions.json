@@ -1,0 +1,2252 @@
+{
+  "next.config.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/__tests__/RootLayout.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/__tests__/layout.test.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/__tests__/not-found.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/__tests__/redirects.test.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/admin/applications/[id]/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 17
+    }
+  },
+  "src/app/admin/applications/[id]/_components/ApplicationDetailClient.tsx": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/admin/applications/[id]/page.tsx": {
+    "local/no-comments": {
+      "count": 14
+    }
+  },
+  "src/app/admin/applications/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/admin/applications/_components/ApplicationsClient.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/admin/cancellations/_components/CancellationsClient.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/admin/cancellations/page.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/admin/dashboard/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/admin/dashboard/_components/AdminDashboardClient.tsx": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/admin/dashboard/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/admin/oku/[userId]/_components/OkuReviewClient.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/admin/payouts/[id]/_components/PayoutReviewClient.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/admin/payouts/[id]/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/admin/payouts/_components/AdminPayoutsClient.tsx": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/admin/payouts/_components/ResendPayoutButton.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/admin/payouts/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/admin/prizes/_components/AdminPrizesClient.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/admin/prizes/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/admin/refunds/_components/RefireRefundButton.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/admin/refunds/_components/StuckRefundsClient.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/admin/refunds/_components/__tests__/StuckRefundsClient.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/admin/refunds/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/admin/tournaments/[id]/page.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/admin/applications/[id]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 31
+    }
+  },
+  "src/app/api/v1/admin/applications/[id]/route.ts": {
+    "local/no-comments": {
+      "count": 16
+    }
+  },
+  "src/app/api/v1/admin/applications/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 30
+    }
+  },
+  "src/app/api/v1/admin/dashboard/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 43
+    }
+  },
+  "src/app/api/v1/admin/dashboard/route.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/admin/oku/[userId]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/admin/oku/[userId]/route.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/admin/payouts/[id]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/api/v1/admin/payouts/[id]/route.ts": {
+    "local/no-comments": {
+      "count": 16
+    }
+  },
+  "src/app/api/v1/admin/payouts/[id]/send/route.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/api/v1/admin/payouts/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/app/api/v1/admin/payouts/route.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/app/api/v1/admin/prize-awards/[id]/route.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/api/v1/admin/prize-awards/[id]/send/route.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/admin/prize-awards/authorize.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/admin/prize-awards/route.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/admin/refunds/[id]/refire/route.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/admin/refunds/route.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/admin/tournament-cancellations/[id]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 21
+    }
+  },
+  "src/app/api/v1/admin/tournament-cancellations/[id]/route.ts": {
+    "local/no-comments": {
+      "count": 36
+    }
+  },
+  "src/app/api/v1/auth/callback/route.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/auth/signup/create-account/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 24
+    }
+  },
+  "src/app/api/v1/auth/signup/create-account/route.ts": {
+    "local/no-comments": {
+      "count": 25
+    }
+  },
+  "src/app/api/v1/auth/signup/request-code/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 19
+    }
+  },
+  "src/app/api/v1/auth/signup/request-code/route.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/api/v1/auth/signup/verify-code/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 23
+    }
+  },
+  "src/app/api/v1/auth/signup/verify-code/route.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/api/v1/changelog/route.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/cron/fide-ratings/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/cron/fide-ratings/route.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/api/v1/cron/payouts/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 19
+    }
+  },
+  "src/app/api/v1/cron/payouts/route.ts": {
+    "local/no-comments": {
+      "count": 14
+    }
+  },
+  "src/app/api/v1/cron/refunds/route.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/api/v1/feedback/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/api/v1/feedback/route.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/api/v1/invitations/[token]/accept/route.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/invitations/[token]/decline/route.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/me/invitations/[id]/accept/route.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/me/invitations/[id]/decline/route.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/me/invitations/_lib/respond.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/me/registrations/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 19
+    }
+  },
+  "src/app/api/v1/me/registrations/route.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/agreement/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 18
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/agreement/route.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/bank-account/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 24
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/bank-account/route.ts": {
+    "local/no-comments": {
+      "count": 23
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/bank-account/validators.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/dashboard/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 51
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/dashboard/route.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/invitations/[id]/route.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/invitations/route.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/members/[id]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 47
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/members/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 32
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/members/invite/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/members/invite/route.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/nominations/[tournamentId]/route.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/nominations/__tests__/routes.test.ts": {
+    "local/no-comments": {
+      "count": 21
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/nominations/route.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/payouts/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/payouts/route.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/payouts/validators.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/route.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/__tests__/route.get.test.ts": {
+    "local/no-comments": {
+      "count": 14
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 73
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/_lib/authorize.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/beneficiary/route.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/cancel/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/cancel/route.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/close-registration/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/close-registration/route.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/participants/export/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/participants/export/route.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/prize-awards/route.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/prize-funder-contacts/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/prize-funder-contacts/route.ts": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/prize-funding/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/prize-funding/route.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/publish/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 18
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/publish/route.ts": {
+    "local/no-comments": {
+      "count": 21
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/[id]/route.ts": {
+    "local/no-comments": {
+      "count": 45
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 17
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/tournaments/route.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/api/v1/organizations/[orgId]/validators.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/_lib/__tests__/invitation-errors.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/_lib/authorize-org.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/_lib/beneficiary-lock.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/organizations/_lib/invitation-errors.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/organizations/_lib/nomination-errors.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/api/v1/organizations/_lib/org-fields.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/api/v1/organizations/applications/[id]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/api/v1/organizations/applications/[id]/route.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/api/v1/organizations/applications/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 38
+    }
+  },
+  "src/app/api/v1/organizations/applications/application-rpc.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/api/v1/organizations/applications/route.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/app/api/v1/organizations/applications/validators.ts": {
+    "local/no-comments": {
+      "count": 30
+    }
+  },
+  "src/app/api/v1/organizations/search/route.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/profile/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/api/v1/profile/banking/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/profile/banking/route.ts": {
+    "local/no-comments": {
+      "count": 21
+    }
+  },
+  "src/app/api/v1/profile/consents/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/api/v1/profile/consents/route.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/api/v1/profile/oku/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/api/v1/profile/oku/route.ts": {
+    "local/no-comments": {
+      "count": 37
+    }
+  },
+  "src/app/api/v1/profile/route.ts": {
+    "local/no-comments": {
+      "count": 18
+    }
+  },
+  "src/app/api/v1/tournaments/[slug]/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 24
+    }
+  },
+  "src/app/api/v1/tournaments/[slug]/checkout/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 70
+    }
+  },
+  "src/app/api/v1/tournaments/[slug]/checkout/route.ts": {
+    "local/no-comments": {
+      "count": 84
+    }
+  },
+  "src/app/api/v1/tournaments/[slug]/registrations/__tests__/validators.test.ts": {
+    "local/no-comments": {
+      "count": 46
+    }
+  },
+  "src/app/api/v1/tournaments/[slug]/registrations/validators.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/api/v1/tournaments/[slug]/route.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/api/v1/tournaments/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/api/v1/webhooks/chip/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 33
+    }
+  },
+  "src/app/api/v1/webhooks/chip/route.ts": {
+    "local/no-comments": {
+      "count": 65
+    }
+  },
+  "src/app/api/v1/webhooks/chip/send/__tests__/route.test.ts": {
+    "local/no-comments": {
+      "count": 30
+    }
+  },
+  "src/app/api/v1/webhooks/chip/send/route.ts": {
+    "local/no-comments": {
+      "count": 66
+    }
+  },
+  "src/app/api/v1/webhooks/github/route.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/auth/forgot-password/__tests__/actions.test.ts": {
+    "local/no-comments": {
+      "count": 16
+    }
+  },
+  "src/app/auth/forgot-password/_actions/__tests__/forgotPassword.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/auth/forgot-password/_actions/forgotPassword.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/auth/forgot-password/_components/ForgotPasswordForm.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/auth/forgot-password/_components/__tests__/ForgotPasswordForm.test.tsx": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/auth/login/__tests__/actions.test.ts": {
+    "local/no-comments": {
+      "count": 20
+    }
+  },
+  "src/app/auth/login/_actions/login.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/auth/login/_components/LoginForm.tsx": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/auth/login/_components/__tests__/LoginForm.test.tsx": {
+    "local/no-comments": {
+      "count": 24
+    }
+  },
+  "src/app/auth/login/types.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/auth/logout/__tests__/actions.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/auth/logout/_actions/logout.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/auth/signup/_components/AuthCardSkeleton.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/auth/signup/_components/SignUpContext.tsx": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/app/auth/signup/_components/SignUpForm.tsx": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/app/auth/signup/_components/VerifyForm.tsx": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/auth/signup/_components/__tests__/SignUpContext.test.tsx": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/auth/signup/_components/__tests__/SignUpForm.test.tsx": {
+    "local/no-comments": {
+      "count": 14
+    }
+  },
+  "src/app/auth/signup/_components/__tests__/VerifyForm.test.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/auth/signup/_components/__tests__/VerifyForm.test.tsx": {
+    "local/no-comments": {
+      "count": 31
+    }
+  },
+  "src/app/auth/update-password/__tests__/actions.test.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/auth/update-password/_actions/__tests__/updatePassword.test.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/auth/update-password/_actions/updatePassword.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/auth/update-password/_components/UpdatePasswordForm.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/auth/update-password/_components/__tests__/UpdatePasswordForm.test.tsx": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/app/changelogs/__tests__/page.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/changelogs/page.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/global-error.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/invitations/[token]/_components/InvitationClient.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/invitations/[token]/page.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/layout.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/my/_components/InvitationsPanel.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/my/_components/PlayerDashboardShell.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/my/organizations/[orgId]/_components/AgreementGate.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/_components/BankAccountNotice.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/_components/DashboardClient.tsx": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/my/organizations/[orgId]/_components/PendingNominations.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/_components/__tests__/AgreementGate.test.tsx": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/my/organizations/[orgId]/members/_components/MembersClient.tsx": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/my/organizations/[orgId]/members/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/my/organizations/[orgId]/page.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/my/organizations/[orgId]/payouts/_components/EarlyPayoutRequest.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/payouts/_components/PayoutsClient.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/my/organizations/[orgId]/payouts/page.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/settings/_components/OrgSettingsClient.tsx": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/app/my/organizations/[orgId]/settings/page.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_components/PrizePoolPanel.tsx": {
+    "local/no-comments": {
+      "count": 17
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_components/TournamentActions.tsx": {
+    "local/no-comments": {
+      "count": 20
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_components/TournamentManageClient.tsx": {
+    "local/no-comments": {
+      "count": 22
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_components/__tests__/PrizePoolPanel.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_components/__tests__/TournamentActions.test.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_components/__tests__/TournamentManageClient.test.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_data/__tests__/getTournamentManageData.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/_data/getTournamentManageData.ts": {
+    "local/no-comments": {
+      "count": 35
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/edit/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/[id]/edit/page.tsx": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/LockedFieldset.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/TournamentWizardContext.tsx": {
+    "local/no-comments": {
+      "count": 20
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/WizardShell.tsx": {
+    "local/no-comments": {
+      "count": 42
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/__tests__/LockedSteps.test.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/__tests__/PayoutStep.test.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/__tests__/PrizesStep.test.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/__tests__/WizardShell.test.tsx": {
+    "local/no-comments": {
+      "count": 30
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/__tests__/entryFees.test.ts": {
+    "local/no-comments": {
+      "count": 14
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/__tests__/restrictions.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/entryFees.ts": {
+    "local/no-comments": {
+      "count": 26
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/restrictions.ts": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/rowId.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/steps/BasicInfoStep.tsx": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/steps/FeesStep.tsx": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/steps/FormatStep.tsx": {
+    "local/no-comments": {
+      "count": 19
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/steps/PayoutStep.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/steps/PrizesStep.tsx": {
+    "local/no-comments": {
+      "count": 25
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/_components/steps/ReviewStep.tsx": {
+    "local/no-comments": {
+      "count": 16
+    }
+  },
+  "src/app/my/organizations/[orgId]/tournaments/create/types.ts": {
+    "local/no-comments": {
+      "count": 42
+    }
+  },
+  "src/app/my/organizations/__tests__/navigationLinks.test.tsx": {
+    "local/no-comments": {
+      "count": 22
+    }
+  },
+  "src/app/my/organizations/applications/[id]/amend/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/my/organizations/applications/[id]/amend/page.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/my/organizations/applications/_components/ApplicationsClient.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/my/page.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/my/tournaments/__tests__/classify.test.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/app/my/tournaments/_components/RegistrationsClient.tsx": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/my/tournaments/_components/__tests__/RegistrationsClient.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/my/tournaments/classify.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/my/tournaments/page.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/my/tournaments/types.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/not-found.tsx": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/app/organizations/apply/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/organizations/apply/_components/ApplyForm.tsx": {
+    "local/no-comments": {
+      "count": 31
+    }
+  },
+  "src/app/organizations/apply/_components/__tests__/ApplyForm.test.tsx": {
+    "local/no-comments": {
+      "count": 27
+    }
+  },
+  "src/app/organizations/page.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/page.tsx": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/prize-funding/thank-you/page.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/profile/_components/PublicProfile.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/profile/_data/getPublicProfile.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/profile/types.ts": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/app/settings/_components/BankingCard.tsx": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/settings/_components/OkuVerificationCard.tsx": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/settings/_components/ProfileClient.tsx": {
+    "local/no-comments": {
+      "count": 37
+    }
+  },
+  "src/app/settings/_components/__tests__/BankingCard.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/settings/_components/__tests__/OkuVerificationCard.test.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/tournaments/[slug]/__tests__/page.test.ts": {
+    "local/no-comments": {
+      "count": 32
+    }
+  },
+  "src/app/tournaments/[slug]/_components/DetailSkeleton.tsx": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/tournaments/[slug]/_components/StartingRankTab.tsx": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/app/tournaments/[slug]/_components/TournamentDetail.tsx": {
+    "local/no-comments": {
+      "count": 31
+    }
+  },
+  "src/app/tournaments/[slug]/_components/__tests__/StartingRankTab.test.tsx": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/app/tournaments/[slug]/_components/__tests__/TournamentDetail.test.tsx": {
+    "local/no-comments": {
+      "count": 25
+    }
+  },
+  "src/app/tournaments/[slug]/_components/__tests__/TournamentTabs.test.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/tournaments/[slug]/page.tsx": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/app/tournaments/[slug]/register/_components/CompleteProfilePrompt.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/tournaments/[slug]/register/_components/PaymentInProgress.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/tournaments/[slug]/register/_components/PaymentStatusView.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/app/tournaments/[slug]/register/_components/RegisterForm.tsx": {
+    "local/no-comments": {
+      "count": 34
+    }
+  },
+  "src/app/tournaments/[slug]/register/_components/RegisterFormSkeleton.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/tournaments/[slug]/register/_components/__tests__/RegisterForm.test.tsx": {
+    "local/no-comments": {
+      "count": 60
+    }
+  },
+  "src/app/tournaments/[slug]/register/_lib/__tests__/resolvePaymentState.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/app/tournaments/[slug]/register/_lib/resolvePaymentState.ts": {
+    "local/no-comments": {
+      "count": 24
+    }
+  },
+  "src/app/tournaments/[slug]/register/failure/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/tournaments/[slug]/register/page.tsx": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/tournaments/[slug]/register/success/page.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/app/tournaments/[slug]/types.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/tournaments/__tests__/utils.test.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/tournaments/_components/FilterBar.tsx": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/tournaments/_components/ProfileNudge.tsx": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/app/tournaments/_components/TournamentCard.tsx": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/app/tournaments/_components/TournamentCardSkeleton.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/app/tournaments/_components/TournamentsClient.tsx": {
+    "local/no-comments": {
+      "count": 22
+    }
+  },
+  "src/app/tournaments/_components/TournamentsGridSkeleton.tsx": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/app/tournaments/_components/__tests__/FilterBar.test.tsx": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/app/tournaments/_components/__tests__/TournamentCard.test.tsx": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/app/tournaments/_components/__tests__/TournamentsClient.test.tsx": {
+    "local/no-comments": {
+      "count": 67
+    }
+  },
+  "src/app/tournaments/types.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/app/tournaments/utils.ts": {
+    "local/no-comments": {
+      "count": 54
+    }
+  },
+  "src/components/AuthProvider.tsx": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/components/BankAccountFields.tsx": {
+    "local/no-comments": {
+      "count": 18
+    }
+  },
+  "src/components/BankingForm.tsx": {
+    "local/no-comments": {
+      "count": 17
+    }
+  },
+  "src/components/BugReport.tsx": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/components/ChangelogChanges.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/components/Footer.tsx": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/components/HideOnAdmin.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/components/NavBar.tsx": {
+    "local/no-comments": {
+      "count": 20
+    }
+  },
+  "src/components/OrgSwitcher.tsx": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/components/RoleBadge.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/components/SensitiveDataConsent.tsx": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/components/ThemeProvider.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/components/WhatsNew.tsx": {
+    "local/no-comments": {
+      "count": 19
+    }
+  },
+  "src/components/__tests__/AuthProvider.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/BugReport.test.tsx": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/Footer.test.tsx": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/components/ui/country-dropdown.tsx": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/instrumentation-client.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/instrumentation.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/lib/__tests__/release-version.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/lib/auth/__tests__/avatar-cache.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/lib/auth/__tests__/session-cookie.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/lib/auth/auth-user.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/lib/auth/avatar-cache.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/lib/auth/roles.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/lib/auth/session-cookie.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/lib/auth/signup-cookie.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/lib/auth/signup-storage.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/lib/changelog.ts": {
+    "local/no-comments": {
+      "count": 18
+    }
+  },
+  "src/lib/export/__tests__/spreadsheet.test.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/lib/export/spreadsheet.ts": {
+    "local/no-comments": {
+      "count": 41
+    }
+  },
+  "src/lib/http/__tests__/after-response.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/lib/http/__tests__/internal-error.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/lib/http/__tests__/request-ip.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/lib/http/after-response.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/lib/http/internal-error.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/lib/http/origin-policy.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/lib/http/request-ip.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/lib/http/self-fetch.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/lib/http/server-to-server.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/lib/reference/__tests__/legal.test.ts": {
+    "local/no-comments": {
+      "count": 23
+    }
+  },
+  "src/lib/reference/__tests__/malaysian-banks.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/lib/reference/contact.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/lib/reference/countries.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/lib/reference/legal.ts": {
+    "local/no-comments": {
+      "count": 70
+    }
+  },
+  "src/lib/reference/malaysian-banks.ts": {
+    "local/no-comments": {
+      "count": 40
+    }
+  },
+  "src/lib/refunds/state.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/lib/refunds/stuck-after.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/lib/release-notes.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/lib/release-version.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/lib/tournaments/__tests__/datetime.test.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/lib/tournaments/__tests__/edit-policy.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/lib/tournaments/__tests__/prize-funding.test.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/lib/tournaments/__tests__/publish-validation.test.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/lib/tournaments/__tests__/venues.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/lib/tournaments/cache-tags.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/lib/tournaments/datetime.ts": {
+    "local/no-comments": {
+      "count": 34
+    }
+  },
+  "src/lib/tournaments/edit-policy.ts": {
+    "local/no-comments": {
+      "count": 66
+    }
+  },
+  "src/lib/tournaments/prize-funding.ts": {
+    "local/no-comments": {
+      "count": 39
+    }
+  },
+  "src/lib/tournaments/publish-validation.ts": {
+    "local/no-comments": {
+      "count": 20
+    }
+  },
+  "src/lib/tournaments/registration-status.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/lib/tournaments/slugs.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/lib/tournaments/venues.ts": {
+    "local/no-comments": {
+      "count": 39
+    }
+  },
+  "src/proxy.ts": {
+    "local/no-comments": {
+      "count": 20
+    }
+  },
+  "src/services/auth/__tests__/auth-validation.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/auth/__tests__/verification-code.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/auth/auth-validation.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/services/auth/verification-code.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/bug-reports/format.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/services/bug-reports/github.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/chip/__tests__/chip.test.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/chip/__tests__/send.test.ts": {
+    "local/no-comments": {
+      "count": 32
+    }
+  },
+  "src/services/chip/chip.ts": {
+    "local/no-comments": {
+      "count": 37
+    }
+  },
+  "src/services/chip/interfaces/common.ts": {
+    "local/no-comments": {
+      "count": 82
+    }
+  },
+  "src/services/chip/interfaces/purchases-request.ts": {
+    "local/no-comments": {
+      "count": 32
+    }
+  },
+  "src/services/chip/interfaces/purchases-response.ts": {
+    "local/no-comments": {
+      "count": 76
+    }
+  },
+  "src/services/chip/interfaces/refund-request.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/chip/interfaces/refund-response.ts": {
+    "local/no-comments": {
+      "count": 18
+    }
+  },
+  "src/services/chip/interfaces/send-account.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/chip/interfaces/send-bank-account.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/services/chip/interfaces/send-common.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/chip/interfaces/send-instruction.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/services/chip/interfaces/send-limit.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/services/chip/payment-method-label.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/services/chip/public-key.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/services/chip/send.ts": {
+    "local/no-comments": {
+      "count": 70
+    }
+  },
+  "src/services/consent/sensitive-data.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/services/email/__tests__/email.test.ts": {
+    "local/no-comments": {
+      "count": 23
+    }
+  },
+  "src/services/email/__tests__/templates.test.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/services/email/email.ts": {
+    "local/no-comments": {
+      "count": 74
+    }
+  },
+  "src/services/email/recipients.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/fide/__tests__/fide.test.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/fide/fide.ts": {
+    "local/no-comments": {
+      "count": 25
+    }
+  },
+  "src/services/github/__tests__/releases.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/github/releases.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/github/repo.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/oku/notify.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/organizations/__tests__/invitations.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/organizations/__tests__/notify.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/organizations/invitations.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/services/organizations/notify.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/services/payments/__tests__/fees.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/payments/fees.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/payments/paid-registration.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/payouts/__tests__/bank-account.test.ts": {
+    "local/no-comments": {
+      "count": 26
+    }
+  },
+  "src/services/payouts/__tests__/execute.test.ts": {
+    "local/no-comments": {
+      "count": 29
+    }
+  },
+  "src/services/payouts/__tests__/notify.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/payouts/__tests__/settle.test.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/services/payouts/admin-queue.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/services/payouts/bank-account.ts": {
+    "local/no-comments": {
+      "count": 41
+    }
+  },
+  "src/services/payouts/constants.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/services/payouts/execute.ts": {
+    "local/no-comments": {
+      "count": 56
+    }
+  },
+  "src/services/payouts/failure-reason.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/payouts/format.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/payouts/notify.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/payouts/recipient-problem.ts": {
+    "local/no-comments": {
+      "count": 4
+    }
+  },
+  "src/services/payouts/recipients.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/payouts/resend.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/payouts/review.ts": {
+    "local/no-comments": {
+      "count": 18
+    }
+  },
+  "src/services/payouts/send-errors.ts": {
+    "local/no-comments": {
+      "count": 8
+    }
+  },
+  "src/services/payouts/settle.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/services/payouts/sweep.ts": {
+    "local/no-comments": {
+      "count": 44
+    }
+  },
+  "src/services/prizes/__tests__/awards.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/prizes/__tests__/execute.test.ts": {
+    "local/no-comments": {
+      "count": 16
+    }
+  },
+  "src/services/prizes/__tests__/funding-requests.test.ts": {
+    "local/no-comments": {
+      "count": 12
+    }
+  },
+  "src/services/prizes/__tests__/sweep.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/prizes/awards.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/services/prizes/execute.ts": {
+    "local/no-comments": {
+      "count": 31
+    }
+  },
+  "src/services/prizes/funding-requests.ts": {
+    "local/no-comments": {
+      "count": 31
+    }
+  },
+  "src/services/prizes/funding.ts": {
+    "local/no-comments": {
+      "count": 11
+    }
+  },
+  "src/services/prizes/notify.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/services/prizes/pool.ts": {
+    "local/no-comments": {
+      "count": 13
+    }
+  },
+  "src/services/prizes/problems.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/services/prizes/settle.ts": {
+    "local/no-comments": {
+      "count": 10
+    }
+  },
+  "src/services/prizes/sweep.ts": {
+    "local/no-comments": {
+      "count": 16
+    }
+  },
+  "src/services/rate-limit/__tests__/limiter.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/rate-limit/__tests__/window.test.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/rate-limit/auth.ts": {
+    "local/no-comments": {
+      "count": 19
+    }
+  },
+  "src/services/rate-limit/limiter.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/services/rate-limit/limits.ts": {
+    "local/no-comments": {
+      "count": 23
+    }
+  },
+  "src/services/rate-limit/window.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/services/redis/__tests__/redis.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/redis/redis.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/refunds/__tests__/fire.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/refunds/__tests__/sweep.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/refunds/fire.ts": {
+    "local/no-comments": {
+      "count": 21
+    }
+  },
+  "src/services/refunds/notify.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/services/refunds/stuck.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/services/refunds/sweep.ts": {
+    "local/no-comments": {
+      "count": 29
+    }
+  },
+  "src/services/registrations/__tests__/roster.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/registrations/notify.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/registrations/roster.ts": {
+    "local/no-comments": {
+      "count": 15
+    }
+  },
+  "src/services/sentry/flush-after-response.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/services/sentry/options.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  },
+  "src/services/sentry/server.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/supabase/__tests__/admin.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/supabase/__tests__/identity.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/supabase/__tests__/permission.test.ts": {
+    "local/no-comments": {
+      "count": 30
+    }
+  },
+  "src/services/supabase/__tests__/server.test.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/supabase/__tests__/storage.test.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/services/supabase/admin.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/services/supabase/audit-context.ts": {
+    "local/no-comments": {
+      "count": 5
+    }
+  },
+  "src/services/supabase/identity.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/services/supabase/permission.ts": {
+    "local/no-comments": {
+      "count": 42
+    }
+  },
+  "src/services/supabase/server.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/services/supabase/storage.ts": {
+    "local/no-comments": {
+      "count": 7
+    }
+  },
+  "src/stores/auth-store.ts": {
+    "local/no-comments": {
+      "count": 6
+    }
+  },
+  "src/test/after.ts": {
+    "local/no-comments": {
+      "count": 2
+    }
+  },
+  "src/test/appRoutes.ts": {
+    "local/no-comments": {
+      "count": 9
+    }
+  },
+  "src/test/identity.ts": {
+    "local/no-comments": {
+      "count": 1
+    }
+  },
+  "src/test/setup.ts": {
+    "local/no-comments": {
+      "count": 3
+    }
+  }
+}

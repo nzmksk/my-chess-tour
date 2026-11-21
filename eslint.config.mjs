@@ -1,11 +1,11 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import local from "./eslint-rules/no-comments.mjs";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Honor the `_`-prefix convention for intentionally-unused vars/args.
   {
     rules: {
       "@typescript-eslint/no-unused-vars": [
@@ -18,9 +18,12 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // src/lib holds framework-agnostic helpers shared across the app, so it must
-  // sit below the UI and state layers: it may not import components, stores,
-  // or app code (which all import lib).
+  {
+    plugins: { local },
+    rules: {
+      "local/no-comments": "error",
+    },
+  },
   {
     files: ["src/lib/**"],
     rules: {
@@ -29,7 +32,7 @@ const eslintConfig = defineConfig([
         {
           patterns: [
             {
-              regex: "^(@/|(\\.\\./)+)(components|stores|app)(/|$)",
+              regex: "^(@/|(\.\./)+)(components|stores|app)(/|$)",
               message:
                 "src/lib must not depend on components, stores, or app. Move the shared code into lib instead.",
             },
@@ -38,8 +41,6 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // Database and auth-server error text describes the schema and must not reach
-  // a response body (#487). Log it and return internalErrorResponse() instead.
   {
     files: ["src/app/api/**/*.ts"],
     ignores: ["**/__tests__/**"],
@@ -61,9 +62,7 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".claude/**",
     ".next/**",
     "build/**",
