@@ -19,14 +19,12 @@ import {
 
 describe("getTodayInTimeZone", () => {
   it("rolls to the next day for an instant past midnight in Malaysia (UTC+8)", () => {
-    // 2026-03-09 17:00 UTC = 2026-03-10 01:00 in Kuala Lumpur
     expect(
       getTodayInTimeZone("Asia/Kuala_Lumpur", new Date("2026-03-09T17:00:00Z")),
     ).toBe("2026-03-10");
   });
 
   it("stays on the same day for an instant still before midnight in Malaysia", () => {
-    // 2026-03-09 15:00 UTC = 2026-03-09 23:00 in Kuala Lumpur
     expect(
       getTodayInTimeZone("Asia/Kuala_Lumpur", new Date("2026-03-09T15:00:00Z")),
     ).toBe("2026-03-09");
@@ -34,7 +32,6 @@ describe("getTodayInTimeZone", () => {
 
   it("gives different days to venues in different zones at the same instant", () => {
     const instant = new Date("2026-03-09T17:00:00Z");
-    // Already the 10th in Manila (UTC+8), still the 9th in Yangon (UTC+6:30).
     expect(getTodayInTimeZone("Asia/Manila", instant)).toBe("2026-03-10");
     expect(getTodayInTimeZone("Asia/Yangon", instant)).toBe("2026-03-09");
   });
@@ -136,7 +133,6 @@ describe("toLocalDateTimeInput", () => {
 
 describe("toCalendarDateInTimeZone", () => {
   it("reduces an instant to the venue's calendar day", () => {
-    // 23:30 UTC is already the next day in Kuala Lumpur.
     expect(
       toCalendarDateInTimeZone("2026-02-19T23:30:00Z", "Asia/Kuala_Lumpur"),
     ).toBe("2026-02-20");
@@ -173,8 +169,6 @@ describe("calendar date arithmetic", () => {
 
 describe("formatCalendarDate", () => {
   it("renders the date's own day, whatever the runtime timezone", () => {
-    // The bug this replaces: new Date("2026-08-10") is UTC midnight, which is
-    // still the 9th anywhere west of Greenwich.
     expect(formatCalendarDate("2026-08-10")).toMatch(/10/);
     expect(formatCalendarDate("2026-08-10")).toMatch(/Aug/);
     expect(formatCalendarDate("2026-08-10")).toMatch(/2026/);
@@ -207,8 +201,6 @@ describe("formatCalendarDateRange", () => {
 
 describe("formatInstantDate", () => {
   it("reads a deadline on the venue's day, not the viewer's", () => {
-    // 2026-02-19 16:30 UTC is already the 20th in Kuala Lumpur (UTC+8) but
-    // still the 19th in Bangkok (UTC+7).
     expect(formatInstantDate("2026-02-19T16:30:00Z", "Asia/Kuala_Lumpur")).toBe(
       "20 Feb 2026 (MYT)",
     );

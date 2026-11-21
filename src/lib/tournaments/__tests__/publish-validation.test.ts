@@ -96,8 +96,6 @@ describe("validatePublishable", () => {
     ]);
   });
 
-  // An edit that doesn't touch a date that has already passed (a closed
-  // registration) must not be refused for it.
   it("can skip the future-date checks for dates that aren't changing", () => {
     expect(
       validatePublishable(
@@ -114,7 +112,6 @@ describe("validatePublishable", () => {
   });
 
   it("compares the deadline as an instant, not as text", () => {
-    // Same instant as NOW in a different offset: not in the future.
     expect(
       validatePublishable(
         { ...COMPLETE, registration_deadline: "2026-11-15T12:00:00+08:00" },

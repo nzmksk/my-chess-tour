@@ -34,3 +34,6 @@ old one `Superseded by NNNN`, and link both ways.
 | 0009 | [Refund states and stuck refunds](0009-refund-states.md)                                         | Accepted |
 | 0010 | [Legal versions are dated histories](0010-legal-versions-are-dated-histories.md)                 | Accepted |
 | 0011 | [Payout banks mirror CHIP Send's list](0011-payout-banks-mirror-chip-send.md)                    | Accepted |
+| 0012 | [Tournament dates belong to the venue](0012-tournament-dates-belong-to-the-venue.md)             | Accepted |
+| 0013 | [Tournament pages are cached and purged by tag](0013-tournament-page-caching.md)                 | Accepted |
+| 0014 | [What a prize declaration must hold](0014-prize-declarations.md)                                 | Accepted |

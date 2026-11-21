@@ -127,7 +127,6 @@ describe("isFieldEditable", () => {
     expect(lockedFields("cancelled")).toEqual(EDITABLE_FIELDS);
   });
 
-  // A field that locks at one stage must never unlock at a later one.
   it("never unlocks a field as the tournament moves on", () => {
     const order: EditStage[] = [
       "draft",
