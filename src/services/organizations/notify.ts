@@ -46,9 +46,10 @@ export async function notifyApplicationReviewed(orgId: string): Promise<void> {
       return;
     }
 
+    const approved = org.approval_status === "approved";
     const recipients = new Map<string, EmailRecipient>();
     addRecipient(recipients, org.applicant?.email, org.applicant?.first_name);
-    addRecipient(recipients, org.email, org.name);
+    if (approved) addRecipient(recipients, org.email, org.name);
     if (recipients.size === 0) {
       console.error(`Organization ${orgId}: no address to send the review email to`);
       return;
@@ -61,7 +62,7 @@ export async function notifyApplicationReviewed(orgId: string): Promise<void> {
           recipientName: r.name,
           organizationName: org.name ?? "your organization",
           orgId: org.id,
-          approved: org.approval_status === "approved",
+          approved,
           rejectionReason: org.rejection_reason ?? undefined,
         }),
       `application review email(s) for organization ${orgId}`,

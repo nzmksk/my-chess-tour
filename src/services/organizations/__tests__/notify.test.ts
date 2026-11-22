@@ -91,14 +91,30 @@ describe("notifyApplicationReviewed", () => {
     );
   });
 
-  it("passes the reason on a rejection", async () => {
+  it("emails a rejection only to the applicant, by their name, with the reason", async () => {
     givenOrg({ approval_status: "rejected", rejection_reason: "Missing SSM document" });
     await notifyApplicationReviewed(ORG);
 
-    expect(mockReview).toHaveBeenCalledWith(
-      "aisha@example.com",
-      expect.objectContaining({ approved: false, rejectionReason: "Missing SSM document" }),
-    );
+    expect(mockReview).toHaveBeenCalledOnce();
+    expect(mockReview).toHaveBeenCalledWith("aisha@example.com", {
+      recipientName: "Aisha",
+      organizationName: "KL Chess Club",
+      orgId: ORG,
+      approved: false,
+      rejectionReason: "Missing SSM document",
+    });
+  });
+
+  it("doesn't fall back to the contact address when a rejected applicant has no email", async () => {
+    givenOrg({
+      approval_status: "rejected",
+      rejection_reason: "Missing SSM document",
+      applicant: { email: null, first_name: "Aisha" },
+    });
+    await notifyApplicationReviewed(ORG);
+
+    expect(mockReview).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalled();
   });
 
   it("emails an address shared by applicant and contact once, by the applicant's name", async () => {
