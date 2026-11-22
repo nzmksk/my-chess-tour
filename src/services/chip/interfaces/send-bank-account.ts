@@ -5,7 +5,7 @@ export interface ChipBankAccountRequest {
   reference: string;
 }
 
-export type ChipBankAccountStatus =
+type ChipBankAccountStatus =
   | "received"
   | "pending"
   | "verified"

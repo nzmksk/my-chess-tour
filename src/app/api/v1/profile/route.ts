@@ -44,7 +44,7 @@ export async function GET(): Promise<NextResponse> {
       supabaseAdmin
         .from("player_bank_accounts")
         .select(
-          "bank_name, bank_code, account_holder, account_number, status, rejection_reason",
+          "bank_name, bank_code, account_holder, account_number, status, rejection_reason, bank_holder_name",
         )
         .eq("user_id", claims.id)
         .eq("is_active", true)
@@ -87,6 +87,7 @@ export async function GET(): Promise<NextResponse> {
         : null,
       bank_account_status: bankData?.status ?? null,
       bank_account_rejection_reason: bankData?.rejection_reason ?? null,
+      bank_holder_name: bankData?.bank_holder_name ?? null,
     },
   });
 }

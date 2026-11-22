@@ -185,9 +185,60 @@ describe("loadPayoutReview", () => {
       account_number_last4: "1234",
       status: "verified",
       is_active: true,
+      bank_holder_name: null,
+      name_check: "not_recorded",
     });
     expect(JSON.stringify(data)).not.toContain("514100001234");
     expect(eqCalls).toContainEqual(["organization_bank_accounts", "is_active", true]);
+  });
+
+  it("checks the bank's holder name against the registered name", async () => {
+    tables.organization_bank_accounts = [
+      {
+        data: {
+          bank_name: "Maybank",
+          account_holder: "KL Chess",
+          account_number: "514100001234",
+          status: "name_mismatch",
+          is_active: true,
+          bank_holder_name: "KL CHESS",
+        },
+        error: null,
+      },
+    ];
+    tables.organization_registered_names = [
+      { data: { registered_name: "KL Chess Sdn Bhd" }, error: null },
+    ];
+
+    const { data } = await loadPayoutReview(ID);
+
+    expect(data?.organization.registered_name).toBe("KL Chess Sdn Bhd");
+    expect(data?.bank_account).toMatchObject({
+      bank_holder_name: "KL CHESS",
+      name_check: "mismatch",
+      status: "name_mismatch",
+    });
+  });
+
+  it("checks against the submitted holder when there is no registered name", async () => {
+    tables.organization_bank_accounts = [
+      {
+        data: {
+          bank_name: "Maybank",
+          account_holder: "KL Chess",
+          account_number: "514100001234",
+          status: "verified",
+          is_active: true,
+          bank_holder_name: "KL CHESS",
+        },
+        error: null,
+      },
+    ];
+
+    const { data } = await loadPayoutReview(ID);
+
+    expect(data?.organization.registered_name).toBeNull();
+    expect(data?.bank_account?.name_check).toBe("match");
   });
 
   it("shows a reviewed request's recorded account instead", async () => {

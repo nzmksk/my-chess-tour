@@ -23,9 +23,51 @@ function renderWithDetails() {
       accountNumberLast4="7890"
       status="verified"
       rejectionReason={null}
+      bankHolderName="AHMAD BIN ALI"
     />,
   );
 }
+
+describe("BankingCard — the bank's holder name (#374)", () => {
+  afterEach(cleanup);
+
+  it("shows the name the bank holds the account under", () => {
+    renderWithDetails();
+    expect(screen.getByText("Name at Your Bank")).toBeTruthy();
+    expect(screen.getByText("AHMAD BIN ALI")).toBeTruthy();
+  });
+
+  it("explains an account held for a name review", () => {
+    render(
+      <BankingCard
+        bankName="Maybank"
+        bankCode="MBBEMYKL"
+        accountHolder="Ahmad bin Ali"
+        accountNumberLast4="7890"
+        status="name_mismatch"
+        rejectionReason={null}
+        bankHolderName="SOMEONE ELSE"
+      />,
+    );
+    expect(screen.getByText("Under review")).toBeTruthy();
+    expect(screen.getByText(/under a different name/)).toBeTruthy();
+  });
+
+  it("leaves the row out when the bank's name isn't known", () => {
+    render(
+      <BankingCard
+        bankName="Maybank"
+        bankCode="MBBEMYKL"
+        accountHolder="Ahmad bin Ali"
+        accountNumberLast4="7890"
+        status="pending"
+        rejectionReason={null}
+        bankHolderName={null}
+      />,
+    );
+    expect(screen.queryByText("Name at Your Bank")).toBeNull();
+  });
+});
 
 describe("BankingCard — withdrawing financial data consent (#451)", () => {
   beforeEach(() => {

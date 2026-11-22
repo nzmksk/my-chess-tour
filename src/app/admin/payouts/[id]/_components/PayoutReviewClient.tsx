@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import BankHolderNameCheck from "@/components/BankHolderNameCheck";
 import { formatRinggit } from "@/services/payouts/format";
 import type { PayoutReview } from "@/services/payouts/review";
 import ResendPayoutButton from "../../_components/ResendPayoutButton";
@@ -25,6 +26,7 @@ const BANK_STATUS_LABELS: Record<string, string> = {
   pending: "Awaiting verification",
   verified: "Verified",
   rejected: "Rejected",
+  name_mismatch: "Holder name doesn't match: waiting for review",
 };
 
 const APPROVAL_CONFIG: Record<
@@ -447,6 +449,9 @@ export default function PayoutReviewClient({ review }: { review: PayoutReview })
         <DetailRow label="Registration No.">
           {org.registration_number ?? <span className="text-text-muted">—</span>}
         </DetailRow>
+        <DetailRow label="Registered Name">
+          {org.registered_name ?? <span className="text-text-muted">Not given</span>}
+        </DetailRow>
         <DetailRow label="Agreement">
           {org.agreement_version ?? "Not accepted"}
           {org.agreement_accepted_at && (
@@ -463,6 +468,13 @@ export default function PayoutReviewClient({ review }: { review: PayoutReview })
           <>
             <DetailRow label="Bank">{review.bank_account.bank_name}</DetailRow>
             <DetailRow label="Account Holder">{review.bank_account.account_holder}</DetailRow>
+            <DetailRow label="Bank's Holder Name">
+              <BankHolderNameCheck
+                bankHolderName={review.bank_account.bank_holder_name}
+                check={review.bank_account.name_check}
+                underReview={review.bank_account.status === "name_mismatch"}
+              />
+            </DetailRow>
             {/* Last 4 only. No surface ever renders or returns the full number. */}
             <DetailRow label="Account Number">
               •••• {review.bank_account.account_number_last4}

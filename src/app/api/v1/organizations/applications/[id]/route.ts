@@ -99,6 +99,7 @@ async function handlePut(
       p_phone: body.phone,
       p_past_tournament_refs: body.past_tournament_refs,
       p_registration_number: body.registration_number,
+      p_registered_name: body.registered_name,
     },
   );
 

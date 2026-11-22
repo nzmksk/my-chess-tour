@@ -109,6 +109,7 @@ Registration with CHIP Send reuses `src/services/payouts/bank-account.ts` (`regi
 
 - when the winner saves their details (the banking route calls `sendAwardsAwaitingBank` after the response);
 - when CHIP verifies the account (the Send webhook hands player verdicts to `onPlayerBankVerdict`; a **rejected** account re-sends the awarded email asking the winner to fix it);
+- when an admin confirms an account held because the bank's holder name didn't match the one the winner gave, or rejects it, which emails the winner as a CHIP rejection does ([Who the account belongs to](./payout-flow.md#who-the-account-belongs-to));
 - on the daily run.
 
 ## The daily run

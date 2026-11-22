@@ -49,6 +49,7 @@ function makeReview(overrides: Partial<PayoutReview> = {}): PayoutReview {
       agreement_version: "2026-08-02",
       agreement_accepted_at: "2026-08-03T00:00:00Z",
       agreement_current: true,
+      registered_name: "Persatuan Catur Selangor",
     },
     bank_account: {
       bank_name: "Maybank",
@@ -56,6 +57,8 @@ function makeReview(overrides: Partial<PayoutReview> = {}): PayoutReview {
       account_number_last4: "1234",
       status: "verified",
       is_active: true,
+      bank_holder_name: "PERSATUAN CATUR SELANGOR",
+      name_check: "match",
     },
     documents: [
       { id: "d1", doc_type: "ros", original_filename: "ros.pdf", url: "https://signed.test/ros" },
@@ -143,6 +146,27 @@ describe("PayoutReviewClient", () => {
     );
     expect(screen.getByText(/not the current version/)).toBeTruthy();
     expect(screen.getByText("Awaiting verification")).toBeTruthy();
+  });
+
+  it("shows the bank's holder name next to the registered name, with the match result", () => {
+    render(
+      <PayoutReviewClient
+        review={makeReview({
+          bank_account: {
+            ...makeReview().bank_account!,
+            status: "name_mismatch",
+            bank_holder_name: "SOMEONE ELSE",
+            name_check: "mismatch",
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("Persatuan Catur Selangor")).toBeTruthy();
+    expect(screen.getByText(/SOMEONE ELSE/)).toBeTruthy();
+    expect(screen.getByText("(doesn't match)")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Review →" }).getAttribute("href")).toBe(
+      "/admin/bank-accounts",
+    );
   });
 
   it("approves and reports what the send did", async () => {

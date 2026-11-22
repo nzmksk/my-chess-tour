@@ -13,7 +13,7 @@ import {
 import { REFUND_STUCK_AFTER_INTERVAL } from "@/lib/refunds/stuck-after";
 import { afterResponse } from "@/lib/http/after-response";
 
-export type RefundFireRefusal =
+type RefundFireRefusal =
   | "settled"
   | "rejected"
   | "in_flight"

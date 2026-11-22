@@ -14,7 +14,7 @@ import {
 import { type ExecutePayoutResult, executePayout } from "./execute";
 import { settlePayout } from "./settle";
 
-export type OutcomeTally = Record<ExecutePayoutResult, number>;
+type OutcomeTally = Record<ExecutePayoutResult, number>;
 
 export interface PassStats extends OutcomeTally {
   checked: number;

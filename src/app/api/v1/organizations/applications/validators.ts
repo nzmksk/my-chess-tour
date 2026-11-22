@@ -57,6 +57,7 @@ interface OrgFields {
   past_tournament_refs: string | null;
   entity_type: OrgEntityType;
   registration_number: string | null;
+  registered_name: string;
 }
 
 // Deliberately no agreement_version field. The applicant declares that they
@@ -159,6 +160,21 @@ function validateOrgFields(b: Record<string, unknown>): Validated<OrgFields> {
     return invalid("Registration number must be 100 characters or fewer");
   }
 
+  const registeredName =
+    typeof b.registered_name === "string"
+      ? b.registered_name.trim().replace(/\s+/g, " ")
+      : "";
+  if (!registeredName) {
+    return invalid(
+      entityType === "individual"
+        ? "Your full name as on your identity document is required"
+        : `The registered name on your ${entityType === "company" ? "SSM" : "ROS"} registration is required`,
+    );
+  }
+  if (registeredName.length > 255) {
+    return invalid("Registered name must be 255 characters or fewer");
+  }
+
   return {
     data: {
       name: b.name.trim(),
@@ -179,6 +195,7 @@ function validateOrgFields(b: Record<string, unknown>): Validated<OrgFields> {
       // means exactly one thing (the RPC does the same).
       registration_number:
         entityType === "individual" ? null : registrationNumber,
+      registered_name: registeredName,
     },
   };
 }

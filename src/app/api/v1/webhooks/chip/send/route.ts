@@ -32,6 +32,7 @@ interface ChipSendBankAccountObject {
   rejection_reason?: string | null;
   account_number?: string;
   bank_code?: string;
+  name?: string | null;
 }
 
 interface ChipSendInstructionObject {
@@ -193,6 +194,7 @@ async function handleBankAccountEvent(
     chipBankAccountId: chipId,
     verified: outcome === "verified",
     reason: obj.rejection_reason,
+    bankHolderName: typeof obj.name === "string" ? obj.name : null,
   });
 
   if (error) {

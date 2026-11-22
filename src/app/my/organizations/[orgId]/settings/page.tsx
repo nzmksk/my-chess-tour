@@ -33,9 +33,10 @@ export interface MaskedBankAccount {
   bank_code: string;
   account_holder: string;
   account_number_last4: string;
-  status: "pending" | "verified" | "rejected";
+  status: "pending" | "verified" | "rejected" | "name_mismatch";
   rejection_reason: string | null;
   verified_at: string | null;
+  bank_holder_name: string | null;
 }
 
 export interface OrgDocumentSummary {
@@ -97,23 +98,31 @@ export default async function OrganizationSettingsPage({
 
   if (!org) notFound();
 
-  const [{ data: bankRow }, { data: documents }] = await Promise.all([
-    canManageBank
-      ? supabaseAdmin
-          .from("organization_bank_accounts")
-          .select(
-            "bank_name, bank_code, account_holder, account_number, status, rejection_reason, verified_at",
-          )
-          .eq("organization_id", orgId)
-          .eq("is_active", true)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabaseAdmin
-      .from("organization_documents")
-      .select("id, doc_type, original_filename, created_at")
-      .eq("organization_id", orgId)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: bankRow }, { data: documents }, { data: registeredNameRow }] =
+    await Promise.all([
+      canManageBank
+        ? supabaseAdmin
+            .from("organization_bank_accounts")
+            .select(
+              "bank_name, bank_code, account_holder, account_number, status, rejection_reason, verified_at, bank_holder_name",
+            )
+            .eq("organization_id", orgId)
+            .eq("is_active", true)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabaseAdmin
+        .from("organization_documents")
+        .select("id, doc_type, original_filename, created_at")
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: true }),
+      canManageBank
+        ? supabaseAdmin
+            .from("organization_registered_names")
+            .select("registered_name")
+            .eq("organization_id", orgId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
   // Masked before it crosses into the client bundle, the same rule the API
   // follows: the full account number never leaves the database.
@@ -126,6 +135,7 @@ export default async function OrganizationSettingsPage({
         status: bankRow.status,
         rejection_reason: bankRow.rejection_reason,
         verified_at: bankRow.verified_at,
+        bank_holder_name: bankRow.bank_holder_name,
       }
     : null;
 
@@ -135,6 +145,10 @@ export default async function OrganizationSettingsPage({
       <OrgSettingsClient
         organization={org as unknown as OrgProfile}
         bankAccount={bankAccount}
+        registeredName={
+          (registeredNameRow as { registered_name: string } | null)
+            ?.registered_name ?? null
+        }
         canManageBank={canManageBank === true}
         documents={(documents ?? []) as OrgDocumentSummary[]}
       />

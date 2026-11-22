@@ -358,4 +358,34 @@ describe("AdminApplicationDetailPage", () => {
     expect(rendered).toContain("SSM certificate unreadable");
     expect(rendered).toContain("resubmitted");
   });
+
+  it("passes the registered name to the review", async () => {
+    mockGetClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockSingle.mockResolvedValue({ data: makeApplicationDetail(), error: null });
+    const namesBuilder = {
+      select: vi.fn(() => namesBuilder),
+      eq: vi.fn(() => namesBuilder),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { registered_name: "KL Chess Club Sdn Bhd" },
+        error: null,
+      }),
+    };
+    const defaultFrom = mockFrom.getMockImplementation()!;
+    mockFrom.mockImplementation((table: string) =>
+      table === "organization_registered_names"
+        ? namesBuilder
+        : defaultFrom(table),
+    );
+
+    const AdminApplicationDetailPage = await importPage();
+    const result = await AdminApplicationDetailPage({
+      params: Promise.resolve({ id: APP_ID }),
+    });
+
+    expect(namesBuilder.eq).toHaveBeenCalledWith("organization_id", APP_ID);
+    expect(JSON.stringify(result)).toContain(
+      '"registered_name":"KL Chess Club Sdn Bhd"',
+    );
+  });
 });

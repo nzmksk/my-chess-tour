@@ -100,6 +100,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       p_phone: body.phone ?? null,
       p_past_tournament_refs: body.past_tournament_refs ?? null,
       p_registration_number: body.registration_number,
+      p_registered_name: body.registered_name,
     },
   );
 

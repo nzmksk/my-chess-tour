@@ -162,6 +162,7 @@ const verifiedEvent = {
   reference: BANK_ID,
   status: "verified",
   rejection_reason: null,
+  name: "KL CHESS CLUB",
 };
 
 beforeEach(() => {
@@ -191,6 +192,7 @@ describe("signature verification", () => {
       chipBankAccountId: 84,
       verified: true,
       reason: null,
+      bankHolderName: "KL CHESS CLUB",
     });
   });
 
@@ -352,7 +354,16 @@ describe("bank account events", () => {
       chipBankAccountId: 84,
       verified: false,
       reason: "Account closed",
+      bankHolderName: null,
     });
+  });
+
+  it("ignores a holder name that isn't a string", async () => {
+    lookups.push({ data: { id: BANK_ID }, error: null });
+    await POST(bankRequest({ ...verifiedEvent, name: 42 }));
+    expect(mockSettle).toHaveBeenCalledWith(
+      expect.objectContaining({ bankHolderName: null }),
+    );
   });
 
   it("accepts a string id", async () => {

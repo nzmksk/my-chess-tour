@@ -68,7 +68,7 @@ type MembershipOrgRow = {
   roles: { name: string };
 };
 
-export const getUserOrganizations = cache(
+const getUserOrganizations = cache(
   async (userId: string): Promise<UserOrganization[]> => {
     const { data } = await supabaseAdmin
       .from("organization_memberships")

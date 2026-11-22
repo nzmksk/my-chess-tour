@@ -48,9 +48,14 @@ export type PlayerProfile = {
   // through the platform, when the account is checked with their bank.
   bank_account_status: BankAccountStatus | null;
   bank_account_rejection_reason: string | null;
+  bank_holder_name: string | null;
 };
 
-export type BankAccountStatus = "pending" | "verified" | "rejected";
+export type BankAccountStatus =
+  | "pending"
+  | "verified"
+  | "rejected"
+  | "name_mismatch";
 
 // Public-facing subset of a player's profile. Excludes private fields
 // (email, date_of_birth) that must never be exposed publicly. Age is a computed

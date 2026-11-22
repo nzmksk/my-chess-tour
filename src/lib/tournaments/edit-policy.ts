@@ -40,7 +40,7 @@ export type EditableField =
   | "organizer_commission_pct"
   | "beneficiary";
 
-export const LOCKS_AT: Record<EditableField, OrderedStage> = {
+const LOCKS_AT: Record<EditableField, OrderedStage> = {
   entry_fees: "paid",
   prizes: "paid",
   commission_rate: "paid",
@@ -67,7 +67,7 @@ export const LOCKS_AT: Record<EditableField, OrderedStage> = {
   description: "completed",
 };
 
-export const INCREASE_ONLY_FROM: Partial<Record<EditableField, OrderedStage>> =
+const INCREASE_ONLY_FROM: Partial<Record<EditableField, OrderedStage>> =
   {
     max_participants: "paid",
   };

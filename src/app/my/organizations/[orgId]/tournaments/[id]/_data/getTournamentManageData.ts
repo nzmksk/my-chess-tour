@@ -31,7 +31,7 @@ interface ManageParticipant {
 }
 
 /** A live (non-rejected) refund to one of the tournament's players. */
-export interface ManageRefund {
+interface ManageRefund {
   id: string;
   registration_id: string;
   player_name: string;

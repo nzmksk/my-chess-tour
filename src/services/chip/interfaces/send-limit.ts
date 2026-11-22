@@ -4,7 +4,7 @@ export interface ChipSendLimitRequest {
   amount: number;
 }
 
-export type ChipSendLimitStatus =
+type ChipSendLimitStatus =
   | "pending"
   | "approved"
   | "expired"

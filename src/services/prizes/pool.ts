@@ -30,7 +30,3 @@ export async function loadPrizePoolPosition(
   }
   return { ok: true, position: data as PrizePoolPosition };
 }
-
-export function unfundedCents(position: PrizePoolPosition): number {
-  return Math.max(0, position.declared_cents - position.funded_cents);
-}

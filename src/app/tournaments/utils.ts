@@ -276,7 +276,4 @@ export function getStartingFee(
 
 // Moved to src/lib so lib code (the edit policy) can use it; re-exported here
 // for the pages that already import it from this module.
-export {
-  getTournamentDateState,
-  type TournamentDateState,
-} from "@/lib/tournaments/datetime";
+export { getTournamentDateState } from "@/lib/tournaments/datetime";

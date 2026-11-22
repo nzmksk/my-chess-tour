@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import BankHolderNameCheck from "@/components/BankHolderNameCheck";
 import { formatRinggit } from "@/services/payouts/format";
 import { prizeAwardStateLabel } from "@/services/prizes/problems";
 import type { PrizeAwardView } from "@/services/prizes/awards";
@@ -46,6 +47,7 @@ const BANK_LABEL: Record<string, string> = {
   verified: "Verified account",
   pending: "Account not yet verified",
   rejected: "Account rejected",
+  name_mismatch: "Account holder name doesn't match: waiting for review",
 };
 
 function formatInstant(iso: string): string {
@@ -132,6 +134,16 @@ function AwardCard({ award }: { award: PrizeAwardView }) {
               ? ` · ${BANK_LABEL[award.winner_bank_status]}`
               : " · No bank account"}
           </p>
+          {award.winner_bank_name_check && (
+            <p className="font-lato text-text-muted text-xs">
+              Bank&apos;s holder name:{" "}
+              <BankHolderNameCheck
+                bankHolderName={award.winner_bank_holder_name ?? null}
+                check={award.winner_bank_name_check}
+                underReview={award.winner_bank_status === "name_mismatch"}
+              />
+            </p>
+          )}
         </div>
         <span
           className={`font-cinzel rounded-md px-2 py-0.5 text-xs font-bold tracking-widest uppercase ${STATE_CLASS[state] ?? ""}`}

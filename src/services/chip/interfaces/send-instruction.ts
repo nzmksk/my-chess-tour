@@ -7,7 +7,7 @@ export interface ChipSendInstructionRequest {
   send_recipient_receipt?: boolean;
 }
 
-export type ChipSendInstructionState =
+type ChipSendInstructionState =
   | "received"
   | "enquiring"
   | "executing"

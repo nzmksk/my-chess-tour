@@ -54,6 +54,7 @@ import {
   registerActiveOrganizationBankAccount,
   registerOrganizationBankAccount,
   registerPendingBankAccounts,
+  reviewBankAccountName,
   settleBankAccountVerification,
 } from "../bank-account";
 
@@ -76,7 +77,21 @@ function queue(table: string, ...results: Array<{ data: unknown; error: unknown 
   tables[table] = [...(tables[table] ?? []), ...results];
 }
 
-function queueNotifyData(status: "verified" | "rejected", reason: string | null = null) {
+function queueExpectedName(registeredName: string | null = null) {
+  queue("organization_bank_accounts", {
+    data: { account_holder: "KL Chess Club", organization_id: ORG_ID },
+    error: null,
+  });
+  queue("organization_registered_names", {
+    data: registeredName ? { registered_name: registeredName } : null,
+    error: null,
+  });
+}
+
+function queueNotifyData(
+  status: "verified" | "rejected" | "name_mismatch",
+  reason: string | null = null,
+) {
   queue("organization_memberships", {
     data: [
       { user: { email: "Owner@x.com", first_name: "Olivia" }, roles: { name: "owner" } },
@@ -106,7 +121,13 @@ beforeEach(() => {
   updates.length = 0;
   mockSendEmail.mockResolvedValue(undefined);
   mockRpc.mockResolvedValue({
-    data: { organization_id: ORG_ID, already_processed: false, is_active: true },
+    data: {
+      owner: "organization",
+      organization_id: ORG_ID,
+      already_processed: false,
+      is_active: true,
+      status: "verified",
+    },
     error: null,
   });
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -137,7 +158,13 @@ describe("registerOrganizationBankAccount", () => {
   it("settles immediately when CHIP answers verified synchronously", async () => {
     queue("organization_bank_accounts", { data: pendingRow, error: null });
     queue("organization_bank_accounts", { data: null, error: null });
-    mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
+    mockRegister.mockResolvedValue({
+      id: 84,
+      status: "verified",
+      rejection_reason: null,
+      name: "KL CHESS CLUB",
+    });
+    queueExpectedName();
     queueNotifyData("verified");
 
     await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("verified");
@@ -147,6 +174,8 @@ describe("registerOrganizationBankAccount", () => {
       p_chip_bank_account_id: 84,
       p_verified: true,
       p_reason: null,
+      p_bank_holder_name: "KL CHESS CLUB",
+      p_name_matched: true,
     });
     await runAfterCallbacks();
     expect(mockSendEmail).toHaveBeenCalled();
@@ -168,6 +197,42 @@ describe("registerOrganizationBankAccount", () => {
       "settle_bank_account_verification",
       expect.objectContaining({ p_verified: false, p_reason: "Invalid account" }),
     );
+  });
+
+  it("holds a verified account in someone else's name for review, without emailing", async () => {
+    queue("organization_bank_accounts", { data: pendingRow, error: null });
+    queue("organization_bank_accounts", { data: null, error: null });
+    mockRegister.mockResolvedValue({
+      id: 84,
+      status: "verified",
+      rejection_reason: null,
+      name: "SOMEONE ELSE",
+    });
+    queueExpectedName();
+    mockRpc.mockResolvedValue({
+      data: {
+        owner: "organization",
+        organization_id: ORG_ID,
+        already_processed: false,
+        is_active: true,
+        status: "name_mismatch",
+      },
+      error: null,
+    });
+
+    await expect(registerOrganizationBankAccount(BANK_ID)).resolves.toBe("name_mismatch");
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({
+        p_verified: true,
+        p_bank_holder_name: "SOMEONE ELSE",
+        p_name_matched: false,
+      }),
+    );
+    await runAfterCallbacks();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).toContain("admin review");
   });
 
   it("treats an unverified sync response as pending", async () => {
@@ -285,6 +350,7 @@ describe("registerPendingBankAccounts", () => {
       checked: 2,
       verified: 0,
       rejected: 0,
+      name_mismatch: 0,
       pending: 1,
       skipped: 0,
       error: 1,
@@ -302,7 +368,13 @@ describe("registerPendingBankAccounts", () => {
       { data: { ...pendingRow, chip_bank_account_id: 84 }, error: null },
       { data: null, error: null },
     );
-    mockRegister.mockResolvedValue({ id: 84, status: "verified", rejection_reason: null });
+    mockRegister.mockResolvedValue({
+      id: 84,
+      status: "verified",
+      rejection_reason: null,
+      name: "KL CHESS CLUB",
+    });
+    queueExpectedName();
     queueNotifyData("verified");
 
     const stats = await registerPendingBankAccounts(NOW);
@@ -323,6 +395,7 @@ describe("registerPendingBankAccounts", () => {
       checked: 0,
       verified: 0,
       rejected: 0,
+      name_mismatch: 0,
       pending: 0,
       skipped: 0,
       error: 0,
@@ -339,12 +412,138 @@ describe("registerPendingBankAccounts", () => {
 });
 
 describe("settleBankAccountVerification", () => {
+  it("matches the bank's name against the registered name, not the submitted holder", async () => {
+    queueExpectedName("Persatuan Catur Kuala Lumpur");
+
+    await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 84,
+      verified: true,
+      bankHolderName: "KL CHESS CLUB",
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_name_matched: false }),
+    );
+
+    vi.clearAllMocks();
+    queueExpectedName("Persatuan Catur Kuala Lumpur");
+    await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 84,
+      verified: true,
+      bankHolderName: "PERSATUAN CATUR KUALA LUMPUR",
+    });
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_name_matched: true }),
+    );
+  });
+
+  it("matches a player's account against the holder they submitted", async () => {
+    queue("organization_bank_accounts", { data: null, error: null });
+    queue("player_bank_accounts", {
+      data: { account_holder: "Ahmad bin Ali" },
+      error: null,
+    });
+    mockRpc.mockResolvedValue({
+      data: {
+        owner: "player",
+        organization_id: null,
+        user_id: "u-1",
+        already_processed: false,
+        is_active: true,
+        status: "verified",
+      },
+      error: null,
+    });
+
+    const res = await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 84,
+      verified: true,
+      bankHolderName: "AHMAD B ALI",
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_name_matched: true, p_bank_holder_name: "AHMAD B ALI" }),
+    );
+    expect(res.playerVerdict).toEqual({ userId: "u-1", verified: true });
+  });
+
+  it("treats a verified answer with no name as a mismatch", async () => {
+    queueExpectedName();
+    await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 84,
+      verified: true,
+    });
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_bank_holder_name: null, p_name_matched: false }),
+    );
+  });
+
+  it("does not look up the expected name for a rejection", async () => {
+    await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 84,
+      verified: false,
+      reason: "Non-Active Status",
+    });
+    expect(mockFrom).not.toHaveBeenCalledWith("organization_registered_names");
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_verified: false, p_name_matched: false }),
+    );
+  });
+
+  it("returns the lookup error without settling when the expected name can't be loaded", async () => {
+    queue("organization_bank_accounts", {
+      data: null,
+      error: { code: "XX000", message: "db down" },
+    });
+    const res = await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 84,
+      verified: true,
+      bankHolderName: "KL CHESS CLUB",
+    });
+    expect(res).toEqual({ error: { code: "XX000", message: "db down" }, settled: false });
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("gives no player verdict while the account is under review", async () => {
+    queue("organization_bank_accounts", { data: null, error: null });
+    queue("player_bank_accounts", { data: { account_holder: "Ahmad" }, error: null });
+    mockRpc.mockResolvedValue({
+      data: {
+        owner: "player",
+        organization_id: null,
+        user_id: "u-1",
+        already_processed: false,
+        is_active: true,
+        status: "name_mismatch",
+      },
+      error: null,
+    });
+    const res = await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 84,
+      verified: true,
+      bankHolderName: "SOMEONE ELSE",
+    });
+    expect(res).toEqual({ error: null, settled: true, status: "name_mismatch" });
+  });
+
   it("returns the RPC error without emailing", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { code: "XX000", message: "boom" } });
     const res = await settleBankAccountVerification({
       bankAccountId: BANK_ID,
       chipBankAccountId: 84,
-      verified: true,
+      verified: false,
     });
     expect(res).toEqual({ error: { code: "XX000", message: "boom" }, settled: false });
     await runAfterCallbacks();
@@ -353,7 +552,12 @@ describe("settleBankAccountVerification", () => {
 
   it("does not email on an already-processed repeat", async () => {
     mockRpc.mockResolvedValue({
-      data: { organization_id: ORG_ID, already_processed: true, is_active: true },
+      data: {
+        organization_id: ORG_ID,
+        already_processed: true,
+        is_active: true,
+        status: "verified",
+      },
       error: null,
     });
     const res = await settleBankAccountVerification({
@@ -368,7 +572,12 @@ describe("settleBankAccountVerification", () => {
 
   it("does not email about a superseded account", async () => {
     mockRpc.mockResolvedValue({
-      data: { organization_id: ORG_ID, already_processed: false, is_active: false },
+      data: {
+        organization_id: ORG_ID,
+        already_processed: false,
+        is_active: false,
+        status: "verified",
+      },
       error: null,
     });
     const res = await settleBankAccountVerification({
@@ -382,14 +591,81 @@ describe("settleBankAccountVerification", () => {
   });
 
   it("an email failure does not fail the settlement", async () => {
+    queueExpectedName();
     queueNotifyData("verified");
     mockSendEmail.mockRejectedValue(new Error("resend down"));
     const res = await settleBankAccountVerification({
       bankAccountId: BANK_ID,
       chipBankAccountId: 84,
       verified: true,
+      bankHolderName: "KL CHESS CLUB",
     });
-    expect(res).toEqual({ error: null, settled: true });
+    expect(res).toEqual({ error: null, settled: true, status: "verified" });
+  });
+});
+
+describe("reviewBankAccountName", () => {
+  const REVIEWER = "44444444-4444-4444-8444-444444444444";
+
+  it("records the decision and emails the organization", async () => {
+    queueNotifyData("verified");
+
+    const res = await reviewBankAccountName({
+      bankAccountId: BANK_ID,
+      reviewerId: REVIEWER,
+      action: "confirm",
+      note: "Bank shortened the name",
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith("review_bank_account_name", {
+      p_bank_account_id: BANK_ID,
+      p_reviewer_id: REVIEWER,
+      p_action: "confirm",
+      p_note: "Bank shortened the name",
+    });
+    expect(res).toEqual({ error: null, settled: true, status: "verified" });
+    await runAfterCallbacks();
+    expect(mockSendEmail).toHaveBeenCalled();
+  });
+
+  it("returns a player verdict for a player account", async () => {
+    mockRpc.mockResolvedValue({
+      data: {
+        owner: "player",
+        organization_id: null,
+        user_id: "u-1",
+        already_processed: false,
+        is_active: true,
+        status: "rejected",
+      },
+      error: null,
+    });
+
+    const res = await reviewBankAccountName({
+      bankAccountId: BANK_ID,
+      reviewerId: REVIEWER,
+      action: "reject",
+      note: "Not the player's account",
+    });
+
+    expect(res.playerVerdict).toEqual({ userId: "u-1", verified: false });
+  });
+
+  it("returns the RPC error", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "NOT_UNDER_REVIEW: x" },
+    });
+    const res = await reviewBankAccountName({
+      bankAccountId: BANK_ID,
+      reviewerId: REVIEWER,
+      action: "confirm",
+      note: "ok",
+    });
+    expect(res).toEqual({
+      error: { code: "P0001", message: "NOT_UNDER_REVIEW: x" },
+      settled: false,
+    });
   });
 });
 
@@ -412,6 +688,12 @@ describe("notifyBankVerification", () => {
       rejectionReason: "Name mismatch",
     });
     expect(JSON.stringify(mockSendEmail.mock.calls)).not.toContain("157380112229");
+  });
+
+  it("emails nobody about an account that is under review", async () => {
+    queueNotifyData("name_mismatch");
+    await notifyBankVerification(ORG_ID, BANK_ID);
+    expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
   it("does nothing when member loading fails", async () => {

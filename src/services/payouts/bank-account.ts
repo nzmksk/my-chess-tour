@@ -7,6 +7,7 @@ import {
 import { sendBankVerificationEmail } from "@/services/email/email";
 import { afterResponse } from "@/lib/http/after-response";
 import { BANK_REGISTRATION_GRACE_MINUTES, PAYOUT_CONCURRENCY } from "./constants";
+import { holderNamesMatch } from "./holder-name";
 
 const NOTIFY_ROLES = ["owner", "admin"];
 
@@ -28,10 +29,12 @@ interface BankAccountRow {
   bank_name: string;
   account_holder: string;
   account_number: string;
-  status: "pending" | "verified" | "rejected";
+  status: BankAccountStatus;
   is_active: boolean;
   chip_bank_account_id: number | null;
 }
+
+export type BankAccountStatus = "pending" | "verified" | "rejected" | "name_mismatch";
 
 function redactDigits(text: string): string {
   return text.replace(/\d{6,}/g, "[redacted]");
@@ -49,49 +52,84 @@ export interface SettleBankAccountInput {
   chipBankAccountId: number | null;
   verified: boolean;
   reason?: string | null;
+  bankHolderName?: string | null;
 }
 
+type DbError = { code?: string; message: string };
+
 export interface SettleBankAccountResult {
-  error: { code?: string; message: string } | null;
+  error: DbError | null;
   settled: boolean;
+  status?: BankAccountStatus;
   playerVerdict?: { userId: string; verified: boolean };
 }
 
-export async function settleBankAccountVerification(
-  input: SettleBankAccountInput,
-): Promise<SettleBankAccountResult> {
-  const { data, error } = await supabaseAdmin.rpc(
-    "settle_bank_account_verification",
-    {
-      p_bank_account_id: input.bankAccountId,
-      p_chip_bank_account_id: input.chipBankAccountId,
-      p_verified: input.verified,
-      p_reason: input.reason ?? null,
-    },
-  );
+interface BankVerdictRow {
+  owner?: BankAccountOwner;
+  organization_id: string | null;
+  user_id?: string | null;
+  already_processed: boolean;
+  is_active: boolean;
+  status?: BankAccountStatus;
+}
 
-  if (error) {
-    return { error: { code: error.code, message: error.message }, settled: false };
+const toDbError = (e: { code?: string; message: string }): DbError => ({
+  code: e.code,
+  message: e.message,
+});
+
+async function expectedHolderName(
+  bankAccountId: string,
+): Promise<{ name: string | null; error: DbError | null }> {
+  const org = await supabaseAdmin
+    .from("organization_bank_accounts")
+    .select("account_holder, organization_id")
+    .eq("id", bankAccountId)
+    .maybeSingle();
+  if (org.error) return { name: null, error: toDbError(org.error) };
+
+  if (org.data) {
+    const row = org.data as { account_holder: string; organization_id: string };
+    const registered = await supabaseAdmin
+      .from("organization_registered_names")
+      .select("registered_name")
+      .eq("organization_id", row.organization_id)
+      .maybeSingle();
+    if (registered.error) return { name: null, error: toDbError(registered.error) };
+    const name = (registered.data as { registered_name: string } | null)?.registered_name;
+    return { name: name ?? row.account_holder, error: null };
   }
 
-  const result = data as {
-    owner?: BankAccountOwner;
-    organization_id: string | null;
-    user_id?: string | null;
-    already_processed: boolean;
-    is_active: boolean;
+  const player = await supabaseAdmin
+    .from("player_bank_accounts")
+    .select("account_holder")
+    .eq("id", bankAccountId)
+    .maybeSingle();
+  if (player.error) return { name: null, error: toDbError(player.error) };
+  return {
+    name: (player.data as { account_holder: string } | null)?.account_holder ?? null,
+    error: null,
   };
+}
 
-  if (result.already_processed) return { error: null, settled: false };
+function afterBankVerdict(
+  bankAccountId: string,
+  result: BankVerdictRow,
+): SettleBankAccountResult {
+  const status = result.status;
+  if (result.already_processed) return { error: null, settled: false, status };
+  if (status !== "verified" && status !== "rejected") {
+    return { error: null, settled: true, status };
+  }
 
   if (result.is_active && result.owner !== "player" && result.organization_id) {
     const organizationId = result.organization_id;
     afterResponse(async () => {
       try {
-        await notifyBankVerification(organizationId, input.bankAccountId);
+        await notifyBankVerification(organizationId, bankAccountId);
       } catch (err) {
         console.error(
-          `Bank account ${input.bankAccountId}: verification email failed`,
+          `Bank account ${bankAccountId}: verification email failed`,
           describeError(err),
         );
       }
@@ -102,10 +140,63 @@ export async function settleBankAccountVerification(
     return {
       error: null,
       settled: true,
-      playerVerdict: { userId: result.user_id, verified: input.verified },
+      status,
+      playerVerdict: { userId: result.user_id, verified: status === "verified" },
     };
   }
-  return { error: null, settled: true };
+  return { error: null, settled: true, status };
+}
+
+export async function settleBankAccountVerification(
+  input: SettleBankAccountInput,
+): Promise<SettleBankAccountResult> {
+  let nameMatched = false;
+  if (input.verified) {
+    const expected = await expectedHolderName(input.bankAccountId);
+    if (expected.error) return { error: expected.error, settled: false };
+    nameMatched = holderNamesMatch(input.bankHolderName, expected.name);
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "settle_bank_account_verification",
+    {
+      p_bank_account_id: input.bankAccountId,
+      p_chip_bank_account_id: input.chipBankAccountId,
+      p_verified: input.verified,
+      p_reason: input.reason ?? null,
+      p_bank_holder_name: input.bankHolderName ?? null,
+      p_name_matched: nameMatched,
+    },
+  );
+
+  if (error) return { error: toDbError(error), settled: false };
+
+  const result = data as BankVerdictRow;
+  if (result.status === "name_mismatch" && !result.already_processed) {
+    console.warn(
+      `Bank account ${input.bankAccountId}: verified by CHIP in a holder name that doesn't match; held for admin review`,
+    );
+  }
+  return afterBankVerdict(input.bankAccountId, result);
+}
+
+export type BankNameReviewAction = "confirm" | "reject";
+
+export async function reviewBankAccountName(input: {
+  bankAccountId: string;
+  reviewerId: string;
+  action: BankNameReviewAction;
+  note: string;
+}): Promise<SettleBankAccountResult> {
+  const { data, error } = await supabaseAdmin.rpc("review_bank_account_name", {
+    p_bank_account_id: input.bankAccountId,
+    p_reviewer_id: input.reviewerId,
+    p_action: input.action,
+    p_note: input.note,
+  });
+
+  if (error) return { error: toDbError(error), settled: false };
+  return afterBankVerdict(input.bankAccountId, data as BankVerdictRow);
 }
 
 export async function notifyBankVerification(
@@ -143,7 +234,7 @@ export async function notifyBankVerification(
     status: string;
     rejection_reason: string | null;
   };
-  if (bank.status === "pending") return;
+  if (bank.status !== "verified" && bank.status !== "rejected") return;
 
   const org = orgRes.data as { name: string | null; email: string | null } | null;
   const orgName = org?.name ?? "your organization";
@@ -190,6 +281,7 @@ export async function notifyBankVerification(
 export type BankRegistrationOutcome =
   | "verified"
   | "rejected"
+  | "name_mismatch"
   | "pending"
   | "skipped"
   | "error";
@@ -275,11 +367,12 @@ async function registerBankAccount(
       return "pending";
     }
 
-    const { error: settleError } = await settleBankAccountVerification({
+    const { error: settleError, status } = await settleBankAccountVerification({
       bankAccountId: row.id,
       chipBankAccountId: chipAccount.id,
       verified: outcome === "verified",
       reason: chipAccount.rejection_reason,
+      bankHolderName: chipAccount.name,
     });
     if (settleError) {
       console.error(
@@ -288,7 +381,7 @@ async function registerBankAccount(
       );
       return "error";
     }
-    return outcome;
+    return status === "name_mismatch" ? "name_mismatch" : outcome;
   } catch (err) {
     console.error(
       `Bank account ${bankAccountId}: unexpected error during CHIP registration`,
@@ -350,6 +443,7 @@ export async function registerPendingBankAccounts(
     checked: rows.length,
     verified: 0,
     rejected: 0,
+    name_mismatch: 0,
     pending: 0,
     skipped: 0,
     error: 0,
