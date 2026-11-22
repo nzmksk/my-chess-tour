@@ -87,6 +87,13 @@ DECLARE
   n_failed     integer := 0;
   n_expired    integer := 0;
 
+  -- Prize funding vars
+  v_funder       record;
+  new_fund_id    uuid;
+  v_chip_id      text;
+  v_funder_email text;
+  n_funded       integer := 0;
+
   -- Tournament vars
   -- Start date of each tournament, in days from today. 1–2 ended within the
   -- listing's 30-day "past" window, 3 is ongoing, 4–12 are upcoming with
@@ -702,6 +709,76 @@ BEGIN
   END LOOP;
 
   RAISE NOTICE '  > 15 tournaments created: 2 recently ended, 1 ongoing, 9 upcoming, 3 drafts (3 venues outside Malaysia)';
+
+  -- ===========================================================================
+  -- 3b. PRIZE FUNDING
+  --
+  -- A platform-distributed tournament is only listed once its prize pool is
+  -- fully funded (release_funded_tournament, 006); until then it waits in
+  -- 'pending_funding' and nobody can register. So every published one here must
+  -- carry its sponsors' paid contributions, or it would be listed with the
+  -- registration button disabled (#660). Shaped like what the app produces:
+  --   * one prize_funder_contacts row per funder, as the organizer enters them;
+  --   * one prize_fundings request per funder for its declared share
+  --     (reconcile_prize_funding_requests), settled as settle_prize_funding
+  --     settles a paid one: a type='prize_funding' ledger row in payments, which
+  --     is what prize_pool_position counts as funded.
+  -- Paid half an hour after publishing, which releases the tournament before
+  -- the first registration (an hour after publishing, section 4).
+  -- ===========================================================================
+  RAISE NOTICE '[3b/4] Seeding prize funding...';
+
+  FOR v_t IN
+    SELECT * FROM tournaments
+    WHERE id = ANY(tourney_ids)
+      AND status = 'published'
+      AND prizes->>'distribution' = 'platform'
+  LOOP
+    FOR v_funder IN SELECT * FROM declared_prize_funders(v_t.prizes) LOOP
+      new_fund_id  := gen_random_uuid();
+      v_settled_at := v_t.published_at + interval '30 minutes';
+      v_chip_id    := 'SEED-' || upper(substring(md5(new_fund_id::text), 1, 12));
+      -- example.com never receives mail, should anything ever email it.
+      v_funder_email := 'prizes@'
+        || regexp_replace(
+             regexp_replace(v_funder.funder_key, '[^a-z0-9]+', '-', 'g'),
+             '(^-+|-+$)', '', 'g'
+           )
+        || '.example.com';
+
+      INSERT INTO public.prize_funder_contacts (tournament_id, funder_name, funder_email, created_at, updated_at)
+      VALUES (v_t.id, v_funder.funder_name, v_funder_email, v_t.published_at, v_t.published_at);
+
+      INSERT INTO public.payments (
+        type, tournament_id, user_id, organization_id,
+        gross_amount_cents, platform_fee_cents, organizer_commission_cents,
+        player_commission_cents, net_amount_cents, currency,
+        payment_method, chip_transaction_id, status, paid_at, created_at
+      ) VALUES (
+        'prize_funding', v_t.id, NULL, v_t.organization_id,
+        v_funder.amount_cents, 0, 0,
+        0, v_funder.amount_cents, 'MYR',
+        'fpx_b2c', v_chip_id, 'paid', v_settled_at, v_settled_at
+      ) RETURNING id INTO new_pay_id;
+
+      INSERT INTO public.prize_fundings (
+        id, tournament_id, funder_name, funder_email, amount_cents,
+        status, chip_transaction_id, payment_method, payment_id, paid_at,
+        created_at, updated_at
+      ) VALUES (
+        new_fund_id, v_t.id, v_funder.funder_name, v_funder_email, v_funder.amount_cents,
+        'paid', v_chip_id, 'fpx_b2c', new_pay_id, v_settled_at,
+        v_t.published_at, v_settled_at
+      );
+    END LOOP;
+
+    IF NOT (SELECT p.fully_funded FROM prize_pool_position(v_t.id) p) THEN
+      RAISE EXCEPTION 'seed: % is listed but its prize pool is not fully funded', v_t.name;
+    END IF;
+    n_funded := n_funded + 1;
+  END LOOP;
+
+  RAISE NOTICE '  > % listed platform-distributed tournaments fully funded', n_funded;
 
   -- ===========================================================================
   -- 4. REGISTRATIONS & PAYMENTS
