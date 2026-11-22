@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { formatCalendarDate } from "@/lib/tournaments/datetime";
+import type { BankAccountStatus } from "@/services/payouts/bank-account";
 import AgreementGate from "./AgreementGate";
-import BankAccountNotice, { type BankAccountStatus } from "./BankAccountNotice";
+import BankAccountNotice from "./BankAccountNotice";
 import PendingNominations, {
   type PendingNomination,
 } from "./PendingNominations";

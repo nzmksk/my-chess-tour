@@ -1,6 +1,5 @@
 import Link from "next/link";
-
-export type BankAccountStatus = "pending" | "verified" | "rejected";
+import type { BankAccountStatus } from "@/services/payouts/bank-account";
 
 interface Props {
   organizationId: string;
