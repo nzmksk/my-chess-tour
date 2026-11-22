@@ -5,6 +5,7 @@ import {
   getPasswordStrength,
   isLoginFormSubmittable,
   isRegistrationFormSubmittable,
+  nameCharactersError,
   validateEmail,
   validateForgotPasswordForm,
   validateLoginForm,
@@ -147,6 +148,35 @@ describe("validateRegistrationForm", () => {
       lastName: "",
     });
     expect(errors.lastName).toBeDefined();
+  });
+
+  it.each([
+    ["Ahmad", "bin Ismail"],
+    ["Nur Aisyah", "binti Abdullah"],
+    ["Muthu", "a/l Rajan"],
+    ["Priya", "a/p Subramaniam"],
+    ["Wei Ming", "Tan"],
+    ["Jimmy", "anak Jugah"],
+    ["Sarah", "D'Cruz-Pereira"],
+    ["Mohd. Faiz", "bin Hj. Osman"],
+  ])("accepts %s / %s", (firstName, lastName) => {
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      firstName,
+      lastName,
+    });
+    expect(errors.firstName).toBeUndefined();
+    expect(errors.lastName).toBeUndefined();
+  });
+
+  it("names the allowed characters when a name has others", () => {
+    const { errors } = validateRegistrationForm({
+      ...validFields,
+      firstName: "Ahmad123",
+      lastName: "R@zif",
+    });
+    expect(errors.firstName).toBe(nameCharactersError("First name"));
+    expect(errors.lastName).toBe(nameCharactersError("Last name"));
   });
 
   it("returns email error for invalid email", () => {
