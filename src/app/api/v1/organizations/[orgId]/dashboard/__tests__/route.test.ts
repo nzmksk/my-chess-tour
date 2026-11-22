@@ -649,6 +649,18 @@ describe("GET /api/v1/organizations/:orgId/dashboard", () => {
       );
     });
 
+    it("passes through a name_mismatch account without either name", async () => {
+      setBankResult({ status: "name_mismatch", rejection_reason: null });
+      const res = await GET(makeRequest(), {
+        params: Promise.resolve({ orgId: ORG_ID }),
+      });
+      const { data } = await res.json();
+      expect(data.bank_account).toEqual({
+        status: "name_mismatch",
+        rejection_reason: null,
+      });
+    });
+
     it("returns null only when the organization has no active account", async () => {
       setBankResult(null);
       const res = await GET(makeRequest(), {
