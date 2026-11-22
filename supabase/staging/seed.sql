@@ -97,13 +97,20 @@ DECLARE
   -- Tournament vars
   -- Start date of each tournament, in days from today. 1–2 ended within the
   -- listing's 30-day "past" window, 3 is ongoing, 4–12 are upcoming with
-  -- registration still open (deadline = start - 7 days), 13–15 are drafts.
+  -- registration still open (deadline = start - 7 days), 13–14 are drafts and
+  -- 15 is published but waiting for its prize pool (pending_funding).
   t_offset_days integer[] := ARRAY[
     -20, -6, -1,
      10, 17, 24, 31, 38, 45, 52, 59, 66,
      80, 94, 108
   ];
   n_published  integer := 12;
+  -- Platform-distributed (idx % 5 = 0), so publishing it parks it in
+  -- 'pending_funding': visible to its organizer, hidden from the public.
+  -- Seeded without funder contacts, so no funding request exists: the daily
+  -- reconcile run reports the missing addresses instead of creating CHIP
+  -- purchases and emailing sponsors from staging.
+  pending_funding_idx integer := 15;
   t_published_at timestamptz;
   t_start      date;
   t_end        date;
@@ -549,8 +556,9 @@ BEGIN
       t_deadline := (t_start - 7)::timestamptz;
 
       t_status := CASE
-        WHEN idx <= n_published THEN 'published'::tournament_status
-        ELSE                         'draft'::tournament_status
+        WHEN idx <= n_published         THEN 'published'::tournament_status
+        WHEN idx = pending_funding_idx  THEN 'pending_funding'::tournament_status
+        ELSE                                 'draft'::tournament_status
       END;
 
       -- Published three weeks ago, or two weeks before the start if that is
@@ -607,9 +615,10 @@ BEGIN
         org_profile_ids[i],
         t_names[idx],
         -- Published tournaments get a public slug (matches slugify() in
-        -- src/lib/tournaments/slugs.ts); drafts have none. Seed names are unique → no collision.
+        -- src/lib/tournaments/slugs.ts), pending_funding included; drafts have
+        -- none. Seed names are unique → no collision.
         CASE
-          WHEN t_status = 'published'::tournament_status
+          WHEN t_status <> 'draft'::tournament_status
           THEN regexp_replace(
                  regexp_replace(lower(t_names[idx]), '[^a-z0-9]+', '-', 'g'),
                  '(^-+|-+$)', '', 'g'
@@ -698,17 +707,17 @@ BEGIN
         max_parts[(idx % 5) + 1],
         org_commission_pct[i],
         t_status::tournament_status,
-        CASE WHEN t_status = 'published'::tournament_status THEN org_user_ids[i] ELSE NULL END,
-        CASE WHEN t_status = 'published'::tournament_status THEN t_published_at ELSE NULL END,
+        CASE WHEN t_status <> 'draft'::tournament_status THEN org_user_ids[i] ELSE NULL END,
+        CASE WHEN t_status <> 'draft'::tournament_status THEN t_published_at ELSE NULL END,
         -- registration_closed_at defaults to the deadline at publish; drafts NULL.
-        CASE WHEN t_status = 'published'::tournament_status THEN t_deadline ELSE NULL END
+        CASE WHEN t_status <> 'draft'::tournament_status THEN t_deadline ELSE NULL END
       ) RETURNING id INTO new_t_id;
 
       tourney_ids := array_append(tourney_ids, new_t_id);
     END LOOP;
   END LOOP;
 
-  RAISE NOTICE '  > 15 tournaments created: 2 recently ended, 1 ongoing, 9 upcoming, 3 drafts (3 venues outside Malaysia)';
+  RAISE NOTICE '  > 15 tournaments created: 2 recently ended, 1 ongoing, 9 upcoming, 1 awaiting prize funding, 2 drafts (3 venues outside Malaysia)';
 
   -- ===========================================================================
   -- 3b. PRIZE FUNDING
