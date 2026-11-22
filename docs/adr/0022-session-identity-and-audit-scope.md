@@ -32,8 +32,8 @@ has its own id and no `auth_user_id` until claimed (#505).
   closed: inventing an id would write orphaned rows.
 - `getAuthClaims` verifies the JWT locally with `getClaims()` and is memoized
   per request, so a render that needs identity ten times pays for the lookup
-  once. `getCurrentUser` is deliberately uncached, so it behaves the same
-  outside a request.
+  once. It's the only identity accessor; an uncached twin (`getCurrentUser`)
+  was removed in #678 so new code can't pick the one that repeats the lookup.
 - Service-role reads scoped to the caller, such as `getUserOrganizations`,
   depend entirely on their `user_id` filter, so they must be given the
   authenticated `claims.id`, never a client-supplied id.

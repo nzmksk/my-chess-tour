@@ -162,8 +162,6 @@ async function resolveAuthClaims(): Promise<AuthIdentity | null> {
 ```
 
 Related helpers in the same file:
-- `getCurrentUser()` — same result, **uncached** (predictable outside a request,
-  e.g. unit tests).
 - `getNavUser()` — `getAuthClaims()` **plus** the avatar from the `users` table
   (avatar is intentionally *not* in the JWT). Used by the root layout/navbar.
 
