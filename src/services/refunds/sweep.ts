@@ -3,13 +3,13 @@ import { fireRefund, type RefundFireOutcome } from "@/services/refunds/fire";
 
 export const REFUND_SWEEP_GRACE_INTERVAL = "1 minute";
 
-export const REFUND_SWEEP_BUDGET_MS = 6_000;
+const REFUND_SWEEP_BUDGET_MS = 6_000;
 
 const REFUND_CONCURRENCY = 5;
 
 const REFUND_SWEEP_PAGE_SIZE = 100;
 
-export type RefundSweepTally = Partial<Record<RefundFireOutcome, number>>;
+type RefundSweepTally = Partial<Record<RefundFireOutcome, number>>;
 
 export interface RefundSweepStats {
   fired: number;

@@ -7,7 +7,7 @@ import { checkHolderName, type HolderNameCheck } from "./holder-name";
 
 export const DOCUMENT_URL_TTL_SECONDS = 300;
 
-export interface EarlyPayoutCap {
+interface EarlyPayoutCap {
   net_revenue_cents: number;
   paid_payouts_cents: number;
   live_refund_cents: number;
@@ -18,7 +18,7 @@ export interface EarlyPayoutCap {
   cap_cents: number;
 }
 
-export interface PayoutReviewBankAccount {
+interface PayoutReviewBankAccount {
   bank_name: string;
   account_holder: string;
   account_number_last4: string;
@@ -28,7 +28,7 @@ export interface PayoutReviewBankAccount {
   name_check: HolderNameCheck;
 }
 
-export interface PayoutReviewDocument {
+interface PayoutReviewDocument {
   id: string;
   doc_type: string;
   original_filename: string | null;

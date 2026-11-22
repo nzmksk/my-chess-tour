@@ -8,7 +8,7 @@ export interface EarlyPayoutRequest {
   reason: string;
 }
 
-export const MAX_REASON_LENGTH = 1000;
+const MAX_REASON_LENGTH = 1000;
 
 // Shape only. Whether the amount fits the cap, and everything else about the
 // tournament, is request_early_payout's to decide under its lock.

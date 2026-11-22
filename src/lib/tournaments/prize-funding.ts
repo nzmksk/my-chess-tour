@@ -7,7 +7,7 @@ export const PRIZE_FUNDING_LABELS: Record<PrizeFundingSource, string> = {
   organizer: "Organizer's own funds",
 };
 
-export const PRIZE_DISTRIBUTION_MODES = ["organizer", "platform"] as const;
+const PRIZE_DISTRIBUTION_MODES = ["organizer", "platform"] as const;
 export type PrizeDistribution = (typeof PRIZE_DISTRIBUTION_MODES)[number];
 
 interface PrizeFunding {

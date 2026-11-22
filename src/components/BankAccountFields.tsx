@@ -16,7 +16,7 @@ export function normalizeAccountNumber(raw: string): string {
   return raw.replace(/[\s-]/g, "");
 }
 
-export const ACCOUNT_NUMBER_PATTERN = /^\d{5,20}$/;
+const ACCOUNT_NUMBER_PATTERN = /^\d{5,20}$/;
 
 export function validateBankAccount(
   values: BankAccountValues,

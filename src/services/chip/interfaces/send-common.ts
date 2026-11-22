@@ -1,4 +1,4 @@
-export interface ChipSendPagination {
+interface ChipSendPagination {
   current_page: number;
   prev_page: number | null;
   next_page: number | null;
