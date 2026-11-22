@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getAppUserId,
   getAuthClaims,
-  getCurrentUser,
   getNavUser,
   hasOrgPermission,
   hasGlobalPermission,
@@ -141,32 +140,6 @@ describe("getNavUser", () => {
   });
 });
 
-describe("getCurrentUser", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("returns the authenticated user identity", async () => {
-    const claims = {
-      sub: "u1",
-      email: "alice@example.com",
-      user_metadata: { first_name: "Alice" },
-      role: "authenticated",
-    };
-    createClient.mockResolvedValue(makeClient({ claims }) as never);
-    expect(await getCurrentUser()).toEqual({
-      id: appIdFor("u1"),
-      authUserId: "u1",
-      email: "alice@example.com",
-      userMetadata: { first_name: "Alice" },
-      role: "authenticated",
-    });
-  });
-
-  it("returns null when no session exists", async () => {
-    createClient.mockResolvedValue(makeClient({ claims: null }) as never);
-    expect(await getCurrentUser()).toBeNull();
-  });
-});
-
 describe("hasOrgPermission", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -262,7 +235,7 @@ describe("identity resolution", () => {
     mockLookupAppUserId.mockResolvedValue("app-xyz");
     createClient.mockResolvedValue(makeClient({ claims }) as never);
 
-    const identity = await getCurrentUser();
+    const identity = await getAuthClaims();
 
     expect(identity?.id).toBe("app-xyz");
     expect(identity?.authUserId).toBe("auth-abc");
@@ -273,14 +246,14 @@ describe("identity resolution", () => {
     mockLookupAppUserId.mockResolvedValue(null);
     createClient.mockResolvedValue(makeClient({ claims }) as never);
 
-    expect(await getCurrentUser()).toBeNull();
+    expect(await getAuthClaims()).toBeNull();
     expect(console.error).toHaveBeenCalled();
   });
 
   it("does not attempt a lookup when there is no session", async () => {
     createClient.mockResolvedValue(makeClient({ claims: null }) as never);
 
-    expect(await getCurrentUser()).toBeNull();
+    expect(await getAuthClaims()).toBeNull();
     expect(mockLookupAppUserId).not.toHaveBeenCalled();
   });
 
@@ -316,18 +289,6 @@ describe("audit actor", () => {
 
     const actor = await runWithAuditContext("org.update", async () => {
       await getAuthClaims();
-      return actorHeader();
-    });
-
-    expect(actor).toBe("app-xyz");
-  });
-
-  it("getCurrentUser records the actor too", async () => {
-    mockLookupAppUserId.mockResolvedValue("app-xyz");
-    createClient.mockResolvedValue(makeClient({ claims }) as never);
-
-    const actor = await runWithAuditContext("org.update", async () => {
-      await getCurrentUser();
       return actorHeader();
     });
 

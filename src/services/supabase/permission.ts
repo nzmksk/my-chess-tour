@@ -43,12 +43,6 @@ export async function getAuthClaims(): Promise<AuthIdentity | null> {
   return claims;
 }
 
-export async function getCurrentUser(): Promise<AuthIdentity | null> {
-  const claims = await resolveAuthClaims();
-  if (claims) noteAuditActor(claims.id);
-  return claims;
-}
-
 export async function getAppUserId(): Promise<string | null> {
   return (await getAuthClaims())?.id ?? null;
 }
