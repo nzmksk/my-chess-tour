@@ -78,7 +78,7 @@ const toDbError = (e: { code?: string; message: string }): DbError => ({
   message: e.message,
 });
 
-export async function expectedHolderName(
+async function expectedHolderName(
   bankAccountId: string,
 ): Promise<{ name: string | null; error: DbError | null }> {
   const org = await supabaseAdmin
