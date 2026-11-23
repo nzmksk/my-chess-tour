@@ -342,6 +342,7 @@ async function handlePost(
     ) {
       return continuePendingPayment(
         existing.id,
+        userId,
         existing.fee_tier,
         fee_tier,
         existing.registered_at,
@@ -362,6 +363,7 @@ async function handlePost(
     ) {
       return resumeRegistration(
         existing.id,
+        userId,
         existing.current_payment_id,
         fee_tier,
         matchedTier.amount_cents,
@@ -389,6 +391,7 @@ async function handlePost(
       p_tournament_id: tournamentId,
       p_fee_tier: fee_tier,
       p_amount_cents: matchedTier.amount_cents,
+      p_payer_user_id: userId,
     },
   );
 
@@ -423,6 +426,7 @@ async function handlePost(
       ) {
         return resumeRegistration(
           raced.id,
+          userId,
           raced.current_payment_id,
           fee_tier,
           matchedTier.amount_cents,
@@ -464,6 +468,7 @@ async function handlePost(
  */
 async function continuePendingPayment(
   registrationId: string,
+  payerUserId: string,
   currentFeeTier: string,
   requestedFeeTier: string,
   registeredAt: string,
@@ -489,6 +494,7 @@ async function continuePendingPayment(
   if (!payment?.checkout_url) {
     return resumeRegistration(
       registrationId,
+      payerUserId,
       currentPaymentId,
       requestedFeeTier,
       amountCents,
@@ -537,6 +543,7 @@ async function continuePendingPayment(
  */
 async function resumeRegistration(
   registrationId: string,
+  payerUserId: string,
   currentPaymentId: string | null,
   feeTier: string,
   amountCents: number,
@@ -570,6 +577,7 @@ async function resumeRegistration(
       p_registration_id: registrationId,
       p_fee_tier: feeTier,
       p_amount_cents: amountCents,
+      p_payer_user_id: payerUserId,
     },
   );
 
