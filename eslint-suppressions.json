@@ -884,11 +884,6 @@
       "count": 2
     }
   },
-  "src/app/my/organizations/[orgId]/_components/BankAccountNotice.tsx": {
-    "local/no-comments": {
-      "count": 2
-    }
-  },
   "src/app/my/organizations/[orgId]/_components/DashboardClient.tsx": {
     "local/no-comments": {
       "count": 7

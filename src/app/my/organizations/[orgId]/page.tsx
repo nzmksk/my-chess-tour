@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
 import { selfApiFetch } from "@/lib/http/self-fetch";
 import { getAuthClaims } from "@/services/supabase/permission";
+import type { BankAccountStatus } from "@/services/payouts/bank-account";
 import DashboardClient from "./_components/DashboardClient";
 import type { PendingNomination } from "./_components/PendingNominations";
 
@@ -22,7 +23,7 @@ interface DashboardData {
   // as in DashboardClient so that dropping it from the API payload breaks the
   // build instead of silently rendering the "no bank account" banner.
   bank_account: {
-    status: "pending" | "verified" | "rejected";
+    status: BankAccountStatus;
     rejection_reason: string | null;
   } | null;
   stats: {
