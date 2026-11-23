@@ -19,10 +19,22 @@
 --      1 year        users, player_profiles, organizations,
 --                    organization_memberships, organization_documents,
 --                    organization_invitations, user_global_roles
---      30 days       registrations that were never paid: abandoned, failed
---                    and expired checkouts, the bulk of the churn
+--      30 days       registrations that were never paid (abandoned, failed
+--                    and expired checkouts, the bulk of the churn), counted
+--                    from the day their tournament's registration closed
 --    A table not listed is never pruned, so a newly audited table is kept until
 --    someone decides otherwise.
+--
+--    An unpaid registration isn't dead while registration is open: checkout
+--    reuses a failed or cancelled row for the same player
+--    (start_new_payment_attempt), so a player who abandons on day 0 can pay on
+--    day 40. Counting from the close, not from the audit row, means a
+--    registration that can still be paid keeps all its history. After the
+--    close, checkout refuses, and a late paid result can only come from a
+--    purchase paid before due_strict expired it, reconciled after CHIP's last
+--    webhook retry (36h26m). The pruner locks the registration rows it deletes
+--    for (FOR UPDATE ... SKIP LOCKED), so a settlement in flight is skipped,
+--    and one that commits first makes the row confirmed and so not eligible.
 --
 -- 2. prune_audit_logs(p_dry_run DEFAULT true, p_limit) reports, per policy
 --    table, how many rows are past retention, and deletes at most p_limit of
@@ -43,7 +55,8 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_table_created
 -- ---- 1. Retention policy ----------------------------------------------------
 -- scope 'all': every row of the table past keep_for.
 -- scope 'never_paid': registrations only; rows of a registration that still
--- exists, isn't confirmed or forfeited, and has no paid payment.
+-- exists, isn't confirmed or forfeited, has no paid payment, and whose
+-- tournament closed registration more than keep_for ago.
 CREATE OR REPLACE FUNCTION audit_log_retention()
 RETURNS TABLE (audited_table text, keep_for interval, scope text)
 LANGUAGE sql
@@ -125,8 +138,10 @@ BEGIN
       SELECT count(*) INTO eligible
       FROM audit_logs a
       JOIN registrations r ON r.id::text = a.record_id
+      JOIN tournaments t ON t.id = r.tournament_id
       WHERE a.table_name = 'registrations'
         AND a.created_at < v_cutoff
+        AND COALESCE(t.registration_closed_at, t.registration_deadline) < v_cutoff
         AND r.status NOT IN ('confirmed', 'forfeited')
         AND NOT EXISTS (
           SELECT 1 FROM payments p
@@ -139,9 +154,11 @@ BEGIN
           SELECT a.id
           FROM audit_logs a
           JOIN registrations r ON r.id::text = a.record_id
+          JOIN tournaments t ON t.id = r.tournament_id
           WHERE a.table_name = 'registrations'
             AND a.table_name <> ALL (c_never_pruned)
             AND a.created_at < v_cutoff
+            AND COALESCE(t.registration_closed_at, t.registration_deadline) < v_cutoff
             AND r.status NOT IN ('confirmed', 'forfeited')
             AND NOT EXISTS (
               SELECT 1 FROM payments p
@@ -149,6 +166,7 @@ BEGIN
             )
           ORDER BY a.created_at
           LIMIT v_budget
+          FOR UPDATE OF r SKIP LOCKED
         );
         GET DIAGNOSTICS deleted = ROW_COUNT;
       END IF;

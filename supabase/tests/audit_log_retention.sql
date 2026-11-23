@@ -8,14 +8,21 @@
 --   R2  the policy names no financial table, and every table it names is one
 --       that is actually audited
 --   R3  dry run reports per-table counts and deletes nothing
---   R4  a real run deletes rows past retention: 1-year tables, and unpaid
---       registrations after 30 days. It keeps recent rows, paid and confirmed
+--   R4  a real run deletes rows past retention: 1-year tables, and an unpaid
+--       registration's 30 days after its tournament closed registration. It
+--       keeps recent rows, an unpaid registration on a tournament still open
+--       or closed under 30 days ago however old its rows, paid and confirmed
 --       registrations however old, and every financial table's rows however
 --       old, even with an unbounded limit
 --   R5  p_limit caps the rows deleted per call
 --   R6  bad arguments are refused, and only service_role may execute the
 --       functions
 --   R7  audit_logs_storage() reports a size
+--   R8  an unpaid registration on an open tournament, kept by R4, is retried
+--       and paid with its earlier history intact
+--
+-- A prune racing a late settlement needs two sessions; see
+-- audit_log_retention_race.sql.
 --
 -- HOW TO RUN: paste into the Supabase SQL editor AFTER applying the current
 -- migrations. Runs inside a transaction that ROLLBACKs. A failing assertion
@@ -43,6 +50,12 @@ DECLARE
   v_unpaid_reg   uuid;
   v_unpaid_pay   uuid;
   v_recent_reg   uuid;
+  v_closed_t     uuid;
+  v_recent_t     uuid;
+  v_closed_user  uuid;
+  v_rclosed_user uuid;
+  v_closed_reg   uuid;
+  v_rclosed_reg  uuid;
   v_n            bigint;
   v_m            bigint;
   v_fin_ids      bigint[];
@@ -56,6 +69,8 @@ BEGIN
   INSERT INTO users (email, first_name, last_name) VALUES ('ret-unpaid@test.local','U','T') RETURNING id INTO v_unpaid_user;
   INSERT INTO users (email, first_name, last_name) VALUES ('ret-recent@test.local','R','T') RETURNING id INTO v_recent_user;
   INSERT INTO users (email, first_name, last_name) VALUES ('ret-old@test.local','O','T')    RETURNING id INTO v_old_user;
+  INSERT INTO users (email, first_name, last_name) VALUES ('ret-closed@test.local','C','T') RETURNING id INTO v_closed_user;
+  INSERT INTO users (email, first_name, last_name) VALUES ('ret-rclosed@test.local','D','T') RETURNING id INTO v_rclosed_user;
 
   INSERT INTO tournaments (
     organization_id, name, venue_name, venue_state, venue_address,
@@ -69,6 +84,21 @@ BEGIN
     '{"standard": {"amount_cents": 4000}}',
     100, 'published'
   ) RETURNING id INTO v_tournament;
+
+  INSERT INTO tournaments (
+    organization_id, name, venue_name, venue_state, venue_address,
+    start_date, end_date, registration_deadline,
+    format, time_control, entry_fees, max_participants, status
+  )
+  SELECT v_org, n, 'Venue', 'Selangor', 'Address',
+         current_date + 30, current_date + 31, now() + interval '20 days',
+         '{"type":"classical","rounds":9,"system":"swiss"}',
+         '{"base_minutes":90,"increment_seconds":30}',
+         '{"standard": {"amount_cents": 4000}}',
+         100, 'published'
+  FROM unnest(ARRAY['RETENTION CLOSED T', 'RETENTION RECENTLY CLOSED T']) AS n;
+  SELECT id INTO v_closed_t FROM tournaments WHERE organization_id = v_org AND name = 'RETENTION CLOSED T';
+  SELECT id INTO v_recent_t FROM tournaments WHERE organization_id = v_org AND name = 'RETENTION RECENTLY CLOSED T';
 
   -- ===== R1 ==================================================================
   v_res        := create_registration_with_payment(v_paid_user, v_tournament, 'standard', 4000);
@@ -111,6 +141,16 @@ BEGIN
   v_res        := create_registration_with_payment(v_recent_user, v_tournament, 'standard', 4000);
   v_recent_reg := (v_res ->> 'registration_id')::uuid;
 
+  v_res        := create_registration_with_payment(v_closed_user, v_closed_t, 'standard', 4000);
+  v_closed_reg := (v_res ->> 'registration_id')::uuid;
+  PERFORM settle_registration_payment((v_res ->> 'payment_id')::uuid, false);
+  v_res         := create_registration_with_payment(v_rclosed_user, v_recent_t, 'standard', 4000);
+  v_rclosed_reg := (v_res ->> 'registration_id')::uuid;
+  PERFORM settle_registration_payment((v_res ->> 'payment_id')::uuid, false);
+
+  UPDATE tournaments SET registration_closed_at = now() - interval '40 days' WHERE id = v_closed_t;
+  UPDATE tournaments SET registration_closed_at = now() - interval '10 days' WHERE id = v_recent_t;
+
   -- ===== R2 ==================================================================
   IF EXISTS (SELECT 1 FROM audit_log_retention() WHERE audited_table = ANY (c_financial)) THEN
     RAISE EXCEPTION 'R2 FAILED: the retention policy names a financial table';
@@ -132,7 +172,8 @@ BEGIN
        OR (table_name = 'payments' AND record_id IN (v_paid_pay::text, v_unpaid_pay::text))
        OR (table_name = 'tournaments' AND record_id = v_tournament::text);
   UPDATE audit_logs SET created_at = now() - interval '60 days'
-    WHERE table_name = 'registrations' AND record_id = v_unpaid_reg::text;
+    WHERE table_name = 'registrations'
+      AND record_id IN (v_unpaid_reg::text, v_closed_reg::text, v_rclosed_reg::text);
   UPDATE audit_logs SET created_at = now() - interval '10 days'
     WHERE table_name = 'registrations' AND record_id = v_recent_reg::text;
 
@@ -181,8 +222,15 @@ BEGIN
   IF EXISTS (SELECT 1 FROM audit_logs WHERE table_name = 'users' AND record_id = v_old_user::text) THEN
     RAISE EXCEPTION 'R4 FAILED: a 2-year-old users row survived';
   END IF;
-  IF EXISTS (SELECT 1 FROM audit_logs WHERE table_name = 'registrations' AND record_id = v_unpaid_reg::text) THEN
-    RAISE EXCEPTION 'R4 FAILED: a 60-day-old unpaid registration row survived';
+  IF EXISTS (SELECT 1 FROM audit_logs WHERE table_name = 'registrations' AND record_id = v_closed_reg::text) THEN
+    RAISE EXCEPTION 'R4 FAILED: an unpaid registration on a tournament closed 40 days ago kept its history';
+  END IF;
+  SELECT count(*) INTO v_n FROM audit_logs WHERE table_name = 'registrations' AND record_id = v_unpaid_reg::text;
+  IF v_n <> 2 THEN
+    RAISE EXCEPTION 'R4 FAILED: an unpaid registration on an open tournament lost history (% rows left)', v_n;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM audit_logs WHERE table_name = 'registrations' AND record_id = v_rclosed_reg::text) THEN
+    RAISE EXCEPTION 'R4 FAILED: an unpaid registration on a tournament closed 10 days ago lost its history';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM audit_logs WHERE table_name = 'users' AND record_id = v_recent_user::text) THEN
     RAISE EXCEPTION 'R4 FAILED: a recent users row was deleted';
@@ -243,6 +291,25 @@ BEGIN
   -- ===== R7 ==================================================================
   IF (SELECT total_bytes FROM audit_logs_storage()) <= 0 THEN
     RAISE EXCEPTION 'R7 FAILED: audit_logs_storage reports no size';
+  END IF;
+
+  -- ===== R8 ==================================================================
+  v_res := start_new_payment_attempt(v_unpaid_reg, 'standard', 4000);
+  PERFORM settle_registration_payment((v_res ->> 'payment_id')::uuid, true, NULL, 'fpx');
+  IF (SELECT status FROM registrations WHERE id = v_unpaid_reg) <> 'confirmed' THEN
+    RAISE EXCEPTION 'R8 FAILED: the retried registration was not confirmed';
+  END IF;
+  SELECT count(*) INTO v_n FROM audit_logs
+    WHERE table_name = 'registrations' AND record_id = v_unpaid_reg::text
+      AND created_at < now() - interval '30 days';
+  IF v_n <> 2 THEN
+    RAISE EXCEPTION 'R8 FAILED: the paid registration has % of its 2 earlier audit rows', v_n;
+  END IF;
+  SELECT count(*) INTO v_n FROM prune_audit_logs(false, 2147483647) WHERE deleted > 0;
+  SELECT count(*) INTO v_n FROM audit_logs
+    WHERE table_name = 'registrations' AND record_id = v_unpaid_reg::text;
+  IF v_n < 4 THEN
+    RAISE EXCEPTION 'R8 FAILED: a prune after payment removed history (% rows left)', v_n;
   END IF;
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
