@@ -109,7 +109,7 @@ Ordered by priority. "Flow(s)" reference the IDs used in §3–§8.
 | Dependent accounts (register on behalf of others) | P15 | ❌ | 🟢 | Each player needs their own account (#504). |
 | Account claiming (dependent takes ownership) | P16 | ❌ | 🟢 | N/A until dependents exist (#505). |
 | Multi-participant checkout (one payment, N seats) | P17 | ❌ | 🟢 | One checkout per player — three kids means three FPX redirects (#506). |
-| Audit-log retention & pruning | S3 | ❌ | 🟢 | No volume yet; write the policy down before the table is big enough to make pruning risky (#507). |
+| Audit-log retention & pruning | S3 | ⚠️ dry run | 🟢 | Policy published and pruned daily ([audit-logs.md](./audit-logs.md), #507). Deletion waits for `AUDIT_LOG_PRUNE=delete` after a few dry runs. |
 | In-app notifications / SMS / push | S5 | ❌ | 🟢 | Not needed for launch. |
 | Payment history / receipts screen | P11 | ❌ | 🟢 | CHIP emails the receipt. |
 | OAuth / magic-link login | P2 | ❌ | 🟢 | Email + password works. |
@@ -347,7 +347,7 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 
 ### S2. Payment-expiry sweep — ⚠️ Partial (lazy, no schedule)
 - `expire_stale_pending_payments` runs **on read** in three paths (return-page resolver, organizer roster, `GET /me/registrations`). Capacity self-frees after 10 min and the CHIP `due` makes stale links unpayable, so impact is low; but a `pending_payment` row never read again is never terminalized.
-- **Gaps:** 🟢 no scheduled backstop. There is no `pg_cron`, and none of the GitHub Actions crons (S1) calls this sweep. The unscoped RPC call already exists for when one is added. **Audit-log pruning (S3, #507) needs the same scheduler** — standing `pg_cron` up once covers both, so sequence them together.
+- **Gaps:** 🟢 no scheduled backstop. There is no `pg_cron`, and none of the GitHub Actions crons (S1) calls this sweep. The unscoped RPC call already exists for when one is added. Audit-log pruning (S3, #507) didn't wait for `pg_cron`: it runs from a GitHub Actions schedule like the other crons, and a backstop for this sweep could do the same.
 
 ### S3. Audit logging — ⚠️ Partial (redacted, but unbounded)
 - **Built:** `audit_trigger_func` writes to `audit_logs` on inserts/updates/deletes of the sensitive tables, storing full `old_data`/`new_data` jsonb snapshots. `organization_invitations` joined them in #470.
@@ -357,7 +357,7 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 - **Account deletion (#503).** `anonymise_user_audit_logs(user_id)` replaces every key in that user's `users`/`player_profiles` snapshots with `[anonymised]`, except an allowlist of ids and timestamps, and clears `changed_by` on the non-financial rows they wrote. Since #470 it also anonymises the snapshots of invitations addressed to any address the account has had. `payments`/`refunds`/`payouts`/`registrations` audit rows are untouched (7-year retention overrides). Called from the [deletion runbook](./account-deletion.md); tests in `supabase/tests/audit_anonymisation.sql`. `/privacy` and the signup modal list audit records in the retention table.
 - **Pre-redaction rows (#503).** A database built from the current migrations has none. Staging and production may still hold rows written before each column was redacted, including every uploaded filename, until they are rebuilt from `supabase/migrations` (#631). The rebuild removes them, so no scrub is needed.
 - **To review 🟢.** `payouts.chip_receipt_url` is copied into audit snapshots. Check whether the CHIP Send receipt page shows the recipient's bank details to anyone with the link. Only org admins and platform admins can read those rows.
-- **Gap — retention 🟢 (#507).** No retention policy and no pruning. `FOR EACH ROW` on INSERT/UPDATE/DELETE across nine tables with two snapshots each means this will be the largest table by row count long before `payments` is. Not urgent (no volume yet), but it needs `prune_audit_logs` with dry-run + batched deletes, an index on `(table_name, created_at)`, and a schedule — which needs `pg_cron`, the **same missing prerequisite as S2**. Land them together.
+- **Retention (#507).** Financial history is never pruned (7 years), other change history goes after 1 year, and an unpaid registration's 30 days after its tournament's registration closes. `prune_audit_logs` runs daily from a GitHub Actions schedule, in batches, and only reports counts until `AUDIT_LOG_PRUNE=delete` is set. The table's size is reported on every run, and above 250 MB it raises a Sentry error. See [audit-logs.md](./audit-logs.md). **Left:** read a few dry runs, then turn deletion on.
 
 ### S4. Transactional email — ⚠️ Partial
 - Provider Resend (`src/services/email/email.ts`), templates in `src/services/email/templates/` (a test checks each is complete). Beyond auth (`sendVerificationEmail`, `sendPasswordResetEmail`) it sends: registration confirmation (#119, once per confirmation via `settle_registration_payment`'s `newly_confirmed`), organizer application result (#120), member invitation and the inviter's accepted/declined notice (#121), OKU result (#449), tournament cancellation and cancellation review, bank verification, payout sent/failed/early-request review, admin payout alerts, payout nomination plus the nominee's accept/decline (#562), refund completed/failed (#512, once per outcome via `settle_refund`'s `newly_settled`/`newly_failed`), and the prize pool's sponsor funding request, "tournament is open", prize awarded and prize paid (#523). All are sent after the response (#583). Fan-out is best-effort and never fails the action (`services/email/recipients.ts`). The change-email, reauthentication, magic-link and invite-user templates are Supabase-dashboard copies, **not wired to app code** (member invites no longer go through Supabase's invite email at all).
@@ -466,7 +466,8 @@ Flow IDs in brackets point back to the detail above.
 
 **System**
 - [ ] **[S1]** Trigger the FIDE cron manually (`workflow_dispatch`) once against production; confirm counts.
-- [ ] **[S2/S3]** Accept lazy expiry for launch, or stand up `pg_cron` — which also unblocks audit-log pruning (#507); do both at once if you do either.
+- [ ] **[S2]** Accept lazy expiry for launch, or add a scheduled backstop (a GitHub Actions cron, as audit-log pruning #507 uses).
+- [ ] **[S3]** Turn audit-log deletion on (`AUDIT_LOG_PRUNE=delete`) after reading a few dry runs (#507, [audit-logs.md](./audit-logs.md)).
 - [ ] **[S3]** Measure actual `audit_logs` growth against the Supabase plan's storage ceiling and record the real figure (#507).
 - [ ] **[S4]** Send every template once on staging with real Resend delivery (S4 lists them) and check the links point at staging (`NEXT_PUBLIC_SITE_URL`, [site-url.md](./site-url.md)).
 - [ ] **[S6]** Check `/api/v1/feedback` files an issue on staging, and that the `user-reported` label exists on the repo (V4).

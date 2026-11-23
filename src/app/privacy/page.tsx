@@ -276,8 +276,12 @@ export default function PrivacyPage() {
                         Audit and change-history records
                       </td>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
-                        Personal fields anonymised alongside the account;
-                        records relating to payments retained for 7 years
+                        History of payments, refunds, payouts, prizes, bank
+                        accounts and tournaments retained for 7 years. Other
+                        change history deleted after 1 year. For a registration
+                        that was never paid, deleted 30 days after the
+                        tournament&apos;s registration closes. Personal fields
+                        anonymised alongside the account
                       </td>
                     </tr>
                     <tr>

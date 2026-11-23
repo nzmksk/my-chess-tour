@@ -1,0 +1,47 @@
+name: Audit-log retention
+
+# Prunes audit_logs rows past their retention period
+# (src/app/api/v1/cron/audit-logs/route.ts, #507). The policy lives in
+# audit_log_retention() and docs/wiki/audit-logs.md.
+#
+# The route only reports what it would delete until the server's
+# AUDIT_LOG_PRUNE env var is set to "delete". Check a few dry-run results here
+# before turning deletion on.
+#
+# Each call deletes at most one batch and answers `more: true` while rows past
+# retention are left, so this keeps calling up to MAX_CALLS per run. What a run
+# doesn't finish, the next one picks up. Daily at 02:30 UTC (10:30 MYT), clear
+# of the 01:00 UTC payout run. Also runnable on demand from the Actions tab.
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: audit-log-retention
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Prune audit logs past retention
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: POST to the cron route until nothing is left
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          MAX_CALLS: "20"
+        run: |
+          for i in $(seq 1 "$MAX_CALLS"); do
+            body=$(curl -fsS --max-time 70 -X POST \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              "${PRODUCTION_URL}/api/v1/cron/audit-logs")
+            echo "call $i: $body"
+            if [ "$(echo "$body" | jq -r '.data.more')" != "true" ]; then
+              exit 0
+            fi
+          done
+          echo "::warning::Audit-log rows past retention remain after $MAX_CALLS calls; the next run continues."
