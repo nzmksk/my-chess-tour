@@ -16,7 +16,8 @@ import type { RatingContext } from "@/app/tournaments/utils";
 import type { EntryFeeBreakdown } from "@/services/payments/fees";
 import { nationalityMatches, resolveCountry } from "@/lib/reference/countries";
 import { formatInstantDate, resolveTimeZone } from "@/lib/tournaments/datetime";
-import type { RegistrationRow, PlayerProfile } from "../types";
+import type { CheckoutResponse, PlayerProfile } from "../types";
+import type { PendingRegistration } from "./RegistrationPending";
 import RegistrationPending from "./RegistrationPending";
 import CompleteProfilePrompt, {
   type CompletableField,
@@ -274,7 +275,7 @@ export default function RegisterForm({
   );
   const [status, setStatus] = useState<FormStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [registration, setRegistration] = useState<RegistrationRow | null>(
+  const [registration, setRegistration] = useState<PendingRegistration | null>(
     null,
   );
 
@@ -338,7 +339,9 @@ export default function RegisterForm({
           body: JSON.stringify({ fee_tier: selectedTier }),
         },
       );
-      const json = await res.json();
+      const json: Partial<CheckoutResponse> & {
+        error?: { message?: string };
+      } = await res.json();
       // A paid tier returns a CHIP checkout_url; a free (RM0.00) tier is
       // confirmed server-side and returns a redirect_url to the success page.
       const nextUrl = json.data?.checkout_url ?? json.data?.redirect_url;
@@ -347,8 +350,9 @@ export default function RegisterForm({
         window.location.href = nextUrl;
         return;
       }
-      if (res.ok) {
-        setRegistration(json.data);
+      const registrationId = json.data?.items?.[0]?.registration_id;
+      if (res.ok && registrationId) {
+        setRegistration({ id: registrationId, fee_tier: selectedTier });
         setStatus("success");
       } else {
         setErrorMessage(
