@@ -21,7 +21,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children }: { children: React.ReactNode }) => children,
+  default: ({
+    children,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>,
 }));
 
 vi.mock("../StepTracker", () => ({ default: () => null }));
@@ -65,6 +68,23 @@ describe("SignUpForm", () => {
     expect(screen.getByLabelText("First Name")).toBeDefined();
     expect(screen.getByLabelText("Last Name")).toBeDefined();
     expect(screen.getByLabelText("Email Address")).toBeDefined();
+  });
+
+  it("links to the name examples in a new tab", () => {
+    renderForm();
+    const link = screen.getByRole("link", { name: /see examples/i });
+    expect(link.getAttribute("href")).toBe("/name-guide");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.textContent).toContain("opens in a new tab");
+  });
+
+  it("doesn't tell bin/binti names to repeat the first name", () => {
+    renderForm();
+    expect(screen.queryByText(/repeat your first name/i)).toBeNull();
+    expect(
+      screen.getByText(/father's name without bin, binti, a\/l, a\/p or anak/),
+    ).toBeDefined();
   });
 
   it("renders the Create Account submit button", () => {

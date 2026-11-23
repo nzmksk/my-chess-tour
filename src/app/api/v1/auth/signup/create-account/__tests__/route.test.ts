@@ -268,6 +268,14 @@ describe("POST /api/v1/auth/signup/create-account", () => {
     expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
+  it("accepts a/l and a/p in a last name", async () => {
+    const res = await POST(
+      makeRequest({ ...validBody, firstName: "Muthu", lastName: "a/l Rajan" }),
+    );
+    expect(res.status).not.toBe(400);
+    expect(mockCreateUser).toHaveBeenCalled();
+  });
+
   it("rejects a last name with invalid characters", async () => {
     const res = await POST(makeRequest({ ...validBody, lastName: "R@zif" }));
     expect(res.status).toBe(400);

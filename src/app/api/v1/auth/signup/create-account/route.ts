@@ -4,8 +4,10 @@ import { storeVerificationCode } from "@/services/redis/redis";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { sendVerificationEmail } from "@/services/email/email";
 import {
-  validateEmail,
+  NAME_PATTERN,
   checkPasswordRequirements,
+  nameCharactersError,
+  validateEmail,
 } from "@/services/auth/auth-validation";
 import {
   SIGNUP_STEP_COOKIE,
@@ -130,14 +132,12 @@ async function handlePost(request: NextRequest) {
     );
   }
 
-  const NAME_PATTERN = /^[a-zA-ZÀ-ɏ\s'.\-]+$/;
   if (!NAME_PATTERN.test(firstName.trim())) {
     return NextResponse.json(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message:
-            "First name can only contain letters, spaces, hyphens, and apostrophes",
+          message: nameCharactersError("First name"),
         },
       },
       { status: 400 },
@@ -148,8 +148,7 @@ async function handlePost(request: NextRequest) {
       {
         error: {
           code: "VALIDATION_ERROR",
-          message:
-            "Last name can only contain letters, spaces, hyphens, and apostrophes",
+          message: nameCharactersError("Last name"),
         },
       },
       { status: 400 },

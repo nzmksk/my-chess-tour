@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import {
   checkPasswordRequirements,
   getPasswordStrength,
@@ -125,9 +126,8 @@ export default function SignUpForm() {
                   >
                     ?
                     <div className="tooltip" role="tooltip">
-                      Enter your legal first name as it appears on your IC or
-                      passport. This is used for tournament registration and
-                      FIDE records.
+                      Your own name, as it appears on your IC or passport. It
+                      goes on your tournament entries and FIDE records.
                     </div>
                   </span>
                 </div>
@@ -165,9 +165,8 @@ export default function SignUpForm() {
                   >
                     ?
                     <div className="tooltip" role="tooltip">
-                      Enter your legal last name or family name. For names
-                      without a surname (e.g. bin/binti), you may repeat your
-                      first name.
+                      Your surname, or your father&apos;s name without bin,
+                      binti, a/l, a/p or anak, as on your IC or passport.
                     </div>
                   </span>
                 </div>
@@ -193,6 +192,22 @@ export default function SignUpForm() {
                 )}
               </div>
             </div>
+            <p className="input-hint -mt-2 mb-4">
+              Not sure which part of your name goes where?{" "}
+              <Link
+                href="/name-guide"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gold-muted hover:text-gold-bright underline"
+              >
+                See examples
+                <ExternalLink
+                  aria-hidden="true"
+                  className="ml-0.5 inline size-3 align-[-1px]"
+                />
+                <span className="sr-only"> (opens in a new tab)</span>
+              </Link>
+            </p>
 
             {/* Email */}
             <div className="form-group">
