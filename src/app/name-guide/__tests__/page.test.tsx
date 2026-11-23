@@ -30,6 +30,8 @@ describe("NameGuidePage", () => {
     expect(html).toMatch(
       /Last name<\/strong> is the\s+part that comes from your family/,
     );
-    expect(html).toContain("a/l");
+    expect(html).toMatch(
+      /Leave out bin, binti, a\/l, a\/p, s\/o, d\/o and\s+anak/,
+    );
   });
 });

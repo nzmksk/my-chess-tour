@@ -165,8 +165,8 @@ export default function SignUpForm() {
                   >
                     ?
                     <div className="tooltip" role="tooltip">
-                      Your surname, or bin, binti, a/l, a/p or anak followed by
-                      your father&apos;s name, as on your IC or passport.
+                      Your surname, or your father&apos;s name without bin,
+                      binti, a/l, a/p or anak, as on your IC or passport.
                     </div>
                   </span>
                 </div>

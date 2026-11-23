@@ -34,12 +34,13 @@ export default function NameGuidePage() {
               </li>
               <li>
                 <strong className="text-text-primary">Last name</strong> is the
-                part that comes from your family: your surname, or bin, binti,
-                a/l, a/p or anak followed by your father&apos;s name.
+                part that comes from your family: your surname, or your
+                father&apos;s name.
               </li>
               <li>
-                Keep every word and its spelling as your ID has it. You
-                don&apos;t need to type it in capitals.
+                Leave out bin, binti, a/l, a/p, s/o, d/o and anak. Keep every
+                other word and its spelling as your ID has it. You don&apos;t
+                need to type it in capitals.
               </li>
             </ul>
 

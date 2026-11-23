@@ -4,6 +4,10 @@ import { NAME_PATTERN } from "@/services/auth/auth-validation";
 
 const examples = NAME_GROUPS.flatMap((g) => g.examples);
 
+const CONNECTORS = ["BIN", "BINTI", "BT", "A/L", "A/P", "S/O", "D/O", "ANAK"];
+
+const words = (name: string) => name.trim().toUpperCase().split(/\s+/);
+
 describe("NAME_GROUPS", () => {
   it("covers Malay, Chinese, Indian and other names", () => {
     expect(NAME_GROUPS.map((g) => g.heading)).toEqual([
@@ -25,16 +29,21 @@ describe("NAME_GROUPS", () => {
     },
   );
 
-  it("keeps every word of the ID name", () => {
+  it.each(examples)(
+    "leaves bin, binti, a/l, a/p and anak out of $firstName / $lastName",
+    ({ firstName, lastName }) => {
+      for (const word of words(`${firstName} ${lastName}`)) {
+        expect(CONNECTORS).not.toContain(word);
+      }
+    },
+  );
+
+  it("keeps every other word of the ID name", () => {
     for (const { onId, firstName, lastName } of examples) {
-      const idWords = onId
-        .replace(/\(.*\)/, "")
-        .trim()
-        .toUpperCase()
-        .split(/\s+/);
-      const enteredWords = `${firstName} ${lastName}`
-        .toUpperCase()
-        .split(/\s+/);
+      const idWords = words(onId.replace(/\(.*\)/, "")).filter(
+        (w) => !CONNECTORS.includes(w),
+      );
+      const enteredWords = words(`${firstName} ${lastName}`);
       expect(enteredWords.toSorted()).toEqual(idWords.toSorted());
     }
   });

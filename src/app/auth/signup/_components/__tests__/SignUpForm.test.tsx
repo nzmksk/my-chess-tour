@@ -82,7 +82,9 @@ describe("SignUpForm", () => {
   it("doesn't tell bin/binti names to repeat the first name", () => {
     renderForm();
     expect(screen.queryByText(/repeat your first name/i)).toBeNull();
-    expect(screen.getByText(/bin, binti, a\/l, a\/p or anak/)).toBeDefined();
+    expect(
+      screen.getByText(/father's name without bin, binti, a\/l, a\/p or anak/),
+    ).toBeDefined();
   });
 
   it("renders the Create Account submit button", () => {
