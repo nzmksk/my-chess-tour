@@ -63,6 +63,26 @@ export default function PrivacyPage() {
               </ul>
 
               <p className="text-text-secondary mb-2 font-semibold">
+                Guardian and Helper Data
+              </p>
+              <ul className="text-text-secondary mb-4 list-disc space-y-1 pl-5">
+                <li>
+                  Who acts for whom, your relationship (for example parent or
+                  carer), and the basis you act on: parent or legal guardian of
+                  a child, helper authorised by an adult player, or legally
+                  appointed guardian
+                </li>
+                <li>
+                  How an adult player&apos;s authorisation was given, and when
+                  you accepted our Terms for the person you act for
+                </li>
+                <li>
+                  The registrations you made and the payments you made for
+                  someone else
+                </li>
+              </ul>
+
+              <p className="text-text-secondary mb-2 font-semibold">
                 Financial Data (collected only for prize payout purposes)
               </p>
               <ul className="text-text-secondary mb-4 list-disc space-y-1 pl-5">
@@ -193,6 +213,35 @@ export default function PrivacyPage() {
                 number as part of the payment record, as described under Data
                 Retention. Date of birth and gender are used as described above
                 once you add them to your profile.
+              </p>
+
+              <p className="text-text-secondary mt-4 mb-2 font-semibold">
+                Data You Give Us About Someone Else
+              </p>
+              <p className="text-text-secondary">
+                A guardian or helper may give us another person&apos;s data,
+                such as their date of birth, disability status or OKU card. By
+                doing so, they confirm that they have the authority to provide
+                it: as the parent or legal guardian of a child, as a helper the
+                player has authorised, or as someone legally appointed to act
+                for an adult who lacks capacity. The separate consent for an OKU
+                card is given by the person with that authority. It is recorded
+                and can be withdrawn in the same way as your own.
+              </p>
+
+              <p className="text-text-secondary mt-4 mb-2 font-semibold">
+                Children&apos;s Data
+              </p>
+              <p className="text-text-secondary">
+                A child under 18 cannot hold their own account and has no login
+                of their own. Their parent or legal guardian adds them as a
+                dependent, provides their data, and gives any separate consent
+                for them. The parent or legal guardian also exercises the
+                child&apos;s rights under the PDPA, including access, correction
+                and deletion. We collect only what tournament entry needs, and
+                share a child&apos;s data only as described under Sharing of
+                Data, as for any player. A prize a child wins is paid to their
+                parent or legal guardian.
               </p>
             </section>
 
