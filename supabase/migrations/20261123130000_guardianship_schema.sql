@@ -51,10 +51,10 @@
 -- =============================================
 
 -- ---- 1. users ---------------------------------------------------------------
+CREATE TYPE account_type AS ENUM ('self', 'managed');
+
 ALTER TABLE users
-  ADD COLUMN account_type text NOT NULL DEFAULT 'self',
-  ADD CONSTRAINT chk_users_account_type
-    CHECK (account_type IN ('self', 'managed'));
+  ADD COLUMN account_type account_type NOT NULL DEFAULT 'self';
 
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 
@@ -73,30 +73,27 @@ CREATE INDEX idx_registrations_registered_by
   WHERE registered_by IS NOT NULL;
 
 -- ---- 3. guardianships -------------------------------------------------------
+CREATE TYPE guardianship_relationship AS ENUM ('parent', 'legal_guardian', 'carer', 'coach', 'other');
+CREATE TYPE guardianship_basis AS ENUM ('minor', 'authorised', 'appointed');
+CREATE TYPE guardianship_status AS ENUM ('active', 'revoked', 'claimed');
+CREATE TYPE guardianship_authorisation_method AS ENUM ('player_invite', 'guardian_attestation', 'document');
+
 CREATE TABLE guardianships (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   guardian_user_id      uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   dependent_user_id     uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  relationship          text NOT NULL,
-  basis                 text NOT NULL,
-  status                text NOT NULL DEFAULT 'active',
+  relationship          guardianship_relationship NOT NULL,
+  basis                 guardianship_basis NOT NULL,
+  status                guardianship_status NOT NULL DEFAULT 'active',
   terms_version         varchar(20) NOT NULL,
   terms_accepted_at     timestamptz NOT NULL,
-  authorisation_method  text,
+  authorisation_method  guardianship_authorisation_method,
   created_at            timestamptz NOT NULL DEFAULT now(),
   revoked_at            timestamptz,
 
   CONSTRAINT uq_guardianship_pair UNIQUE (guardian_user_id, dependent_user_id),
   CONSTRAINT chk_guardianship_not_self
     CHECK (guardian_user_id <> dependent_user_id),
-  CONSTRAINT chk_guardianship_relationship
-    CHECK (relationship IN ('parent', 'legal_guardian', 'carer', 'coach', 'other')),
-  CONSTRAINT chk_guardianship_basis
-    CHECK (basis IN ('minor', 'authorised', 'appointed')),
-  CONSTRAINT chk_guardianship_status
-    CHECK (status IN ('active', 'revoked', 'claimed')),
-  CONSTRAINT chk_guardianship_authorisation_method
-    CHECK (authorisation_method IN ('player_invite', 'guardian_attestation', 'document')),
   -- Only a parent or legal guardian accepts the Terms for a child.
   CONSTRAINT chk_guardianship_minor_relationship
     CHECK (basis <> 'minor' OR relationship IN ('parent', 'legal_guardian')),

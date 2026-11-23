@@ -88,7 +88,7 @@ BEGIN
     INSERT INTO users (email, first_name, last_name, account_type)
       VALUES ('guard-odd@test.local', 'Odd', 'Type', 'shared');
     RAISE EXCEPTION 'G1 FAIL: an unknown account_type was accepted';
-  EXCEPTION WHEN check_violation THEN NULL;
+  EXCEPTION WHEN invalid_text_representation THEN NULL;
   END;
 
   BEGIN
@@ -191,7 +191,7 @@ BEGIN
                                      terms_version, terms_accepted_at)
             VALUES (v_stranger, v_child, 'coach', 'minor', 'v', now());
       END CASE;
-    EXCEPTION WHEN check_violation THEN
+    EXCEPTION WHEN check_violation OR invalid_text_representation THEN
       v_ok := true;
     END;
     IF NOT v_ok THEN
