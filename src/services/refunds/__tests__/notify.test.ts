@@ -44,9 +44,11 @@ function givenRefund(overrides: Record<string, unknown> = {}) {
       data: {
         refund_amount_cents: 11000,
         registration: {
-          user: { email: "farid@example.com", first_name: "Farid" },
           tournament: { name: "KL Open" },
-          payment: { payment_method: "razer_grabpay" },
+          payment: {
+            payment_method: "razer_grabpay",
+            payer: { email: "farid@example.com", first_name: "Farid" },
+          },
         },
         ...overrides,
       },
@@ -76,6 +78,18 @@ describe("notifyRefundSettlement", () => {
     });
   });
 
+  it("reads the address from the refunded payment's payer, not the registration", async () => {
+    givenRefund();
+    await notifyRefundSettlement(REFUND, { newly_settled: true });
+
+    const builder = mockFrom.mock.results[0].value as { select: ReturnType<typeof vi.fn> };
+    const columns = (builder.select.mock.calls[0][0] as string).replace(/\s+/g, " ");
+    expect(columns).toContain(
+      "payment:payments!current_payment_id( payment_method, payer:users!user_id(email, first_name) )",
+    );
+    expect(columns).not.toMatch(/registrations!registration_id\( user:/);
+  });
+
   it("emails a failed refund when this call recorded the first failure", async () => {
     givenRefund();
     await notifyRefundSettlement(REFUND, { newly_settled: false, newly_failed: true });
@@ -101,9 +115,11 @@ describe("notifyRefundSettlement", () => {
   it("falls back when the name, tournament and payment method are missing", async () => {
     givenRefund({
       registration: {
-        user: { email: "farid@example.com", first_name: null },
         tournament: null,
-        payment: null,
+        payment: {
+          payment_method: null,
+          payer: { email: "farid@example.com", first_name: null },
+        },
       },
     });
     await notifyRefundSettlement(REFUND, { newly_settled: true });
@@ -117,9 +133,12 @@ describe("notifyRefundSettlement", () => {
     });
   });
 
-  it("sends nothing when the player has no address", async () => {
+  it("sends nothing when the payer has no address", async () => {
     givenRefund({
-      registration: { user: null, tournament: { name: "KL Open" }, payment: null },
+      registration: {
+        tournament: { name: "KL Open" },
+        payment: { payment_method: "fpx_b2c", payer: null },
+      },
     });
     await notifyRefundSettlement(REFUND, { newly_settled: true });
 

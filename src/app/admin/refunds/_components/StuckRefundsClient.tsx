@@ -91,11 +91,11 @@ function StuckRefundCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-lato text-text-primary text-sm font-semibold">
-            {refund.player_name ?? "Unknown player"}
+            {refund.payer_name ?? "Unknown payer"}
           </h3>
-          {refund.player_email && (
+          {refund.payer_email && (
             <p className="font-lato text-text-muted mt-0.5 text-xs break-all">
-              {refund.player_email}
+              {refund.payer_email}
             </p>
           )}
           <p className="font-lato text-text-muted mt-0.5 text-xs">
@@ -174,7 +174,7 @@ export default function StuckRefundsClient({
       ...prev,
       [refund.refund_id]: {
         ...result,
-        label: `${refund.player_name ?? "Unknown player"} · ${refund.tournament_name}`,
+        label: `${refund.payer_name ?? "Unknown payer"} · ${refund.tournament_name}`,
       },
     }));
   }

@@ -112,7 +112,7 @@ BEGIN
 
   SELECT * INTO v_row FROM list_stuck_refunds(c_age) WHERE refund_id = v_refund_a;
   IF v_row.tournament_id <> v_tournament OR v_row.tournament_name <> 'REFIRE T'
-     OR v_row.player_name <> 'Aina Tan' OR v_row.player_email <> 'refire-a@test.local'
+     OR v_row.payer_name <> 'Aina Tan' OR v_row.payer_email <> 'refire-a@test.local'
      OR v_row.amount_cents <> v_gross
      OR v_row.original_chip_purchase_id <> 'refire-purchase-a'
      OR v_row.last_fired_at IS NOT NULL OR v_row.failed_at IS NOT NULL THEN

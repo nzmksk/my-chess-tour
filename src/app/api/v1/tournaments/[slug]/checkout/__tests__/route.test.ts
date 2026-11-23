@@ -258,6 +258,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_registration_id: "reg-1",
       p_fee_tier: "early_bird",
       p_amount_cents: 3000,
+      p_payer_user_id: appIdFor(USER_ID),
     });
   });
 
@@ -355,6 +356,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_registration_id: "reg-1",
       p_fee_tier: "early_bird",
       p_amount_cents: 3000,
+      p_payer_user_id: appIdFor(USER_ID),
     });
     expect(mockCancelChipPurchase).not.toHaveBeenCalled();
   });
@@ -386,6 +388,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_registration_id: "reg-1",
       p_fee_tier: "early_bird",
       p_amount_cents: 3000,
+      p_payer_user_id: appIdFor(USER_ID),
     });
   });
 
@@ -415,6 +418,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_registration_id: "reg-1",
       p_fee_tier: "standard",
       p_amount_cents: 5000,
+      p_payer_user_id: appIdFor(USER_ID),
     });
   });
 
@@ -554,6 +558,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_tournament_id: VALID_UUID,
       p_fee_tier: "standard",
       p_amount_cents: 5000,
+      p_payer_user_id: appIdFor(USER_ID),
     });
   });
 
@@ -741,6 +746,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
       p_registration_id: "reg-1",
       p_fee_tier: "standard",
       p_amount_cents: 5000,
+      p_payer_user_id: appIdFor(USER_ID),
     });
   });
 
