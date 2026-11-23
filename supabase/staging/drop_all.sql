@@ -96,6 +96,7 @@ DROP TABLE IF EXISTS public.organization_registered_names CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
 DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
 DROP TABLE IF EXISTS public.sensitive_data_consents CASCADE;
+DROP TABLE IF EXISTS public.guardianships           CASCADE;
 DROP TABLE IF EXISTS public.player_profiles         CASCADE;
 DROP TABLE IF EXISTS public.user_global_roles       CASCADE;
 DROP TABLE IF EXISTS public.users                   CASCADE;
@@ -146,6 +147,11 @@ DROP TYPE IF EXISTS public.payout_kind          CASCADE;
 DROP TYPE IF EXISTS public.payout_status        CASCADE;
 DROP TYPE IF EXISTS public.invitation_status    CASCADE;
 DROP TYPE IF EXISTS public.sensitive_data_category CASCADE;
+DROP TYPE IF EXISTS public.account_type         CASCADE;
+DROP TYPE IF EXISTS public.guardianship_relationship CASCADE;
+DROP TYPE IF EXISTS public.guardianship_basis   CASCADE;
+DROP TYPE IF EXISTS public.guardianship_status  CASCADE;
+DROP TYPE IF EXISTS public.guardianship_authorisation_method CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
@@ -178,7 +184,8 @@ WHERE table_schema = 'public'
     'organization_bank_accounts','organization_documents','tournaments',
     'registrations','payments','refunds','payouts','tournament_cancellation_requests',
     'audit_logs','waitlist','bug_reports','player_bank_accounts','prize_awards',
-    'prize_fundings','prize_funder_contacts','sensitive_data_consents'
+    'prize_fundings','prize_funder_contacts','sensitive_data_consents',
+    'guardianships'
   );
 
 SELECT 'app_enums' AS check, count(*)
