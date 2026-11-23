@@ -155,6 +155,21 @@ describe("PATCH /api/v1/admin/bank-accounts/:id", () => {
     expect(json.error.message).not.toContain("awaiting a name review");
   });
 
+  it("409 when the owner has replaced the account since", async () => {
+    mockReview.mockResolvedValue({
+      error: {
+        code: "P0001",
+        message: "SUPERSEDED: the owner has replaced this account since",
+      },
+      settled: false,
+    });
+    const res = await patch({ action: "reject", note: "stale page" });
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error.code).toBe("SUPERSEDED");
+    expect(json.error.message).toMatch(/replaced this account/);
+  });
+
   it("500 on an unexpected error", async () => {
     mockReview.mockResolvedValue({
       error: { code: "XX000", message: "boom" },

@@ -93,6 +93,13 @@ async function handlePatch(
         "This account isn't waiting for a name review. It may already have been decided.",
       );
     }
+    if (result.error.message.startsWith("SUPERSEDED")) {
+      return fail(
+        409,
+        "SUPERSEDED",
+        "The owner has replaced this account since. Refresh to see the one waiting now.",
+      );
+    }
     return internalErrorResponse(
       "PATCH /api/v1/admin/bank-accounts/[id]: review_bank_account_name failed",
       result.error,
