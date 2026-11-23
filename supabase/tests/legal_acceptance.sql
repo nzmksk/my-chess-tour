@@ -20,6 +20,9 @@
 --       terms_accepted_at itself
 --   L8  handle_new_user leaves BOTH columns NULL when no version was supplied,
 --       so rows created outside signup still satisfy chk_terms_shape
+--   L9  handle_new_user stamps adult_confirmed_at only when the metadata says
+--       adult_confirmed is true; otherwise it stays NULL (#710)
+--   L10 a managed account can't carry adult_confirmed_at (#710)
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it builds
@@ -39,6 +42,9 @@ DECLARE
   v_org      uuid;
   v_auth     uuid := gen_random_uuid();
   v_auth2    uuid := gen_random_uuid();
+  v_auth3    uuid := gen_random_uuid();
+  v_auth4    uuid := gen_random_uuid();
+  v_adult_at timestamptz;
   v_version  text;
   v_at       timestamptz;
   v_by       uuid;
@@ -154,6 +160,38 @@ BEGIN
     RAISE EXCEPTION 'L8 FAIL: expected both NULL, got (%, %)', v_version, v_at;
   END IF;
   RAISE NOTICE 'L8 PASS — no metadata version leaves both columns NULL';
+
+  -- ---- L9: the 18+ confirmation is stamped by the trigger ------------------
+  SELECT adult_confirmed_at INTO v_adult_at FROM users WHERE auth_user_id = v_auth2;
+  IF v_adult_at IS NOT NULL THEN
+    RAISE EXCEPTION 'L9 FAIL: adult_confirmed_at stamped with no confirmation in the metadata';
+  END IF;
+
+  INSERT INTO auth.users (id, email, raw_user_meta_data)
+    VALUES (v_auth3, 'legal-l9@test.local',
+            '{"first_name":"L","last_name":"Nine","terms_version":"2026-08-02","adult_confirmed":true}'::jsonb);
+  SELECT adult_confirmed_at INTO v_adult_at FROM users WHERE auth_user_id = v_auth3;
+  IF v_adult_at IS NULL THEN
+    RAISE EXCEPTION 'L9 FAIL: adult_confirmed_at was not stamped';
+  END IF;
+
+  INSERT INTO auth.users (id, email, raw_user_meta_data)
+    VALUES (v_auth4, 'legal-l9b@test.local',
+            '{"first_name":"L","last_name":"NineB","adult_confirmed":"2000-01-01T00:00:00Z"}'::jsonb);
+  SELECT adult_confirmed_at INTO v_adult_at FROM users WHERE auth_user_id = v_auth4;
+  IF v_adult_at IS NOT NULL THEN
+    RAISE EXCEPTION 'L9 FAIL: a non-true adult_confirmed was taken as a confirmation (%)', v_adult_at;
+  END IF;
+  RAISE NOTICE 'L9 PASS — adult_confirmed_at stamped only for adult_confirmed = true';
+
+  -- ---- L10: a managed account never carries the confirmation ---------------
+  BEGIN
+    INSERT INTO users (email, first_name, last_name, account_type, adult_confirmed_at)
+      VALUES (NULL, 'L', 'Ten', 'managed', now());
+    RAISE EXCEPTION 'L10 FAIL: a managed account stored adult_confirmed_at';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  RAISE NOTICE 'L10 PASS — adult_confirmed_at is for self accounts only';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END $$;
