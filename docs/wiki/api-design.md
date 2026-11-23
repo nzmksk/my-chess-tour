@@ -186,6 +186,7 @@ Admin **pages** with no route of their own read through the server (e.g. `/admin
 | POST | `/cron/refunds` | `CRON_SECRET` | Fire queued cancellation refunds. Every 5 minutes (`.github/workflows/cancellation-refunds.yml`). |
 | POST | `/cron/payouts` | `CRON_SECRET` | Bank registrations, payout and prize sweeps. Daily at 01:00 UTC (`organizer-payouts.yml`). |
 | POST | `/cron/fide-ratings` | `CRON_SECRET` | Refresh every player's FIDE ratings. Monthly (`fide-ratings.yml`). |
+| POST | `/cron/audit-logs` | `CRON_SECRET` | Prune audit rows past retention; a dry run unless `AUDIT_LOG_PRUNE=delete`. Daily at 02:30 UTC (`audit-log-retention.yml`). |
 
 ---
 
