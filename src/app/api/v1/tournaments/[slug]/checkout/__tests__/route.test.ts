@@ -251,6 +251,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     expect(res.status).toBe(201);
     const json = await res.json();
     expect(json.data.checkout_url).toBe("https://pay.example/checkout");
+    expect(json.data.items).toEqual([{ registration_id: "reg-1" }]);
 
     // H1: a new attempt is started with the newly chosen tier + its amount.
     expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
@@ -285,7 +286,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     expect(res.status).toBe(201);
     const json = await res.json();
     expect(json.data.checkout_url).toBe("https://pay.example/saved");
-    expect(json.data.registration_id).toBe("reg-1");
+    expect(json.data.items).toEqual([{ registration_id: "reg-1" }]);
     // Reused, not re-issued: no reset, no cancel, no new purchase, no timer reset.
     expect(mockRpc).not.toHaveBeenCalled();
     expect(mockCancelChipPurchase).not.toHaveBeenCalled();
@@ -542,6 +543,12 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     });
 
     expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({
+      data: {
+        checkout_url: "https://pay.example/checkout",
+        items: [{ registration_id: "reg-1" }],
+      },
+    });
     expect(mockRpc).toHaveBeenCalledWith("create_registration_with_payment", {
       p_user_id: appIdFor(USER_ID),
       p_tournament_id: VALID_UUID,
@@ -579,7 +586,7 @@ describe("POST /api/v1/tournaments/:slug/checkout — resume", () => {
     expect(json.data.redirect_url).toBe(
       `/tournaments/${SLUG}/register/success`,
     );
-    expect(json.data.registration_id).toBe("reg-1");
+    expect(json.data.items).toEqual([{ registration_id: "reg-1" }]);
     expect(mockCreateChipPurchase).not.toHaveBeenCalled();
     // Settled as paid through the same idempotent RPC the webhook uses, with a
     // 'free' sentinel method (no gateway/instrument for a zero-gross tier).
