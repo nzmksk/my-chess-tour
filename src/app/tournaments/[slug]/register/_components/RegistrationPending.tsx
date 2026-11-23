@@ -2,8 +2,10 @@ import Link from "next/link";
 import type { RegistrationRow } from "../types";
 import { toTitleCase } from "@/app/tournaments/utils";
 
+export type PendingRegistration = Pick<RegistrationRow, "id" | "fee_tier">;
+
 interface Props {
-  registration: RegistrationRow;
+  registration: PendingRegistration;
   tournamentSlug: string;
 }
 

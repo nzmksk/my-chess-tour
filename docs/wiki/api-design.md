@@ -92,7 +92,7 @@ The verify step is gated by the `SIGNUP_STEP_COOKIE`. Details in [authentication
 | GET | `/tournaments` | Public | Every published tournament with participant counts (`get_participant_counts`). |
 | GET | `/tournaments/:slug` | Public | One published tournament's details. |
 | GET | `/tournaments/name-check` | Public | `?name=…&excludeId=…`: whether a tournament name is free (wizard). |
-| POST | `/tournaments/:slug/checkout` | Signed in | **The only register-and-pay entry point.** Checks deadline, eligibility, fee tier, capacity and the prize-pool gate; creates or resumes the registration and its payment attempt; returns `{ data: { checkout_url, registration_id } }`. A zero-fee tier confirms without CHIP. See [payment-flow.md](./payment-flow.md). |
+| POST | `/tournaments/:slug/checkout` | Signed in | **The only register-and-pay entry point.** Checks deadline, eligibility, fee tier, capacity and the prize-pool gate; creates or resumes the registration and its payment attempt; returns `{ data: { checkout_url, items: [{ registration_id }] } }`. A zero-fee tier confirms without CHIP and returns `redirect_url` (the confirmation page) in place of `checkout_url`. `items` holds one entry per registration in the purchase; today that is always one (#513). See [payment-flow.md](./payment-flow.md). |
 
 There is no player cancellation route yet (#509).
 

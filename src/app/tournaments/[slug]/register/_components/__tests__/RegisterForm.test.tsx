@@ -153,23 +153,13 @@ const NO_DOB_PROFILE: PlayerProfile = {
   nationality: null,
 };
 
-const FAKE_REGISTRATION = {
-  id: "reg-00000001",
-  user_id: "user-1",
-  tournament_id: TOURNAMENT_ID,
-  fee_tier: "standard",
-  status: "pending_payment" as const,
-  registered_at: "2026-05-12T00:00:00.000Z",
-  confirmed_at: null,
-  cancelled_at: null,
-  cancellation_reason: null,
-};
+const REGISTRATION_ID = "reg-00000001";
 
-function makeSuccessFetch(feeTier = "standard") {
+function makeSuccessFetch() {
   return {
     ok: true,
     json: vi.fn().mockResolvedValue({
-      data: { ...FAKE_REGISTRATION, fee_tier: feeTier },
+      data: { items: [{ registration_id: REGISTRATION_ID }] },
     }),
   };
 }
@@ -1002,7 +992,27 @@ describe("RegisterForm", () => {
       await act(async () => {
         fireEvent.submit(container.querySelector("form")!);
       });
-      expect(screen.getByText(FAKE_REGISTRATION.id)).toBeDefined();
+      expect(screen.getByText(REGISTRATION_ID)).toBeDefined();
+    });
+
+    it("shows a generic error when an OK response names no registration", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ data: { items: [] } }),
+      });
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament()}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+        />,
+      );
+      await act(async () => {
+        fireEvent.submit(container.querySelector("form")!);
+      });
+      expect(
+        screen.getByText("Registration failed. Please try again."),
+      ).toBeDefined();
     });
 
     it("shows the API error message on a failed response", async () => {
@@ -1058,7 +1068,7 @@ describe("RegisterForm", () => {
     });
 
     it("calls fetch with the correct fee_tier in the request body", async () => {
-      mockFetch.mockResolvedValueOnce(makeSuccessFetch("early_bird"));
+      mockFetch.mockResolvedValueOnce(makeSuccessFetch());
       const { container } = render(
         <RegisterForm
           tournament={makeTournament([

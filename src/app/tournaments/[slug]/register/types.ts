@@ -35,3 +35,14 @@ export interface RegistrationRow {
   cancelled_at: string | null;
   cancellation_reason: string | null;
 }
+
+interface CheckoutItem {
+  registration_id: string;
+}
+
+export type CheckoutResponse = {
+  data: { items: CheckoutItem[] } & (
+    | { checkout_url: string; redirect_url?: never }
+    | { redirect_url: string; checkout_url?: never }
+  );
+};

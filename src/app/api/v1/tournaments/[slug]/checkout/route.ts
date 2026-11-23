@@ -10,7 +10,10 @@ import {
   checkRatedRequirements,
   normalizeRestrictions,
 } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
-import type { RegistrationRequest } from "@/app/tournaments/[slug]/register/types";
+import type {
+  CheckoutResponse,
+  RegistrationRequest,
+} from "@/app/tournaments/[slug]/register/types";
 import { registrationStatus } from "@/lib/tournaments/registration-status";
 import {
   cancelChipPurchase,
@@ -518,11 +521,11 @@ async function continuePendingPayment(
     );
   }
 
-  return NextResponse.json(
+  return NextResponse.json<CheckoutResponse>(
     {
       data: {
         checkout_url: payment.checkout_url,
-        registration_id: registrationId,
+        items: [{ registration_id: registrationId }],
       },
     },
     { status: 201 },
@@ -646,11 +649,11 @@ async function settleFreeRegistration(
     afterResponse(() => notifyRegistrationConfirmed(registrationId));
   }
 
-  return NextResponse.json(
+  return NextResponse.json<CheckoutResponse>(
     {
       data: {
-        registration_id: registrationId,
         redirect_url: `/tournaments/${tournamentSlug}/register/success`,
+        items: [{ registration_id: registrationId }],
       },
     },
     { status: 201 },
@@ -762,11 +765,11 @@ async function initiateChipPayment(
     );
   }
 
-  return NextResponse.json(
+  return NextResponse.json<CheckoutResponse>(
     {
       data: {
         checkout_url: chipPurchase.checkout_url,
-        registration_id: payment.registration_id,
+        items: [{ registration_id: payment.registration_id }],
       },
     },
     { status: 201 },
