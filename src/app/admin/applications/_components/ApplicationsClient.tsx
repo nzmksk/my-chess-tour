@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { Application, ApplicationCounts, ApprovalStatus } from "../page";
+import AdminBackLink from "@/app/admin/_components/AdminBackLink";
 
 type TabKey = "all" | ApprovalStatus;
 
@@ -115,6 +116,7 @@ export default function ApplicationsClient({ data }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
+      <AdminBackLink />
       <div className="mb-6">
         <h1 className="font-cinzel text-2xl font-bold text-text-primary tracking-wide">
           Organizer Applications

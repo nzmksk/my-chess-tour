@@ -12,6 +12,7 @@ import type {
   PayoutStatus,
 } from "@/services/payouts/admin-queue";
 import ResendPayoutButton from "./ResendPayoutButton";
+import AdminBackLink from "@/app/admin/_components/AdminBackLink";
 
 type TabKey = "all" | PayoutStatus;
 
@@ -346,6 +347,7 @@ export default function AdminPayoutsClient({ data }: { data: AdminPayoutQueue })
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <AdminBackLink />
       <div className="mb-6">
         <h1 className="font-cinzel text-text-primary text-2xl font-bold tracking-wide">
           Payouts

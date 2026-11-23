@@ -7,6 +7,7 @@ import type {
   BankNameReview,
   BankNameReviews,
 } from "@/services/payouts/name-review";
+import AdminBackLink from "@/app/admin/_components/AdminBackLink";
 
 type Action = "confirm" | "reject";
 
@@ -204,17 +205,10 @@ export default function BankNameReviewClient({
 }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-2 flex flex-wrap items-center gap-3">
-        <Link
-          href="/admin/dashboard"
-          className="font-lato text-text-muted hover:text-text-primary text-sm transition-colors"
-        >
-          ← Back
-        </Link>
-        <h1 className="font-cinzel text-text-primary text-2xl font-bold tracking-wide">
-          Bank Account Names
-        </h1>
-      </div>
+      <AdminBackLink />
+      <h1 className="font-cinzel text-text-primary mb-2 text-2xl font-bold tracking-wide">
+        Bank Account Names
+      </h1>
       <p className="font-lato text-text-muted mb-6 text-sm">
         CHIP confirms a payout account exists and returns the holder name the
         bank has. These accounts are in a name that doesn&apos;t match who the

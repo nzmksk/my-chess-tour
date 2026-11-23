@@ -6,6 +6,7 @@ import { formatRinggit } from "@/services/payouts/format";
 import { REFUND_STUCK_AFTER_MINUTES } from "@/lib/refunds/stuck-after";
 import type { StuckRefund } from "@/services/refunds/stuck";
 import RefireRefundButton, { type RefireResult } from "./RefireRefundButton";
+import AdminBackLink from "@/app/admin/_components/AdminBackLink";
 
 type StuckReason = "no_purchase" | "failed" | "never_sent" | "no_answer";
 
@@ -180,14 +181,9 @@ export default function StuckRefundsClient({
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <AdminBackLink />
       <div className="mb-6">
-        <Link
-          href="/admin/dashboard"
-          className="font-lato text-text-muted hover:text-text-primary text-xs"
-        >
-          ← Admin dashboard
-        </Link>
-        <h1 className="font-cinzel text-text-primary mt-2 text-2xl font-bold tracking-wide">
+        <h1 className="font-cinzel text-text-primary text-2xl font-bold tracking-wide">
           Stuck refunds
         </h1>
         <p className="font-lato text-text-muted mt-1 text-sm">

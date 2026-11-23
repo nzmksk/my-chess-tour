@@ -9,6 +9,7 @@ import type {
   RequestStatus,
 } from "../page";
 import { formatCalendarDate } from "@/lib/tournaments/datetime";
+import AdminBackLink from "@/app/admin/_components/AdminBackLink";
 
 type TabKey = "all" | RequestStatus;
 
@@ -245,6 +246,7 @@ export default function CancellationsClient({ data }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <AdminBackLink />
       <div className="mb-6">
         <h1 className="font-cinzel text-text-primary text-2xl font-bold tracking-wide">
           Tournament Cancellations

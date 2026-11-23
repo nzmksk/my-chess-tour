@@ -7,6 +7,7 @@ import BankHolderNameCheck from "@/components/BankHolderNameCheck";
 import { formatRinggit } from "@/services/payouts/format";
 import { prizeAwardStateLabel } from "@/services/prizes/problems";
 import type { PrizeAwardView } from "@/services/prizes/awards";
+import AdminBackLink from "@/app/admin/_components/AdminBackLink";
 
 // The admin prize queue (#523). An award is checked here before any money moves:
 // a wrong name is an irreversible transfer. Approving runs the funding and pool
@@ -263,14 +264,7 @@ export default function AdminPrizesClient({ awards }: { awards: PrizeAwardView[]
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <div className="mb-4">
-        <Link
-          href="/admin/dashboard"
-          className="font-lato text-text-muted hover:text-text-primary text-sm transition-colors"
-        >
-          ← Back to Admin Dashboard
-        </Link>
-      </div>
+      <AdminBackLink />
       <h1 className="font-cinzel text-text-primary mb-1 text-2xl font-bold tracking-wide">
         Prizes
       </h1>
