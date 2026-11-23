@@ -193,17 +193,21 @@ an `auth.uid()`. The two are different identifier spaces bridged only by
   policy. The app-side twin is `lookupAppUserId`
   (`src/services/supabase/identity.ts`).
 - **`can_act_for(p_user_id)`** answers "may the caller act on this user's
-  behalf". Today it is exactly `p_user_id = app_user_id()`, so it changes
-  nothing — it exists so that when guardianships arrive (#504) the widening is
-  one function body rather than another policy sweep. Used by the
-  `player_profiles`, `registrations`, `payments`, and `refunds` policies.
+  behalf": the caller is `p_user_id`, or holds an `active` guardianship of them
+  (#707, `20261124100000_guardians_can_act_for_dependents.sql`). A revoked or
+  claimed guardianship stops counting at once, and a dependent never gains
+  access to their guardian. It began as the bare self check (#501) so that this
+  widening was one function body rather than another policy sweep. Used by the
+  `player_profiles` (read, insert, update), `registrations`, `payments`,
+  `refunds`, `player_bank_accounts`, `sensitive_data_consents` and
+  `prize_awards` read policies. `supabase/tests/guardian_access.sql` covers it.
 
 > ⚠️ **Four policy groups deliberately do NOT use `can_act_for()`** and must not
 > start: `users`, `user_global_roles`, `organization_memberships`, and the
 > own-account `audit_logs` policy. Acting on someone's behalf must never confer
 > their platform-admin role or org membership. Each carries a comment saying so
-> at the policy site; `supabase/tests/identity_indirection.sql` scenario I5 is the
-> regression guard.
+> at the policy site; `supabase/tests/identity_indirection.sql` scenario I5 and
+> `guardian_access.sql` A2 are the regression guards.
 
 ### `users` is read-only to clients
 
