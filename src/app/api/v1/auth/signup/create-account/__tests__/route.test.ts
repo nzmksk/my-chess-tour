@@ -71,6 +71,7 @@ const validBody = {
   firstName: "Ahmad",
   lastName: "Razif",
   termsAccepted: true,
+  adultConfirmed: true,
 };
 
 const NEW_USER_ID = "new-user-id";
@@ -182,6 +183,28 @@ describe("POST /api/v1/auth/signup/create-account", () => {
       expect(json.error.message).toMatch(/must accept the terms/i);
       expect(mockCreateUser).not.toHaveBeenCalled();
     }
+  });
+
+  it("rejects a signup that does not confirm the person is 18 or over", async () => {
+    for (const adultConfirmed of [undefined, false, "true", 1]) {
+      vi.clearAllMocks();
+      const res = await POST(makeRequest({ ...validBody, adultConfirmed }));
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe("VALIDATION_ERROR");
+      expect(json.error.message).toMatch(/18 or over/);
+      expect(json.error.message).toMatch(/parent or guardian/);
+      expect(mockCreateUser).not.toHaveBeenCalled();
+    }
+  });
+
+  it("passes the 18+ confirmation to handle_new_user, which stamps the time", async () => {
+    await POST(makeRequest(validBody));
+
+    const metadata = mockCreateUser.mock.calls[0][0].user_metadata;
+    expect(metadata.adult_confirmed).toBe(true);
+    expect(metadata).not.toHaveProperty("adult_confirmed_at");
   });
 
   // --- Per-IP rate limiting (anti-enumeration) ------------------------------

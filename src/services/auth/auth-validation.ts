@@ -54,6 +54,9 @@ export type RegistrationFields = {
   termsAccepted: boolean;
 };
 
+export const ADULT_CONFIRMATION_REQUIRED =
+  "You must confirm you are 18 or over. Under-18s take part through a parent or guardian's account.";
+
 export function validateRegistrationForm(fields: RegistrationFields): {
   errors: RegistrationErrors;
   isValid: boolean;

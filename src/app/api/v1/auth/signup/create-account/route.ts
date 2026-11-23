@@ -4,6 +4,7 @@ import { storeVerificationCode } from "@/services/redis/redis";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { sendVerificationEmail } from "@/services/email/email";
 import {
+  ADULT_CONFIRMATION_REQUIRED,
   NAME_PATTERN,
   checkPasswordRequirements,
   nameCharactersError,
@@ -70,12 +71,20 @@ async function handlePost(request: NextRequest) {
     );
   }
 
-  const { email, password, firstName, lastName, termsAccepted } = body as {
+  const {
+    email,
+    password,
+    firstName,
+    lastName,
+    termsAccepted,
+    adultConfirmed,
+  } = body as {
     email?: string;
     password?: string;
     firstName?: string;
     lastName?: string;
     termsAccepted?: boolean;
+    adultConfirmed?: boolean;
   };
 
   if (!email || typeof email !== "string") {
@@ -117,6 +126,18 @@ async function handlePost(request: NextRequest) {
         error: {
           code: "VALIDATION_ERROR",
           message: "You must accept the Terms of Service and Privacy Policy",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (adultConfirmed !== true) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: ADULT_CONFIRMATION_REQUIRED,
         },
       },
       { status: 400 },
@@ -218,6 +239,7 @@ async function handlePost(request: NextRequest) {
         // server's constant — a client-supplied version would be evidence of
         // nothing.
         terms_version: TERMS_VERSION,
+        adult_confirmed: true,
       },
     });
 
