@@ -236,6 +236,7 @@ check has passed.
   redirect to `/auth/login?redirectTo=…`.
 - **Guest-only:** `/auth/login`, `/auth/signup`, `/auth/forgot-password`,
   `/auth/logout` — authenticated users are bounced to `/`.
+- **18 or over:** signup has a required "I am 18 or over" checkbox beside the Terms one, and says that under-18s take part through a parent or guardian's account. `POST /api/v1/auth/signup/create-account` refuses a body without `adultConfirmed: true`. It then puts `adult_confirmed` in the auth metadata, and `handle_new_user` stamps `users.adult_confirmed_at` in the statement that creates the row, the way it records `terms_version` (#710). Managed (dependent) accounts never carry it. Signup collects no date of birth, so this confirmation is the only age record until the profile has one. #711 refuses an under-18 date of birth on a self-managed account.
 - **Signup step gating:** a `SIGNUP_STEP_COOKIE` (`verify`) prevents reaching the verify step by URL before an account exists; it's cleared once verified.
 - **One account per mailbox:** signup refuses an address whose mailbox already has an active account, so `test+123@gmail.com` or `t.e.s.t@googlemail.com` gets `EMAIL_EXISTS` when `test@gmail.com` is registered. The route asks `email_registered()`, and the unique `users.email_canonical` index is the backstop ([ADR 0027](../adr/0027-one-account-per-mailbox.md)).
 - **Password reset:** `/auth/update-password` requires a *recovery* session —
