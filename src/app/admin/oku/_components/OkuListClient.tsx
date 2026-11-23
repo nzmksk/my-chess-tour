@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { OkuCounts, OkuReviewStatus, OkuSubmission } from "../page";
+import AdminBackLink from "@/app/admin/_components/AdminBackLink";
 
 type TabKey = "all" | OkuReviewStatus;
 
@@ -96,6 +97,7 @@ export default function OkuListClient({ data }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <AdminBackLink />
       <div className="mb-6">
         <h1 className="font-cinzel text-text-primary text-2xl font-bold tracking-wide">
           OKU Verification
