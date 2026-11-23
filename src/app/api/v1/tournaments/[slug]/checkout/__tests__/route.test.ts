@@ -10,6 +10,7 @@ const {
   mockTournamentBuilder,
   mockExistingBuilder,
   mockProfileBuilder,
+  mockUsersBuilder,
   mockPaymentPriorBuilder,
   mockPaymentSelectBuilder,
   mockPaymentUpdateBuilder,
@@ -42,6 +43,7 @@ const {
   // Only read when the tier or restrictions need profile fields; defaults to a
   // null profile, which every validator treats as ineligible (fails closed).
   const mockProfileBuilder = makeBuilder({ data: null, error: null });
+  const mockUsersBuilder = makeBuilder({ data: null, error: null });
   // Resume reads the prior payment's chip_transaction_id before re-pricing.
   const mockPaymentPriorBuilder = makeBuilder({ data: null, error: null });
   const mockPaymentSelectBuilder = makeBuilder({ data: null, error: null });
@@ -72,6 +74,7 @@ const {
     // capacity is enforced in Postgres, not via a JS pre-check.
     if (table === "registrations") return mockExistingBuilder;
     if (table === "player_profiles") return mockProfileBuilder;
+    if (table === "users") return mockUsersBuilder;
     if (table === "payments") {
       return paymentBuilders[payCallCount++] ?? mockPaymentUpdateBuilder;
     }
@@ -88,6 +91,7 @@ const {
     mockTournamentBuilder,
     mockExistingBuilder,
     mockProfileBuilder,
+    mockUsersBuilder,
     mockPaymentPriorBuilder,
     mockPaymentSelectBuilder,
     mockPaymentUpdateBuilder,
@@ -193,6 +197,8 @@ beforeEach(() => {
   });
   setThen(mockTournamentBuilder, { data: makeTournament(), error: null });
   setThen(mockExistingBuilder, { data: null, error: null });
+  setThen(mockProfileBuilder, { data: null, error: null });
+  setThen(mockUsersBuilder, { data: { account_type: "self" }, error: null });
   setThen(mockPaymentPriorBuilder, {
     data: { chip_transaction_id: null },
     error: null,
@@ -1022,6 +1028,128 @@ describe("POST /api/v1/tournaments/:slug/checkout — prize pool gate (#523)", (
     const res = await POST(makeRequest(SLUG), { params: Promise.resolve({ slug: SLUG }) });
 
     expect(res.status).toBe(500);
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/v1/tournaments/:slug/checkout — under-18 self-managed participant", () => {
+  const thisYear = Number(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+      year: "numeric",
+    }).format(new Date()),
+  );
+  const CHILD_DOB = `${thisYear - 15}-06-15`;
+  const under18DbError = {
+    code: "P0001",
+    message: "UNDER_18: a self-managed account holder under 18 can't register",
+  };
+
+  it("refuses before registering or creating a purchase", async () => {
+    setThen(mockProfileBuilder, {
+      data: { date_of_birth: CHILD_DOB },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error.code).toBe("UNDER_18");
+    expect(json.error.message).toMatch(/parent or guardian/);
+    expect(mockRpc).not.toHaveBeenCalledWith(
+      "create_registration_with_payment",
+      expect.anything(),
+    );
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("refuses to hand back a live pending payment's link too", async () => {
+    setThen(mockProfileBuilder, {
+      data: { date_of_birth: CHILD_DOB },
+      error: null,
+    });
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-0",
+      },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("UNDER_18");
+  });
+
+  it("exempts a managed participant", async () => {
+    setThen(mockProfileBuilder, {
+      data: { date_of_birth: CHILD_DOB },
+      error: null,
+    });
+    setThen(mockUsersBuilder, {
+      data: { account_type: "managed" },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("maps the database guard on a new registration to the same 422", async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: under18DbError });
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("UNDER_18");
+  });
+
+  it("maps the database guard on a new payment attempt to the same 422", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "failed_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+    mockRpc.mockResolvedValueOnce({ data: null, error: under18DbError });
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("UNDER_18");
+  });
+
+  it("500s when the participant can't be read", async () => {
+    setThen(mockUsersBuilder, { data: null, error: { message: "db down" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(makeRequest(SLUG), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toContain("db down");
     expect(mockCreateChipPurchase).not.toHaveBeenCalled();
   });
 });

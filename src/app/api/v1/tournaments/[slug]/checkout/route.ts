@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { notifyRegistrationConfirmed } from "@/services/registrations/notify";
 import type { EntryFees } from "@/app/tournaments/types";
 import {
+  checkParticipantAge,
   checkRestrictions,
   checkFeeTierEligibility,
   checkRatedRequirements,
@@ -22,12 +23,20 @@ import {
 } from "@/services/chip/chip";
 import type { PurchasesResponse } from "@/services/chip/interfaces/purchases-response";
 import { internalErrorResponse } from "@/lib/http/internal-error";
+import { UNDER_18_SELF_ACCOUNT_MESSAGE } from "@/lib/auth/adult-age";
 import { afterResponse } from "@/lib/http/after-response";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import {
   noteAuditActor,
   withAuditContext,
 } from "@/services/supabase/audit-context";
+
+function under18Response(): NextResponse {
+  return NextResponse.json(
+    { error: { code: "UNDER_18", message: UNDER_18_SELF_ACCOUNT_MESSAGE } },
+    { status: 422 },
+  );
+}
 
 function prizePoolNotFundedResponse(): NextResponse {
   return NextResponse.json(
@@ -258,6 +267,34 @@ async function handlePost(
     isMcfRated: tournament.is_mcf_rated === true,
   };
 
+  const [
+    { data: participantAccount, error: participantAccountErr },
+    { data: participantProfile, error: participantProfileErr },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("users")
+      .select("account_type")
+      .eq("id", userId)
+      .single(),
+    supabaseAdmin
+      .from("player_profiles")
+      .select("date_of_birth")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+  const participantErr = participantAccountErr ?? participantProfileErr;
+  if (participantErr) {
+    return internalErrorResponse(
+      "POST /api/v1/tournaments/[slug]/checkout: participant lookup failed",
+      participantErr,
+    );
+  }
+  const participantAgeError = checkParticipantAge({
+    account_type: participantAccount?.account_type ?? null,
+    date_of_birth: participantProfile?.date_of_birth ?? null,
+  });
+  if (participantAgeError) return participantAgeError;
+
   const needsTierProfile =
     matchedTier.age_min != null ||
     matchedTier.age_max != null ||
@@ -401,6 +438,9 @@ async function handlePost(
   if (insertErr) {
     if (insertErr.message?.startsWith("PRIZE_POOL_NOT_FUNDED")) {
       return prizePoolNotFundedResponse();
+    }
+    if (insertErr.message?.startsWith("UNDER_18")) {
+      return under18Response();
     }
     if (
       insertErr.message.includes("Tournament is full") ||
@@ -587,6 +627,9 @@ async function resumeRegistration(
   if (attemptErr) {
     if (attemptErr.message?.startsWith("PRIZE_POOL_NOT_FUNDED")) {
       return prizePoolNotFundedResponse();
+    }
+    if (attemptErr.message?.startsWith("UNDER_18")) {
+      return under18Response();
     }
     if (attemptErr.message?.toLowerCase().includes("full")) {
       return NextResponse.json(
