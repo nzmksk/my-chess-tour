@@ -122,6 +122,7 @@ describe("validateRegistrationForm", () => {
     password: "Secure1!x",
     confirmPassword: "Secure1!x",
     termsAccepted: true,
+    adultConfirmed: true,
   };
 
   it("returns isValid true for valid fields", () => {
@@ -217,6 +218,16 @@ describe("validateRegistrationForm", () => {
     expect(errors.terms).toBeDefined();
   });
 
+  it("returns an adult error, pointing under-18s to a guardian, when 18+ isn't confirmed", () => {
+    const { errors, isValid } = validateRegistrationForm({
+      ...validFields,
+      adultConfirmed: false,
+    });
+    expect(isValid).toBe(false);
+    expect(errors.adult).toMatch(/18 or over/);
+    expect(errors.adult).toMatch(/parent or guardian/);
+  });
+
   it("returns isValid false when any field is invalid", () => {
     const { isValid } = validateRegistrationForm({
       ...validFields,
@@ -234,6 +245,7 @@ describe("isRegistrationFormSubmittable", () => {
     password: "Secure1!x",
     confirmPassword: "Secure1!x",
     termsAccepted: true,
+    adultConfirmed: true,
   };
 
   it("returns true for valid complete fields", () => {
@@ -274,6 +286,12 @@ describe("isRegistrationFormSubmittable", () => {
   it("returns false when terms not accepted", () => {
     expect(
       isRegistrationFormSubmittable({ ...validFields, termsAccepted: false }),
+    ).toBe(false);
+  });
+
+  it("returns false when 18+ isn't confirmed", () => {
+    expect(
+      isRegistrationFormSubmittable({ ...validFields, adultConfirmed: false }),
     ).toBe(false);
   });
 });

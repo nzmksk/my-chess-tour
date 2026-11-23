@@ -51,6 +51,30 @@ function getForm() {
     .closest("form")!;
 }
 
+function fillValidForm({ adult = true }: { adult?: boolean } = {}) {
+  fireEvent.change(screen.getByLabelText("First Name"), {
+    target: { value: "Alice" },
+  });
+  fireEvent.change(screen.getByLabelText("Last Name"), {
+    target: { value: "Wong" },
+  });
+  fireEvent.change(screen.getByLabelText("Email Address"), {
+    target: { value: "alice@example.com" },
+  });
+  fireEvent.change(screen.getByLabelText("Password"), {
+    target: { value: "Password1!" },
+  });
+  fireEvent.change(screen.getByLabelText("Confirm Password"), {
+    target: { value: "Password1!" },
+  });
+  fireEvent.click(
+    screen.getByLabelText(
+      "I agree to the Terms of Service and Privacy Policy",
+    ),
+  );
+  if (adult) fireEvent.click(screen.getByLabelText("I am 18 or over"));
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -58,6 +82,7 @@ function getForm() {
 describe("SignUpForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
   });
 
   // --- Rendering ------------------------------------------------------------
@@ -145,22 +170,7 @@ describe("SignUpForm", () => {
 
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("First Name"), {
-      target: { value: "Alice" },
-    });
-    fireEvent.change(screen.getByLabelText("Last Name"), {
-      target: { value: "Wong" },
-    });
-    fireEvent.change(screen.getByLabelText("Email Address"), {
-      target: { value: "alice@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText("Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.change(screen.getByLabelText("Confirm Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fillValidForm();
 
     await act(async () => {
       fireEvent.submit(getForm());
@@ -183,22 +193,7 @@ describe("SignUpForm", () => {
 
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("First Name"), {
-      target: { value: "Alice" },
-    });
-    fireEvent.change(screen.getByLabelText("Last Name"), {
-      target: { value: "Wong" },
-    });
-    fireEvent.change(screen.getByLabelText("Email Address"), {
-      target: { value: "alice@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText("Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.change(screen.getByLabelText("Confirm Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fillValidForm();
 
     await act(async () => {
       fireEvent.submit(getForm());
@@ -206,6 +201,53 @@ describe("SignUpForm", () => {
 
     expect(screen.getByRole("alert")).toBeDefined();
     expect(mockPush).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("asks for 18 or over and points under-18s to a guardian", () => {
+    renderForm();
+    const box = screen.getByLabelText("I am 18 or over") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(
+      screen.getByText(/Under 18\? You take part through a parent or guardian/),
+    ).toBeDefined();
+  });
+
+  it("doesn't submit without the 18+ confirmation", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+    fillValidForm({ adult: false });
+
+    await act(async () => {
+      fireEvent.submit(getForm());
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById("adult-error")?.textContent).toMatch(
+      /18 or over/,
+    );
+    expect(
+      screen.getByLabelText("I am 18 or over").getAttribute("aria-invalid"),
+    ).toBe("true");
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the 18+ confirmation with the signup", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ message: "Account created. Verification code sent." }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+    fillValidForm();
+
+    await act(async () => {
+      fireEvent.submit(getForm());
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).toMatchObject({ termsAccepted: true, adultConfirmed: true });
     vi.unstubAllGlobals();
   });
 

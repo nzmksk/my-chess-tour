@@ -56,6 +56,7 @@ export default function SignUpForm() {
           // The consent itself has to reach the server — the version it is
           // recorded against comes from the server's own constant, not from here.
           termsAccepted: form.termsAccepted,
+          adultConfirmed: form.adultConfirmed,
         }),
       });
       const data = await res.json();
@@ -408,6 +409,34 @@ export default function SignUpForm() {
             {errors.terms && (
               <p id="terms-error" className="input-hint error mb-2">
                 {errors.terms}
+              </p>
+            )}
+
+            <div className="check-row">
+              <input
+                id="adult"
+                type="checkbox"
+                className="checkbox"
+                checked={form.adultConfirmed}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, adultConfirmed: e.target.checked }))
+                }
+                aria-invalid={!!errors.adult}
+                aria-describedby={
+                  errors.adult ? "adult-hint adult-error" : "adult-hint"
+                }
+              />
+              <label className="check-label" htmlFor="adult">
+                I am 18 or over
+              </label>
+            </div>
+            <p id="adult-hint" className="input-hint mb-2">
+              Under 18? You take part through a parent or guardian&apos;s
+              account, not one of your own.
+            </p>
+            {errors.adult && (
+              <p id="adult-error" className="input-hint error mb-2">
+                {errors.adult}
               </p>
             )}
 

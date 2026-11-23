@@ -43,6 +43,7 @@ export type RegistrationErrors = {
   password?: string;
   confirmPassword?: string;
   terms?: string;
+  adult?: string;
 };
 
 export type RegistrationFields = {
@@ -52,6 +53,7 @@ export type RegistrationFields = {
   password: string;
   confirmPassword: string;
   termsAccepted: boolean;
+  adultConfirmed: boolean;
 };
 
 export const ADULT_CONFIRMATION_REQUIRED =
@@ -97,6 +99,10 @@ export function validateRegistrationForm(fields: RegistrationFields): {
     errors.terms = "You must accept the Terms of Service and Privacy Policy";
   }
 
+  if (!fields.adultConfirmed) {
+    errors.adult = ADULT_CONFIRMATION_REQUIRED;
+  }
+
   return { errors, isValid: Object.keys(errors).length === 0 };
 }
 
@@ -111,7 +117,8 @@ export function isRegistrationFormSubmittable(
     validateEmail(fields.email) &&
     allReqsMet &&
     fields.password === fields.confirmPassword &&
-    fields.termsAccepted
+    fields.termsAccepted &&
+    fields.adultConfirmed
   );
 }
 
