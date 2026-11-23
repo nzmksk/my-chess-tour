@@ -35,15 +35,39 @@ export default function TermsPage() {
               <h2 className="font-cinzel text-gold-muted mb-3 text-sm font-semibold tracking-widest uppercase">
                 1. Acceptance of Terms
               </h2>
-              <p className="text-text-secondary">
+              <p className="text-text-secondary mb-2">
                 By registering for an account or using any MCT service, you
-                confirm that either you are at least 18 years of age, or you are
-                under 18 and your parent or legal guardian has agreed to these
-                Terms on your behalf. You also confirm that you agree to be
-                bound by these Terms and our Privacy Policy. A parent or
-                guardian who agrees on a minor&apos;s behalf is responsible for
-                the minor&apos;s use of the platform, including any payment
-                made. If you do not agree, you may not use our services.
+                confirm that you are at least 18 years of age and that you agree
+                to be bound by these Terms and our Privacy Policy. If you do not
+                agree, you may not use our services.
+              </p>
+              <p className="text-text-secondary mb-2">
+                Accounts you hold yourself are for people aged 18 and over.
+                Others take part through someone who acts for them:
+              </p>
+              <ul className="text-text-secondary list-disc space-y-1 pl-5">
+                <li>
+                  <strong>Players under 18.</strong> A person under 18 can take
+                  part only as a dependent of their parent or legal guardian.
+                  That parent or legal guardian accepts these Terms on the
+                  child&apos;s behalf and is responsible for the child&apos;s
+                  use of the platform, including any payment made.
+                </li>
+                <li>
+                  <strong>Helpers.</strong> An adult player may authorise a
+                  helper, such as a carer, to act for them. The helper acts as
+                  the player&apos;s agent, within what the player has
+                  authorised. The player remains the party to these Terms.
+                </li>
+                <li>
+                  <strong>Legally appointed guardians.</strong> A person legally
+                  appointed to act for an adult who lacks capacity may act for
+                  that adult and accepts these Terms on their behalf.
+                </li>
+              </ul>
+              <p className="text-text-secondary mt-2">
+                A guardian or helper confirms that they have the authority they
+                act under, and we may ask for evidence of it.
               </p>
             </section>
 
@@ -167,6 +191,12 @@ export default function TermsPage() {
                   prize by bank transfer to the bank account you register with
                   us. We never pay out more than we have collected for the
                   event.
+                </li>
+                <li>
+                  A prize won by a player under 18 is paid to their parent or
+                  legal guardian. A prize won by an adult is paid to the
+                  player&apos;s own bank account, even when a helper or guardian
+                  acts for them.
                 </li>
                 <li>
                   A prize we distribute that is still unclaimed twelve months
