@@ -172,12 +172,10 @@ async function handlePost(request: NextRequest) {
     );
   }
 
-  // Check if email already exists in public.users
-  const { data: existing, error: dbError } = await supabaseAdmin
-    .from("users")
-    .select("id")
-    .eq("email", normalized)
-    .maybeSingle();
+  const { data: registered, error: dbError } = await supabaseAdmin.rpc(
+    "email_registered",
+    { p_email: normalized },
+  );
 
   if (dbError) {
     console.error(
@@ -193,7 +191,7 @@ async function handlePost(request: NextRequest) {
     );
   }
 
-  if (existing) {
+  if (registered === true) {
     return NextResponse.json(
       {
         error: {

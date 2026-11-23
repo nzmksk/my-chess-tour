@@ -6,9 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 const {
-  mockMaybeSingle,
-  mockSelectEq,
-  mockSelect,
+  mockRpc,
   mockDeleteEq,
   mockDelete,
   mockFrom,
@@ -18,21 +16,17 @@ const {
   mockSendVerificationEmail,
   mockHitWindow,
 } = vi.hoisted(() => {
-  const mockMaybeSingle = vi.fn();
-  const mockSelectEq = vi.fn(() => ({ maybeSingle: mockMaybeSingle }));
-  const mockSelect = vi.fn(() => ({ eq: mockSelectEq }));
+  const mockRpc = vi.fn();
   const mockDeleteEq = vi.fn();
   const mockDelete = vi.fn(() => ({ eq: mockDeleteEq }));
-  const mockFrom = vi.fn(() => ({ select: mockSelect, delete: mockDelete }));
+  const mockFrom = vi.fn(() => ({ delete: mockDelete }));
   const mockCreateUser = vi.fn();
   const mockDeleteUser = vi.fn();
   const mockStoreVerificationCode = vi.fn();
   const mockSendVerificationEmail = vi.fn();
   const mockHitWindow = vi.fn();
   return {
-    mockMaybeSingle,
-    mockSelectEq,
-    mockSelect,
+    mockRpc,
     mockDeleteEq,
     mockDelete,
     mockFrom,
@@ -47,6 +41,7 @@ const {
 vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: {
     from: mockFrom,
+    rpc: mockRpc,
     auth: { admin: { createUser: mockCreateUser, deleteUser: mockDeleteUser } },
   },
 }));
@@ -98,13 +93,10 @@ function makeRequest(body: unknown): NextRequest {
 describe("POST /api/v1/auth/signup/create-account", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // No existing user by default
-    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
-    mockSelectEq.mockReturnValue({ maybeSingle: mockMaybeSingle });
-    mockSelect.mockReturnValue({ eq: mockSelectEq });
+    mockRpc.mockResolvedValue({ data: false, error: null });
     mockDeleteEq.mockResolvedValue({ error: null });
     mockDelete.mockReturnValue({ eq: mockDeleteEq });
-    mockFrom.mockReturnValue({ select: mockSelect, delete: mockDelete });
+    mockFrom.mockReturnValue({ delete: mockDelete });
     mockCreateUser.mockResolvedValue({
       data: { user: { id: NEW_USER_ID } },
       error: null,
@@ -360,10 +352,7 @@ describe("POST /api/v1/auth/signup/create-account", () => {
   // --- No rollback when nothing was created ---------------------------------
 
   it("returns 409 and does not roll back when email already exists (pre-check)", async () => {
-    mockMaybeSingle.mockResolvedValue({
-      data: { id: "existing-user" },
-      error: null,
-    });
+    mockRpc.mockResolvedValue({ data: true, error: null });
 
     const res = await POST(makeRequest(validBody));
     const json = await res.json();
@@ -373,6 +362,38 @@ describe("POST /api/v1/auth/signup/create-account", () => {
     expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it("asks whether the mailbox is taken, so a +tag variant gets a 409", async () => {
+    mockRpc.mockResolvedValue({ data: true, error: null });
+
+    const res = await POST(
+      makeRequest({ ...validBody, email: " Player+123@Example.com " }),
+    );
+
+    expect(mockRpc).toHaveBeenCalledWith("email_registered", {
+      p_email: "player+123@example.com",
+    });
+    expect(res.status).toBe(409);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("creates the account with the address as typed, not the canonical one", async () => {
+    await POST(makeRequest({ ...validBody, email: "Player+chess@Gmail.com" }));
+
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "player+chess@gmail.com" }),
+    );
+  });
+
+  it("returns 500 without creating the user when the pre-check fails", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(500);
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it("returns 500 and does not roll back when auth user creation fails", async () => {

@@ -49,3 +49,4 @@ old one `Superseded by NNNN`, and link both ways.
 | 0024 | [Text sent to and received from CHIP Send](0024-text-to-and-from-chip-send.md)                         | Accepted |
 | 0025 | [The CHIP Collect and CHIP Send clients](0025-chip-clients.md)                                         | Accepted |
 | 0026 | [Payout accounts are matched by holder name](0026-payout-accounts-are-matched-by-holder-name.md)       | Accepted |
+| 0027 | [One account per mailbox](0027-one-account-per-mailbox.md)                                             | Accepted |

@@ -237,6 +237,7 @@ check has passed.
 - **Guest-only:** `/auth/login`, `/auth/signup`, `/auth/forgot-password`,
   `/auth/logout` — authenticated users are bounced to `/`.
 - **Signup step gating:** a `SIGNUP_STEP_COOKIE` (`verify`) prevents reaching the verify step by URL before an account exists; it's cleared once verified.
+- **One account per mailbox:** signup refuses an address whose mailbox already has an active account, so `test+123@gmail.com` or `t.e.s.t@googlemail.com` gets `EMAIL_EXISTS` when `test@gmail.com` is registered. The route asks `email_registered()`, and the unique `users.email_canonical` index is the backstop ([ADR 0027](../adr/0027-one-account-per-mailbox.md)).
 - **Password reset:** `/auth/update-password` requires a *recovery* session —
   checked via the JWT's `amr` containing an `otp` method.
 - **Signup return path:** a page that sends someone to signup (the organization

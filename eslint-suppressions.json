@@ -246,12 +246,12 @@
   },
   "src/app/api/v1/auth/signup/create-account/__tests__/route.test.ts": {
     "local/no-comments": {
-      "count": 24
+      "count": 23
     }
   },
   "src/app/api/v1/auth/signup/create-account/route.ts": {
     "local/no-comments": {
-      "count": 25
+      "count": 24
     }
   },
   "src/app/api/v1/auth/signup/request-code/__tests__/route.test.ts": {
