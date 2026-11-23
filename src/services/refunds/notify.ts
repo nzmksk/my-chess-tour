@@ -10,9 +10,11 @@ export interface SettleRefundResult {
 interface RefundEmailRow {
   refund_amount_cents: number;
   registration: {
-    user: { email: string | null; first_name: string | null } | null;
     tournament: { name: string | null } | null;
-    payment: { payment_method: string | null } | null;
+    payment: {
+      payment_method: string | null;
+      payer: { email: string | null; first_name: string | null } | null;
+    } | null;
   } | null;
 }
 
@@ -29,9 +31,11 @@ export async function notifyRefundSettlement(
       .select(
         `refund_amount_cents,
          registration:registrations!registration_id(
-           user:users!user_id(email, first_name),
            tournament:tournaments(name),
-           payment:payments!current_payment_id(payment_method)
+           payment:payments!current_payment_id(
+             payment_method,
+             payer:users!user_id(email, first_name)
+           )
          )`,
       )
       .eq("id", refundId)
@@ -45,14 +49,15 @@ export async function notifyRefundSettlement(
     }
 
     const row = data as unknown as RefundEmailRow;
-    const email = row.registration?.user?.email;
+    const payer = row.registration?.payment?.payer;
+    const email = payer?.email;
     if (!email) {
-      console.error(`Refund ${refundId}: no player address for the refund outcome email`);
+      console.error(`Refund ${refundId}: no payer address for the refund outcome email`);
       return;
     }
 
     await sendRefundOutcomeEmail(email, {
-      playerName: row.registration?.user?.first_name ?? "Player",
+      playerName: payer?.first_name ?? "Player",
       tournamentName: row.registration?.tournament?.name ?? "your tournament",
       amountCents: row.refund_amount_cents,
       paymentMethod: describePaymentMethod(row.registration?.payment?.payment_method),
