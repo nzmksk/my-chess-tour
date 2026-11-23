@@ -1,6 +1,6 @@
 import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 
-export const ADULT_AGE = 18;
+const ADULT_AGE = 18;
 
 export const UNDER_18_SELF_ACCOUNT_MESSAGE =
   "You must be 18 or over to hold your own account. Under-18s take part through a parent or guardian's account.";
