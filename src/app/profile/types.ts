@@ -10,6 +10,8 @@ export type ChessTitle =
 export type Gender = "male" | "female";
 export type OkuStatus = "none" | "pending" | "verified" | "rejected";
 
+export type AccountType = "self" | "managed";
+
 export type FideRating = {
   standard?: number | null;
   rapid?: number | null;

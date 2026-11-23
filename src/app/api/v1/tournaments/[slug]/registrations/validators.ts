@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ChessTitle } from "@/app/tournaments/types";
 import type { Restrictions } from "@/app/tournaments/[slug]/types";
-import type { OkuStatus } from "@/app/profile/types";
+import type { AccountType, OkuStatus } from "@/app/profile/types";
 import {
   checkAgeEligibility,
   checkRatingEligibility,
@@ -10,6 +10,10 @@ import {
 } from "@/app/tournaments/utils";
 import type { RatingContext } from "@/app/tournaments/utils";
 import { nationalityMatches, resolveCountry } from "@/lib/reference/countries";
+import {
+  UNDER_18_SELF_ACCOUNT_MESSAGE,
+  isUnderAdultAge,
+} from "@/lib/auth/adult-age";
 
 export interface EligibilityProfile {
   date_of_birth: string | null;
@@ -78,6 +82,28 @@ export function normalizeRestrictions(raw: unknown): Restrictions | null {
     }
   }
   return hasAnyRestriction(result) ? result : null;
+}
+
+export interface Participant {
+  account_type: AccountType | null;
+  date_of_birth: string | null;
+}
+
+export function checkParticipantAge(
+  participant: Participant,
+  today?: string,
+): NextResponse | null {
+  if (
+    participant.account_type === "managed" ||
+    participant.date_of_birth == null ||
+    !isUnderAdultAge(participant.date_of_birth, today)
+  ) {
+    return null;
+  }
+  return NextResponse.json(
+    { error: { code: "UNDER_18", message: UNDER_18_SELF_ACCOUNT_MESSAGE } },
+    { status: 422 },
+  );
 }
 
 export function checkRestrictions(
