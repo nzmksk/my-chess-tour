@@ -27,6 +27,8 @@
 --   N2  reject: 'rejected', the note is the owner-facing reason
 --   N3  refusals: unknown id, not under review, blank note, unknown action
 --   N4  a player account goes through the same review
+--   N5  a superseded account can't be reviewed (SUPERSEDED, #704): the owner
+--       replaced it, so nothing would pay it. It keeps 'name_mismatch'.
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it builds
@@ -45,6 +47,7 @@ DECLARE
   v_row     organization_bank_accounts;
   v_user    uuid;
   v_player  uuid;
+  v_action  text;
 BEGIN
   INSERT INTO organizations (name) VALUES ('BANK VERIFY ORG') RETURNING id INTO v_org;
 
@@ -299,6 +302,29 @@ BEGIN
   END IF;
   IF (SELECT status FROM player_bank_accounts WHERE id = v_player) <> 'verified' THEN
     RAISE EXCEPTION 'N4 FAIL: player account not verified after confirm';
+  END IF;
+
+  -- ---- N5 -----------------------------------------------------------------
+  v_result := set_organization_bank_account(v_org, 'AMMBMYKL', 'AmBank', 'Bank Verify Org', '4123456786');
+  v_old := (v_result->>'id')::uuid;
+  PERFORM settle_bank_account_verification(v_old, 109, true, NULL, 'SOMEONE ELSE', false);
+  v_result := set_organization_bank_account(v_org, 'AMMBMYKL', 'AmBank', 'Bank Verify Org', '4123456787');
+  v_bank := (v_result->>'id')::uuid;
+  PERFORM settle_bank_account_verification(v_bank, 110, true, NULL, 'BANK VERIFY ORG', true);
+  FOREACH v_action IN ARRAY ARRAY['confirm', 'reject'] LOOP
+    BEGIN
+      PERFORM review_bank_account_name(v_old, NULL, v_action, 'stale page');
+      RAISE EXCEPTION 'N5 FAIL: % reviewed a superseded account', v_action;
+    EXCEPTION WHEN SQLSTATE 'P0001' THEN
+      IF SQLERRM NOT LIKE 'SUPERSEDED%' THEN RAISE EXCEPTION 'N5 FAIL: got %', SQLERRM; END IF;
+    END;
+  END LOOP;
+  SELECT * INTO v_row FROM organization_bank_accounts WHERE id = v_old;
+  IF v_row.status <> 'name_mismatch' OR v_row.is_active OR v_row.name_reviewed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'N5 FAIL: superseded row = (%, %, %)', v_row.status, v_row.is_active, v_row.name_reviewed_at;
+  END IF;
+  IF payout_recipient_problem(v_org) IS NOT NULL THEN
+    RAISE EXCEPTION 'N5 FAIL: the replacement is not payable (%)', payout_recipient_problem(v_org);
   END IF;
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
