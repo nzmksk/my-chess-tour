@@ -31,8 +31,11 @@ Invitation answers notify the inviter only for a fresh answer, not an
 **One email per person.** Recipients are keyed by lowercased address, keeping
 the first entry, so someone reached two ways (a member who's also the
 organization's contact address) gets one email, by their own name. An
-application's outcome also goes to the contact address it gave, where the
-organization expects mail; the applicant is added first.
+application's approval also goes to the contact address it gave, where the
+organization expects mail; the applicant is added first. A rejection goes only
+to the applicant (#691): only they can amend and resubmit, and the contact
+address is one they typed and nobody has checked, so the reviewer's reason
+shouldn't land there.
 
 **Nothing unsafe in the HTML.** `src/services/email/email.ts`:
 
