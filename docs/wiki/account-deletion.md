@@ -92,6 +92,10 @@ DELETE FROM organization_invitations WHERE email = lower('<their email>');
 -- organization_memberships
 -- and user_global_roles;
 -- sets user_id / *_by to NULL everywhere else.
+-- Refused (foreign key violation) while they are a guardian or a dependent in
+-- guardianships: both sides are ON DELETE RESTRICT (#706), so a dependent's
+-- payment history can't vanish by cascade. Stop and settle who takes over the
+-- dependent before deleting either side.
 DELETE FROM users WHERE id = '<users.id>';
 
 -- Expect snapshots_anonymised > 0. changed_by_cleared is usually 0 here,
