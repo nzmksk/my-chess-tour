@@ -14,6 +14,7 @@
 --       and the superseded attempt keeps its own payer
 --   P4  a settled refund's ledger row names the payer of the refunded payment
 --   P5  payments.user_id is documented as the payer
+--   P6  the admin's stuck-refunds list names the payer, who is owed the money
 --
 -- HOW TO RUN: paste into the Supabase SQL editor AFTER applying the current
 -- migrations. Runs inside a transaction that ROLLBACKs, so it builds throwaway
@@ -42,6 +43,10 @@ DECLARE
   v_reg_user    uuid;
   v_pay_user    uuid;
   v_comment     text;
+  v_kid         uuid;
+  v_kid_reg     uuid;
+  v_kid_pay     uuid;
+  v_row         record;
 BEGIN
   -- ---- fixtures -----------------------------------------------------------
   INSERT INTO organizations (name) VALUES ('PAYER ORG') RETURNING id INTO v_org;
@@ -138,6 +143,30 @@ BEGIN
     RAISE EXCEPTION 'P5 FAIL: payments.user_id comment is %', coalesce(v_comment, 'missing');
   END IF;
   RAISE NOTICE 'P5 PASS — payments.user_id is documented as the payer';
+
+  -- ===== P6 ===============================================================
+  INSERT INTO users (email, first_name, last_name)
+    VALUES ('payer-kid@test.local', 'Kit', 'Kid') RETURNING id INTO v_kid;
+  v_res := create_registration_with_payment(
+    v_kid, v_tournament, 'standard', 4000, p_payer_user_id => v_guardian);
+  v_kid_reg := (v_res->>'registration_id')::uuid;
+  v_kid_pay := (v_res->>'payment_id')::uuid;
+  PERFORM settle_registration_payment(v_kid_pay, true, v_gross, 'fpx_b2c');
+
+  INSERT INTO refunds (registration_id, refund_amount_cents, reason, requested_at)
+    VALUES (v_kid_reg, v_gross, 'tournament_cancelled', now() - interval '1 hour')
+    RETURNING id INTO v_refund;
+
+  SELECT * INTO v_row FROM list_stuck_refunds(interval '10 minutes') WHERE refund_id = v_refund;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'P6 FAIL: the stuck refund is not listed';
+  END IF;
+  IF v_row.payer_email IS DISTINCT FROM 'payer-guardian@test.local'
+     OR v_row.payer_name IS DISTINCT FROM 'Gail Guardian' THEN
+    RAISE EXCEPTION 'P6 FAIL: stuck refund names % <%> (expected the payer Gail Guardian)',
+      v_row.payer_name, v_row.payer_email;
+  END IF;
+  RAISE NOTICE 'P6 PASS — a stuck refund names the payer';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END;

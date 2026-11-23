@@ -6,8 +6,8 @@ export interface StuckRefund {
   registration_id: string;
   tournament_id: string;
   tournament_name: string;
-  player_name: string | null;
-  player_email: string | null;
+  payer_name: string | null;
+  payer_email: string | null;
   amount_cents: number;
   requested_at: string;
   last_fired_at: string | null;
