@@ -23,6 +23,7 @@ import {
   sendCancellationReviewEmail,
   sendHelperInvitationEmail,
   sendAccountClaimEmail,
+  sendGuardianshipAgeOutEmail,
   sendInvitationResponseEmail,
   sendMemberInvitationEmail,
   sendNominationResponseEmail,
@@ -1564,6 +1565,83 @@ describe("sendHelperInvitationEmail", () => {
     await expect(sendHelperInvitationEmail("h@example.com", base)).rejects.toThrow(
       "Failed to send helper invitation email: down",
     );
+  });
+});
+
+describe("sendGuardianshipAgeOutEmail (#721)", () => {
+  const base = {
+    recipientName: "Gwen",
+    playerName: "Sara Child",
+    guardianName: "Gwen Guardian",
+    turns18On: "5 Dec 2026",
+    accessEndsOn: "4 Jan 2027",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{headline}}|{{recipientName}}|{{message}}|{{noticeMain}}|{{noticeReason}}|{{ctaUrl}}|{{ctaLabel}}|{{footerReason}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () =>
+    mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("tells the guardian the birthday is coming and what they can still do", async () => {
+    await sendGuardianshipAgeOutEmail("gwen@example.com", {
+      ...base,
+      audience: "guardian",
+      stage: "upcoming",
+    });
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("guardianship-age-out.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("gwen@example.com");
+    expect(sent().subject).toBe(
+      "Sara Child turns 18 on 5 Dec 2026: hand over their MY Chess Tour record",
+    );
+    expect(sent().html).toContain("no new registrations or payments");
+    expect(sent().html).toContain("Your access ends on 4 Jan 2027");
+    expect(sent().html).toContain("/settings/dependents");
+  });
+
+  it("tells the guardian their access has ended", async () => {
+    await sendGuardianshipAgeOutEmail("gwen@example.com", {
+      ...base,
+      audience: "guardian",
+      stage: "ended",
+    });
+    expect(sent().subject).toBe(
+      "Your access to Sara Child's MY Chess Tour record has ended",
+    );
+    expect(sent().html).toContain("you no longer manage it");
+  });
+
+  it("asks the player to have the record handed over", async () => {
+    await sendGuardianshipAgeOutEmail("sara@example.com", {
+      ...base,
+      recipientName: "Sara",
+      audience: "player",
+      stage: "turned_18",
+    });
+    expect(sent().subject).toBe(
+      "You've turned 18: take over your MY Chess Tour record",
+    );
+    expect(sent().html).toContain("Ask Gwen Guardian to hand the record over to you");
+  });
+
+  it("throws when Resend refuses", async () => {
+    mockSend.mockResolvedValue({ error: { message: "rate limited" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      sendGuardianshipAgeOutEmail("gwen@example.com", {
+        ...base,
+        audience: "guardian",
+        stage: "turned_18",
+      }),
+    ).rejects.toThrow("rate limited");
   });
 });
 

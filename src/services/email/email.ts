@@ -846,6 +846,140 @@ export async function sendAccountClaimEmail(
   }
 }
 
+type GuardianshipAgeOutStage = "upcoming" | "turned_18" | "ended";
+
+interface GuardianshipAgeOutCopy {
+  subject: string;
+  headline: string;
+  message: string;
+  noticeMain: string;
+  noticeReason: string;
+  ctaLabel: string;
+  ctaPath: string;
+  footerReason: string;
+}
+
+function guardianAgeOutCopy(
+  stage: GuardianshipAgeOutStage,
+  player: string,
+  turns18On: string,
+  accessEndsOn: string,
+): GuardianshipAgeOutCopy {
+  const waysForward = `Hand ${player}'s record over to them so they sign in to it themselves. If ${player} would like you to keep helping, they can invite you back as a helper from their own account once they have it.`;
+  const footerReason = `You received this email because you look after ${player}'s player record`;
+  if (stage === "upcoming") {
+    return {
+      subject: `${player} turns 18 on ${turns18On}: hand over their MY Chess Tour record`,
+      headline: `${player} Turns 18 Soon`,
+      message: `${player} turns 18 on ${turns18On}. A parent's or guardian's authority over a player's record ends at 18, so it's time to decide what happens to it.`,
+      noticeMain: waysForward,
+      noticeReason: `From ${turns18On} you can only view ${player}'s record and hand it over: no new registrations or payments. Your access ends on ${accessEndsOn} unless a handover is under way.`,
+      ctaLabel: "Hand Over the Record",
+      ctaPath: "/settings/dependents",
+      footerReason,
+    };
+  }
+  if (stage === "turned_18") {
+    return {
+      subject: `${player} has turned 18: hand over their MY Chess Tour record`,
+      headline: `${player} Has Turned 18`,
+      message: `${player} turned 18 on ${turns18On}. You can now only view their record and hand it over: new registrations and payments for them are closed.`,
+      noticeMain: waysForward,
+      noticeReason: `Your access to ${player}'s record ends on ${accessEndsOn} unless a handover is under way.`,
+      ctaLabel: "Hand Over the Record",
+      ctaPath: "/settings/dependents",
+      footerReason,
+    };
+  }
+  return {
+    subject: `Your access to ${player}'s MY Chess Tour record has ended`,
+    headline: "Your Access Has Ended",
+    message: `${player} turned 18 on ${turns18On} and the grace period to hand their record over has passed, so you no longer manage it. Their registrations and history stay on the record.`,
+    noticeMain: `If ${player} wants to take the record over, or would like your help with it, they can contact support@mychesstour.com.`,
+    noticeReason: "Payments you made stay with you.",
+    ctaLabel: "View Settings",
+    ctaPath: "/settings",
+    footerReason: `You received this email because you looked after ${player}'s player record`,
+  };
+}
+
+function playerAgeOutCopy(
+  stage: GuardianshipAgeOutStage,
+  guardian: string,
+  turns18On: string,
+): GuardianshipAgeOutCopy {
+  const footerReason =
+    "You received this email because this address is the contact for your player record";
+  if (stage === "ended") {
+    return {
+      subject: `${guardian} no longer manages your MY Chess Tour record`,
+      headline: "Your Record Is Yours to Take Over",
+      message: `You turned 18 on ${turns18On}, so ${guardian} no longer manages your MY Chess Tour player record.`,
+      noticeMain:
+        "To take it over and sign in to it yourself, contact support@mychesstour.com. Your registrations, results and profile are all still there.",
+      noticeReason: `If you'd like ${guardian} to keep helping, you can invite them as a helper once you have the record.`,
+      ctaLabel: "Visit MY Chess Tour",
+      ctaPath: "/",
+      footerReason,
+    };
+  }
+  return {
+    subject:
+      stage === "upcoming"
+        ? `You turn 18 on ${turns18On}: take over your MY Chess Tour record`
+        : "You've turned 18: take over your MY Chess Tour record",
+    headline: "Take Over Your Player Record",
+    message: `${guardian} has been looking after your MY Chess Tour player record. ${stage === "upcoming" ? `You turn 18 on ${turns18On}` : `You turned 18 on ${turns18On}`}, so it's time for you to take it over.`,
+    noticeMain: `Ask ${guardian} to hand the record over to you. You'll get a link to set a password, and you keep your registrations, results and profile.`,
+    noticeReason: `If you'd like ${guardian} to keep helping, you can invite them as a helper once the record is yours.`,
+    ctaLabel: "Visit MY Chess Tour",
+    ctaPath: "/",
+    footerReason,
+  };
+}
+
+export async function sendGuardianshipAgeOutEmail(
+  email: string,
+  params: {
+    audience: "guardian" | "player";
+    stage: GuardianshipAgeOutStage;
+    recipientName: string;
+    playerName: string;
+    guardianName: string;
+    turns18On: string;
+    accessEndsOn: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const copy =
+    params.audience === "guardian"
+      ? guardianAgeOutCopy(params.stage, params.playerName, params.turns18On, params.accessEndsOn)
+      : playerAgeOutCopy(params.stage, params.guardianName, params.turns18On);
+
+  const html = loadTemplate("guardianship-age-out.html")
+    .replace(/\{\{headline\}\}/g, escapeHtml(copy.headline))
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
+    .replace(/\{\{message\}\}/g, escapeHtml(copy.message))
+    .replace(/\{\{noticeMain\}\}/g, escapeHtml(copy.noticeMain))
+    .replace(/\{\{noticeReason\}\}/g, escapeHtml(copy.noticeReason))
+    .replace(/\{\{ctaUrl\}\}/g, escapeHtml(`${siteUrl}${copy.ctaPath}`))
+    .replace(/\{\{ctaLabel\}\}/g, escapeHtml(copy.ctaLabel))
+    .replace(/\{\{footerReason\}\}/g, escapeHtml(copy.footerReason))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: copy.subject,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send guardianship age-out email:", error);
+    throw new Error(`Failed to send guardianship age-out email: ${error.message}`);
+  }
+}
+
 export async function sendOkuReviewEmail(
   email: string,
   params: {
