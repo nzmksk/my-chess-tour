@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkParticipantAge,
   checkRestrictions,
   checkFeeTierEligibility,
   checkRatedRequirements,
@@ -937,5 +938,51 @@ describe("checkRatedRequirements", () => {
       null,
     );
     expect(result?.status).toBe(422);
+  });
+});
+
+describe("checkParticipantAge", () => {
+  const TODAY = "2026-05-12";
+
+  it("refuses a self-managed participant who is under 18 today", async () => {
+    const res = checkParticipantAge(
+      { account_type: "self", date_of_birth: DOB_17 },
+      TODAY,
+    );
+    expect(res?.status).toBe(422);
+    const json = await res!.json();
+    expect(json.error.code).toBe("UNDER_18");
+    expect(json.error.message).toMatch(/parent or guardian/);
+  });
+
+  it("allows a self-managed participant on their 18th birthday", () => {
+    expect(
+      checkParticipantAge(
+        { account_type: "self", date_of_birth: DOB_18 },
+        TODAY,
+      ),
+    ).toBeNull();
+  });
+
+  it("exempts a managed participant (a dependent)", () => {
+    expect(
+      checkParticipantAge(
+        { account_type: "managed", date_of_birth: DOB_17 },
+        TODAY,
+      ),
+    ).toBeNull();
+  });
+
+  it("allows a participant with no date of birth on file", () => {
+    expect(
+      checkParticipantAge({ account_type: "self", date_of_birth: null }, TODAY),
+    ).toBeNull();
+  });
+
+  it("treats an unknown account type as self-managed", () => {
+    expect(
+      checkParticipantAge({ account_type: null, date_of_birth: DOB_17 }, TODAY)
+        ?.status,
+    ).toBe(422);
   });
 });

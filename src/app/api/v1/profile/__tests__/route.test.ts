@@ -191,3 +191,74 @@ describe("PATCH /api/v1/profile — FIDE sync", () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 });
+
+describe("PATCH /api/v1/profile — under-18 date of birth", () => {
+  const thisYear = Number(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+      year: "numeric",
+    }).format(new Date()),
+  );
+  const CHILD_DOB = `${thisYear - 10}-06-15`;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetClaims.mockResolvedValue({
+      data: { claims: { sub: USER } },
+      error: null,
+    });
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    mockSingle.mockResolvedValue({
+      data: { account_type: "self" },
+      error: null,
+    });
+    mockUpsert.mockResolvedValue({ error: null });
+  });
+
+  it("refuses an under-18 date of birth on a self-managed account, pointing to a guardian", async () => {
+    const res = await PATCH(makeReq({ date_of_birth: CHILD_DOB }));
+    expect(res.status).toBe(422);
+    const json = await res.json();
+    expect(json.error.code).toBe("UNDER_18");
+    expect(json.error.message).toMatch(/18 or over/);
+    expect(json.error.message).toMatch(/parent or guardian/);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("saves an adult date of birth without looking up the account type", async () => {
+    const res = await PATCH(makeReq({ date_of_birth: "1990-01-01" }));
+    expect(res.status).toBe(200);
+    expect(mockSingle).not.toHaveBeenCalled();
+    expect(mockUpsert.mock.calls[0][0].date_of_birth).toBe("1990-01-01");
+  });
+
+  it("exempts a managed account", async () => {
+    mockSingle.mockResolvedValue({
+      data: { account_type: "managed" },
+      error: null,
+    });
+    const res = await PATCH(makeReq({ date_of_birth: CHILD_DOB }));
+    expect(res.status).toBe(200);
+    expect(mockUpsert.mock.calls[0][0].date_of_birth).toBe(CHILD_DOB);
+  });
+
+  it("doesn't re-check a date of birth that is already stored", async () => {
+    mockMaybeSingle.mockResolvedValue({
+      data: { date_of_birth: CHILD_DOB },
+      error: null,
+    });
+    const res = await PATCH(
+      makeReq({ date_of_birth: CHILD_DOB, nationality: "Malaysia" }),
+    );
+    expect(res.status).toBe(200);
+    expect(mockSingle).not.toHaveBeenCalled();
+  });
+
+  it("500s when the account type can't be read", async () => {
+    mockSingle.mockResolvedValue({ data: null, error: { message: "db down" } });
+    const res = await PATCH(makeReq({ date_of_birth: CHILD_DOB }));
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toContain("db down");
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+});

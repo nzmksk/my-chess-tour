@@ -44,6 +44,8 @@ DECLARE
     'count_taken_seats',
     'create_registration_with_payment',
     'start_new_payment_attempt',
+    'self_managed_minor',
+    'assert_participant_not_self_managed_minor',
     'settle_registration_payment',
     'expire_stale_pending_payments',
     'list_unfired_cancellation_refunds',

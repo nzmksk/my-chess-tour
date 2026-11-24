@@ -10,6 +10,10 @@ import {
 } from "@/services/fide/fide";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { withAuditContext } from "@/services/supabase/audit-context";
+import {
+  UNDER_18_SELF_ACCOUNT_MESSAGE,
+  isUnderAdultAge,
+} from "@/lib/auth/adult-age";
 
 const VALID_GENDERS = new Set<string>(["male", "female"]);
 
@@ -295,6 +299,35 @@ async function handlePatch(request: NextRequest): Promise<NextResponse> {
       },
       { status: 400 },
     );
+  }
+
+  if (
+    update.date_of_birth != null &&
+    update.date_of_birth !== existing?.date_of_birth &&
+    isUnderAdultAge(update.date_of_birth)
+  ) {
+    const { data: account, error: accountError } = await supabaseAdmin
+      .from("users")
+      .select("account_type")
+      .eq("id", claims.id)
+      .single();
+    if (accountError) {
+      return internalErrorResponse(
+        "PATCH /api/v1/profile: account type lookup failed",
+        accountError,
+      );
+    }
+    if (account?.account_type !== "managed") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "UNDER_18",
+            message: UNDER_18_SELF_ACCOUNT_MESSAGE,
+          },
+        },
+        { status: 422 },
+      );
+    }
   }
 
   if (Object.keys(update).length === 0 && avatarUpdate === null) {
