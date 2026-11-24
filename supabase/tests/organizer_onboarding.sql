@@ -24,8 +24,9 @@
 --       old row retained with is_active = false
 --   B7  one account cannot be the active destination for two organizations
 --   B8  the same account IS reusable once the other org's row is superseded
---   C1  create_organization_application creates org + bank + documents together,
---       and records the registered name (#374)
+--   C1  create_organization_application creates the org and its documents
+--       together, records the registered name (#374), and asks for no bank
+--       account (#671)
 --   C2  a company with no SSM/ROS document raises P0001 and rolls back WHOLLY —
 --       the name stays free
 --   C3  an approved organization's name raises NAME_TAKEN, not a raw unique
@@ -34,19 +35,21 @@
 --   C5  the registry document must MATCH the entity: a company with only an
 --       ROS document, or a society with only an SSM one, raises
 --       ENTITY_DOCS_REQUIRED
+--   C6  bank details an older app version still sends are ignored (#671)
 --   A1  audit snapshots redact account_number and storage_path, and carry the
 --       organization_id
 --   R1  pending applications can share a name (any case); the first approval
 --       takes it, and approving another raises NAME_TAKEN (#582)
---   R2  rejecting deactivates the bank account and records the event; amending
---       and resubmitting keeps the account and chosen documents, drops the
---       rest (returning their paths), adds new ones, re-stamps the agreement
---       and returns the application to pending; a new registered name
+--   R2  rejecting deactivates a bank account an application from before #671
+--       came with, and records the event; amending and resubmitting keeps the
+--       chosen documents, drops the rest (returning their paths), adds new
+--       ones, re-stamps the agreement and returns the application to pending,
+--       without reactivating that account (#671); a new registered name
 --       replaces the old one and a blank one keeps it (#374)
 --   R3  resubmit refuses: another user's application, one that isn't rejected,
---       an approved organization's name, documents that don't match the entity
---       (another application's document ids don't count), and a bank account
---       that is another organization's destination; a refusal changes nothing
+--       an approved organization's name, and documents that don't match the
+--       entity (another application's document ids don't count); a refusal
+--       changes nothing
 --   R4  a rejected application cannot be approved until it is resubmitted, and
 --       every submission and decision is in organization_application_events
 --
@@ -237,10 +240,6 @@ BEGIN
     p_email               => 'applicant@test.local',
     p_entity_type         => 'society',
     p_agreement_version   => '2026-08-02',
-    p_bank_code           => 'RHBBMYKL',
-    p_bank_name           => 'RHB Bank',
-    p_account_holder      => 'Onboarding Applicant',
-    p_account_number      => '1112223334',
     p_documents           => '[{"doc_type":"ros","storage_path":"users/x/org-kyb/ros.pdf","original_filename":"ros.pdf"}]'::jsonb,
     p_registration_number => 'PPM-001-14-01012020',
     p_registered_name     => '  Persatuan Catur Onboarding  '
@@ -254,9 +253,9 @@ BEGIN
   END IF;
 
   SELECT count(*) INTO v_count
-    FROM organization_bank_accounts WHERE organization_id = v_id AND is_active;
-  IF v_count <> 1 THEN
-    RAISE EXCEPTION 'C1 FAIL: application created % bank accounts', v_count;
+    FROM organization_bank_accounts WHERE organization_id = v_id;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'C1 FAIL: application created % bank accounts (expected none, #671)', v_count;
   END IF;
 
   SELECT count(*) INTO v_count
@@ -269,7 +268,7 @@ BEGIN
   IF v_status <> '2026-08-02' THEN
     RAISE EXCEPTION 'C1 FAIL: agreement not stamped (%)', v_status;
   END IF;
-  RAISE NOTICE 'C1 PASS — org, bank account, documents and agreement in one transaction';
+  RAISE NOTICE 'C1 PASS — org, documents and agreement in one transaction, no bank account';
 
   -- ---- C2: entity rule, and total rollback --------------------------------
   BEGIN
@@ -279,10 +278,6 @@ BEGIN
       p_email             => 'rollback@test.local',
       p_entity_type       => 'company',
       p_agreement_version => '2026-08-02',
-      p_bank_code         => 'HLBBMYKL',
-      p_bank_name         => 'Hong Leong Bank',
-      p_account_holder    => 'Rollback Org',
-      p_account_number    => '4445556667',
       -- A company must supply an SSM/ROS document; this is neither.
       p_documents         => '[{"doc_type":"other","storage_path":"users/x/org-kyb/misc.pdf"}]'::jsonb,
       p_registration_number => '202001234567'
@@ -315,10 +310,6 @@ BEGIN
       p_email             => 'wrongreg-co@test.local',
       p_entity_type       => 'company',
       p_agreement_version => '2026-08-02',
-      p_bank_code         => 'HLBBMYKL',
-      p_bank_name         => 'Hong Leong Bank',
-      p_account_holder    => 'Wrong Registry Co',
-      p_account_number    => '5556667778',
       p_documents         => '[{"doc_type":"ros","storage_path":"users/x/org-kyb/ros.pdf"}]'::jsonb,
       p_registration_number => '202001234567'
     );
@@ -338,10 +329,6 @@ BEGIN
       p_email             => 'wrongreg-soc@test.local',
       p_entity_type       => 'society',
       p_agreement_version => '2026-08-02',
-      p_bank_code         => 'HLBBMYKL',
-      p_bank_name         => 'Hong Leong Bank',
-      p_account_holder    => 'Wrong Registry Soc',
-      p_account_number    => '6667778889',
       p_documents         => '[{"doc_type":"ssm","storage_path":"users/x/org-kyb/ssm.pdf"}]'::jsonb,
       p_registration_number => 'PPM-001-14-01012020'
     );
@@ -355,6 +342,25 @@ BEGIN
   END;
   RAISE NOTICE 'C5 PASS — the wrong registry''s document is rejected for both entity types';
 
+  -- ---- C6: bank details from an older app version are ignored (#671) -------
+  v_result := create_organization_application(
+    p_created_by        => v_user,
+    p_name              => 'OLD CLIENT ORG',
+    p_email             => 'old-client@test.local',
+    p_entity_type       => 'individual',
+    p_agreement_version => '2026-08-02',
+    p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/old.pdf"}]'::jsonb,
+    p_bank_code         => 'HLBBMYKL',
+    p_bank_name         => 'Hong Leong Bank',
+    p_account_holder    => 'Old Client',
+    p_account_number    => '1231231234'
+  );
+  IF EXISTS (SELECT 1 FROM organization_bank_accounts
+             WHERE organization_id = (v_result->>'id')::uuid) THEN
+    RAISE EXCEPTION 'C6 FAIL: bank details sent with an application were stored';
+  END IF;
+  RAISE NOTICE 'C6 PASS — bank details sent with an application are ignored';
+
   -- ---- C3: duplicate name --------------------------------------------------
   -- Only an approved organization holds its name (#582), so approve C1's first.
   PERFORM review_organization_application(v_id, v_user, 'approve', NULL);
@@ -366,10 +372,6 @@ BEGIN
       p_email             => 'dupe@test.local',
       p_entity_type       => 'individual',
       p_agreement_version => '2026-08-02',
-      p_bank_code         => 'HLBBMYKL',
-      p_bank_name         => 'Hong Leong Bank',
-      p_account_holder    => 'Dupe',
-      p_account_number    => '7778889990',
       p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/id.pdf"}]'::jsonb
     );
     RAISE EXCEPTION 'C3 FAIL: a duplicate organization name was accepted'
@@ -389,10 +391,6 @@ BEGIN
     p_email               => 'sole@test.local',
     p_entity_type         => 'individual',
     p_agreement_version   => '2026-08-02',
-    p_bank_code           => 'HLBBMYKL',
-    p_bank_name           => 'Hong Leong Bank',
-    p_account_holder      => 'Sole Organizer',
-    p_account_number      => '7778889990',
     p_documents           => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/id.pdf"}]'::jsonb,
     -- Supplied but meaningless for an individual; must not be stored.
     p_registration_number => 'PPM-999'
@@ -452,10 +450,6 @@ BEGIN
     p_email             => 'shared-a@test.local',
     p_entity_type       => 'individual',
     p_agreement_version => '2026-08-02',
-    p_bank_code         => 'RHBBMYKL',
-    p_bank_name         => 'RHB Bank',
-    p_account_holder    => 'Shared A',
-    p_account_number    => '8889990001',
     p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/a.pdf"}]'::jsonb
   );
   v_org_a := (v_result->>'id')::uuid;
@@ -467,10 +461,6 @@ BEGIN
     p_email             => 'shared-b@test.local',
     p_entity_type       => 'individual',
     p_agreement_version => '2026-08-02',
-    p_bank_code         => 'RHBBMYKL',
-    p_bank_name         => 'RHB Bank',
-    p_account_holder    => 'Shared B',
-    p_account_number    => '8889990002',
     p_documents         => '[{"doc_type":"identity_document","storage_path":"users/y/org-kyb/b.pdf"}]'::jsonb
   );
   v_org_b := (v_result->>'id')::uuid;
@@ -493,6 +483,10 @@ BEGIN
   RAISE NOTICE 'R1 PASS — pending names are shared; only the first approval takes the name';
 
   -- ---- R2: reject, then amend and resubmit ---------------------------------
+  -- An application from before #671 came with a payout account.
+  PERFORM set_organization_bank_account(
+    v_org_b, 'RHBBMYKL', 'RHB Bank', 'Shared B', '8889990002', v_user2);
+
   -- The second applicant is told the name is taken, and fixes it.
   PERFORM review_organization_application(v_org_b, v_user, 'reject', 'Name already used by an approved organizer');
 
@@ -541,13 +535,15 @@ BEGIN
     RAISE EXCEPTION 'R2 FAIL: the amended name or agreement version was not saved';
   END IF;
 
-  -- Kept account: registered again as a fresh active row with the same details.
+  -- The old account stays deactivated, even though an older app version
+  -- asked to keep it (#671); the organization adds one after approval.
   SELECT count(*) INTO v_count
     FROM organization_bank_accounts
-    WHERE organization_id = v_org_b AND is_active
-      AND account_number = '8889990002' AND id <> v_bank_before;
-  IF v_count <> 1 THEN
-    RAISE EXCEPTION 'R2 FAIL: the kept bank account was not registered again (% active rows)', v_count;
+    WHERE organization_id = v_org_b AND is_active;
+  IF v_count <> 0 OR NOT EXISTS (
+    SELECT 1 FROM organization_bank_accounts WHERE id = v_bank_before AND NOT is_active
+  ) THEN
+    RAISE EXCEPTION 'R2 FAIL: resubmitting reactivated a bank account (% active rows)', v_count;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM organization_documents WHERE id = v_doc_keep)
@@ -559,7 +555,7 @@ BEGIN
   IF v_result->'removed_storage_paths' <> '["users/y/org-kyb/old-other.pdf"]'::jsonb THEN
     RAISE EXCEPTION 'R2 FAIL: removed paths returned as %', v_result->'removed_storage_paths';
   END IF;
-  RAISE NOTICE 'R2 PASS — amended and resubmitted: account kept, documents kept/dropped/added, back to pending';
+  RAISE NOTICE 'R2 PASS — amended and resubmitted: documents kept/dropped/added, back to pending, no bank account';
 
   -- ---- R3: what resubmit refuses -------------------------------------------
   PERFORM review_organization_application(v_org_b, v_user, 'reject', 'Second look');
@@ -569,7 +565,7 @@ BEGIN
     PERFORM resubmit_organization_application(
       p_org_id => v_org_b, p_user_id => v_user, p_name => 'Hijack',
       p_email => 'x@test.local', p_entity_type => 'individual',
-      p_agreement_version => '2026-11-20', p_keep_bank_account => true,
+      p_agreement_version => '2026-11-20',
       p_keep_document_ids => ARRAY[v_doc_keep], p_new_documents => '[]'::jsonb);
     RAISE EXCEPTION 'R3 FAIL: another user resubmitted the application' USING ERRCODE = 'assert_failure';
   EXCEPTION
@@ -584,7 +580,7 @@ BEGIN
     PERFORM resubmit_organization_application(
       p_org_id => v_org_a, p_user_id => v_user, p_name => 'Shared Name Chess',
       p_email => 'shared-a@test.local', p_entity_type => 'individual',
-      p_agreement_version => '2026-11-20', p_keep_bank_account => true,
+      p_agreement_version => '2026-11-20',
       p_keep_document_ids => '{}', p_new_documents => '[]'::jsonb);
     RAISE EXCEPTION 'R3 FAIL: an approved application was resubmitted' USING ERRCODE = 'assert_failure';
   EXCEPTION
@@ -599,7 +595,7 @@ BEGIN
     PERFORM resubmit_organization_application(
       p_org_id => v_org_b, p_user_id => v_user2, p_name => 'shared name chess',
       p_email => 'shared-b@test.local', p_entity_type => 'individual',
-      p_agreement_version => '2026-11-20', p_keep_bank_account => true,
+      p_agreement_version => '2026-11-20',
       p_keep_document_ids => ARRAY[v_doc_keep], p_new_documents => '[]'::jsonb);
     RAISE EXCEPTION 'R3 FAIL: resubmitted under an approved organization''s name' USING ERRCODE = 'assert_failure';
   EXCEPTION
@@ -615,7 +611,7 @@ BEGIN
     PERFORM resubmit_organization_application(
       p_org_id => v_org_b, p_user_id => v_user2, p_name => 'Shared Name Chess Club',
       p_email => 'shared-b@test.local', p_entity_type => 'individual',
-      p_agreement_version => '2026-11-20', p_keep_bank_account => true,
+      p_agreement_version => '2026-11-20',
       p_keep_document_ids => ARRAY(SELECT id FROM organization_documents WHERE organization_id = v_org_a),
       p_new_documents => '[{"doc_type":"other","storage_path":"users/y/org-kyb/x.pdf"}]'::jsonb);
     RAISE EXCEPTION 'R3 FAIL: resubmitted with no identity document' USING ERRCODE = 'assert_failure';
@@ -626,28 +622,11 @@ BEGIN
       END IF;
   END;
 
-  -- A replacement account that is already another organization's destination.
-  BEGIN
-    PERFORM resubmit_organization_application(
-      p_org_id => v_org_b, p_user_id => v_user2, p_name => 'Shared Name Chess Club',
-      p_email => 'shared-b@test.local', p_entity_type => 'individual',
-      p_agreement_version => '2026-11-20', p_keep_bank_account => false,
-      p_keep_document_ids => ARRAY[v_doc_keep], p_new_documents => '[]'::jsonb,
-      p_bank_code => 'RHBBMYKL', p_bank_name => 'RHB Bank',
-      p_account_holder => 'Shared B', p_account_number => '8889990001');
-    RAISE EXCEPTION 'R3 FAIL: took another organization''s payout account' USING ERRCODE = 'assert_failure';
-  EXCEPTION
-    WHEN sqlstate 'P0001' THEN
-      IF SQLERRM NOT LIKE 'BANK_ACCOUNT_IN_USE%' THEN
-        RAISE EXCEPTION 'R3 FAIL: expected BANK_ACCOUNT_IN_USE, got — %', SQLERRM;
-      END IF;
-  END;
-
   IF (SELECT approval_status FROM organizations WHERE id = v_org_b) <> 'rejected'
      OR NOT EXISTS (SELECT 1 FROM organization_documents WHERE id = v_doc_keep) THEN
     RAISE EXCEPTION 'R3 FAIL: a refused resubmission changed the application';
   END IF;
-  RAISE NOTICE 'R3 PASS — resubmit refuses other users, non-rejected, taken names, bad documents and taken accounts';
+  RAISE NOTICE 'R3 PASS — resubmit refuses other users, non-rejected, taken names and bad documents';
 
   -- ---- R4: approval waits for the resubmission; the history is kept --------
   BEGIN
@@ -660,19 +639,19 @@ BEGIN
       END IF;
   END;
 
-  -- Resubmit with a new account this time, then approve.
+  -- Resubmit, then approve. It is approved with no payout account; the
+  -- organization adds one in its settings afterwards (#671).
   PERFORM resubmit_organization_application(
     p_org_id => v_org_b, p_user_id => v_user2, p_name => 'Shared Name Chess Club',
     p_email => 'shared-b@test.local', p_entity_type => 'individual',
-    p_agreement_version => '2026-11-20', p_keep_bank_account => false,
-    p_keep_document_ids => ARRAY[v_doc_keep], p_new_documents => '[]'::jsonb,
-    p_bank_code => 'RHBBMYKL', p_bank_name => 'RHB Bank',
-    p_account_holder => 'Shared B', p_account_number => '8889990003');
+    p_agreement_version => '2026-11-20',
+    p_keep_document_ids => ARRAY[v_doc_keep], p_new_documents => '[]'::jsonb);
   PERFORM review_organization_application(v_org_b, v_user, 'approve', NULL);
 
-  IF NOT EXISTS (SELECT 1 FROM organization_bank_accounts
-                  WHERE organization_id = v_org_b AND is_active AND account_number = '8889990003') THEN
-    RAISE EXCEPTION 'R4 FAIL: the replacement bank account is not the active one';
+  IF (SELECT approval_status FROM organizations WHERE id = v_org_b) <> 'approved'
+     OR EXISTS (SELECT 1 FROM organization_bank_accounts
+                 WHERE organization_id = v_org_b AND is_active) THEN
+    RAISE EXCEPTION 'R4 FAIL: expected an approved organization with no active bank account';
   END IF;
   -- No registered name given on this resubmission: the one on file stays.
   IF (SELECT registered_name FROM organization_registered_names WHERE organization_id = v_org_b)
