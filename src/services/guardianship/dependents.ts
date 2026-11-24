@@ -2,30 +2,12 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import type { ChessTitle, Gender, OkuStatus } from "@/app/profile/types";
+import type {
+  GuardianshipBasis,
+  GuardianshipRelationship,
+} from "@/lib/guardianship/dependent-options";
 
 const MAX_ACTIVE_DEPENDENTS = 10;
-
-export const MAX_DEPENDENT_NAME_LENGTH = 100;
-
-export const CONTACT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-export const GUARDIANSHIP_RELATIONSHIPS = [
-  "parent",
-  "legal_guardian",
-  "carer",
-  "coach",
-  "other",
-] as const;
-export type GuardianshipRelationship =
-  (typeof GUARDIANSHIP_RELATIONSHIPS)[number];
-
-export const MINOR_RELATIONSHIPS: readonly GuardianshipRelationship[] = [
-  "parent",
-  "legal_guardian",
-];
-
-export const GUARDIANSHIP_BASES = ["minor", "authorised", "appointed"] as const;
-export type GuardianshipBasis = (typeof GUARDIANSHIP_BASES)[number];
 
 type AuthorisationMethod =
   | "player_invite"
