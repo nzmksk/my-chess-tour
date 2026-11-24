@@ -22,6 +22,8 @@
 --       count); a stranger can't, even with consent of their own; a folder
 --       that isn't a user id is refused
 --   O9  OKU read: the guardian can read the dependent's card, a stranger can't
+--   O10 a guardianship reactivated with another basis records the same
+--       version again under the new basis instead of treating it as a no-op
 --
 -- HOW TO RUN: paste into the Supabase SQL editor (service role) AFTER applying
 -- the current migrations. Runs inside a transaction that ROLLBACKs, so it
@@ -256,6 +258,22 @@ BEGIN
   END IF;
   PERFORM set_config('request.jwt.claims', '{}', true);
   RAISE NOTICE 'O9 PASS — the guardian can read the dependent''s card, a stranger can''t';
+
+  -- ===== O10 ==============================================================
+  UPDATE guardianships
+    SET basis = 'authorised', authorisation_method = 'guardian_attestation'
+    WHERE guardian_user_id = v_guardian AND dependent_user_id = v_child;
+  v_changed := record_sensitive_data_consent(v_child, 'health', true, '2026-11-24', v_guardian);
+  SELECT on_behalf_basis INTO v_row
+    FROM sensitive_data_consents WHERE user_id = v_child AND category = 'health'
+    ORDER BY id DESC LIMIT 1;
+  IF NOT v_changed OR v_row.on_behalf_basis IS DISTINCT FROM 'authorised' THEN
+    RAISE EXCEPTION 'O10 FAIL: changed %, latest basis %', v_changed, v_row.on_behalf_basis;
+  END IF;
+  IF record_sensitive_data_consent(v_child, 'health', true, '2026-11-24', v_guardian) THEN
+    RAISE EXCEPTION 'O10 FAIL: the same basis again wrote another row';
+  END IF;
+  RAISE NOTICE 'O10 PASS — a new basis is a new agreement';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END;

@@ -34,7 +34,13 @@
 --    rule is checked directly against the named actor. The guardianship row
 --    is locked FOR SHARE, so a concurrent revoke_dependent either commits
 --    first (and this raises NOT_GUARDIAN, 42501) or waits until this commits.
---    A withdrawal recorded by a guardian names them too. The old
+--    It is locked BEFORE the player's users row, the order checkout (#714)
+--    and account claiming (#720) use too, so none of them can deadlock with
+--    another by taking the same two rows the other way round.
+--    A withdrawal recorded by a guardian names them too. Re-granting the same
+--    wording is a no-op only when the same person records it under the same
+--    basis: a guardianship reactivated with another basis agrees to other
+--    wording, so that is written. The old
 --    four-argument function is dropped rather than overloaded, so every
 --    existing call (set_player_bank_account's withdrawal among them) resolves
 --    to the new one with the defaults.
@@ -103,14 +109,6 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  PERFORM 1 FROM users
-    WHERE id = p_user_id AND deleted_at IS NULL
-    FOR UPDATE;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'user % not found', p_user_id USING ERRCODE = 'P0002';
-  END IF;
-
   IF v_recorded_by IS NOT NULL THEN
     SELECT basis INTO v_basis
       FROM guardianships
@@ -125,6 +123,14 @@ BEGIN
     END IF;
   END IF;
 
+  PERFORM 1 FROM users
+    WHERE id = p_user_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'user % not found', p_user_id USING ERRCODE = 'P0002';
+  END IF;
+
   SELECT * INTO v_latest
     FROM sensitive_data_consents
     WHERE user_id = p_user_id AND category = p_category
@@ -133,7 +139,8 @@ BEGIN
 
   IF p_granted THEN
     IF FOUND AND v_latest.granted AND v_latest.version = p_version
-       AND v_latest.granted_by IS NOT DISTINCT FROM v_recorded_by THEN
+       AND v_latest.granted_by IS NOT DISTINCT FROM v_recorded_by
+       AND v_latest.on_behalf_basis IS NOT DISTINCT FROM v_basis THEN
       RETURN false;
     END IF;
   ELSIF NOT FOUND OR NOT v_latest.granted THEN
