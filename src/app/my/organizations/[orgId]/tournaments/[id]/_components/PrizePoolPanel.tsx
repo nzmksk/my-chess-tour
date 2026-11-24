@@ -497,7 +497,9 @@ export default function PrizePoolPanel({
                       {a.approval === "approved" &&
                         a.status === "pending" &&
                         !a.winner_bank_status &&
-                        " — waiting for the winner's bank details"}
+                        (a.payee_reason === "guardian_of_minor"
+                          ? " — waiting for the guardian's bank details"
+                          : " — waiting for the winner's bank details")}
                     </span>
                   </li>
                 );
