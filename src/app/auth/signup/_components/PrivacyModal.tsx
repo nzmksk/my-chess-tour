@@ -84,7 +84,8 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             <li>FIDE ID and MCF ID</li>
             <li>
               Date of birth, gender — collected for age-category eligibility and
-              FIDE registration
+              FIDE registration. We ask for your date of birth when you sign up,
+              to confirm you are 18 or over
             </li>
             <li>
               OKU (disability) status — collected to facilitate accessibility
@@ -193,8 +194,9 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
                 <td>Date of birth</td>
                 <td>Not required</td>
                 <td>
-                  Age-category eligibility; identity verification; shared with
-                  the organisers of tournaments you enter
+                  Confirming you are 18 or over at signup; age-category
+                  eligibility; identity verification; shared with the organisers
+                  of tournaments you enter
                 </td>
               </tr>
               <tr>
@@ -214,8 +216,9 @@ export default function PrivacyModal({ onClose }: PrivacyModalProps) {
             consent for your financial data and deletes them, except that for an
             account a prize was sent to we keep the bank, account holder name
             and last 4 digits of the account number as part of the payment
-            record, as described under Data Retention. Date of birth and gender
-            are used as described above once you add them to your profile.
+            record, as described under Data Retention. Your date of birth is
+            used as described above from when you sign up, and your gender once
+            you add it to your profile.
           </p>
           <p className="modal-paragraph">
             <strong>Data You Give Us About Someone Else</strong>

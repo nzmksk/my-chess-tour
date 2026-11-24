@@ -6,9 +6,14 @@ import { sendVerificationEmail } from "@/services/email/email";
 import {
   NAME_PATTERN,
   checkPasswordRequirements,
+  invalidDateOfBirthError,
   nameCharactersError,
   validateEmail,
 } from "@/services/auth/auth-validation";
+import {
+  UNDER_18_SELF_ACCOUNT_MESSAGE,
+  isUnderAdultAge,
+} from "@/lib/auth/adult-age";
 import {
   SIGNUP_STEP_COOKIE,
   SIGNUP_STEP_MAX_AGE,
@@ -70,13 +75,15 @@ async function handlePost(request: NextRequest) {
     );
   }
 
-  const { email, password, firstName, lastName, termsAccepted } = body as {
-    email?: string;
-    password?: string;
-    firstName?: string;
-    lastName?: string;
-    termsAccepted?: boolean;
-  };
+  const { email, password, firstName, lastName, termsAccepted, dateOfBirth } =
+    body as {
+      email?: string;
+      password?: string;
+      firstName?: string;
+      lastName?: string;
+      termsAccepted?: boolean;
+      dateOfBirth?: string;
+    };
 
   if (!email || typeof email !== "string") {
     return NextResponse.json(
@@ -120,6 +127,22 @@ async function handlePost(request: NextRequest) {
         },
       },
       { status: 400 },
+    );
+  }
+
+  const dob = typeof dateOfBirth === "string" ? dateOfBirth : "";
+  const dobError = invalidDateOfBirthError(dob);
+  if (dobError) {
+    return NextResponse.json(
+      { error: { code: "VALIDATION_ERROR", message: dobError } },
+      { status: 400 },
+    );
+  }
+
+  if (isUnderAdultAge(dob)) {
+    return NextResponse.json(
+      { error: { code: "UNDER_18", message: UNDER_18_SELF_ACCOUNT_MESSAGE } },
+      { status: 422 },
     );
   }
 
@@ -218,6 +241,7 @@ async function handlePost(request: NextRequest) {
         // server's constant — a client-supplied version would be evidence of
         // nothing.
         terms_version: TERMS_VERSION,
+        date_of_birth: dob,
       },
     });
 

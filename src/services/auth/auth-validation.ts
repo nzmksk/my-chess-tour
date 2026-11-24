@@ -1,3 +1,9 @@
+import {
+  UNDER_18_SELF_ACCOUNT_MESSAGE,
+  isUnderAdultAge,
+} from "@/lib/auth/adult-age";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
+
 export type PasswordRequirements = {
   minLength: boolean;
   hasUppercase: boolean;
@@ -43,6 +49,7 @@ export type RegistrationErrors = {
   password?: string;
   confirmPassword?: string;
   terms?: string;
+  dateOfBirth?: string;
 };
 
 export type RegistrationFields = {
@@ -52,7 +59,48 @@ export type RegistrationFields = {
   password: string;
   confirmPassword: string;
   termsAccepted: boolean;
+  dateOfBirth: string;
 };
+
+const OLDEST_PLAUSIBLE_AGE = 120;
+
+function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() + 1 === m &&
+    dt.getUTCDate() === d
+  );
+}
+
+export function invalidDateOfBirthError(
+  dateOfBirth: string,
+  today: string = getTodayInTimeZone(),
+): string | undefined {
+  if (!dateOfBirth) return "Date of birth is required";
+  const oldest = `${Number(today.slice(0, 4)) - OLDEST_PLAUSIBLE_AGE}${today.slice(4)}`;
+  if (
+    !isCalendarDate(dateOfBirth) ||
+    dateOfBirth > today ||
+    dateOfBirth < oldest
+  ) {
+    return "Please enter a valid date of birth";
+  }
+  return undefined;
+}
+
+function dateOfBirthError(
+  dateOfBirth: string,
+  today: string = getTodayInTimeZone(),
+): string | undefined {
+  const invalid = invalidDateOfBirthError(dateOfBirth, today);
+  if (invalid) return invalid;
+  return isUnderAdultAge(dateOfBirth, today)
+    ? UNDER_18_SELF_ACCOUNT_MESSAGE
+    : undefined;
+}
 
 export function validateRegistrationForm(fields: RegistrationFields): {
   errors: RegistrationErrors;
@@ -94,6 +142,11 @@ export function validateRegistrationForm(fields: RegistrationFields): {
     errors.terms = "You must accept the Terms of Service and Privacy Policy";
   }
 
+  const dobError = dateOfBirthError(fields.dateOfBirth);
+  if (dobError) {
+    errors.dateOfBirth = dobError;
+  }
+
   return { errors, isValid: Object.keys(errors).length === 0 };
 }
 
@@ -108,7 +161,8 @@ export function isRegistrationFormSubmittable(
     validateEmail(fields.email) &&
     allReqsMet &&
     fields.password === fields.confirmPassword &&
-    fields.termsAccepted
+    fields.termsAccepted &&
+    dateOfBirthError(fields.dateOfBirth) === undefined
   );
 }
 

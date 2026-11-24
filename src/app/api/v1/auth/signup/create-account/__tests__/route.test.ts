@@ -71,6 +71,7 @@ const validBody = {
   firstName: "Ahmad",
   lastName: "Razif",
   termsAccepted: true,
+  dateOfBirth: "1990-05-17",
 };
 
 const NEW_USER_ID = "new-user-id";
@@ -182,6 +183,49 @@ describe("POST /api/v1/auth/signup/create-account", () => {
       expect(json.error.message).toMatch(/must accept the terms/i);
       expect(mockCreateUser).not.toHaveBeenCalled();
     }
+  });
+
+  it("rejects a signup without a valid date of birth", async () => {
+    for (const dateOfBirth of [
+      undefined,
+      "",
+      19900517,
+      "1990-02-30",
+      "17/05/1990",
+      "2999-01-01",
+      "1800-01-01",
+    ]) {
+      vi.clearAllMocks();
+      const res = await POST(makeRequest({ ...validBody, dateOfBirth }));
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe("VALIDATION_ERROR");
+      expect(json.error.message).toMatch(/date of birth/i);
+      expect(mockCreateUser).not.toHaveBeenCalled();
+    }
+  });
+
+  it("refuses an under-18 date of birth with 422 UNDER_18", async () => {
+    const tenYearsAgo = new Date().getUTCFullYear() - 10;
+    const res = await POST(
+      makeRequest({ ...validBody, dateOfBirth: `${tenYearsAgo}-01-01` }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error.code).toBe("UNDER_18");
+    expect(json.error.message).toMatch(/18 or over/);
+    expect(json.error.message).toMatch(/parent or guardian/);
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("passes the date of birth to handle_new_user", async () => {
+    await POST(makeRequest(validBody));
+
+    const metadata = mockCreateUser.mock.calls[0][0].user_metadata;
+    expect(metadata.date_of_birth).toBe("1990-05-17");
+    expect(metadata).not.toHaveProperty("adult_confirmed");
   });
 
   // --- Per-IP rate limiting (anti-enumeration) ------------------------------

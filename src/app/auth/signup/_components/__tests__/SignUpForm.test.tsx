@@ -51,6 +51,34 @@ function getForm() {
     .closest("form")!;
 }
 
+function fillValidForm({
+  dateOfBirth = "1990-05-17",
+}: { dateOfBirth?: string } = {}) {
+  fireEvent.change(screen.getByLabelText("First Name"), {
+    target: { value: "Alice" },
+  });
+  fireEvent.change(screen.getByLabelText("Last Name"), {
+    target: { value: "Wong" },
+  });
+  fireEvent.change(screen.getByLabelText("Date of Birth"), {
+    target: { value: dateOfBirth },
+  });
+  fireEvent.change(screen.getByLabelText("Email Address"), {
+    target: { value: "alice@example.com" },
+  });
+  fireEvent.change(screen.getByLabelText("Password"), {
+    target: { value: "Password1!" },
+  });
+  fireEvent.change(screen.getByLabelText("Confirm Password"), {
+    target: { value: "Password1!" },
+  });
+  fireEvent.click(
+    screen.getByLabelText(
+      "I agree to the Terms of Service and Privacy Policy",
+    ),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -58,6 +86,7 @@ function getForm() {
 describe("SignUpForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
   });
 
   // --- Rendering ------------------------------------------------------------
@@ -145,22 +174,7 @@ describe("SignUpForm", () => {
 
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("First Name"), {
-      target: { value: "Alice" },
-    });
-    fireEvent.change(screen.getByLabelText("Last Name"), {
-      target: { value: "Wong" },
-    });
-    fireEvent.change(screen.getByLabelText("Email Address"), {
-      target: { value: "alice@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText("Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.change(screen.getByLabelText("Confirm Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fillValidForm();
 
     await act(async () => {
       fireEvent.submit(getForm());
@@ -183,22 +197,7 @@ describe("SignUpForm", () => {
 
     renderForm();
 
-    fireEvent.change(screen.getByLabelText("First Name"), {
-      target: { value: "Alice" },
-    });
-    fireEvent.change(screen.getByLabelText("Last Name"), {
-      target: { value: "Wong" },
-    });
-    fireEvent.change(screen.getByLabelText("Email Address"), {
-      target: { value: "alice@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText("Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.change(screen.getByLabelText("Confirm Password"), {
-      target: { value: "Password1!" },
-    });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fillValidForm();
 
     await act(async () => {
       fireEvent.submit(getForm());
@@ -206,6 +205,63 @@ describe("SignUpForm", () => {
 
     expect(screen.getByRole("alert")).toBeDefined();
     expect(mockPush).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("asks for a date of birth and points under-18s to a guardian", () => {
+    renderForm();
+    const input = screen.getByLabelText("Date of Birth") as HTMLInputElement;
+    expect(input.type).toBe("date");
+    expect(input.value).toBe("");
+    expect(input.getAttribute("aria-describedby")).toBe("dateOfBirth-hint");
+    expect(
+      screen.getByText(/Under 18\? You\s+take part through a parent or guardian/),
+    ).toBeDefined();
+    expect(screen.queryByLabelText("I am 18 or over")).toBeNull();
+  });
+
+  it("doesn't submit an under-18 date of birth", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+    const tenYearsAgo = new Date().getUTCFullYear() - 10;
+    fillValidForm({ dateOfBirth: `${tenYearsAgo}-01-01` });
+
+    await act(async () => {
+      fireEvent.submit(getForm());
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById("dateOfBirth-error")?.textContent).toMatch(
+      /18 or over/,
+    );
+    const input = screen.getByLabelText("Date of Birth");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")).toBe(
+      "dateOfBirth-hint dateOfBirth-error",
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the date of birth with the signup", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ message: "Account created. Verification code sent." }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+    fillValidForm();
+
+    await act(async () => {
+      fireEvent.submit(getForm());
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).toMatchObject({
+      termsAccepted: true,
+      dateOfBirth: "1990-05-17",
+    });
+    expect(body).not.toHaveProperty("adultConfirmed");
     vi.unstubAllGlobals();
   });
 
