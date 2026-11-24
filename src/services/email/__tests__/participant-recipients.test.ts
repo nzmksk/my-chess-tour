@@ -6,13 +6,13 @@ const { mockFrom, tables, eqCalls } = vi.hoisted(() => {
 
   function makeBuilder(table: string) {
     const b: Record<string, unknown> = {};
-    for (const m of ["select", "maybeSingle"]) {
-      b[m] = vi.fn(() => b);
+    b.select = vi.fn(() => b);
+    for (const m of ["eq", "in"]) {
+      b[m] = vi.fn((col: string, val: unknown) => {
+        eqCalls.push([table, col, val]);
+        return b;
+      });
     }
-    b.eq = vi.fn((col: string, val: unknown) => {
-      eqCalls.push([table, col, val]);
-      return b;
-    });
     b.then = (
       onfulfilled: (v: unknown) => unknown,
       onrejected?: (r: unknown) => unknown,
@@ -37,6 +37,7 @@ vi.mock("@/services/supabase/admin", () => ({
 
 import {
   loadParticipantRecipients,
+  loadParticipantRecipientsFor,
   nameForRecipient,
 } from "../participant-recipients";
 
@@ -46,9 +47,15 @@ function given(
   participant: Record<string, unknown> | null,
   guardians: Array<{ email: string | null; first_name: string | null }> = [],
 ) {
-  tables.users = { data: participant, error: null };
+  tables.users = {
+    data: participant ? [{ id: PLAYER, ...participant }] : [],
+    error: null,
+  };
   tables.guardianships = {
-    data: guardians.map((guardian) => ({ guardian })),
+    data: guardians.map((guardian) => ({
+      dependent_user_id: PLAYER,
+      guardian,
+    })),
     error: null,
   };
 }
@@ -90,7 +97,7 @@ describe("loadParticipantRecipients", () => {
     expect(eqCalls).toContainEqual([
       "guardianships",
       "dependent_user_id",
-      PLAYER,
+      [PLAYER],
     ]);
   });
 
@@ -182,5 +189,64 @@ describe("loadParticipantRecipients", () => {
     tables.users = { data: null, error: { message: "boom" } };
     expect(await loadParticipantRecipients(PLAYER)).toBeNull();
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it("returns null and logs when the player doesn't exist", async () => {
+    given(null);
+    expect(await loadParticipantRecipients(PLAYER)).toBeNull();
+    expect(console.error).toHaveBeenCalled();
+  });
+});
+
+describe("loadParticipantRecipientsFor", () => {
+  const OTHER = "dddddddd-0000-4000-8000-000000000002";
+
+  it("loads many players in two queries, each with their own guardians", async () => {
+    tables.users = {
+      data: [
+        {
+          id: PLAYER,
+          email: null,
+          contact_email: null,
+          first_name: "Aina",
+          last_name: "Rahman",
+          account_type: "managed",
+        },
+        {
+          id: OTHER,
+          email: "farid@example.com",
+          contact_email: null,
+          first_name: "Farid",
+          last_name: null,
+          account_type: "self",
+        },
+      ],
+      error: null,
+    };
+    tables.guardianships = {
+      data: [
+        {
+          dependent_user_id: PLAYER,
+          guardian: { email: "mum@example.com", first_name: "Siti" },
+        },
+      ],
+      error: null,
+    };
+
+    const all = await loadParticipantRecipientsFor([PLAYER, OTHER, PLAYER]);
+
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+    expect(eqCalls).toContainEqual(["users", "id", [PLAYER, OTHER]]);
+    expect([...all!.get(PLAYER)!.recipients.keys()]).toEqual([
+      "mum@example.com",
+    ]);
+    expect([...all!.get(OTHER)!.recipients.keys()]).toEqual([
+      "farid@example.com",
+    ]);
+  });
+
+  it("asks nothing for no players", async () => {
+    expect(await loadParticipantRecipientsFor([])).toEqual(new Map());
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
