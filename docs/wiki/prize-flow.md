@@ -112,6 +112,15 @@ Registration with CHIP Send reuses `src/services/payouts/bank-account.ts` (`regi
 - when an admin confirms an account held because the bank's holder name didn't match the one the winner gave, or rejects it, which emails the winner as a CHIP rejection does ([Who the account belongs to](./payout-flow.md#who-the-account-belongs-to));
 - on the daily run.
 
+### Dependents' prizes (#718)
+
+`prize_awards.user_id` is always the winner. Whose account the money goes to is decided by `prize_payees()` (migration `20261124210000`), the one rule that the claim, the award lists and the emails all read:
+
+- **A minor** (an active guardianship with basis `minor`) holds no bank details: `set_player_bank_account` refuses them with `MINOR_DEPENDENT`. Their prize goes to a guardian's own `player_bank_accounts` row. That is the guardian with a verified account, else one who has an account, else the earliest guardianship. A guardian saving or verifying their account sends their minor dependents' waiting prizes too. The awarded email tells the guardian who is paid that the money goes to their account, or asks them to add one.
+- **An adult with a helper** (`authorised` / `appointed`) keeps their own row. The helper enters it with `PUT /api/v1/me/dependents/[id]/bank-account`, under the financial consent they recorded (#717). The row records `entered_by`, and the holder-name check compares CHIP's holder name with **the player's name**, never the holder the helper typed. The route also refuses a holder that isn't the player (`HOLDER_NOT_PLAYER`).
+
+`claim_prize_award_send` records `payee_user_id` and `payee_reason` (`winner` or `guardian_of_minor`) next to the snapshotted `bank_account_id`. CHIP Send is given the payee's email. A managed winner with no email or contact email falls back to the support address rather than never sending.
+
 ## The daily run
 
 `POST /api/v1/cron/payouts` (see [payout-flow.md](./payout-flow.md#the-daily-run)) ends with three prize passes. Their counts are `stuckPrizes`, `retriedPrizes` and `prizeFunding`:
@@ -144,4 +153,4 @@ Best-effort and after the response, following the `Promise.allSettled` disciplin
 - Returning residual funds, and the whole pool on cancellation, is manual (above). Cancelling withdraws the open payment links automatically; money already paid in is returned by hand.
 - A tournament still waiting for funding when its registration deadline passes is listed once funded, but with registration already closed. The organizer should move the deadline or cancel.
 - An organizer can't withdraw an award awaiting review; an admin rejects it with a reason instead.
-- The winner must have a login: an award goes to a confirmed registrant's own `player_bank_accounts`. Guardians and managed players (#504) will widen `can_act_for`, not this flow.
+- A minor's prize goes to one guardian's account, chosen by `prize_payees()`. Guardians can't pick between themselves.
