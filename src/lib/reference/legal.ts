@@ -5,7 +5,7 @@ export interface LegalVersion {
 
 export const TERMS_HISTORY: readonly LegalVersion[] = [
   {
-    version: "2026-11-23",
+    version: "2026-11-24",
     changes: [
       "Accounts you hold yourself are for people aged 18 and over. Someone under 18 takes part only as a dependent of a parent or legal guardian, who accepts these terms for them and is responsible for their use of the platform, including payments. An adult player may authorise a helper to act as their agent, and stays the party to these terms. A legally appointed guardian may act for an adult who lacks capacity. Your name must match your MyKad or passport — it is used for official tournament records and FIDE/MCF registration.",
       "Tournaments follow the FIDE Laws of Chess. You agree to abide by the arbiter's decisions, to compete without computer assistance, and to accept results as final unless you appeal within the time the arbiter sets.",
@@ -17,7 +17,7 @@ export const TERMS_HISTORY: readonly LegalVersion[] = [
       "Organising tournaments requires an approved organization and acceptance of the versioned Organizer Agreement. Nothing in that agreement reduces our obligations to players.",
       "A code of conduct covering respect, harassment, cheating and rating manipulation, enforced by suspension, disqualification, or reporting to the MCF and FIDE.",
       "Platform content is ours or licensed to us, liability is limited as far as Malaysian law permits, and disputes are governed by Malaysian law and heard in the courts of Malaysia.",
-      "Privacy Policy: what we collect (account, player profile, financial, business verification and tournament data), how long we keep it, and your rights under the PDPA. Change history is deleted after 1 year (for a registration never paid, 30 days after the tournament's registration closes), except where it concerns money, which is kept for 7 years.",
+      "Privacy Policy: what we collect (account, player profile, financial, business verification and tournament data), how long we keep it, and your rights under the PDPA. Your date of birth is asked for when you sign up, to confirm you are 18 or over. Change history is deleted after 1 year (for a registration never paid, 30 days after the tournament's registration closes), except where it concerns money, which is kept for 7 years.",
       "Privacy Policy: your OKU card (health data) and your bank details (financial data) are each collected only with their own explicit consent, a separate checkbox shown when you give us that data and never part of accepting these terms. You can withdraw either at any time in Settings, which deletes the OKU card or removes the bank details.",
       "Privacy Policy: a guardian or helper who gives us someone else's data, such as their date of birth, disability status or OKU card, confirms they have the authority to. A child's data is provided and managed by their parent or legal guardian, who gives any separate consent and exercises the child's PDPA rights for them.",
       "Privacy Policy: how your data is protected. All of it, your bank details and documents included, is encrypted in transit (HTTPS) and at rest, with access controlled row by row. Once saved, your full bank account number is never shown again — only its last 4 digits — and it is masked in our change logs.",

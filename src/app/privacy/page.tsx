@@ -53,7 +53,8 @@ export default function PrivacyPage() {
                 <li>FIDE ID and MCF ID</li>
                 <li>
                   Date of birth, gender — collected for age-category eligibility
-                  and FIDE registration
+                  and FIDE registration. We ask for your date of birth when you
+                  sign up, to confirm you are 18 or over
                 </li>
                 <li>
                   OKU (disability) status — collected to facilitate
@@ -185,8 +186,9 @@ export default function PrivacyPage() {
                         Not required
                       </td>
                       <td className="border-border text-text-secondary border-b px-3 py-2">
-                        Age-category eligibility; identity verification; shared
-                        with the organisers of tournaments you enter
+                        Confirming you are 18 or over at signup; age-category
+                        eligibility; identity verification; shared with the
+                        organisers of tournaments you enter
                       </td>
                     </tr>
                     <tr>
@@ -211,8 +213,9 @@ export default function PrivacyPage() {
                 them, except that for an account a prize was sent to we keep the
                 bank, account holder name and last 4 digits of the account
                 number as part of the payment record, as described under Data
-                Retention. Date of birth and gender are used as described above
-                once you add them to your profile.
+                Retention. Your date of birth is used as described above from
+                when you sign up, and your gender once you add it to your
+                profile.
               </p>
 
               <p className="text-text-secondary mt-4 mb-2 font-semibold">
