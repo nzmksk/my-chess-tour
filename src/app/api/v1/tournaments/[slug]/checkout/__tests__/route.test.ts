@@ -1205,6 +1205,17 @@ describe("POST /api/v1/tournaments/:slug/checkout — registering a dependent (#
     );
   });
 
+  it("sends the CHIP redirects back to the dependent's registration", async () => {
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(201);
+    const arg = mockCreateChipPurchase.mock.calls[0][0];
+    const query = `?participant=${DEPENDENT_ID}`;
+    expect(arg.success_redirect.endsWith(`/tournaments/${SLUG}/register/success${query}`)).toBe(true);
+    expect(arg.failure_redirect.endsWith(`/tournaments/${SLUG}/register/failure${query}`)).toBe(true);
+    expect(arg.cancel_redirect.endsWith(`/tournaments/${SLUG}/register${query}`)).toBe(true);
+  });
+
   it("lets a managed dependent under 18 through the under-18 block", async () => {
     const res = await callFor(DEPENDENT_ID);
     expect(res.status).toBe(201);

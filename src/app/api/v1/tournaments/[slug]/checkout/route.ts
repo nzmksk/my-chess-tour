@@ -109,6 +109,27 @@ async function resolveParticipant(
   return { ok: true, id: requested, actingForSomeoneElse: true };
 }
 
+interface ReturnPaths {
+  register: string;
+  success: string;
+  failure: string;
+}
+
+function returnPathsFor(
+  slug: string,
+  participantId: string | null,
+): ReturnPaths {
+  const query = participantId
+    ? `?participant=${encodeURIComponent(participantId)}`
+    : "";
+  const base = `/tournaments/${slug}/register`;
+  return {
+    register: `${base}${query}`,
+    success: `${base}/success${query}`,
+    failure: `${base}/failure${query}`,
+  };
+}
+
 function prizePoolNotFundedResponse(): NextResponse {
   return NextResponse.json(
     {
@@ -206,6 +227,10 @@ async function handlePost(
   );
   if (!participant.ok) return participant.response;
   const participantId = participant.id;
+  const returnTo = returnPathsFor(
+    slug,
+    participant.actingForSomeoneElse ? participantId : null,
+  );
 
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
@@ -466,7 +491,7 @@ async function handlePost(
         existing.registered_at,
         existing.current_payment_id,
         matchedTier.amount_cents,
-        slug,
+        returnTo,
         tournament.name,
         user.email!,
         subject,
@@ -486,7 +511,7 @@ async function handlePost(
         existing.current_payment_id,
         fee_tier,
         matchedTier.amount_cents,
-        slug,
+        returnTo,
         tournament.name,
         user.email!,
       );
@@ -555,7 +580,7 @@ async function handlePost(
           raced.registered_at,
           raced.current_payment_id,
           matchedTier.amount_cents,
-          slug,
+          returnTo,
           tournament.name,
           user.email!,
           subject,
@@ -573,7 +598,7 @@ async function handlePost(
           raced.current_payment_id,
           fee_tier,
           matchedTier.amount_cents,
-          slug,
+          returnTo,
           tournament.name,
           user.email!,
         );
@@ -588,7 +613,7 @@ async function handlePost(
 
   return initiateChipPayment(
     (registration as { payment_id: string }).payment_id,
-    slug,
+    returnTo,
     tournament.name,
     user.email!,
   );
@@ -609,7 +634,7 @@ async function continuePendingPayment(
   registeredAt: string,
   currentPaymentId: string | null,
   amountCents: number,
-  tournamentSlug: string,
+  returnTo: ReturnPaths,
   tournamentName: string,
   userEmail: string,
   subject: PlayerSubject | null,
@@ -653,7 +678,7 @@ async function continuePendingPayment(
       currentPaymentId,
       requestedFeeTier,
       amountCents,
-      tournamentSlug,
+      returnTo,
       tournamentName,
       userEmail,
     );
@@ -699,7 +724,7 @@ async function resumeRegistration(
   currentPaymentId: string | null,
   feeTier: string,
   amountCents: number,
-  tournamentSlug: string,
+  returnTo: ReturnPaths,
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
@@ -768,7 +793,7 @@ async function resumeRegistration(
 
   return initiateChipPayment(
     (attempt as { payment_id: string }).payment_id,
-    tournamentSlug,
+    returnTo,
     tournamentName,
     userEmail,
   );
@@ -785,7 +810,7 @@ async function resumeRegistration(
 async function settleFreeRegistration(
   paymentId: string,
   registrationId: string,
-  tournamentSlug: string,
+  returnTo: ReturnPaths,
 ): Promise<NextResponse> {
   const { data: settled, error: settleErr } = await supabaseAdmin.rpc(
     "settle_registration_payment",
@@ -815,7 +840,7 @@ async function settleFreeRegistration(
   return NextResponse.json<CheckoutResponse>(
     {
       data: {
-        redirect_url: `/tournaments/${tournamentSlug}/register/success`,
+        redirect_url: returnTo.success,
         items: [{ registration_id: registrationId }],
       },
     },
@@ -825,7 +850,7 @@ async function settleFreeRegistration(
 
 async function initiateChipPayment(
   paymentId: string,
-  tournamentSlug: string,
+  returnTo: ReturnPaths,
   tournamentName: string,
   userEmail: string,
 ): Promise<NextResponse> {
@@ -852,7 +877,7 @@ async function initiateChipPayment(
     return settleFreeRegistration(
       payment.id,
       payment.registration_id,
-      tournamentSlug,
+      returnTo,
     );
   }
 
@@ -879,14 +904,14 @@ async function initiateChipPayment(
       },
       client: { email: userEmail },
       reference: payment.id,
-      success_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/success`,
-      failure_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register/failure`,
+      success_redirect: `${siteUrl}${returnTo.success}`,
+      failure_redirect: `${siteUrl}${returnTo.failure}`,
       // Renders a "Return to seller" button on the CHIP checkout. Lands on the
       // register page, which shows PaymentInProgress (same link, tier-lock
       // countdown) because the registration is still pending. Note this does NOT
       // cancel the purchase — the seat stays held and the link stays payable
       // until `due`, by design.
-      cancel_redirect: `${siteUrl}/tournaments/${tournamentSlug}/register`,
+      cancel_redirect: `${siteUrl}${returnTo.register}`,
       send_receipt: true,
       // Expire the checkout when the seat hold lapses (see `due_strict` above).
       // `due` is a Unix timestamp in seconds.
