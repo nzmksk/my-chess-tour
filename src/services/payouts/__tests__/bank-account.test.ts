@@ -441,6 +441,76 @@ describe("settleBankAccountVerification", () => {
     );
   });
 
+  it("checks a helper-entered account against the player's name, never the helper's (#718)", async () => {
+    queue("organization_bank_accounts", { data: null, error: null });
+    queue("player_bank_accounts", {
+      data: {
+        account_holder: "Hana Helper",
+        entered_by: "helper-1",
+        user: { first_name: "Aziz", last_name: "Adult" },
+      },
+      error: null,
+    });
+    mockRpc.mockResolvedValue({
+      data: {
+        owner: "player",
+        organization_id: null,
+        user_id: "u-1",
+        already_processed: false,
+        is_active: true,
+        status: "name_mismatch",
+      },
+      error: null,
+    });
+
+    await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 85,
+      verified: true,
+      bankHolderName: "HANA HELPER",
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_name_matched: false }),
+    );
+  });
+
+  it("matches a helper-entered account held in the player's name (#718)", async () => {
+    queue("organization_bank_accounts", { data: null, error: null });
+    queue("player_bank_accounts", {
+      data: {
+        account_holder: "Aziz Adult",
+        entered_by: "helper-1",
+        user: { first_name: "Aziz", last_name: "Adult" },
+      },
+      error: null,
+    });
+    mockRpc.mockResolvedValue({
+      data: {
+        owner: "player",
+        organization_id: null,
+        user_id: "u-1",
+        already_processed: false,
+        is_active: true,
+        status: "verified",
+      },
+      error: null,
+    });
+
+    await settleBankAccountVerification({
+      bankAccountId: BANK_ID,
+      chipBankAccountId: 86,
+      verified: true,
+      bankHolderName: "AZIZ BIN ADULT",
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "settle_bank_account_verification",
+      expect.objectContaining({ p_name_matched: true }),
+    );
+  });
+
   it("matches a player's account against the holder they submitted", async () => {
     queue("organization_bank_accounts", { data: null, error: null });
     queue("player_bank_accounts", {

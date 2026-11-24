@@ -8,6 +8,7 @@ import { sendBankVerificationEmail } from "@/services/email/email";
 import { afterResponse } from "@/lib/http/after-response";
 import { BANK_REGISTRATION_GRACE_MINUTES, PAYOUT_CONCURRENCY } from "./constants";
 import { holderNamesMatch } from "./holder-name";
+import { expectedPlayerHolderName } from "./player-holder";
 
 const NOTIFY_ROLES = ["owner", "admin"];
 
@@ -102,12 +103,17 @@ async function expectedHolderName(
 
   const player = await supabaseAdmin
     .from("player_bank_accounts")
-    .select("account_holder")
+    .select("account_holder, entered_by, user:users!user_id(first_name, last_name)")
     .eq("id", bankAccountId)
     .maybeSingle();
   if (player.error) return { name: null, error: toDbError(player.error) };
+  const row = player.data as {
+    account_holder: string;
+    entered_by: string | null;
+    user: { first_name: string | null; last_name: string | null } | null;
+  } | null;
   return {
-    name: (player.data as { account_holder: string } | null)?.account_holder ?? null,
+    name: row ? expectedPlayerHolderName(row, row.user) : null,
     error: null,
   };
 }
