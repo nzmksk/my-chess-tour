@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Resend } from "resend";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL!;
@@ -302,14 +303,16 @@ export async function sendPrizeAwardedEmail(
     accountLast4: string | null;
     accountRejected?: boolean;
     aboutPlayer?: string | null;
+    canActInSettings?: boolean;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const settingsUrl = `${siteUrl}/settings`;
   const last4 = params.accountLast4?.replace(/\D/g, "").slice(-4) || null;
   const about = params.aboutPlayer ?? null;
+  const selfService = !about && params.canActInSettings !== false;
 
-  const bankLine = about
+  const bankLine = !selfService
     ? last4
       ? `It will be sent to the account ending in ${last4}.`
       : "We will contact you about where to send the prize."
@@ -318,7 +321,7 @@ export async function sendPrizeAwardedEmail(
       : last4
         ? `It will be sent to your account ending in ${last4}.`
         : "Please add your bank details in Settings so we can send your prize.";
-  const needsAction = !about && (params.accountRejected || !last4);
+  const needsAction = selfService && (params.accountRejected || !last4);
 
   const html = loadTemplate("prize-awarded.html")
     .replace(
@@ -821,10 +824,12 @@ export async function sendOkuReviewEmail(
     verified: boolean;
     rejectionReason?: string;
     aboutPlayer?: string | null;
+    canActInSettings?: boolean;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const about = params.aboutPlayer ?? null;
+  const selfService = !about && params.canActInSettings !== false;
 
   const template = params.verified ? "oku-verified.html" : "oku-rejected.html";
 
@@ -841,10 +846,18 @@ export async function sendOkuReviewEmail(
     .replace(
       /\{\{retryLine\}\}/g,
       escapeHtml(
-        about
-          ? `You can upload a new copy of ${about}'s card and we will review it again.`
-          : "You can upload a new copy of your card from your settings and we will review it again.",
+        selfService
+          ? "You can upload a new copy of your card from your settings and we will review it again."
+          : `To send a new copy of ${about ? `${about}'s` : "your"} card, email ${SUPPORT_EMAIL} and we will review it again.`,
       ),
+    )
+    .replace(
+      /\{\{ctaUrl\}\}/g,
+      selfService ? `${siteUrl}/settings` : `mailto:${SUPPORT_EMAIL}`,
+    )
+    .replace(
+      /\{\{ctaLabel\}\}/g,
+      selfService ? "Upload Again" : "Contact Support",
     )
     .replace(
       /\{\{footerReason\}\}/g,

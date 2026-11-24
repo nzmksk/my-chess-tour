@@ -80,6 +80,8 @@ describe("email templates", () => {
     ["oku-verified.html", "{{footerReason}}"],
     ["oku-rejected.html", "{{lead}}"],
     ["oku-rejected.html", "{{retryLine}}"],
+    ["oku-rejected.html", "{{ctaUrl}}"],
+    ["oku-rejected.html", "{{ctaLabel}}"],
     ["oku-rejected.html", "{{footerReason}}"],
     ["refund-failed.html", "{{paymentMethod}}"],
     ["member-invitation.html", "{{invitationUrl}}"],

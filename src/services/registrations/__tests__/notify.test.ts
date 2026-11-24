@@ -50,12 +50,14 @@ function contacts(
   participantName: string,
   guardians: Array<[string, string]>,
   own: Array<[string, string]> = [],
+  participantCanSignIn = true,
 ): ParticipantRecipients {
   const recipients = new Map(
     [...guardians, ...own].map(([email, name]) => [email.toLowerCase(), { email, name }]),
   );
   return {
     participantName,
+    participantCanSignIn,
     recipients,
     participantAddresses: new Set(own.map(([email]) => email.toLowerCase())),
   };

@@ -36,6 +36,7 @@ vi.mock("@/services/supabase/admin", () => ({
 }));
 
 import {
+  canActInSettings,
   loadParticipantRecipients,
   loadParticipantRecipientsFor,
   nameForRecipient,
@@ -248,5 +249,46 @@ describe("loadParticipantRecipientsFor", () => {
   it("asks nothing for no players", async () => {
     expect(await loadParticipantRecipientsFor([])).toEqual(new Map());
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe("canActInSettings (#716)", () => {
+  it("is true only for a self-managed player's own address", async () => {
+    given(
+      {
+        email: "adam@example.com",
+        contact_email: null,
+        first_name: "Adam",
+        last_name: "Adult",
+        account_type: "self",
+      },
+      [{ email: "helper@example.com", first_name: "Hana" }],
+    );
+    const contacts = (await loadParticipantRecipients(PLAYER))!;
+    expect(contacts.participantCanSignIn).toBe(true);
+    expect(
+      canActInSettings(contacts, { email: "adam@example.com", name: "Adam" }),
+    ).toBe(true);
+    expect(
+      canActInSettings(contacts, { email: "helper@example.com", name: "Hana" }),
+    ).toBe(false);
+  });
+
+  it("is false for a dependent's contact email, who has no login", async () => {
+    given({
+      email: null,
+      contact_email: "badrul@example.com",
+      first_name: "Badrul",
+      last_name: "Hisham",
+      account_type: "managed",
+    });
+    const contacts = (await loadParticipantRecipients(PLAYER))!;
+    expect(contacts.participantCanSignIn).toBe(false);
+    expect(
+      canActInSettings(contacts, {
+        email: "badrul@example.com",
+        name: "Badrul",
+      }),
+    ).toBe(false);
   });
 });

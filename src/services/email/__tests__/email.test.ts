@@ -817,7 +817,7 @@ describe("sendOkuReviewEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "{{recipientName}}|{{settingsUrl}}|{{browseUrl}}|{{rejectionReason}}|{{lead}}|{{retryLine}}|{{footerReason}}",
+      "{{recipientName}}|{{settingsUrl}}|{{browseUrl}}|{{rejectionReason}}|{{lead}}|{{retryLine}}|{{footerReason}}|{{ctaUrl}}|{{ctaLabel}}",
     );
     mockSend.mockResolvedValue({ error: null });
   });
@@ -878,7 +878,32 @@ describe("sendOkuReviewEmail", () => {
     });
     expect(sent().subject).toBe("We couldn't verify Aina Rahman's OKU card");
     expect(sent().html).toContain("We were unable to verify Aina Rahman&#39;s OKU card.");
-    expect(sent().html).toContain("upload a new copy of Aina Rahman&#39;s card");
+    expect(sent().html).toContain(
+      "To send a new copy of Aina Rahman&#39;s card, email support@mychesstour.com",
+    );
+    expect(sent().html).toContain("|mailto:support@mychesstour.com|Contact Support");
+  });
+
+  it("sends the player to Settings to upload again", async () => {
+    await sendOkuReviewEmail("p@example.com", {
+      recipientName: "Farid",
+      verified: false,
+      rejectionReason: "Blurry",
+    });
+    expect(sent().html).toContain("from your settings");
+    expect(sent().html).toMatch(/\|https?:\/\/[^|]+\/settings\|Upload Again$/);
+  });
+
+  it("sends a player who can't sign in to support instead (#716)", async () => {
+    await sendOkuReviewEmail("b@example.com", {
+      recipientName: "Badrul",
+      verified: false,
+      rejectionReason: "Blurry",
+      canActInSettings: false,
+    });
+    expect(sent().subject).toBe("We couldn't verify your OKU card");
+    expect(sent().html).toContain("To send a new copy of your card, email support@mychesstour.com");
+    expect(sent().html).not.toContain("from your settings");
   });
 
   it("throws when the send fails", async () => {
@@ -1331,6 +1356,18 @@ describe("sendPrizeAwardedEmail", () => {
     expect(sent().html).toContain("We will contact you about where to send the prize.");
     expect(sent().html).toContain("|View Settings|");
     expect(sent().html).toContain("because Aina Rahman won a prize");
+  });
+
+  it("doesn't send a winner who can't sign in to Settings (#716)", async () => {
+    await sendPrizeAwardedEmail("b@example.com", {
+      ...base,
+      recipientName: "Badrul",
+      accountLast4: null,
+      canActInSettings: false,
+    });
+    expect(sent().subject).toBe("You've been awarded a prize at Merdeka Open");
+    expect(sent().html).toContain("We will contact you about where to send the prize.");
+    expect(sent().html).not.toContain("Add Bank Details");
   });
 });
 

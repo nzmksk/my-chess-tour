@@ -49,9 +49,11 @@ function contacts(
   participantName: string,
   guardians: Array<[string, string]>,
   own: Array<[string, string]> = [],
+  participantCanSignIn = true,
 ): ParticipantRecipients {
   return {
     participantName,
+    participantCanSignIn,
     recipients: new Map(
       [...guardians, ...own].map(([email, name]) => [email.toLowerCase(), { email, name }]),
     ),
@@ -92,6 +94,7 @@ describe("notifyOkuReviewed", () => {
       verified: true,
       rejectionReason: undefined,
       aboutPlayer: null,
+      canActInSettings: true,
     });
   });
 
@@ -103,6 +106,7 @@ describe("notifyOkuReviewed", () => {
       verified: false,
       rejectionReason: "Blurry scan",
       aboutPlayer: null,
+      canActInSettings: true,
     });
   });
 
@@ -115,7 +119,30 @@ describe("notifyOkuReviewed", () => {
       verified: true,
       rejectionReason: undefined,
       aboutPlayer: "Aina Rahman",
+      canActInSettings: false,
     });
+  });
+
+  it("doesn't point a dependent with no login to Settings (#716)", async () => {
+    mockLoadContacts.mockResolvedValue(
+      contacts(
+        "Badrul Hisham",
+        [["carer@example.com", "Hana"]],
+        [["badrul@example.com", "Badrul"]],
+        false,
+      ),
+    );
+    givenProfile({ oku_status: "rejected", oku_rejection_reason: "Blurry" });
+    await notifyOkuReviewed(USER);
+
+    expect(mockReview).toHaveBeenCalledWith(
+      "badrul@example.com",
+      expect.objectContaining({ aboutPlayer: null, canActInSettings: false }),
+    );
+    expect(mockReview).toHaveBeenCalledWith(
+      "carer@example.com",
+      expect.objectContaining({ aboutPlayer: "Badrul Hisham", canActInSettings: false }),
+    );
   });
 
   it.each(["pending", "none"])("sends nothing while the status is %s", async (status) => {

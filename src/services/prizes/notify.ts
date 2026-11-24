@@ -6,6 +6,7 @@ import {
 } from "@/services/email/email";
 import { sendToAll, type EmailRecipient } from "@/services/email/recipients";
 import {
+  canActInSettings,
   loadParticipantRecipients,
   nameForRecipient,
 } from "@/services/email/participant-recipients";
@@ -78,6 +79,7 @@ export async function notifyPrizeAwarded(
           accountLast4: rejected || !account ? null : account.account_number.slice(-4),
           accountRejected: rejected,
           aboutPlayer: nameForRecipient(contacts, r),
+          canActInSettings: canActInSettings(contacts, r),
         }),
       `prize awarded email(s) for award ${awardId}`,
     );

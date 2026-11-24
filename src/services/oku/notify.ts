@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { sendOkuReviewEmail } from "@/services/email/email";
 import { sendToAll } from "@/services/email/recipients";
 import {
+  canActInSettings,
   loadParticipantRecipients,
   nameForRecipient,
 } from "@/services/email/participant-recipients";
@@ -47,6 +48,7 @@ export async function notifyOkuReviewed(userId: string): Promise<void> {
           verified: profile.oku_status === "verified",
           rejectionReason: profile.oku_rejection_reason ?? undefined,
           aboutPlayer: nameForRecipient(contacts, r),
+          canActInSettings: canActInSettings(contacts, r),
         }),
       `OKU review email(s) for user ${userId}`,
     );

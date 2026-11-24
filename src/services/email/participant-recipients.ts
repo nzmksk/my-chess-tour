@@ -3,6 +3,7 @@ import { addRecipient, type EmailRecipient } from "@/services/email/recipients";
 
 export interface ParticipantRecipients {
   participantName: string;
+  participantCanSignIn: boolean;
   recipients: Map<string, EmailRecipient>;
   participantAddresses: Set<string>;
 }
@@ -60,9 +61,20 @@ function recipientsFor(
 
   return {
     participantName: fullName(participant),
+    participantCanSignIn: participant.account_type === "self",
     recipients,
     participantAddresses,
   };
+}
+
+export function canActInSettings(
+  contacts: ParticipantRecipients,
+  recipient: EmailRecipient,
+): boolean {
+  return (
+    contacts.participantCanSignIn &&
+    nameForRecipient(contacts, recipient) === null
+  );
 }
 
 export async function loadParticipantRecipientsFor(

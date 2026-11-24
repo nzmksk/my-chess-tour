@@ -59,9 +59,11 @@ function contacts(
   participantName: string,
   guardians: Array<[string, string]>,
   own: Array<[string, string]> = [],
+  participantCanSignIn = true,
 ): ParticipantRecipients {
   return {
     participantName,
+    participantCanSignIn,
     recipients: new Map(
       [...guardians, ...own].map(([email, name]) => [
         email.toLowerCase(),
@@ -124,6 +126,7 @@ describe("notifyPrizeAwarded", () => {
       accountLast4: "0101",
       accountRejected: false,
       aboutPlayer: null,
+      canActInSettings: true,
     });
   });
 
@@ -152,6 +155,20 @@ describe("notifyPrizeAwarded", () => {
         recipientName: "Rahman",
         aboutPlayer: "Aina Rahman",
       }),
+    );
+  });
+
+  it("doesn't ask a dependent with no login for bank details in Settings (#716)", async () => {
+    mockLoadContacts.mockResolvedValue(
+      contacts("Badrul Hisham", [], [["badrul@example.com", "Badrul"]], false),
+    );
+    givenAward();
+    tables.player_bank_accounts = [{ data: null, error: null }];
+    await notifyPrizeAwarded(AWARD);
+
+    expect(mockAwarded).toHaveBeenCalledWith(
+      "badrul@example.com",
+      expect.objectContaining({ aboutPlayer: null, canActInSettings: false }),
     );
   });
 
