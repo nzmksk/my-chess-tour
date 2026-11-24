@@ -656,7 +656,7 @@
   },
   "src/app/api/v1/profile/oku/route.ts": {
     "local/no-comments": {
-      "count": 37
+      "count": 29
     }
   },
   "src/app/api/v1/profile/route.ts": {
