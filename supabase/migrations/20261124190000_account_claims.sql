@@ -70,8 +70,11 @@
 --    The player's registrations, profile and history stay on the same
 --    users.id. Payments stay with whoever paid: payments.user_id is the payer
 --    (#708), so the guardian's receipts don't move.
---    Locks: the claim row, then the users row, then the guardianship, the
---    same users-before-guardianship order record_sensitive_data_consent uses.
+--    Locks, in one order everywhere: the dependent's pending claim, then the
+--    guardianship, then the dependent's users row. create_account_claim and
+--    link_claimed_account both follow it, so a resend racing an acceptance
+--    waits instead of deadlocking. Guardianship before users is also the
+--    order checkout (#714) and consent recording (#717) use.
 --
 -- Otherwise handle_new_user is as in 20261124110000_date_of_birth_at_signup.sql.
 -- =============================================
@@ -138,6 +141,11 @@ DECLARE
   v_dob     date;
   v_claim   account_claims;
 BEGIN
+  PERFORM 1 FROM account_claims
+    WHERE dependent_user_id = p_dependent_user_id
+      AND status = 'pending'
+    FOR UPDATE;
+
   PERFORM 1 FROM guardianships
     WHERE guardian_user_id = p_guardian_user_id
       AND dependent_user_id = p_dependent_user_id
@@ -148,7 +156,7 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  SELECT * INTO v_user FROM users WHERE id = p_dependent_user_id;
+  SELECT * INTO v_user FROM users WHERE id = p_dependent_user_id FOR UPDATE;
   IF v_user.account_type <> 'managed' OR v_user.deleted_at IS NOT NULL THEN
     RAISE EXCEPTION 'CLAIM_NOT_ALLOWED: only a dependent with no login of their own can be handed over'
       USING ERRCODE = 'P0001';
@@ -246,12 +254,6 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  SELECT * INTO v_user FROM users WHERE id = v_claim.dependent_user_id FOR UPDATE;
-  IF v_user.account_type <> 'managed' OR v_user.deleted_at IS NOT NULL THEN
-    RAISE EXCEPTION 'CLAIM_INVALID: this record can''t be handed over any more'
-      USING ERRCODE = 'P0001';
-  END IF;
-
   PERFORM 1 FROM guardianships
     WHERE guardian_user_id = v_claim.guardian_user_id
       AND dependent_user_id = v_claim.dependent_user_id
@@ -259,6 +261,12 @@ BEGIN
     FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'CLAIM_INVALID: the guardian who started this handover no longer acts for this player'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_user FROM users WHERE id = v_claim.dependent_user_id FOR UPDATE;
+  IF v_user.account_type <> 'managed' OR v_user.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'CLAIM_INVALID: this record can''t be handed over any more'
       USING ERRCODE = 'P0001';
   END IF;
 

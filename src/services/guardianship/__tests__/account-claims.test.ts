@@ -134,6 +134,19 @@ describe("accountClaimErrorResponse", () => {
     expect((await res.json()).error.code).toBe(code);
   });
 
+  it("asks to retry when another guardian started a handover at the same moment", async () => {
+    const res = accountClaimErrorResponse(
+      {
+        code: "23505",
+        message:
+          'duplicate key value violates unique constraint "uq_account_claims_one_pending"',
+      },
+      "testing",
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("CLAIM_IN_PROGRESS");
+  });
+
   it("sends a taken address to support", async () => {
     const res = accountClaimErrorResponse(
       { message: "EMAIL_TAKEN: x" },

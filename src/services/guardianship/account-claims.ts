@@ -104,13 +104,23 @@ export async function getAccountClaimByToken(
 }
 
 export function accountClaimErrorResponse(
-  error: { message?: string },
+  error: { code?: string; message?: string },
   action: string,
 ): NextResponse {
   const message = error.message ?? "";
   const respond = (code: string, text: string, status: number) =>
     NextResponse.json({ error: { code, message: text } }, { status });
 
+  if (
+    error.code === "23505" &&
+    message.includes("uq_account_claims_one_pending")
+  ) {
+    return respond(
+      "CLAIM_IN_PROGRESS",
+      "A handover for this player was just started. Refresh and try again.",
+      409,
+    );
+  }
   if (message.includes("DEPENDENT_NOT_FOUND")) {
     return respond("NOT_FOUND", "Dependent not found", 404);
   }
