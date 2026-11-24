@@ -2,8 +2,10 @@
 -- RLS regression test for the identity indirection (#501):
 --   * app_user_id()  (003_functions_triggers.sql) resolving a JWT sub to a
 --     public.users.id through users.auth_user_id
---   * can_act_for()  currently the self check, and the policies that must NOT
---     use it (user_global_roles, users, organization_memberships, audit_logs)
+--   * can_act_for()  the self check when no guardianship is involved, and the
+--     policies that must NOT use it (user_global_roles, users,
+--     organization_memberships, audit_logs). What a guardian may do is in
+--     guardian_access.sql (#707).
 --   * per-user isolation on player_profiles / registrations / payments / refunds
 --     surviving the switch from "auth.uid() = user_id" to can_act_for()
 --   * the identity bridge itself being immune to client writes — users.id,
@@ -110,12 +112,12 @@ BEGIN
   END IF;
   RAISE NOTICE 'I1 PASS — app_user_id() resolved auth id to users.id through auth_user_id';
 
-  -- ===== I2: can_act_for() is the self check, and only the self check ======
+  -- ===== I2: with no guardianship, can_act_for() is the self check ==========
   IF NOT can_act_for(v_a_app) THEN
     RAISE EXCEPTION 'I2 FAIL: can_act_for(self) was false';
   END IF;
   IF can_act_for(v_b_app) THEN
-    RAISE EXCEPTION 'I2 FAIL: can_act_for(other) was true — it must widen only via #504';
+    RAISE EXCEPTION 'I2 FAIL: can_act_for(other) was true with no guardianship between them';
   END IF;
   -- Passing the AUTH id must never authorise anything.
   IF can_act_for(v_a_auth) THEN
@@ -173,9 +175,10 @@ BEGIN
   RAISE NOTICE 'I4 PASS — users row scoped to the caller';
 
   -- ===== I5: the deliberately self-only policies did not widen =============
-  -- Regression guard for the day can_act_for() grows an OR (#504): if any of
-  -- these ever start using it, a guardian would silently inherit a dependent's
-  -- platform-admin role or org membership.
+  -- can_act_for() covers a guardian's dependents (#707): if any of these ever
+  -- start using it, a guardian would silently inherit a dependent's
+  -- platform-admin role or org membership. guardian_access.sql A2 checks
+  -- that with a real guardianship.
   SELECT count(*) INTO v_count FROM user_global_roles WHERE user_id = v_b_app;
   IF v_count <> 0 THEN
     RAISE EXCEPTION 'I5 FAIL: another user''s global role was readable';
