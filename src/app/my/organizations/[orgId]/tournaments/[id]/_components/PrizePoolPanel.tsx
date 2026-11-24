@@ -87,6 +87,7 @@ const AWARD_CLASS: Record<string, string> = {
   Paid: "text-success",
   Failed: "text-danger",
   Rejected: "text-danger",
+  Withdrawn: "text-text-muted",
 };
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -296,6 +297,33 @@ export default function PrizePoolPanel({
     }
   }
 
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+
+  async function withdrawAward(award: PrizeAwardView) {
+    setAwardError(null);
+    setAwardMessage(null);
+    setWithdrawingId(award.id);
+    try {
+      const res = await fetch(`${base}/prize-awards/${award.id}/withdraw`, {
+        method: "POST",
+      });
+      const json = await readJson(res);
+      if (!res.ok) {
+        setAwardError(json?.error?.message ?? "Couldn't withdraw the award.");
+        reload();
+        return;
+      }
+      setAwardMessage(
+        "Withdrawn. You can enter the corrected winner for that prize above.",
+      );
+      reload();
+    } catch {
+      setAwardError("A network error occurred. Please try again.");
+    } finally {
+      setWithdrawingId(null);
+    }
+  }
+
   if (loadError) {
     return (
       <div className="mb-8">
@@ -420,6 +448,8 @@ export default function PrizePoolPanel({
             Enter each winner from the arbiter&apos;s final results, from the
             last day of play. Nothing is paid until MY Chess Tour approves it,
             and a winner without verified bank details is asked to add them.
+            Entered the wrong winner or amount? Withdraw it while it awaits
+            review and enter it again.
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <select
@@ -479,10 +509,12 @@ export default function PrizePoolPanel({
             <ul className="flex flex-col gap-1">
               {awards.map((a) => {
                 const state = prizeAwardStateLabel(a);
+                const withdrawable =
+                  a.approval === "pending" && !a.withdrawn_at;
                 return (
                   <li
                     key={a.id}
-                    className="font-lato flex flex-wrap justify-between gap-2 text-sm"
+                    className="font-lato flex flex-wrap items-center justify-between gap-2 text-sm"
                   >
                     <span className="text-text-body">
                       {a.winner_name} ·{" "}
@@ -492,12 +524,24 @@ export default function PrizePoolPanel({
                     <span className={AWARD_CLASS[state] ?? "text-text-muted"}>
                       {state}
                       {a.approval === "rejected" &&
+                        !a.withdrawn_at &&
                         a.rejection_reason &&
                         ` — ${a.rejection_reason}`}
                       {a.approval === "approved" &&
                         a.status === "pending" &&
                         !a.winner_bank_status &&
                         " — waiting for the winner's bank details"}
+                      {withdrawable && (
+                        <button
+                          type="button"
+                          className="text-accent ml-2 cursor-pointer text-xs underline disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => withdrawAward(a)}
+                          disabled={withdrawingId !== null}
+                          aria-label={`Withdraw the award to ${a.winner_name}`}
+                        >
+                          {withdrawingId === a.id ? "Withdrawing…" : "Withdraw"}
+                        </button>
+                      )}
                     </span>
                   </li>
                 );

@@ -22,6 +22,7 @@ export interface PrizeAwardView {
   chip_receipt_url: string | null;
   entered_at: string;
   reviewed_at: string | null;
+  withdrawn_at: string | null;
   processed_at: string | null;
   winner_bank_status: "pending" | "verified" | "rejected" | "name_mismatch" | null;
   winner_bank_holder_name?: string | null;
@@ -43,7 +44,7 @@ interface AwardRow extends Omit<
 
 const COLUMNS = `id, tournament_id, user_id, category, place, amount_cents, settled_amount_cents,
   approval, status, rejection_reason, failure_reason, chip_receipt_url,
-  entered_at, reviewed_at, processed_at,
+  entered_at, reviewed_at, withdrawn_at, processed_at,
   tournament:tournaments(name, organization:organizations!organization_id(name)),
   winner:users!user_id(first_name, last_name)`;
 

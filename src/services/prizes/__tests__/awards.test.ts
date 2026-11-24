@@ -40,6 +40,7 @@ function row(overrides: Record<string, unknown> = {}) {
     chip_receipt_url: null,
     entered_at: "2026-11-18T00:00:00Z",
     reviewed_at: null,
+    withdrawn_at: null,
     processed_at: null,
     tournament: { name: "KL Open", organization: { name: "Chess Club" } },
     winner: { first_name: "Aina", last_name: "Rahman" },

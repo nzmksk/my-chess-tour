@@ -15,6 +15,13 @@ describe("describePrizeAwardRefusal", () => {
       "This award is RM 75.00, but only RM 50.00 of the collected pool is uncommitted.",
     ],
     ["PRIZE_AWARD_ALREADY_REVIEWED: prize award x already reviewed", "This award has already been reviewed."],
+    ["PRIZE_AWARD_WITHDRAWN: the organizer withdrew prize award x", "The organizer has withdrawn this award."],
+    [
+      "PRIZE_AWARD_NOT_WITHDRAWABLE: approved",
+      "MY Chess Tour has already approved this award, so it can't be withdrawn. Contact support to reverse it.",
+    ],
+    ["PRIZE_AWARD_NOT_WITHDRAWABLE: withdrawn", "This award has already been withdrawn."],
+    ["PRIZE_AWARD_NOT_WITHDRAWABLE: something_new", "This award can no longer be withdrawn."],
   ])("%s", (message, expected) => {
     expect(describePrizeAwardRefusal(message)).toBe(expected);
   });
@@ -29,6 +36,8 @@ describe("prizeAwardStateLabel", () => {
   it.each([
     [{ approval: "pending", status: "pending" }, "Awaiting review"],
     [{ approval: "rejected", status: "pending" }, "Rejected"],
+    [{ approval: "rejected", status: "pending", withdrawn_at: null }, "Rejected"],
+    [{ approval: "rejected", status: "pending", withdrawn_at: "2026-11-24T10:00:00Z" }, "Withdrawn"],
     [{ approval: "approved", status: "pending" }, "Approved"],
     [{ approval: "approved", status: "processing" }, "Sending"],
     [{ approval: "approved", status: "paid" }, "Paid"],

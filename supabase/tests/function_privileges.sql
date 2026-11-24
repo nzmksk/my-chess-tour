@@ -83,6 +83,7 @@ DECLARE
     'list_pending_payout_nominations',
     'list_admin_payout_candidates',
     'list_payable_tournaments',
+    'withdraw_prize_award',
     'anonymise_user_audit_logs'
   ];
   -- SECURITY DEFINER functions clients may call. Adding to this list is a

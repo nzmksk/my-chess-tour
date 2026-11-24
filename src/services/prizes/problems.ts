@@ -13,6 +13,13 @@ const NOT_ALLOWED: Record<string, string> = {
   winner_missing: "The winner's account no longer exists.",
 };
 
+const NOT_WITHDRAWABLE: Record<string, string> = {
+  approved:
+    "MY Chess Tour has already approved this award, so it can't be withdrawn. Contact support to reverse it.",
+  rejected: "MY Chess Tour has already rejected this award.",
+  withdrawn: "This award has already been withdrawn.",
+};
+
 export function describePrizeAwardRefusal(message: string | null | undefined): string | null {
   const parsed = parseSentinel(message);
   if (!parsed) return null;
@@ -34,6 +41,10 @@ export function describePrizeAwardRefusal(message: string | null | undefined): s
     }
     case "PRIZE_AWARD_ALREADY_REVIEWED":
       return "This award has already been reviewed.";
+    case "PRIZE_AWARD_WITHDRAWN":
+      return "The organizer has withdrawn this award.";
+    case "PRIZE_AWARD_NOT_WITHDRAWABLE":
+      return NOT_WITHDRAWABLE[detail] ?? "This award can no longer be withdrawn.";
     default:
       return null;
   }
@@ -42,7 +53,9 @@ export function describePrizeAwardRefusal(message: string | null | undefined): s
 export function prizeAwardStateLabel(award: {
   approval: string;
   status: string;
+  withdrawn_at?: string | null;
 }): string {
+  if (award.withdrawn_at) return "Withdrawn";
   if (award.approval === "rejected") return "Rejected";
   if (award.approval === "pending") return "Awaiting review";
   switch (award.status) {
