@@ -137,6 +137,20 @@ describe("POST /api/v1/me/dependents/[id]/consents", () => {
     });
   });
 
+  it("refuses a guardian's consent once a minor has turned 18 (#721)", async () => {
+    mockGetDependent.mockResolvedValue({
+      ok: true,
+      data: view({ date_of_birth: `${new Date().getUTCFullYear() - 19}-01-01` }),
+    });
+    const res = await grantConsent(
+      post("consents", { category: "health" }),
+      params(),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("AGED_OUT");
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
   it("uses the helper's wording for an adult who authorised them", async () => {
     mockGetDependent.mockResolvedValue({
       ok: true,
@@ -208,6 +222,16 @@ describe("POST /api/v1/me/dependents/[id]/consents", () => {
 
 describe("POST /api/v1/me/dependents/[id]/oku", () => {
   const PATH = `users/${CHILD_ID}/oku/1700000000000.png`;
+
+  it("refuses a new card once a minor has turned 18 (#721)", async () => {
+    mockGetDependent.mockResolvedValue({
+      ok: true,
+      data: view({ date_of_birth: `${new Date().getUTCFullYear() - 19}-01-01` }),
+    });
+    const res = await submitOku(post("oku", { document_path: PATH }), params());
+    expect(res.status).toBe(409);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
 
   it("registers a card uploaded into the dependent's folder", async () => {
     const res = await submitOku(post("oku", { document_path: PATH }), params());
