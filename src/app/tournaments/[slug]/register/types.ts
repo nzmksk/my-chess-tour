@@ -15,6 +15,7 @@ export interface PlayerProfile {
 
 export interface RegistrationRequest {
   fee_tier: string;
+  participant_id?: string | null;
 }
 
 type RegistrationStatus =
