@@ -17,5 +17,20 @@ export const MINOR_RELATIONSHIPS: readonly GuardianshipRelationship[] = [
   "legal_guardian",
 ];
 
+export const ADULT_HELPER_RELATIONSHIPS: readonly GuardianshipRelationship[] = [
+  "carer",
+  "parent",
+  "coach",
+  "other",
+];
+
+export const RELATIONSHIP_LABELS: Record<GuardianshipRelationship, string> = {
+  parent: "Parent",
+  legal_guardian: "Legal guardian",
+  carer: "Carer",
+  coach: "Coach",
+  other: "Other",
+};
+
 export const GUARDIANSHIP_BASES = ["minor", "authorised", "appointed"] as const;
 export type GuardianshipBasis = (typeof GUARDIANSHIP_BASES)[number];
