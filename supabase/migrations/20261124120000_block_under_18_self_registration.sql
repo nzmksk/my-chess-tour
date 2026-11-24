@@ -2,9 +2,10 @@
 -- #711: a self-managed account whose holder is under 18 can't register (part
 -- of #705).
 --
--- Signup asks for 18 or over (#710) but collects no date of birth, so an
--- under-18 could confirm, save their real date of birth later and then
--- register and pay on their own account. The app refuses that twice:
+-- Signup now asks for a date of birth and refuses under-18s (#710), but an
+-- account from before that, or one created outside signup, may have none, and
+-- its holder could save an under-18 date later and then register and pay on
+-- their own account. The app refuses that twice:
 -- PATCH /api/v1/profile won't save an under-18 date of birth on a self-managed
 -- account, and checkout refuses an under-18 self-managed participant
 -- (checkParticipantAge in registrations/validators.ts). This is the database
@@ -16,7 +17,7 @@
 -- (Asia/Kuala_Lumpur, the platform's time zone). "Under 18" is date_of_birth > today - 18 years, so
 -- someone born on 29 February is 18 on 1 March in a common year, matching
 -- isUnderAdultAge in src/lib/auth/adult-age.ts. No date of birth means no
--- refusal: the signup confirmation is the record until there is one.
+-- refusal: only accounts from before #710 or created outside signup lack one.
 -- Managed accounts (dependents) are exempt: a guardian registers them.
 --
 -- assert_participant_not_self_managed_minor raises UNDER_18 (P0001), which
