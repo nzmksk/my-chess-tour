@@ -3,12 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/services/supabase/client";
-import BankAccountFields, {
-  normalizeAccountNumber,
-  validateBankAccount,
-  type BankAccountValues,
-} from "@/components/BankAccountFields";
-import { MALAYSIAN_BANKS } from "@/lib/reference/malaysian-banks";
 
 const LINK_TYPES = [
   { value: "website", label: "Website" },
@@ -115,11 +109,7 @@ export interface ExistingDocument {
   originalFilename: string | null;
 }
 
-/**
- * A rejected application the applicant is amending (#582). Masked: the bank
- * account comes with its last 4 digits only, and keeping it never sends the
- * number back.
- */
+/** A rejected application the applicant is amending (#582). */
 export interface AmendApplication {
   id: string;
   rejectionReason: string | null;
@@ -132,12 +122,6 @@ export interface AmendApplication {
   entityType: EntityType | null;
   registrationNumber: string | null;
   registeredName: string | null;
-  bank: {
-    bankName: string;
-    bankCode: string;
-    accountHolder: string;
-    last4: string;
-  } | null;
   documents: ExistingDocument[];
 }
 
@@ -169,14 +153,6 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
   const [pastTournamentRefs, setPastTournamentRefs] = useState(
     amend?.pastTournamentRefs ?? "",
   );
-  const [bank, setBank] = useState<BankAccountValues>({
-    bankName: "",
-    bankCode: "",
-    accountHolder: "",
-    accountNumber: "",
-  });
-  // Amending: keep the application's account unless the applicant replaces it.
-  const [keepBank, setKeepBank] = useState(Boolean(amend?.bank));
   const [entityType, setEntityType] = useState<EntityType>(
     amend?.entityType ?? "company",
   );
@@ -281,15 +257,6 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
     e.preventDefault();
     if (status === "submitting") return;
 
-    const bankError = keepBank
-      ? null
-      : validateBankAccount(bank, { requireBankCode: true });
-    if (bankError) {
-      setErrorMessage(bankError);
-      setStatus("error");
-      return;
-    }
-
     if (entityType !== "individual" && !registrationNumber.trim()) {
       setErrorMessage(`Please enter your ${entityConfig.registrationLabel}.`);
       setStatus("error");
@@ -382,13 +349,6 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
         // The version this is recorded against is the server's, not ours.
         agreement_accepted: agreementAccepted,
       };
-      // Only the SWIFT code — the server derives the bank's display name, so
-      // the stored name can't contradict the code.
-      const bankFields = {
-        bank_code: bank.bankCode,
-        bank_account_holder: bank.accountHolder.trim(),
-        bank_account_number: normalizeAccountNumber(bank.accountNumber),
-      };
 
       const res = amend
         ? await fetch(`/api/v1/organizations/applications/${amend.id}`, {
@@ -396,7 +356,6 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...fields,
-              ...(keepBank ? { keep_bank_account: true } : bankFields),
               keep_document_ids: keptDocuments.map((d) => d.id),
               new_documents: uploaded,
             }),
@@ -406,7 +365,6 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...fields,
-              ...bankFields,
               documents: uploaded,
             }),
           });
@@ -444,7 +402,8 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
           processed.
         </p>
         <p className="font-lato text-text-muted mb-8 text-xs">
-          Typically reviewed within 1–2 business days.
+          Typically reviewed within 1–2 business days. Once approved, add your
+          payout bank account in your organization&apos;s settings.
         </p>
         <div className="flex flex-col gap-3">
           <button
@@ -613,61 +572,6 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
             Optional — helps speed up the approval process.
           </p>
         </div>
-
-        {/* Payout bank account */}
-        <fieldset className="border-border rounded-md border p-4">
-          <legend className="font-cinzel text-text-primary px-2 text-sm font-semibold tracking-wider">
-            Payout Bank Account
-          </legend>
-          <p className="font-lato text-text-muted mb-4 text-xs">
-            Where your entry-fee revenue is paid out. The account holder name
-            must match your bank&apos;s records exactly — payouts fail
-            otherwise, and the failed transfer is at your cost.
-          </p>
-          {keepBank && amend?.bank ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="font-lato text-text-secondary flex-1 text-sm">
-                {amend.bank.bankName} · {amend.bank.accountHolder} · ••••
-                {amend.bank.last4}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setKeepBank(false);
-                  setErrorMessage(null);
-                }}
-                className="font-lato text-gold-bright border-border hover:border-gold-bright hover:bg-gold-ghost rounded-md border border-dashed px-3 py-2 text-sm font-medium transition-colors"
-              >
-                Use a different account
-              </button>
-            </div>
-          ) : (
-            <>
-              <BankAccountFields
-                values={bank}
-                onChange={(patch) => {
-                  setBank((prev) => ({ ...prev, ...patch }));
-                  setErrorMessage(null);
-                }}
-                banks={MALAYSIAN_BANKS}
-                idPrefix="org_bank"
-                disabled={status === "submitting"}
-              />
-              {amend?.bank && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setKeepBank(true);
-                    setErrorMessage(null);
-                  }}
-                  className="font-lato text-text-muted hover:text-text-primary mt-3 text-sm underline"
-                >
-                  Keep the current account (••••{amend.bank.last4})
-                </button>
-              )}
-            </>
-          )}
-        </fieldset>
 
         {/* Entity & verification documents */}
         <fieldset className="border-border rounded-md border p-4">

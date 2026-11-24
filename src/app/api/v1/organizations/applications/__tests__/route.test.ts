@@ -84,9 +84,6 @@ const VALID_BODY = {
   entity_type: "society",
   registration_number: "PPM-001-14-01012020",
   registered_name: "Persatuan Catur Kuala Lumpur",
-  bank_code: "MBBEMYKL",
-  bank_account_holder: "KL Chess Association",
-  bank_account_number: "5140 1234-5678",
   documents: [
     { doc_type: "ros", storage_path: DOC_PATH, original_filename: "ros.pdf" },
   ],
@@ -415,46 +412,19 @@ describe("POST /api/v1/organizations/applications", () => {
   // -------------------------------------------------------------------------
 
   describe("payout bank account", () => {
-    it("returns 400 for a SWIFT code that isn't a bank we support", async () => {
+    it("asks for no bank account, and ignores one sent anyway (#671)", async () => {
       const res = await POST(
-        makePostRequest({ ...VALID_BODY, bank_code: "NOTABANK" }),
-      );
-      expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error.message).toMatch(/bank/i);
-      expect(mockRpc).not.toHaveBeenCalled();
-    });
-
-    it.each(["1234", "12345678901234567890123", "abcdefgh"])(
-      "returns 400 for account number %s",
-      async (bank_account_number) => {
-        const res = await POST(
-          makePostRequest({ ...VALID_BODY, bank_account_number }),
-        );
-        expect(res.status).toBe(400);
-      },
-    );
-
-    it("normalizes spaces and dashes out of the account number", async () => {
-      await POST(makePostRequest());
-      expect(mockRpc).toHaveBeenCalledWith(
-        "create_organization_application",
-        expect.objectContaining({ p_account_number: "514012345678" }),
-      );
-    });
-
-    it("derives the bank display name server-side from the SWIFT code", async () => {
-      // The client never supplies bank_name, so the stored name cannot
-      // contradict the code it arrived with.
-      await POST(
-        makePostRequest({ ...VALID_BODY, bank_name: "Definitely Not Maybank" }),
-      );
-      expect(mockRpc).toHaveBeenCalledWith(
-        "create_organization_application",
-        expect.objectContaining({
-          p_bank_code: "MBBEMYKL",
-          p_bank_name: "Maybank",
+        makePostRequest({
+          ...VALID_BODY,
+          bank_code: "MBBEMYKL",
+          bank_account_holder: "KL Chess Association",
+          bank_account_number: "514012345678",
         }),
+      );
+      expect(res.status).toBe(201);
+      const args = mockRpc.mock.calls[0][1];
+      expect(Object.keys(args).filter((key) => /bank|account/.test(key))).toEqual(
+        [],
       );
     });
   });
@@ -744,20 +714,6 @@ describe("POST /api/v1/organizations/applications", () => {
       const json = await res.json();
       expect(json.error.code).toBe("NAME_TAKEN");
       expect(json.error.message).toMatch(/approved organization already uses/i);
-    });
-
-    it("returns 409 when the account is another organization's destination", async () => {
-      mockRpc.mockResolvedValue({
-        data: null,
-        error: {
-          code: "P0001",
-          message: "BANK_ACCOUNT_IN_USE: this bank account is already...",
-        },
-      });
-      const res = await POST(makePostRequest());
-      expect(res.status).toBe(409);
-      const json = await res.json();
-      expect(json.error.code).toBe("BANK_ACCOUNT_IN_USE");
     });
 
     it("returns 400 when the RPC rejects the entity/document combination", async () => {

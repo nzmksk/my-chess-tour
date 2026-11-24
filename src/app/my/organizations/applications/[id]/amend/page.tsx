@@ -56,30 +56,19 @@ export default async function AmendApplicationPage({
     redirect(APPLICATIONS_PATH);
   }
 
-  const [
-    { data: bankRow },
-    { data: documentRows },
-    { data: registeredNameRow },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from("organization_bank_accounts")
-      .select("bank_name, bank_code, account_holder, account_number")
-      .eq("organization_id", id)
-      // Rejecting deactivated it, so the newest row rather than the active one.
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabaseAdmin
-      .from("organization_documents")
-      .select("id, doc_type, original_filename")
-      .eq("organization_id", id)
-      .order("created_at", { ascending: true }),
-    supabaseAdmin
-      .from("organization_registered_names")
-      .select("registered_name")
-      .eq("organization_id", id)
-      .maybeSingle(),
-  ]);
+  const [{ data: documentRows }, { data: registeredNameRow }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("organization_documents")
+        .select("id, doc_type, original_filename")
+        .eq("organization_id", id)
+        .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("organization_registered_names")
+        .select("registered_name")
+        .eq("organization_id", id)
+        .maybeSingle(),
+    ]);
 
   const amend: AmendApplication = {
     id: org.id,
@@ -95,16 +84,6 @@ export default async function AmendApplicationPage({
     registeredName:
       (registeredNameRow as { registered_name: string } | null)
         ?.registered_name ?? null,
-    // Masked here, in the server component: the full number never reaches the
-    // browser. Keeping the account re-registers it from the database.
-    bank: bankRow
-      ? {
-          bankName: bankRow.bank_name,
-          bankCode: bankRow.bank_code,
-          accountHolder: bankRow.account_holder,
-          last4: (bankRow.account_number as string).slice(-4),
-        }
-      : null,
     documents: (documentRows ?? []).map((doc) => ({
       id: doc.id as string,
       docType: doc.doc_type as string,

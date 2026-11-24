@@ -4,7 +4,6 @@ import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { NextRequest, NextResponse } from "next/server";
 import { validateResubmitRequest } from "../validators";
 import { ORGANIZER_AGREEMENT_VERSION } from "@/lib/reference/legal";
-import { bankNameForSwift } from "@/lib/reference/malaysian-banks";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
 import { withAuditContext } from "@/services/supabase/audit-context";
@@ -87,13 +86,8 @@ async function handlePut(
       // From the server constant, never the request: the stamp names the
       // document the platform served.
       p_agreement_version: ORGANIZER_AGREEMENT_VERSION,
-      p_keep_bank_account: body.bank === null,
       p_keep_document_ids: body.keep_document_ids,
       p_new_documents: body.new_documents,
-      p_bank_code: body.bank?.bank_code ?? null,
-      p_bank_name: body.bank ? bankNameForSwift(body.bank.bank_code) : null,
-      p_account_holder: body.bank?.bank_account_holder ?? null,
-      p_account_number: body.bank?.bank_account_number ?? null,
       p_description: body.description,
       p_links: body.links,
       p_phone: body.phone,

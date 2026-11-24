@@ -109,7 +109,7 @@ Only the token's SHA-256 is stored. Invitations expire 30 days after they were s
 
 | Method | Path | Who | What |
 | -- | -- | -- | -- |
-| GET, POST | `/organizations/applications` | Signed in | List your own applications, or apply. Apply creates the organization (pending), its bank account, KYB documents and agreement stamp in one transaction (`create_organization_application`). |
+| GET, POST | `/organizations/applications` | Signed in | List your own applications, or apply. Apply creates the organization (pending), its KYB documents and agreement stamp in one transaction (`create_organization_application`). No bank account: an approved organization adds one with `PUT /organizations/[orgId]/bank-account` (#671). |
 | GET | `/organizations/search` | Signed in | Approved organizations by name (id + name), for picking a payout beneficiary. |
 | PATCH | `/organizations/:orgId` | `org.manage` | Edit the organization profile. |
 | GET | `/organizations/:orgId/dashboard` | Member of an approved org | Dashboard stats, tournaments, agreement and bank-account notices. |

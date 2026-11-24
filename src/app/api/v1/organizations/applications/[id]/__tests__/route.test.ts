@@ -58,7 +58,6 @@ const KEEP_BODY = {
   entity_type: "society",
   registration_number: "PPM-001-14-01012020",
   registered_name: "Persatuan Catur Kuala Lumpur",
-  keep_bank_account: true,
   keep_document_ids: [KEPT_DOC_ID],
   new_documents: [
     {
@@ -139,7 +138,7 @@ describe("PUT /api/v1/organizations/applications/[id]", () => {
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
-  it("resubmits as the caller, keeping the account, with the server's agreement version", async () => {
+  it("resubmits as the caller with the server's agreement version", async () => {
     const res = await put();
 
     expect(res.status).toBe(200);
@@ -151,35 +150,24 @@ describe("PUT /api/v1/organizations/applications/[id]", () => {
     expect(args.p_org_id).toBe(ORG_ID);
     expect(args.p_user_id).toBe(appIdFor(USER_ID));
     expect(args.p_agreement_version).toBe(ORGANIZER_AGREEMENT_VERSION);
-    expect(args.p_keep_bank_account).toBe(true);
-    expect(args.p_account_number).toBeNull();
     expect(args.p_keep_document_ids).toEqual([KEPT_DOC_ID]);
     expect(args.p_new_documents).toEqual(KEEP_BODY.new_documents);
     expect(args.p_registered_name).toBe("Persatuan Catur Kuala Lumpur");
   });
 
-  it("sends a replacement account, normalised, with the bank name derived from the code", async () => {
+  it("asks for no bank account, and ignores one sent anyway (#671)", async () => {
     const res = await put({
       ...KEEP_BODY,
       keep_bank_account: false,
       bank_code: "MBBEMYKL",
-      bank_account_holder: " KL Chess Club ",
-      bank_account_number: "5140 1234-5678",
+      bank_account_holder: "KL Chess Club",
+      bank_account_number: "514012345678",
     });
 
     expect(res.status).toBe(200);
-    const args = rpcArgs();
-    expect(args.p_keep_bank_account).toBe(false);
-    expect(args.p_bank_code).toBe("MBBEMYKL");
-    expect(args.p_bank_name).toBeTruthy();
-    expect(args.p_account_holder).toBe("KL Chess Club");
-    expect(args.p_account_number).toBe("514012345678");
-  });
-
-  it("requires bank details when the account is not kept", async () => {
-    const res = await put({ ...KEEP_BODY, keep_bank_account: false });
-    expect(res.status).toBe(400);
-    expect(mockRpc).not.toHaveBeenCalled();
+    expect(
+      Object.keys(rpcArgs()).filter((key) => /bank|account/.test(key)),
+    ).toEqual([]);
   });
 
   it("requires the Organizer Agreement to be accepted again", async () => {
@@ -257,18 +245,6 @@ describe("PUT /api/v1/organizations/applications/[id]", () => {
       "P0001",
       409,
       "NAME_TAKEN",
-    ],
-    [
-      "BANK_ACCOUNT_IN_USE: this bank account is already...",
-      "P0001",
-      409,
-      "BANK_ACCOUNT_IN_USE",
-    ],
-    [
-      "BANK_ACCOUNT_REQUIRED: this application has no bank account to keep",
-      "P0001",
-      400,
-      "VALIDATION_ERROR",
     ],
     [
       "ENTITY_DOCS_REQUIRED: a society must supply an ROS document",

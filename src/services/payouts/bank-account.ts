@@ -408,10 +408,7 @@ export async function registerActiveOrganizationBankAccount(
     );
     return;
   }
-  if (!data) {
-    console.warn(`Org ${organizationId}: approved with no active bank account`);
-    return;
-  }
+  if (!data) return;
 
   await registerOrganizationBankAccount((data as { id: string }).id);
 }

@@ -125,17 +125,8 @@ describe("AmendApplicationPage", () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("hands the form the application with the account masked to its last 4 digits", async () => {
+  it("hands the form the application, without any bank account (#671)", async () => {
     tables.organizations = { data: rejectedOrg(), calls: [] };
-    tables.organization_bank_accounts = {
-      data: {
-        bank_name: "Maybank",
-        bank_code: "MBBEMYKL",
-        account_holder: "KL Chess Association",
-        account_number: "514012345678",
-      },
-      calls: [],
-    };
     tables.organization_documents = {
       data: [{ id: "d1", doc_type: "ssm", original_filename: "ssm.pdf" }],
       calls: [],
@@ -151,13 +142,8 @@ describe("AmendApplicationPage", () => {
     );
 
     expect(rendered).toContain("SSM certificate unreadable");
-    expect(rendered).toContain('"last4":"5678"');
-    expect(rendered).not.toContain("514012345678");
     expect(rendered).toContain("ssm.pdf");
-    // Rejecting deactivated the account, so the newest row is read, not the active one.
-    expect(tables.organization_bank_accounts.calls).toContainEqual([
-      "order",
-      ["created_at", { ascending: false }],
-    ]);
+    expect(rendered).not.toContain('"bank"');
+    expect(tables.organization_bank_accounts).toBeUndefined();
   });
 });
