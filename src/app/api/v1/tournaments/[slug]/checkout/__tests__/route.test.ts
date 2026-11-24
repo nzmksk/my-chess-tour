@@ -109,9 +109,12 @@ vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
+const { mockSessionRpc } = vi.hoisted(() => ({ mockSessionRpc: vi.fn() }));
+
 vi.mock("@/services/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: { getUser: mockGetUser },
+    rpc: mockSessionRpc,
   }),
 }));
 
@@ -1151,5 +1154,340 @@ describe("POST /api/v1/tournaments/:slug/checkout — under-18 self-managed part
     expect(res.status).toBe(500);
     expect(JSON.stringify(await res.json())).not.toContain("db down");
     expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/v1/tournaments/:slug/checkout — registering a dependent (#714)", () => {
+  const DEPENDENT_ID = "dddddddd-0000-4000-8000-000000000001";
+  const thisYear = Number(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+      year: "numeric",
+    }).format(new Date()),
+  );
+  const CHILD_DOB = `${thisYear - 10}-06-15`;
+
+  const callFor = (participantId: unknown, feeTier = "standard") =>
+    POST(makeRequest(SLUG, { fee_tier: feeTier, participant_id: participantId }), {
+      params: Promise.resolve({ slug: SLUG }),
+    });
+
+  beforeEach(() => {
+    mockSessionRpc.mockResolvedValue({ data: true, error: null });
+    setThen(mockUsersBuilder, {
+      data: { account_type: "managed", first_name: "Aina" },
+      error: null,
+    });
+    setThen(mockProfileBuilder, {
+      data: { date_of_birth: CHILD_DOB },
+      error: null,
+    });
+  });
+
+  it("registers the dependent, with the guardian as the payer", async () => {
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(201);
+    expect(mockSessionRpc).toHaveBeenCalledWith("can_act_for", {
+      p_user_id: DEPENDENT_ID,
+    });
+    expect(mockRpc).toHaveBeenCalledWith("create_registration_with_payment", {
+      p_user_id: DEPENDENT_ID,
+      p_tournament_id: VALID_UUID,
+      p_fee_tier: "standard",
+      p_amount_cents: 5000,
+      p_payer_user_id: appIdFor(USER_ID),
+    });
+    expect(mockUsersBuilder.eq).toHaveBeenCalledWith("id", DEPENDENT_ID);
+    expect(mockExistingBuilder.eq).toHaveBeenCalledWith("user_id", DEPENDENT_ID);
+    expect(mockCreateChipPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({ client: { email: "p@example.com" } }),
+    );
+  });
+
+  it("lets a managed dependent under 18 through the under-18 block", async () => {
+    const res = await callFor(DEPENDENT_ID);
+    expect(res.status).toBe(201);
+  });
+
+  it("refuses someone the caller doesn't act for, before any write", async () => {
+    mockSessionRpc.mockResolvedValue({ data: false, error: null });
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("FORBIDDEN");
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("maps the database's NOT_GUARDIAN backstop to the same 403", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "42501",
+        message: "NOT_GUARDIAN: the payer can't register this participant",
+      },
+    });
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(403);
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("refuses a participant_id that isn't a player id", async () => {
+    const res = await callFor("not-a-uuid");
+
+    expect(res.status).toBe(400);
+    expect(mockSessionRpc).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("treats the caller's own id as registering themselves", async () => {
+    setThen(mockUsersBuilder, { data: { account_type: "self" }, error: null });
+    setThen(mockProfileBuilder, { data: null, error: null });
+
+    const res = await callFor(appIdFor(USER_ID));
+
+    expect(res.status).toBe(201);
+    expect(mockSessionRpc).not.toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenCalledWith(
+      "create_registration_with_payment",
+      expect.objectContaining({
+        p_user_id: appIdFor(USER_ID),
+        p_payer_user_id: appIdFor(USER_ID),
+      }),
+    );
+  });
+
+  it("500s when can_act_for can't be checked", async () => {
+    mockSessionRpc.mockResolvedValue({
+      data: null,
+      error: { message: "db down" },
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toContain("db down");
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("checks eligibility against the dependent's profile and names them", async () => {
+    setThen(mockTournamentBuilder, {
+      data: makeTournament({
+        restrictions: { min_age: 12 },
+        start_date: `${thisYear + 1}-01-10`,
+      }),
+      error: null,
+    });
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.message).toBe(
+      "Aina must be at least 12 years old on the tournament start date to enter",
+    );
+    expect(mockProfileBuilder.eq).toHaveBeenCalledWith("user_id", DEPENDENT_ID);
+    expect(mockProfileBuilder.eq).not.toHaveBeenCalledWith(
+      "user_id",
+      appIdFor(USER_ID),
+    );
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("says the dependent is already registered", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "confirmed",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toBe(
+      "Aina is already registered for this tournament",
+    );
+  });
+
+  it("starts a retry as the guardian", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "failed_payment",
+        fee_tier: "standard",
+        registered_at: OLD,
+        current_payment_id: "pay-0",
+      },
+      error: null,
+    });
+    setPaymentBuilders([
+      mockPaymentPriorBuilder,
+      mockPaymentSelectBuilder,
+      mockPaymentUpdateBuilder,
+    ]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(201);
+    expect(mockRpc).toHaveBeenCalledWith("start_new_payment_attempt", {
+      p_registration_id: "reg-1",
+      p_fee_tier: "standard",
+      p_amount_cents: 5000,
+      p_payer_user_id: appIdFor(USER_ID),
+    });
+  });
+
+  it("doesn't hand one guardian another payer's live checkout link", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: {
+        checkout_url: "https://pay.example/other-guardian",
+        user_id: "eeeeeeee-0000-4000-8000-000000000001",
+      },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error.code).toBe("PAYMENT_IN_PROGRESS");
+    expect(json.error.message).toMatch(/payment in progress for Aina/);
+    expect(JSON.stringify(json)).not.toContain("other-guardian");
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("doesn't supersede another payer's live attempt that has no link yet", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: { checkout_url: null, user_id: "eeeeeeee-0000-4000-8000-000000000001" },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("PAYMENT_IN_PROGRESS");
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
+  });
+
+  function loseCreateRaceTo(winner: Record<string, unknown>) {
+    let regReads = 0;
+    mockExistingBuilder.then = (r: (v: unknown) => unknown) => {
+      regReads += 1;
+      return Promise.resolve(
+        regReads === 1 ? { data: null, error: null } : { data: winner, error: null },
+      ).then(r);
+    };
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "23505", message: "duplicate key value violates unique constraint" },
+    });
+  }
+
+  it("leaves a concurrent guardian's live attempt alone after losing the create race", async () => {
+    loseCreateRaceTo({
+      id: "reg-1",
+      status: "pending_payment",
+      fee_tier: "standard",
+      registered_at: RECENT,
+      current_payment_id: "pay-1",
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: {
+        checkout_url: "https://pay.example/winner",
+        user_id: "eeeeeeee-0000-4000-8000-000000000001",
+      },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error.code).toBe("PAYMENT_IN_PROGRESS");
+    expect(JSON.stringify(json)).not.toContain("winner");
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).not.toHaveBeenCalledWith("start_new_payment_attempt", expect.anything());
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("reuses its own live link after losing a create race to its own double submit", async () => {
+    loseCreateRaceTo({
+      id: "reg-1",
+      status: "pending_payment",
+      fee_tier: "standard",
+      registered_at: RECENT,
+      current_payment_id: "pay-1",
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: { checkout_url: "https://pay.example/mine", user_id: appIdFor(USER_ID) },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(201);
+    expect((await res.json()).data.checkout_url).toBe("https://pay.example/mine");
+    expect(mockRpc).not.toHaveBeenCalledWith("start_new_payment_attempt", expect.anything());
+  });
+
+  it("hands the guardian back their own live checkout link", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: {
+        checkout_url: "https://pay.example/mine",
+        user_id: appIdFor(USER_ID),
+      },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(201);
+    expect((await res.json()).data.checkout_url).toBe("https://pay.example/mine");
   });
 });

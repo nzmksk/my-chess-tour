@@ -46,6 +46,7 @@ DECLARE
     'start_new_payment_attempt',
     'self_managed_minor',
     'assert_participant_not_self_managed_minor',
+    'assert_payer_acts_for',
     'create_helper_invitation',
     'accept_helper_invitation',
     'decline_helper_invitation',

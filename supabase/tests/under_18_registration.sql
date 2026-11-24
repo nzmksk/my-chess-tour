@@ -15,6 +15,9 @@
 --   U5  start_new_payment_attempt refuses a retry once an under-18 date of
 --       birth was written another way, and leaves the registration as it was
 --
+-- Since #714 a payer other than the participant needs an active guardianship
+-- of them, so the guardian in U3 has one.
+--
 -- HOW TO RUN: paste into the Supabase SQL editor AFTER applying the current
 -- migrations. Runs inside a transaction that ROLLBACKs, so it builds throwaway
 -- fixtures and persists NOTHING. A failing assertion RAISEs; on success it
@@ -83,6 +86,10 @@ BEGIN
     (v_guardian,  date '1980-01-01'),
     (v_late,      NULL),
     (v_dependent, (v_today - interval '10 years')::date);
+
+  INSERT INTO guardianships (guardian_user_id, dependent_user_id, relationship,
+                             basis, terms_version, terms_accepted_at)
+    VALUES (v_guardian, v_dependent, 'parent', 'minor', '2026-11-24', now());
 
   -- ===== U1 ===============================================================
   IF NOT self_managed_minor(v_minor) OR NOT self_managed_minor(v_almost) THEN

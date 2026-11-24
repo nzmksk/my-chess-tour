@@ -10,7 +10,9 @@ import {
   checkFeeTierEligibility,
   checkRatedRequirements,
   normalizeRestrictions,
+  type PlayerSubject,
 } from "@/app/api/v1/tournaments/[slug]/registrations/validators";
+import { UUID_RE } from "@/app/api/v1/organizations/_lib/authorize-org";
 import type {
   CheckoutResponse,
   RegistrationRequest,
@@ -36,6 +38,75 @@ function under18Response(): NextResponse {
     { error: { code: "UNDER_18", message: UNDER_18_SELF_ACCOUNT_MESSAGE } },
     { status: 422 },
   );
+}
+
+function notYourPlayerResponse(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: "FORBIDDEN",
+        message: "You can only register yourself or a player you act for",
+      },
+    },
+    { status: 403 },
+  );
+}
+
+function alreadyRegisteredResponse(subject: PlayerSubject | null): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: "ALREADY_REGISTERED",
+        message: subject
+          ? `${subject.name} is already registered for this tournament`
+          : "You are already registered for this tournament",
+      },
+    },
+    { status: 409 },
+  );
+}
+
+type ParticipantResolution =
+  | { ok: true; id: string; actingForSomeoneElse: boolean }
+  | { ok: false; response: NextResponse };
+
+async function resolveParticipant(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  callerId: string,
+  requested: unknown,
+): Promise<ParticipantResolution> {
+  if (requested === undefined || requested === null || requested === callerId) {
+    return { ok: true, id: callerId, actingForSomeoneElse: false };
+  }
+  if (typeof requested !== "string" || !UUID_RE.test(requested)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "participant_id must be a player id",
+          },
+        },
+        { status: 400 },
+      ),
+    };
+  }
+
+  const { data: allowed, error } = await supabase.rpc("can_act_for", {
+    p_user_id: requested,
+  });
+  if (error) {
+    return {
+      ok: false,
+      response: internalErrorResponse(
+        "POST /api/v1/tournaments/[slug]/checkout: can_act_for failed",
+        error,
+      ),
+    };
+  }
+  if (allowed !== true) return { ok: false, response: notYourPlayerResponse() };
+  return { ok: true, id: requested, actingForSomeoneElse: true };
 }
 
 function prizePoolNotFundedResponse(): NextResponse {
@@ -127,6 +198,14 @@ async function handlePost(
       { status: 400 },
     );
   }
+
+  const participant = await resolveParticipant(
+    supabase,
+    userId,
+    body.participant_id,
+  );
+  if (!participant.ok) return participant.response;
+  const participantId = participant.id;
 
   const { data: tournament, error: tErr } = await supabaseAdmin
     .from("tournaments")
@@ -273,13 +352,13 @@ async function handlePost(
   ] = await Promise.all([
     supabaseAdmin
       .from("users")
-      .select("account_type")
-      .eq("id", userId)
+      .select("account_type, first_name")
+      .eq("id", participantId)
       .single(),
     supabaseAdmin
       .from("player_profiles")
       .select("date_of_birth")
-      .eq("user_id", userId)
+      .eq("user_id", participantId)
       .maybeSingle(),
   ]);
   const participantErr = participantAccountErr ?? participantProfileErr;
@@ -294,6 +373,10 @@ async function handlePost(
     date_of_birth: participantProfile?.date_of_birth ?? null,
   });
   if (participantAgeError) return participantAgeError;
+
+  const subject: PlayerSubject | null = participant.actingForSomeoneElse
+    ? { name: participantAccount?.first_name || "This player" }
+    : null;
 
   const needsTierProfile =
     matchedTier.age_min != null ||
@@ -323,7 +406,7 @@ async function handlePost(
       .select(
         "date_of_birth, gender, oku_status, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
       )
-      .eq("user_id", userId)
+      .eq("user_id", participantId)
       .single();
 
     if (needsRestrictionProfile && restrictions) {
@@ -332,6 +415,7 @@ async function handlePost(
         profile,
         ratingContext,
         startDate,
+        subject,
       );
       if (restrictionError) return restrictionError;
     }
@@ -341,6 +425,7 @@ async function handlePost(
       profile,
       startDate,
       ratingContext,
+      subject,
     );
     if (tierError) return tierError;
 
@@ -350,6 +435,7 @@ async function handlePost(
         is_mcf_rated: tournament.is_mcf_rated === true,
       },
       profile,
+      subject,
     );
     if (ratedError) return ratedError;
   }
@@ -357,21 +443,13 @@ async function handlePost(
   const { data: existing } = await supabaseAdmin
     .from("registrations")
     .select("id, status, fee_tier, registered_at, current_payment_id")
-    .eq("user_id", userId)
+    .eq("user_id", participantId)
     .eq("tournament_id", tournamentId)
     .maybeSingle();
 
   if (existing) {
     if (existing.status === "confirmed") {
-      return NextResponse.json(
-        {
-          error: {
-            code: "ALREADY_REGISTERED",
-            message: "You are already registered for this tournament",
-          },
-        },
-        { status: 409 },
-      );
+      return alreadyRegisteredResponse(subject);
     }
 
     // A still-live pending payment is resumed by reusing its existing CHIP link —
@@ -391,6 +469,7 @@ async function handlePost(
         slug,
         tournament.name,
         user.email!,
+        subject,
       );
     }
 
@@ -427,7 +506,7 @@ async function handlePost(
   const { data: registration, error: insertErr } = await supabaseAdmin.rpc(
     "create_registration_with_payment",
     {
-      p_user_id: userId,
+      p_user_id: participantId,
       p_tournament_id: tournamentId,
       p_fee_tier: fee_tier,
       p_amount_cents: matchedTier.amount_cents,
@@ -441,6 +520,9 @@ async function handlePost(
     }
     if (insertErr.message?.startsWith("UNDER_18")) {
       return under18Response();
+    }
+    if (insertErr.message?.startsWith("NOT_GUARDIAN")) {
+      return notYourPlayerResponse();
     }
     if (
       insertErr.message.includes("Tournament is full") ||
@@ -457,10 +539,28 @@ async function handlePost(
     if (insertErr.code === "23505") {
       const { data: raced } = await supabaseAdmin
         .from("registrations")
-        .select("id, status, current_payment_id")
-        .eq("user_id", userId)
+        .select("id, status, fee_tier, registered_at, current_payment_id")
+        .eq("user_id", participantId)
         .eq("tournament_id", tournamentId)
         .maybeSingle();
+      if (
+        raced?.status === "pending_payment" &&
+        isHoldLive(raced.registered_at)
+      ) {
+        return continuePendingPayment(
+          raced.id,
+          userId,
+          raced.fee_tier,
+          fee_tier,
+          raced.registered_at,
+          raced.current_payment_id,
+          matchedTier.amount_cents,
+          slug,
+          tournament.name,
+          user.email!,
+          subject,
+        );
+      }
       if (
         raced &&
         (raced.status === "pending_payment" ||
@@ -478,15 +578,7 @@ async function handlePost(
           user.email!,
         );
       }
-      return NextResponse.json(
-        {
-          error: {
-            code: "ALREADY_REGISTERED",
-            message: "You are already registered for this tournament",
-          },
-        },
-        { status: 409 },
-      );
+      return alreadyRegisteredResponse(subject);
     }
     return internalErrorResponse(
       "POST /api/v1/tournaments/[slug]/checkout: insertErr",
@@ -520,16 +612,36 @@ async function continuePendingPayment(
   tournamentSlug: string,
   tournamentName: string,
   userEmail: string,
+  subject: PlayerSubject | null,
 ): Promise<NextResponse> {
   // Look up the current attempt's stored link first. Whether a payment is truly
   // "in progress" (and thus tier-locked) hinges on a live link existing.
   const { data: payment } = currentPaymentId
     ? await supabaseAdmin
         .from("payments")
-        .select("checkout_url")
+        .select("checkout_url, user_id")
         .eq("id", currentPaymentId)
         .maybeSingle()
     : { data: null };
+
+  const unlockAt = new Date(
+    new Date(registeredAt).getTime() + PAYMENT_TIMEOUT_MINUTES * 60_000,
+  ).toISOString();
+
+  if (payment?.user_id && payment.user_id !== payerUserId) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "PAYMENT_IN_PROGRESS",
+          message:
+            `Someone else has a payment in progress for ${subject?.name ?? "this player"}. ` +
+            `Try again after ${unlockAt} if it isn't completed.`,
+          unlock_at: unlockAt,
+        },
+      },
+      { status: 409 },
+    );
+  }
 
   // No stored link (an earlier purchase-create failed) — nothing is actually in
   // progress to protect, so start a fresh attempt for whatever tier was requested
@@ -550,9 +662,6 @@ async function continuePendingPayment(
   // A live link exists: the tier is locked until the hold lapses. A request for a
   // different tier is rejected with the time it unlocks.
   if (requestedFeeTier !== currentFeeTier) {
-    const unlockAt = new Date(
-      new Date(registeredAt).getTime() + PAYMENT_TIMEOUT_MINUTES * 60_000,
-    ).toISOString();
     return NextResponse.json(
       {
         error: {
@@ -630,6 +739,9 @@ async function resumeRegistration(
     }
     if (attemptErr.message?.startsWith("UNDER_18")) {
       return under18Response();
+    }
+    if (attemptErr.message?.startsWith("NOT_GUARDIAN")) {
+      return notYourPlayerResponse();
     }
     if (attemptErr.message?.toLowerCase().includes("full")) {
       return NextResponse.json(
