@@ -160,12 +160,19 @@ function getMissingProfileFields(
   return Array.from(missing);
 }
 
+interface FormParticipant {
+  id: string;
+  firstName: string;
+  isSelf: boolean;
+}
+
 interface Props {
   tournament: TournamentDetail;
   userId: string;
   playerProfile: PlayerProfile | null;
   restrictions?: Restrictions | null;
   feeBreakdown?: FeeBreakdownByTier;
+  participant?: FormParticipant | null;
 }
 
 type FormStatus = "idle" | "submitting" | "redirecting" | "success" | "error";
@@ -175,7 +182,9 @@ export default function RegisterForm({
   playerProfile,
   restrictions = null,
   feeBreakdown = {},
+  participant = null,
 }: Props) {
+  const forSomeoneElse = participant !== null && !participant.isSelf;
   const now = new Date();
   // Age eligibility is judged as of the tournament start date, not today (see
   // checkAgeEligibility). `now` is still used below for tier valid_until expiry.
@@ -336,7 +345,11 @@ export default function RegisterForm({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fee_tier: selectedTier }),
+          body: JSON.stringify(
+            forSomeoneElse
+              ? { fee_tier: selectedTier, participant_id: participant.id }
+              : { fee_tier: selectedTier },
+          ),
         },
       );
       const json: Partial<CheckoutResponse> & {
@@ -378,7 +391,9 @@ export default function RegisterForm({
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="font-cinzel text-text-primary mb-4 text-xl font-semibold tracking-wider">
-        Register — {tournament.name}
+        {forSomeoneElse
+          ? `Register ${participant.firstName} — ${tournament.name}`
+          : `Register — ${tournament.name}`}
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -469,6 +484,12 @@ export default function RegisterForm({
           <CompleteProfilePrompt
             missing={missingFields}
             onSaved={handleProfileSaved}
+            saveUrl={
+              forSomeoneElse
+                ? `/api/v1/me/dependents/${participant.id}`
+                : undefined
+            }
+            playerName={forSomeoneElse ? participant.firstName : null}
           />
         ) : (
           <button

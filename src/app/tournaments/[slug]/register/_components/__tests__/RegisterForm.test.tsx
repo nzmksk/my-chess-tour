@@ -1288,4 +1288,90 @@ describe("RegisterForm", () => {
       ).toBeNull();
     });
   });
+
+  describe("RegisterForm for a dependent", () => {
+    const DEPENDENT = { id: "dep-1", firstName: "Aina", isSelf: false };
+
+    it("names the player in the heading", () => {
+      render(
+        <RegisterForm
+          tournament={makeTournament()}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+          participant={DEPENDENT}
+        />,
+      );
+      expect(screen.getByText("Register Aina — Test Open 2026")).toBeDefined();
+    });
+
+    it("sends the dependent as participant_id", async () => {
+      mockFetch.mockResolvedValueOnce(makeSuccessFetch());
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament()}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+          participant={DEPENDENT}
+        />,
+      );
+      await act(async () => {
+        fireEvent.submit(container.querySelector("form")!);
+      });
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body).toEqual({ fee_tier: "standard", participant_id: "dep-1" });
+    });
+
+    it("sends no participant_id when registering yourself", async () => {
+      mockFetch.mockResolvedValueOnce(makeSuccessFetch());
+      const { container } = render(
+        <RegisterForm
+          tournament={makeTournament()}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+          participant={{ id: "u1", firstName: "You", isSelf: true }}
+        />,
+      );
+      await act(async () => {
+        fireEvent.submit(container.querySelector("form")!);
+      });
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body).toEqual({ fee_tier: "standard" });
+    });
+
+    it("completes the dependent's profile, not the guardian's", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ data: {} }),
+      });
+      render(
+        <RegisterForm
+          tournament={{ ...makeTournament(), is_fide_rated: true }}
+          userId="u1"
+          playerProfile={MALE_PROFILE}
+          participant={DEPENDENT}
+        />,
+      );
+      expect(
+        screen.getByText(
+          "A few of Aina's details are needed for this tournament",
+        ),
+      ).toBeDefined();
+
+      await act(async () => {
+        fireEvent.change(screen.getByPlaceholderText("e.g. 5834567"), {
+          target: { value: "5834567" },
+        });
+      });
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Save & Continue" }),
+        );
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/v1/me/dependents/dep-1",
+        expect.objectContaining({ method: "PATCH" }),
+      );
+    });
+  });
 });
