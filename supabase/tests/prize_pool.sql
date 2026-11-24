@@ -5,7 +5,8 @@
 --     create_registration_with_payment)
 --   * settle_prize_funding: partial funding from several sponsors, idempotency,
 --     the amount guard, "real money wins"
---   * enter_prize_award, review_prize_award (the sum guard), claim_prize_award_send,
+--   * enter_prize_award, review_prize_award (the sum guard), withdraw_prize_award,
+--     claim_prize_award_send,
 --     settle_prize_award (idempotent, one player_prize ledger row)
 --   * prize money never moving net_payout_cents
 --   * set_player_bank_account and the player branch of
@@ -370,6 +371,69 @@ BEGIN
   END IF;
   DELETE FROM payments WHERE id = v_drain;
   RAISE NOTICE 'R2 PASS — approval reserves pool money; an award beyond the collected pool is refused';
+
+  -- ===== D1: the organizer withdraws an award awaiting review (#611) ========
+  -- R1 left v_award5 rejected by an admin and a fresh pending award on v_t3.
+  SELECT id INTO v_award FROM prize_awards WHERE tournament_id = v_t3 AND approval = 'pending';
+  v_err := pg_temp.error_of(format(
+    $q$SELECT withdraw_prize_award(%L, %L, %L)$q$, v_t, v_award.id, v_admin));
+  IF v_err NOT LIKE 'P0002%' THEN
+    RAISE EXCEPTION 'D1 FAIL: withdrawing through another tournament gave %', COALESCE(v_err, 'no error');
+  END IF;
+  v_err := pg_temp.error_of(format(
+    $q$SELECT withdraw_prize_award(%L, %L, %L)$q$, v_t3, v_award5, v_admin));
+  IF v_err NOT LIKE '%PRIZE_AWARD_NOT_WITHDRAWABLE: rejected%' THEN
+    RAISE EXCEPTION 'D1 FAIL: withdrawing an admin-rejected award gave %', COALESCE(v_err, 'no error');
+  END IF;
+  v_err := pg_temp.error_of(format(
+    $q$SELECT withdraw_prize_award(%L, %L, %L)$q$, v_t, v_award1, v_admin));
+  IF v_err NOT LIKE '%PRIZE_AWARD_NOT_WITHDRAWABLE: approved%' THEN
+    RAISE EXCEPTION 'D1 FAIL: withdrawing an approved award gave %', COALESCE(v_err, 'no error');
+  END IF;
+
+  v_res := withdraw_prize_award(v_t3, v_award.id, v_admin);
+  IF (v_res->>'id')::uuid <> v_award.id OR v_res->>'withdrawn_at' IS NULL THEN
+    RAISE EXCEPTION 'D1 FAIL: withdraw returned %', v_res;
+  END IF;
+  SELECT * INTO v_award FROM prize_awards WHERE id = v_award.id;
+  IF v_award.approval <> 'rejected' OR v_award.withdrawn_by <> v_admin OR v_award.withdrawn_at IS NULL
+     OR v_award.reviewed_by IS NOT NULL OR v_award.reviewed_at IS NOT NULL
+     OR v_award.rejection_reason IS NOT NULL OR v_award.status <> 'pending' THEN
+    RAISE EXCEPTION 'D1 FAIL: withdrawn award is %', row_to_json(v_award);
+  END IF;
+  SELECT * INTO v_pos FROM prize_pool_position(v_t3);
+  IF v_pos.pending_review_cents <> 0 THEN
+    RAISE EXCEPTION 'D1 FAIL: a withdrawn award still counts as awaiting review: %', row_to_json(v_pos);
+  END IF;
+
+  v_err := pg_temp.error_of(format(
+    $q$SELECT withdraw_prize_award(%L, %L, %L)$q$, v_t3, v_award.id, v_admin));
+  IF v_err NOT LIKE '%PRIZE_AWARD_NOT_WITHDRAWABLE: withdrawn%' THEN
+    RAISE EXCEPTION 'D1 FAIL: withdrawing twice gave %', COALESCE(v_err, 'no error');
+  END IF;
+  v_err := pg_temp.error_of(format(
+    $q$SELECT review_prize_award(%L, %L, 'approve', NULL)$q$, v_award.id, v_admin));
+  IF v_err NOT LIKE '%PRIZE_AWARD_WITHDRAWN%' THEN
+    RAISE EXCEPTION 'D1 FAIL: approving a withdrawn award gave %', COALESCE(v_err, 'no error');
+  END IF;
+  v_err := pg_temp.error_of(format(
+    $q$SELECT review_prize_award(%L, %L, 'reject', 'Too late')$q$, v_award.id, v_admin));
+  IF v_err NOT LIKE '%PRIZE_AWARD_WITHDRAWN%' THEN
+    RAISE EXCEPTION 'D1 FAIL: rejecting a withdrawn award gave %', COALESCE(v_err, 'no error');
+  END IF;
+
+  v_err := pg_temp.error_of(format(
+    $q$UPDATE prize_awards SET withdrawn_at = now() WHERE id = %L$q$, v_award1));
+  IF v_err NOT LIKE '23514%' THEN
+    RAISE EXCEPTION 'D1 FAIL: marking an approved award withdrawn gave %', COALESCE(v_err, 'no error');
+  END IF;
+
+  -- The corrected award, for the same winner and the whole prize, fits again.
+  v_award5 := enter_prize_award(v_t3, v_p[1], 'Open', '1st', 30000, v_admin);
+  IF (SELECT approval FROM prize_awards WHERE id = v_award5) <> 'pending' THEN
+    RAISE EXCEPTION 'D1 FAIL: the corrected award was not entered';
+  END IF;
+  RAISE NOTICE 'D1 PASS — only an award awaiting review can be withdrawn; it frees the prize and leaves the queue';
 
   -- ===== C1: the claim needs a verified bank account ========================
   IF claim_prize_award_send(v_award2) <> 'not_claimable' THEN
