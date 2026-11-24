@@ -2,20 +2,18 @@ import { supabaseAdmin } from "@/services/supabase/admin";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { NextRequest, NextResponse } from "next/server";
-import type { Gender, UpdateProfilePayload } from "@/app/profile/types";
 import {
-  buildFideProfileUpdate,
-  fetchFidePlayer,
-  type FidePlayer,
-} from "@/services/fide/fide";
+  PROFILE_FIELDS_SELECT,
+  resolveNewFideId,
+  validateProfileFields,
+  type ExistingProfileFields,
+} from "@/services/profile/profile-fields";
 import { internalErrorResponse } from "@/lib/http/internal-error";
 import { withAuditContext } from "@/services/supabase/audit-context";
 import {
   UNDER_18_SELF_ACCOUNT_MESSAGE,
   isUnderAdultAge,
 } from "@/lib/auth/adult-age";
-
-const VALID_GENDERS = new Set<string>(["male", "female"]);
 
 export async function GET(): Promise<NextResponse> {
   const claims = await getAuthClaims();
@@ -123,14 +121,11 @@ async function handlePatch(request: NextRequest): Promise<NextResponse> {
   // crafted request cannot bypass the UI lock. A missing row means all-null.
   const { data: existing } = await supabaseAdmin
     .from("player_profiles")
-    .select(
-      "date_of_birth, gender, nationality, fide_id, mcf_id, title, national_rating",
-    )
+    .select(PROFILE_FIELDS_SELECT)
     .eq("user_id", claims.id)
-    .maybeSingle();
+    .maybeSingle<ExistingProfileFields>();
 
-  const errors: string[] = [];
-  const update: UpdateProfilePayload = {};
+  const { update, errors } = validateProfileFields(body, existing);
 
   // avatar_url lives on the users table, not player_profiles. Only accept a URL
   // that points at this user's own folder in the public avatars bucket, so a
@@ -147,145 +142,6 @@ async function handlePatch(request: NextRequest): Promise<NextResponse> {
       avatarUpdate = { value: body.avatar_url };
     } else {
       errors.push("avatar_url must be a valid uploaded avatar URL or null");
-    }
-  }
-
-  if ("gender" in body) {
-    if (body.gender === null) {
-      update.gender = null;
-    } else if (
-      typeof body.gender === "string" &&
-      VALID_GENDERS.has(body.gender)
-    ) {
-      update.gender = body.gender as Gender;
-    } else {
-      errors.push("gender must be 'male', 'female', or null");
-    }
-    if (
-      update.gender !== undefined &&
-      existing?.gender != null &&
-      update.gender !== existing.gender
-    ) {
-      errors.push("gender can only be set once; contact support to change");
-    }
-  }
-
-  // Chess title is never user-editable; reject any attempt to change it.
-  if ("title" in body && body.title !== (existing?.title ?? null)) {
-    errors.push("title cannot be edited; contact support to change");
-  }
-
-  if ("fide_id" in body) {
-    if (body.fide_id === null) {
-      update.fide_id = null;
-    } else if (
-      typeof body.fide_id === "number" &&
-      Number.isInteger(body.fide_id) &&
-      body.fide_id > 0 &&
-      body.fide_id <= 2147483647
-    ) {
-      update.fide_id = body.fide_id;
-    } else {
-      errors.push(
-        "fide_id must be a positive integer no greater than 2147483647 or null",
-      );
-    }
-    if (
-      update.fide_id !== undefined &&
-      existing?.fide_id != null &&
-      update.fide_id !== existing.fide_id
-    ) {
-      errors.push("fide_id can only be set once; contact support to change");
-    }
-  }
-
-  if ("mcf_id" in body) {
-    if (body.mcf_id === null) {
-      update.mcf_id = null;
-    } else if (
-      typeof body.mcf_id === "number" &&
-      Number.isInteger(body.mcf_id) &&
-      body.mcf_id > 0 &&
-      body.mcf_id <= 2147483647
-    ) {
-      update.mcf_id = body.mcf_id;
-    } else {
-      errors.push(
-        "mcf_id must be a positive integer no greater than 2147483647 or null",
-      );
-    }
-    if (
-      update.mcf_id !== undefined &&
-      existing?.mcf_id != null &&
-      update.mcf_id !== existing.mcf_id
-    ) {
-      errors.push("mcf_id can only be set once; contact support to change");
-    }
-  }
-
-  // National rating is never user-editable; reject any attempt to change it.
-  if (
-    "national_rating" in body &&
-    body.national_rating !== (existing?.national_rating ?? null)
-  ) {
-    errors.push("national_rating cannot be edited; contact support to change");
-  }
-
-  if ("date_of_birth" in body) {
-    if (body.date_of_birth === null) {
-      update.date_of_birth = null;
-    } else if (
-      typeof body.date_of_birth === "string" &&
-      /^\d{4}-\d{2}-\d{2}$/.test(body.date_of_birth)
-    ) {
-      const [y, m, d] = body.date_of_birth.split("-").map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d));
-      if (
-        dt.getUTCFullYear() === y &&
-        dt.getUTCMonth() + 1 === m &&
-        dt.getUTCDate() === d
-      ) {
-        update.date_of_birth = body.date_of_birth;
-      } else {
-        errors.push(
-          "date_of_birth must be a valid calendar date (YYYY-MM-DD) or null",
-        );
-      }
-    } else {
-      errors.push(
-        "date_of_birth must be a valid calendar date (YYYY-MM-DD) or null",
-      );
-    }
-    if (
-      update.date_of_birth !== undefined &&
-      existing?.date_of_birth != null &&
-      update.date_of_birth !== existing.date_of_birth
-    ) {
-      errors.push(
-        "date_of_birth can only be set once; contact support to change",
-      );
-    }
-  }
-
-  if ("nationality" in body) {
-    if (body.nationality === null) {
-      update.nationality = null;
-    } else if (
-      typeof body.nationality === "string" &&
-      body.nationality.trim()
-    ) {
-      update.nationality = body.nationality.trim();
-    } else {
-      errors.push("nationality must be a non-empty string or null");
-    }
-    if (
-      update.nationality !== undefined &&
-      existing?.nationality != null &&
-      update.nationality !== existing.nationality
-    ) {
-      errors.push(
-        "nationality can only be set once; contact support to change",
-      );
     }
   }
 
@@ -342,59 +198,23 @@ async function handlePatch(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // When a FIDE ID is set for the first time, fetch the player's ratings, title
-  // and validate their name against the FIDE profile. A nonexistent ID is
-  // rejected so a typo isn't stored in this set-once field; if FIDE is
-  // unreachable we still save the ID and let the monthly sync backfill ratings.
-  let fideFields: Partial<ReturnType<typeof buildFideProfileUpdate>> = {};
+  let fideFields = {};
   if (update.fide_id != null && update.fide_id !== existing?.fide_id) {
-    // Each new FIDE ID is a scrape of fide.com; a not-found one can be retried.
-    const fideLimited = await enforceRateLimit(
-      "fideLookup",
+    const fide = await resolveNewFideId(
       request,
       claims.id,
+      update.fide_id,
+      async () => {
+        const { data } = await supabaseAdmin
+          .from("users")
+          .select("first_name, last_name")
+          .eq("id", claims.id)
+          .single();
+        return data;
+      },
     );
-    if (fideLimited) return fideLimited;
-
-    let player: FidePlayer | null = null;
-    let reachable = true;
-    try {
-      player = await fetchFidePlayer(update.fide_id);
-    } catch (error) {
-      reachable = false;
-      console.error(
-        `FIDE lookup unavailable for user %s (fide_id %d):`,
-        claims.id,
-        update.fide_id,
-        error,
-      );
-    }
-
-    if (reachable && player === null) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: `FIDE ID ${update.fide_id} was not found on FIDE. Please check the number.`,
-          },
-        },
-        { status: 400 },
-      );
-    }
-
-    if (player) {
-      const { data: nameRow } = await supabaseAdmin
-        .from("users")
-        .select("first_name, last_name")
-        .eq("id", claims.id)
-        .single();
-      fideFields = buildFideProfileUpdate(
-        player,
-        nameRow?.first_name ?? "",
-        nameRow?.last_name ?? "",
-        new Date().toISOString(),
-      );
-    }
+    if (!fide.ok) return fide.response;
+    fideFields = fide.fields;
   }
 
   if (Object.keys(update).length > 0) {

@@ -51,6 +51,8 @@ DECLARE
     'decline_helper_invitation',
     'revoke_helper_invitation',
     'end_helper_guardianship',
+    'create_dependent',
+    'revoke_dependent',
     'settle_registration_payment',
     'expire_stale_pending_payments',
     'list_unfired_cancellation_refunds',

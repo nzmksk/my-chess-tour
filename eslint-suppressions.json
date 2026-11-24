@@ -661,7 +661,7 @@
   },
   "src/app/api/v1/profile/route.ts": {
     "local/no-comments": {
-      "count": 18
+      "count": 11
     }
   },
   "src/app/api/v1/tournaments/[slug]/__tests__/route.test.ts": {
