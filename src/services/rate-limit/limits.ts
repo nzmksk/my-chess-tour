@@ -66,6 +66,11 @@ export const RATE_LIMITS = {
     perUser: 30,
     message: "You've saved your profile several times in a short time.",
   },
+  dependentSave: {
+    windowSeconds: 10 * MINUTE,
+    perUser: 30,
+    message: "You've changed your dependents several times in a short time.",
+  },
   organizationSave: {
     windowSeconds: 10 * MINUTE,
     perUser: 30,
