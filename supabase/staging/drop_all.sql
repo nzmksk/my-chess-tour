@@ -96,6 +96,7 @@ DROP TABLE IF EXISTS public.organization_registered_names CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
 DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
 DROP TABLE IF EXISTS public.sensitive_data_consents CASCADE;
+DROP TABLE IF EXISTS public.helper_invitations      CASCADE;
 DROP TABLE IF EXISTS public.guardianships           CASCADE;
 DROP TABLE IF EXISTS public.player_profiles         CASCADE;
 DROP TABLE IF EXISTS public.user_global_roles       CASCADE;
@@ -185,7 +186,7 @@ WHERE table_schema = 'public'
     'registrations','payments','refunds','payouts','tournament_cancellation_requests',
     'audit_logs','waitlist','bug_reports','player_bank_accounts','prize_awards',
     'prize_fundings','prize_funder_contacts','sensitive_data_consents',
-    'guardianships'
+    'guardianships','helper_invitations'
   );
 
 SELECT 'app_enums' AS check, count(*)
