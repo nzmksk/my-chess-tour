@@ -71,6 +71,9 @@ describe("email templates", () => {
     ["invitation-accepted.html", "{{membersUrl}}"],
     ["invitation-declined.html", "{{inviteeName}}"],
     ["invitation-declined.html", "{{membersUrl}}"],
+    ["helper-invitation.html", "{{invitationUrl}}"],
+    ["helper-invitation.html", "{{playerName}}"],
+    ["helper-invitation.html", "{{relationshipLabel}}"],
   ])("%s renders %s", (name, placeholder) => {
     expect(read(name)).toContain(placeholder);
   });

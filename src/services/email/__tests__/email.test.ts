@@ -21,6 +21,7 @@ import {
   sendBankVerificationEmail,
   sendBeneficiaryNominationEmail,
   sendCancellationReviewEmail,
+  sendHelperInvitationEmail,
   sendInvitationResponseEmail,
   sendMemberInvitationEmail,
   sendNominationResponseEmail,
@@ -1356,5 +1357,55 @@ describe("sendTournamentListedEmail", () => {
       fundedCents: 50000,
     });
     expect(mockSend.mock.calls[0][0].html).toContain("/my/organizations");
+  });
+});
+
+describe("sendHelperInvitationEmail", () => {
+  const base = {
+    playerName: "Bea Player",
+    relationshipLabel: "carer",
+    invitationUrl: "https://example.com/helper-invitations/abc_DEF-123",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{playerName}}|{{relationshipLabel}}|{{invitationUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () =>
+    mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("links to the invitation, naming the player and relationship", async () => {
+    await sendHelperInvitationEmail("h@example.com", base);
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("helper-invitation.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("h@example.com");
+    expect(sent().subject).toBe(
+      "Bea Player asked you to help them on MY Chess Tour",
+    );
+    expect(sent().html).toContain(
+      "Bea Player|carer|https://example.com/helper-invitations/abc_DEF-123|",
+    );
+  });
+
+  it("escapes the player's name", async () => {
+    await sendHelperInvitationEmail("h@example.com", {
+      ...base,
+      playerName: "<b>Bea</b> & co",
+    });
+    expect(sent().html).toContain("&lt;b&gt;Bea&lt;/b&gt; &amp; co");
+  });
+
+  it("throws when the email can't be sent", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockSend.mockResolvedValue({ error: { message: "down" } });
+    await expect(sendHelperInvitationEmail("h@example.com", base)).rejects.toThrow(
+      "Failed to send helper invitation email: down",
+    );
   });
 });

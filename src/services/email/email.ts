@@ -725,6 +725,35 @@ export async function sendInvitationResponseEmail(
   }
 }
 
+export async function sendHelperInvitationEmail(
+  email: string,
+  params: {
+    playerName: string;
+    relationshipLabel: string;
+    invitationUrl: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate("helper-invitation.html")
+    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(/\{\{relationshipLabel\}\}/g, escapeHtml(params.relationshipLabel))
+    .replace(/\{\{invitationUrl\}\}/g, escapeHtml(params.invitationUrl))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${params.playerName} asked you to help them on MY Chess Tour`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send helper invitation email:", error);
+    throw new Error(`Failed to send helper invitation email: ${error.message}`);
+  }
+}
+
 export async function sendOkuReviewEmail(
   email: string,
   params: {

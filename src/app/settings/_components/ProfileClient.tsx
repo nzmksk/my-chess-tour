@@ -9,6 +9,7 @@ import { nameToAlpha3 } from "@/lib/reference/countries";
 import { createClient } from "@/services/supabase/client";
 import OkuVerificationCard from "./OkuVerificationCard";
 import BankingCard from "./BankingCard";
+import HelpersCard from "./HelpersCard";
 import { broadcastAvatar } from "@/lib/auth/avatar-cache";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -726,6 +727,8 @@ export default function ProfileClient({ profile }: Props) {
             rejectionReason={current.bank_account_rejection_reason}
             bankHolderName={current.bank_holder_name}
           />
+
+          <HelpersCard />
 
           {/* Chess Details */}
           <SectionCard title="Chess Details">

@@ -15,6 +15,7 @@ const ALLOWED_QUERY_PARAMS = new Set([
 
 const SECRET_PATH_SEGMENTS: ReadonlyArray<[RegExp, string]> = [
   [/^\/invitations\/[^/]+/, "/invitations/:token"],
+  [/^\/helper-invitations\/[^/]+/, "/helper-invitations/:token"],
 ];
 
 const URL_PROPERTIES = [
