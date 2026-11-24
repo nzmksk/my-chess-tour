@@ -56,7 +56,7 @@ export default function SignUpForm() {
           // The consent itself has to reach the server — the version it is
           // recorded against comes from the server's own constant, not from here.
           termsAccepted: form.termsAccepted,
-          adultConfirmed: form.adultConfirmed,
+          dateOfBirth: form.dateOfBirth,
         }),
       });
       const data = await res.json();
@@ -209,6 +209,40 @@ export default function SignUpForm() {
                 <span className="sr-only"> (opens in a new tab)</span>
               </Link>
             </p>
+
+            <div className="form-group">
+              <div className="label-row">
+                <label className="input-label" htmlFor="dateOfBirth">
+                  Date of Birth
+                </label>
+              </div>
+              <input
+                id="dateOfBirth"
+                className={`input${errors.dateOfBirth ? " input-error" : ""}`}
+                type="date"
+                value={form.dateOfBirth}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, dateOfBirth: e.target.value }))
+                }
+                autoComplete="bday"
+                aria-invalid={!!errors.dateOfBirth}
+                aria-describedby={
+                  errors.dateOfBirth
+                    ? "dateOfBirth-hint dateOfBirth-error"
+                    : "dateOfBirth-hint"
+                }
+              />
+              <p id="dateOfBirth-hint" className="input-hint">
+                You must be 18 or over to hold your own account. Under 18? You
+                take part through a parent or guardian&apos;s account. You
+                can&apos;t change this later without contacting support.
+              </p>
+              {errors.dateOfBirth && (
+                <p id="dateOfBirth-error" className="input-hint error">
+                  {errors.dateOfBirth}
+                </p>
+              )}
+            </div>
 
             {/* Email */}
             <div className="form-group">
@@ -409,34 +443,6 @@ export default function SignUpForm() {
             {errors.terms && (
               <p id="terms-error" className="input-hint error mb-2">
                 {errors.terms}
-              </p>
-            )}
-
-            <div className="check-row">
-              <input
-                id="adult"
-                type="checkbox"
-                className="checkbox"
-                checked={form.adultConfirmed}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, adultConfirmed: e.target.checked }))
-                }
-                aria-invalid={!!errors.adult}
-                aria-describedby={
-                  errors.adult ? "adult-hint adult-error" : "adult-hint"
-                }
-              />
-              <label className="check-label" htmlFor="adult">
-                I am 18 or over
-              </label>
-            </div>
-            <p id="adult-hint" className="input-hint mb-2">
-              Under 18? You take part through a parent or guardian&apos;s
-              account, not one of your own.
-            </p>
-            {errors.adult && (
-              <p id="adult-error" className="input-hint error mb-2">
-                {errors.adult}
               </p>
             )}
 

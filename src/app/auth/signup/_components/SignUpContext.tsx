@@ -17,7 +17,7 @@ const defaultForm: RegistrationFields = {
   password: "",
   confirmPassword: "",
   termsAccepted: false,
-  adultConfirmed: false,
+  dateOfBirth: "",
 };
 
 // Read any in-progress signup back from storage. Runs on the server (where

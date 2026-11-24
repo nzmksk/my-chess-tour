@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkPasswordRequirements,
   getPasswordStrength,
+  invalidDateOfBirthError,
   isLoginFormSubmittable,
   isRegistrationFormSubmittable,
   nameCharactersError,
@@ -122,7 +123,7 @@ describe("validateRegistrationForm", () => {
     password: "Secure1!x",
     confirmPassword: "Secure1!x",
     termsAccepted: true,
-    adultConfirmed: true,
+    dateOfBirth: "1990-05-17",
   };
 
   it("returns isValid true for valid fields", () => {
@@ -218,14 +219,34 @@ describe("validateRegistrationForm", () => {
     expect(errors.terms).toBeDefined();
   });
 
-  it("returns an adult error, pointing under-18s to a guardian, when 18+ isn't confirmed", () => {
+  it("requires a date of birth", () => {
     const { errors, isValid } = validateRegistrationForm({
       ...validFields,
-      adultConfirmed: false,
+      dateOfBirth: "",
     });
     expect(isValid).toBe(false);
-    expect(errors.adult).toMatch(/18 or over/);
-    expect(errors.adult).toMatch(/parent or guardian/);
+    expect(errors.dateOfBirth).toBe("Date of birth is required");
+  });
+
+  it("returns a dateOfBirth error for a date that isn't real or is in the future", () => {
+    for (const dateOfBirth of ["1990-02-30", "17/05/1990", "2999-01-01"]) {
+      const { errors } = validateRegistrationForm({
+        ...validFields,
+        dateOfBirth,
+      });
+      expect(errors.dateOfBirth).toBe("Please enter a valid date of birth");
+    }
+  });
+
+  it("refuses an under-18 date of birth and points to a guardian", () => {
+    const tenYearsAgo = new Date().getUTCFullYear() - 10;
+    const { errors, isValid } = validateRegistrationForm({
+      ...validFields,
+      dateOfBirth: `${tenYearsAgo}-01-01`,
+    });
+    expect(isValid).toBe(false);
+    expect(errors.dateOfBirth).toMatch(/18 or over/);
+    expect(errors.dateOfBirth).toMatch(/parent or guardian/);
   });
 
   it("returns isValid false when any field is invalid", () => {
@@ -245,7 +266,7 @@ describe("isRegistrationFormSubmittable", () => {
     password: "Secure1!x",
     confirmPassword: "Secure1!x",
     termsAccepted: true,
-    adultConfirmed: true,
+    dateOfBirth: "1990-05-17",
   };
 
   it("returns true for valid complete fields", () => {
@@ -289,10 +310,37 @@ describe("isRegistrationFormSubmittable", () => {
     ).toBe(false);
   });
 
-  it("returns false when 18+ isn't confirmed", () => {
+  it("returns false without a date of birth or with an under-18 one", () => {
+    const tenYearsAgo = new Date().getUTCFullYear() - 10;
     expect(
-      isRegistrationFormSubmittable({ ...validFields, adultConfirmed: false }),
+      isRegistrationFormSubmittable({ ...validFields, dateOfBirth: "" }),
     ).toBe(false);
+    expect(
+      isRegistrationFormSubmittable({
+        ...validFields,
+        dateOfBirth: `${tenYearsAgo}-01-01`,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("invalidDateOfBirthError", () => {
+  it("accepts today and up to 120 years back, and nothing outside that", () => {
+    expect(invalidDateOfBirthError("2026-11-24", "2026-11-24")).toBeUndefined();
+    expect(invalidDateOfBirthError("1906-11-24", "2026-11-24")).toBeUndefined();
+    expect(invalidDateOfBirthError("1906-11-23", "2026-11-24")).toBe(
+      "Please enter a valid date of birth",
+    );
+    expect(invalidDateOfBirthError("2026-11-25", "2026-11-24")).toBe(
+      "Please enter a valid date of birth",
+    );
+  });
+
+  it("accepts 29 February only in a leap year", () => {
+    expect(invalidDateOfBirthError("2000-02-29", "2026-11-24")).toBeUndefined();
+    expect(invalidDateOfBirthError("2001-02-29", "2026-11-24")).toBe(
+      "Please enter a valid date of birth",
+    );
   });
 });
 
