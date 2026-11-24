@@ -182,6 +182,82 @@ describe("PrizePoolPanel", () => {
     });
   });
 
+  const award = (over: Record<string, unknown>) => ({
+    id: "a-1",
+    tournament_id: "t-1",
+    tournament_name: null,
+    organization_name: null,
+    user_id: "u1",
+    winner_name: "Aisyah Rahman",
+    category: "Open",
+    place: "1st",
+    amount_cents: 30000,
+    settled_amount_cents: null,
+    approval: "pending",
+    status: "pending",
+    rejection_reason: null,
+    failure_reason: null,
+    chip_receipt_url: null,
+    entered_at: "2026-11-24T00:00:00Z",
+    reviewed_at: null,
+    withdrawn_at: null,
+    processed_at: null,
+    winner_bank_status: null,
+    ...over,
+  });
+
+  it("offers to withdraw only an award awaiting review", async () => {
+    respond(50000, {
+      awards: [
+        award({ id: "a-1" }),
+        award({ id: "a-2", winner_name: "Approved Winner", approval: "approved" }),
+        award({
+          id: "a-3",
+          winner_name: "Withdrawn Winner",
+          approval: "rejected",
+          withdrawn_at: "2026-11-24T01:00:00Z",
+        }),
+      ],
+    });
+    renderPanel();
+    await waitFor(() => expect(screen.getByText("Withdrawn")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Withdraw the award to Aisyah Rahman" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Approved Winner/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Withdrawn Winner/ })).toBeNull();
+  });
+
+  it("withdraws an award and re-reads the pool", async () => {
+    respond(50000, { awards: [award({})] });
+    renderPanel();
+    const button = await screen.findByRole("button", { name: "Withdraw the award to Aisyah Rahman" });
+    fireEvent.click(button);
+    await waitFor(() => expect(screen.getByText(/Withdrawn. You can enter the corrected winner/)).toBeTruthy());
+    const withdrawCall = mockFetch.mock.calls.find(
+      ([url, init]) => init?.method === "POST" && String(url).endsWith("/prize-awards/a-1/withdraw"),
+    );
+    expect(withdrawCall?.[0]).toBe("/api/v1/organizations/org-1/tournaments/t-1/prize-awards/a-1/withdraw");
+    await waitFor(() =>
+      expect(mockFetch.mock.calls.filter(([url]) => String(url).endsWith("/prize-awards")).length).toBe(2),
+    );
+  });
+
+  it("shows why a withdrawal was refused", async () => {
+    respond(50000, { awards: [award({})] });
+    const base = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/withdraw")) {
+        return {
+          ok: false,
+          json: async () => ({ error: { message: "MY Chess Tour has already approved this award." } }),
+        };
+      }
+      return base(url, init);
+    });
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Withdraw the award to Aisyah Rahman" }));
+    await waitFor(() => expect(screen.getByText("MY Chess Tour has already approved this award.")).toBeTruthy());
+  });
+
   it("shows why the pool couldn't be loaded", async () => {
     mockFetch.mockResolvedValue({ ok: false, json: async () => ({ error: { message: "Access denied" } }) });
     renderPanel();
