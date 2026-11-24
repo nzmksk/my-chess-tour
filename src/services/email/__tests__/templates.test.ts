@@ -72,6 +72,9 @@ describe("email templates", () => {
     ["invitation-declined.html", "{{inviteeName}}"],
     ["invitation-declined.html", "{{membersUrl}}"],
     ["helper-invitation.html", "{{invitationUrl}}"],
+    ["account-claim.html", "{{claimUrl}}"],
+    ["account-claim.html", "{{guardianName}}"],
+    ["account-claim.html", "{{playerName}}"],
     ["helper-invitation.html", "{{playerName}}"],
     ["helper-invitation.html", "{{relationshipLabel}}"],
   ])("%s renders %s", (name, placeholder) => {

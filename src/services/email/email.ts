@@ -754,6 +754,35 @@ export async function sendHelperInvitationEmail(
   }
 }
 
+export async function sendAccountClaimEmail(
+  email: string,
+  params: {
+    playerName: string;
+    guardianName: string;
+    claimUrl: string;
+  },
+) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const html = loadTemplate("account-claim.html")
+    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(/\{\{guardianName\}\}/g, escapeHtml(params.guardianName))
+    .replace(/\{\{claimUrl\}\}/g, escapeHtml(params.claimUrl))
+    .replace(/\{\{siteUrl\}\}/g, siteUrl);
+
+  const { error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: `${params.guardianName} is handing your MY Chess Tour record over to you`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send account claim email:", error);
+    throw new Error(`Failed to send account claim email: ${error.message}`);
+  }
+}
+
 export async function sendOkuReviewEmail(
   email: string,
   params: {
