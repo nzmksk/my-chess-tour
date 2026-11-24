@@ -110,7 +110,9 @@ describe("loadBankNameReviews", () => {
     expect(calls).toContainEqual([
       "organization_bank_accounts",
       "or",
-      ["status.eq.name_mismatch,name_reviewed_at.not.is.null"],
+      [
+        "and(status.eq.name_mismatch,is_active.is.true),name_reviewed_at.not.is.null",
+      ],
     ]);
   });
 
@@ -138,6 +140,39 @@ describe("loadBankNameReviews", () => {
       expected_name: "KL Chess Club",
       expected_is_registered_name: false,
     });
+  });
+
+  it("leaves a superseded account off the queue, so an owner has one review at most", async () => {
+    results.organization_bank_accounts = {
+      data: [
+        {
+          ...common,
+          id: "replaced",
+          organization_id: "org-1",
+          organization: { name: "KL Chess Club" },
+          account_holder: "KL Chess Club",
+          account_number: "514012345678",
+          status: "name_mismatch",
+          is_active: false,
+          created_at: "2026-11-19T00:00:00Z",
+        },
+        {
+          ...common,
+          id: "current",
+          organization_id: "org-1",
+          organization: { name: "KL Chess Club" },
+          account_holder: "KL Chess Club",
+          account_number: "514012345679",
+          status: "name_mismatch",
+          created_at: "2026-11-20T00:00:00Z",
+        },
+      ],
+      error: null,
+    };
+
+    const { data } = await loadBankNameReviews();
+
+    expect(data!.pending.map((r) => r.id)).toEqual(["current"]);
   });
 
   it("lists decided accounts newest decision first", async () => {

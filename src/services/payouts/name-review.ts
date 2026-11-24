@@ -30,8 +30,8 @@ const DECIDED_SHOWN = 20;
 const COMMON = `id, bank_name, account_holder, account_number, bank_holder_name, status,
   is_active, created_at, name_reviewed_at, name_review_note`;
 
-const IN_REVIEW_OR_DECIDED =
-  "status.eq.name_mismatch,name_reviewed_at.not.is.null";
+const ACTIVE_IN_REVIEW_OR_DECIDED =
+  "and(status.eq.name_mismatch,is_active.is.true),name_reviewed_at.not.is.null";
 
 type CommonRow = Omit<
   BankNameReview,
@@ -72,13 +72,13 @@ export async function loadBankNameReviews(): Promise<{
     supabaseAdmin
       .from("organization_bank_accounts")
       .select(`${COMMON}, organization_id, organization:organizations(name)`)
-      .or(IN_REVIEW_OR_DECIDED)
+      .or(ACTIVE_IN_REVIEW_OR_DECIDED)
       .order("created_at", { ascending: false })
       .limit(LIMIT),
     supabaseAdmin
       .from("player_bank_accounts")
       .select(`${COMMON}, user_id, user:users!user_id(first_name, last_name)`)
-      .or(IN_REVIEW_OR_DECIDED)
+      .or(ACTIVE_IN_REVIEW_OR_DECIDED)
       .order("created_at", { ascending: false })
       .limit(LIMIT),
   ]);
@@ -134,7 +134,7 @@ export async function loadBankNameReviews(): Promise<{
   return {
     data: {
       pending: reviews
-        .filter((r) => r.status === "name_mismatch")
+        .filter((r) => r.status === "name_mismatch" && r.is_active)
         .sort((a, b) => a.created_at.localeCompare(b.created_at)),
       decided: reviews
         .filter((r) => r.name_reviewed_at !== null)
