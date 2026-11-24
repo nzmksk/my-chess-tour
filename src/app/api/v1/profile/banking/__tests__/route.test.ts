@@ -179,6 +179,20 @@ describe("PATCH /api/v1/profile/banking", () => {
     expect(mockSendAwaiting).not.toHaveBeenCalled();
   });
 
+  it("409 MINOR_DEPENDENT for a player whose prizes go to a guardian (#718)", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "MINOR_DEPENDENT: a minor's prizes are paid to their guardian's bank account",
+      },
+    });
+    const res = await PATCH(makeReq(VALID));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("MINOR_DEPENDENT");
+    expect(mockSendAwaiting).not.toHaveBeenCalled();
+  });
+
   it("500 for any other P0001 refusal", async () => {
     mockRpc.mockResolvedValue({
       data: null,
