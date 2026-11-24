@@ -437,6 +437,17 @@ describe("PATCH /api/v1/me/dependents/[id]", () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
+  it("refuses changes once a minor has turned 18 (#721)", async () => {
+    mockGetDependent.mockResolvedValue({
+      ok: true,
+      data: view({ date_of_birth: `${new Date().getUTCFullYear() - 19}-01-01` }),
+    });
+    const res = await patch({ nationality: "Malaysia" });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("AGED_OUT");
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
   it("updates the dependent's profile, not the guardian's", async () => {
     const res = await patch({ nationality: " Malaysia ", gender: "male" });
     expect(res.status).toBe(200);

@@ -52,6 +52,19 @@ function notYourPlayerResponse(): NextResponse {
   );
 }
 
+function agedOutResponse(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: "AGED_OUT",
+        message:
+          "This player has turned 18, so you can no longer register them. Hand their record over to them in Settings, under Dependents.",
+      },
+    },
+    { status: 403 },
+  );
+}
+
 function alreadyRegisteredResponse(subject: PlayerSubject | null): NextResponse {
   return NextResponse.json(
     {
@@ -549,6 +562,9 @@ async function handlePost(
     if (insertErr.message?.startsWith("NOT_GUARDIAN")) {
       return notYourPlayerResponse();
     }
+    if (insertErr.message?.startsWith("AGED_OUT")) {
+      return agedOutResponse();
+    }
     if (
       insertErr.message.includes("Tournament is full") ||
       insertErr.code === "P0001"
@@ -767,6 +783,9 @@ async function resumeRegistration(
     }
     if (attemptErr.message?.startsWith("NOT_GUARDIAN")) {
       return notYourPlayerResponse();
+    }
+    if (attemptErr.message?.startsWith("AGED_OUT")) {
+      return agedOutResponse();
     }
     if (attemptErr.message?.toLowerCase().includes("full")) {
       return NextResponse.json(

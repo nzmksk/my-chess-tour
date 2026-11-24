@@ -20,6 +20,7 @@ import {
   resolveDependentForCaller,
   type ResolvedDependent,
 } from "@/services/guardianship/resolve-dependent";
+import { agedOutResponse } from "@/services/guardianship/aged-out-response";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -47,6 +48,8 @@ async function handlePatch(
   const resolved = await resolveDependent(context, "PATCH");
   if (!resolved.ok) return resolved.response;
   const { guardianId, dependent } = resolved;
+  const agedOut = agedOutResponse(dependent);
+  if (agedOut) return agedOut;
 
   const limited = await enforceRateLimit("dependentSave", request, guardianId);
   if (limited) return limited;

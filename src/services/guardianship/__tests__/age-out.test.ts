@@ -23,7 +23,8 @@ vi.mock("@/services/email/email", () => ({
   sendGuardianshipAgeOutEmail: mockSend,
 }));
 
-import { agedOutResponse, runGuardianshipAgeOuts } from "../age-out";
+import { runGuardianshipAgeOuts } from "../age-out";
+import { agedOutResponse } from "../aged-out-response";
 
 const GUARDIAN = {
   id: "g-1",
