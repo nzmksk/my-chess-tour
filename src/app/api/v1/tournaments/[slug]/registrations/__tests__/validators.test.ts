@@ -986,3 +986,119 @@ describe("checkParticipantAge", () => {
     ).toBe(422);
   });
 });
+
+describe("naming the player when a guardian registers them (#714)", () => {
+  const AINA = { name: "Aina" };
+
+  async function messageOf(response: Response | null) {
+    expect(response).not.toBeNull();
+    return (await response!.json()).error.message as string;
+  }
+
+  it("judges the dependent's own profile and names them in an age refusal", async () => {
+    const restrictions = { max_age: 18 };
+    expect(
+      checkRestrictions(
+        restrictions,
+        makeProfile({ date_of_birth: "2015-01-01" }),
+        UNRATED_EVENT("rapid"),
+        NOW,
+        AINA,
+      ),
+    ).toBeNull();
+    expect(
+      await messageOf(
+        checkRestrictions(
+          restrictions,
+          makeProfile({ date_of_birth: "2000-01-01" }),
+          UNRATED_EVENT("rapid"),
+          NOW,
+          AINA,
+        ),
+      ),
+    ).toBe("Aina must not turn 18 before the tournament start date to enter");
+  });
+
+  it("names the dependent for a missing date of birth or nationality", async () => {
+    expect(
+      await messageOf(
+        checkRestrictions(
+          { min_age: 8 },
+          makeProfile(),
+          UNRATED_EVENT("rapid"),
+          NOW,
+          AINA,
+        ),
+      ),
+    ).toBe(
+      "Aina's player profile is missing a date of birth required for this tournament",
+    );
+    expect(
+      await messageOf(
+        checkRestrictions(
+          { nationality: "MYS" },
+          makeProfile(),
+          UNRATED_EVENT("rapid"),
+          NOW,
+          AINA,
+        ),
+      ),
+    ).toBe(
+      "Aina's profile is missing a nationality required for this tournament",
+    );
+  });
+
+  it("names the dependent in a fee tier refusal", async () => {
+    expect(
+      await messageOf(
+        checkFeeTierEligibility(
+          { age_max: 12 },
+          makeProfile({ date_of_birth: DOB_17 }),
+          NOW,
+          UNRATED_EVENT("rapid"),
+          AINA,
+        ),
+      ),
+    ).toBe(
+      "Aina must not turn 12 before the tournament start date for this tier",
+    );
+    expect(
+      await messageOf(
+        checkFeeTierEligibility(
+          { rating_min: 1500 },
+          makeProfile(),
+          NOW,
+          FIDE("rapid"),
+          AINA,
+        ),
+      ),
+    ).toMatch(/and Aina's profile has no FIDE rapid rating$/);
+  });
+
+  it("names the dependent for a missing federation ID", async () => {
+    expect(
+      await messageOf(
+        checkRatedRequirements(
+          { is_fide_rated: false, is_mcf_rated: true },
+          makeProfile(),
+          AINA,
+        ),
+      ),
+    ).toBe(
+      "Aina's profile is missing an MCF ID required for this MCF-rated tournament",
+    );
+  });
+
+  it("still speaks to the player when they register themselves", async () => {
+    expect(
+      await messageOf(
+        checkRatedRequirements(
+          { is_fide_rated: true, is_mcf_rated: false },
+          makeProfile(),
+        ),
+      ),
+    ).toBe(
+      "Your profile is missing a FIDE ID required for this FIDE-rated tournament",
+    );
+  });
+});

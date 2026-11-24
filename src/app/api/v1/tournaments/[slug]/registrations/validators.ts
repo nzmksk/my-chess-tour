@@ -27,6 +27,18 @@ export interface EligibilityProfile {
   nationality: string | null;
 }
 
+export interface PlayerSubject {
+  name: string;
+}
+
+function you(subject: PlayerSubject | null): string {
+  return subject ? subject.name : "You";
+}
+
+function your(subject: PlayerSubject | null): string {
+  return subject ? `${subject.name}'s` : "Your";
+}
+
 export interface FeeTier {
   age_min?: number | null;
   age_max?: number | null;
@@ -111,6 +123,7 @@ export function checkRestrictions(
   profile: EligibilityProfile | null,
   rating: RatingContext,
   startDate: Date,
+  subject: PlayerSubject | null = null,
 ): NextResponse | null {
   if (restrictions.gender != null && profile?.gender !== restrictions.gender) {
     return NextResponse.json(
@@ -132,8 +145,7 @@ export function checkRestrictions(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message:
-              "Your profile is missing a nationality required for this tournament",
+            message: `${your(subject)} profile is missing a nationality required for this tournament`,
           },
         },
         { status: 422 },
@@ -196,7 +208,7 @@ export function checkRestrictions(
         {
           error: {
             code: "ELIGIBILITY_ERROR",
-            message: `Your rating exceeds the maximum allowed (${restrictions.max_rating})`,
+            message: `${your(subject)} rating exceeds the maximum allowed (${restrictions.max_rating})`,
           },
         },
         { status: 422 },
@@ -210,8 +222,7 @@ export function checkRestrictions(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message:
-              "Your player profile is missing a date of birth required for this tournament",
+            message: `${your(subject)} player profile is missing a date of birth required for this tournament`,
           },
         },
         { status: 422 },
@@ -230,7 +241,7 @@ export function checkRestrictions(
         {
           error: {
             code: "ELIGIBILITY_ERROR",
-            message: `You must be at least ${restrictions.min_age} years old on the tournament start date to enter`,
+            message: `${you(subject)} must be at least ${restrictions.min_age} years old on the tournament start date to enter`,
           },
         },
         { status: 422 },
@@ -242,7 +253,7 @@ export function checkRestrictions(
         {
           error: {
             code: "ELIGIBILITY_ERROR",
-            message: `You must not turn ${restrictions.max_age} before the tournament start date to enter`,
+            message: `${you(subject)} must not turn ${restrictions.max_age} before the tournament start date to enter`,
           },
         },
         { status: 422 },
@@ -264,6 +275,7 @@ export function checkFeeTierEligibility(
   profile: EligibilityProfile | null,
   startDate: Date,
   rating: RatingContext,
+  subject: PlayerSubject | null = null,
 ): NextResponse | null {
   if (tier.gender === "female" && profile?.gender !== "female") {
     return NextResponse.json(
@@ -322,7 +334,7 @@ export function checkFeeTierEligibility(
             code: "INVALID_FEE_TIER",
             message:
               playerRating == null
-                ? `This fee tier requires a rating of at least ${tier.rating_min}, and your profile has no ${describeRatingList(rating)} rating`
+                ? `This fee tier requires a rating of at least ${tier.rating_min}, and ${subject ? `${subject.name}'s` : "your"} profile has no ${describeRatingList(rating)} rating`
                 : `This fee tier requires a minimum rating of ${tier.rating_min}`,
           },
         },
@@ -335,7 +347,7 @@ export function checkFeeTierEligibility(
         {
           error: {
             code: "INVALID_FEE_TIER",
-            message: `Your rating exceeds this fee tier's maximum (${tier.rating_max})`,
+            message: `${your(subject)} rating exceeds this fee tier's maximum (${tier.rating_max})`,
           },
         },
         { status: 400 },
@@ -349,8 +361,7 @@ export function checkFeeTierEligibility(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message:
-              "Your player profile is missing a date of birth required for this fee tier",
+            message: `${your(subject)} player profile is missing a date of birth required for this fee tier`,
           },
         },
         { status: 422 },
@@ -369,7 +380,7 @@ export function checkFeeTierEligibility(
         {
           error: {
             code: "INVALID_FEE_TIER",
-            message: `You must be at least ${tier.age_min} years old on the tournament start date for this tier`,
+            message: `${you(subject)} must be at least ${tier.age_min} years old on the tournament start date for this tier`,
           },
         },
         { status: 400 },
@@ -381,7 +392,7 @@ export function checkFeeTierEligibility(
         {
           error: {
             code: "INVALID_FEE_TIER",
-            message: `You must not turn ${tier.age_max} before the tournament start date for this tier`,
+            message: `${you(subject)} must not turn ${tier.age_max} before the tournament start date for this tier`,
           },
         },
         { status: 400 },
@@ -401,14 +412,14 @@ export function checkFeeTierEligibility(
 export function checkRatedRequirements(
   flags: { is_fide_rated: boolean; is_mcf_rated: boolean },
   profile: EligibilityProfile | null,
+  subject: PlayerSubject | null = null,
 ): NextResponse | null {
   if (flags.is_fide_rated && profile?.fide_id == null) {
     return NextResponse.json(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message:
-            "Your profile is missing a FIDE ID required for this FIDE-rated tournament",
+          message: `${your(subject)} profile is missing a FIDE ID required for this FIDE-rated tournament`,
         },
       },
       { status: 422 },
@@ -420,8 +431,7 @@ export function checkRatedRequirements(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message:
-            "Your profile is missing an MCF ID required for this MCF-rated tournament",
+          message: `${your(subject)} profile is missing an MCF ID required for this MCF-rated tournament`,
         },
       },
       { status: 422 },
