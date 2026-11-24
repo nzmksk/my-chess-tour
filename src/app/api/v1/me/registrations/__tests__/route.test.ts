@@ -48,6 +48,14 @@ vi.mock("@/services/supabase/admin", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
+const { mockListDependents } = vi.hoisted(() => ({
+  mockListDependents: vi.fn(),
+}));
+
+vi.mock("@/services/guardianship/dependents", () => ({
+  listDependents: mockListDependents,
+}));
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -109,6 +117,7 @@ describe("GET /api/v1/me/registrations", () => {
       data: { claims: { sub: AUTHENTICATED_USER.id } },
     });
     mockRpc.mockResolvedValue({ data: [], error: null });
+    mockListDependents.mockResolvedValue({ ok: true, data: [] });
     setQueryResult([]);
   });
 
@@ -132,11 +141,71 @@ describe("GET /api/v1/me/registrations", () => {
 
       await GET(makeRequest());
 
-      const eqMock = mockRegistrationsBuilder.eq as ReturnType<typeof vi.fn>;
-      expect(eqMock).toHaveBeenCalledWith(
-        "user_id",
+      const inMock = mockRegistrationsBuilder.in as ReturnType<typeof vi.fn>;
+      expect(inMock).toHaveBeenCalledWith("user_id", [
+        appIdFor(AUTHENTICATED_USER.id),
+      ]);
+    });
+  });
+
+  describe("dependents", () => {
+    const DEPENDENT_ID = "dependent-1";
+
+    beforeEach(() => {
+      mockListDependents.mockResolvedValue({
+        ok: true,
+        data: [{ id: DEPENDENT_ID, first_name: "Aina", last_name: "Rahman" }],
+      });
+    });
+
+    it("lists the caller's and their active dependents' registrations", async () => {
+      await GET(makeRequest());
+
+      expect(mockListDependents).toHaveBeenCalledWith(
         appIdFor(AUTHENTICATED_USER.id),
       );
+      const inMock = mockRegistrationsBuilder.in as ReturnType<typeof vi.fn>;
+      expect(inMock).toHaveBeenCalledWith("user_id", [
+        appIdFor(AUTHENTICATED_USER.id),
+        DEPENDENT_ID,
+      ]);
+    });
+
+    it("expires each player's lapsed checkouts", async () => {
+      await GET(makeRequest());
+
+      const swept = mockRpc.mock.calls
+        .filter(([fn]) => fn === "expire_stale_pending_payments")
+        .map(([, args]) => (args as { p_user_id: string }).p_user_id);
+      expect(swept).toEqual([appIdFor(AUTHENTICATED_USER.id), DEPENDENT_ID]);
+    });
+
+    it("labels a dependent's registration with the player's name", async () => {
+      setQueryResult([
+        makeRegistration({ id: "own", user_id: appIdFor(AUTHENTICATED_USER.id) }),
+        makeRegistration({ id: "theirs", user_id: DEPENDENT_ID }),
+      ]);
+
+      const res = await GET(makeRequest());
+      const json = await res.json();
+      const byId = Object.fromEntries(
+        json.data.map((r: { id: string }) => [r.id, r]),
+      );
+
+      expect(byId.own.participant).toBeNull();
+      expect(byId.theirs.participant).toEqual({
+        id: DEPENDENT_ID,
+        name: "Aina Rahman",
+      });
+    });
+
+    it("returns 500 when the dependents can't be loaded", async () => {
+      mockListDependents.mockResolvedValue({ ok: false, error: { message: "boom" } });
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const res = await GET(makeRequest());
+
+      expect(res.status).toBe(500);
     });
   });
 
@@ -376,7 +445,7 @@ describe("GET /api/v1/me/registrations", () => {
       await GET(makeRequest());
 
       const inMock = mockRegistrationsBuilder.in as ReturnType<typeof vi.fn>;
-      expect(inMock).not.toHaveBeenCalled();
+      expect(inMock).not.toHaveBeenCalledWith("status", expect.anything());
     });
   });
 

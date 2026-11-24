@@ -10,6 +10,7 @@ export type RegistrationStatus =
 
 export interface PlayerRegistration {
   id: string;
+  participant: { id: string; name: string } | null;
   tournament: {
     id: string;
     slug: string;
