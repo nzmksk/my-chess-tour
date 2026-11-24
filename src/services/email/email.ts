@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Resend } from "resend";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL!;
@@ -58,18 +59,41 @@ export async function sendPasswordResetEmail(email: string, resetLink: string) {
 
 export async function sendTournamentCancellationEmail(
   email: string,
-  params: { playerName: string; tournamentName: string },
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    aboutPlayer?: string | null;
+  },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const about = params.aboutPlayer ?? null;
   const html = loadTemplate("tournament-cancellation.html")
-    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(
+      /\{\{lead\}\}/g,
+      escapeHtml(
+        about
+          ? `We're sorry to let you know that ${about}'s tournament`
+          : "We're sorry to let you know that",
+      ),
+    )
+    .replace(
+      /\{\{footerReason\}\}/g,
+      escapeHtml(
+        about
+          ? `You received this email because ${about} was registered for`
+          : "You received this email because you were registered for",
+      ),
+    )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
     .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/`);
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: email,
-    subject: `${params.tournamentName} has been cancelled`,
+    subject: about
+      ? `${params.tournamentName}, which ${about} entered, has been cancelled`
+      : `${params.tournamentName} has been cancelled`,
     html,
   });
 
@@ -278,20 +302,44 @@ export async function sendPrizeAwardedEmail(
     amountCents: number;
     accountLast4: string | null;
     accountRejected?: boolean;
+    aboutPlayer?: string | null;
+    canActInSettings?: boolean;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const settingsUrl = `${siteUrl}/settings`;
   const last4 = params.accountLast4?.replace(/\D/g, "").slice(-4) || null;
+  const about = params.aboutPlayer ?? null;
+  const selfService = !about && params.canActInSettings !== false;
 
-  const bankLine = params.accountRejected
-    ? "Your bank account couldn't be verified. Please check your bank details in Settings so we can send your prize."
-    : last4
-      ? `It will be sent to your account ending in ${last4}.`
-      : "Please add your bank details in Settings so we can send your prize.";
-  const needsAction = params.accountRejected || !last4;
+  const bankLine = !selfService
+    ? last4
+      ? `It will be sent to the account ending in ${last4}.`
+      : "We will contact you about where to send the prize."
+    : params.accountRejected
+      ? "Your bank account couldn't be verified. Please check your bank details in Settings so we can send your prize."
+      : last4
+        ? `It will be sent to your account ending in ${last4}.`
+        : "Please add your bank details in Settings so we can send your prize.";
+  const needsAction = selfService && (params.accountRejected || !last4);
 
   const html = loadTemplate("prize-awarded.html")
+    .replace(
+      /\{\{lead\}\}/g,
+      escapeHtml(
+        about
+          ? `Congratulations! ${about} has been awarded`
+          : "Congratulations! You have been awarded",
+      ),
+    )
+    .replace(
+      /\{\{footerReason\}\}/g,
+      escapeHtml(
+        about
+          ? `You received this email because ${about} won a prize in a tournament`
+          : "You received this email because you won a prize in a tournament",
+      ),
+    )
     .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
     .replace(/\{\{prizeName\}\}/g, escapeHtml(params.prizeName))
@@ -301,9 +349,11 @@ export async function sendPrizeAwardedEmail(
     .replace(/\{\{ctaLabel\}\}/g, needsAction ? "Add Bank Details" : "View Settings")
     .replace(/\{\{settingsUrl\}\}/g, settingsUrl);
 
-  const subject = needsAction
-    ? `Action needed: add your bank details to receive your prize from ${params.tournamentName}`
-    : `You've been awarded a prize at ${params.tournamentName}`;
+  const subject = about
+    ? `${about} has been awarded a prize at ${params.tournamentName}`
+    : needsAction
+      ? `Action needed: add your bank details to receive your prize from ${params.tournamentName}`
+      : `You've been awarded a prize at ${params.tournamentName}`;
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
@@ -327,14 +377,25 @@ export async function sendPrizePaidEmail(
     amountCents: number;
     accountLast4: string;
     receiptUrl?: string | null;
+    aboutPlayer?: string | null;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const settingsUrl = `${siteUrl}/settings`;
   const receiptUrl = safeHttpsUrl(params.receiptUrl);
   const last4 = params.accountLast4.replace(/\D/g, "").slice(-4);
+  const about = params.aboutPlayer ?? null;
 
   const html = loadTemplate("prize-paid.html")
+    .replace(/\{\{lead\}\}/g, escapeHtml(about ? `${about}'s prize for` : "Your prize for"))
+    .replace(
+      /\{\{footerReason\}\}/g,
+      escapeHtml(
+        about
+          ? `You received this email because ${about} won a prize in a tournament`
+          : "You received this email because you won a prize in a tournament",
+      ),
+    )
     .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
     .replace(/\{\{prizeName\}\}/g, escapeHtml(params.prizeName))
@@ -347,7 +408,9 @@ export async function sendPrizePaidEmail(
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: email,
-    subject: `Your prize from ${params.tournamentName} has been sent`,
+    subject: about
+      ? `${about}'s prize from ${params.tournamentName} has been sent`
+      : `Your prize from ${params.tournamentName} has been sent`,
     html,
   });
 
@@ -760,13 +823,50 @@ export async function sendOkuReviewEmail(
     recipientName: string;
     verified: boolean;
     rejectionReason?: string;
+    aboutPlayer?: string | null;
+    canActInSettings?: boolean;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const about = params.aboutPlayer ?? null;
+  const selfService = !about && params.canActInSettings !== false;
 
   const template = params.verified ? "oku-verified.html" : "oku-rejected.html";
 
+  const lead = params.verified
+    ? about
+      ? `We have checked ${about}'s OKU card, and their OKU status is now verified.`
+      : "We have checked the OKU card you uploaded, and your OKU status is now verified."
+    : about
+      ? `We were unable to verify ${about}'s OKU card.`
+      : "We were unable to verify the OKU card you uploaded.";
+
   let html = loadTemplate(template)
+    .replace(/\{\{lead\}\}/g, escapeHtml(lead))
+    .replace(
+      /\{\{retryLine\}\}/g,
+      escapeHtml(
+        selfService
+          ? "You can upload a new copy of your card from your settings and we will review it again."
+          : `To send a new copy of ${about ? `${about}'s` : "your"} card, email ${SUPPORT_EMAIL} and we will review it again.`,
+      ),
+    )
+    .replace(
+      /\{\{ctaUrl\}\}/g,
+      selfService ? `${siteUrl}/settings` : `mailto:${SUPPORT_EMAIL}`,
+    )
+    .replace(
+      /\{\{ctaLabel\}\}/g,
+      selfService ? "Upload Again" : "Contact Support",
+    )
+    .replace(
+      /\{\{footerReason\}\}/g,
+      escapeHtml(
+        about
+          ? `You received this email because an OKU card for ${about} was submitted for verification`
+          : "You received this email because you submitted an OKU card for verification",
+      ),
+    )
     .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{settingsUrl\}\}/g, `${siteUrl}/settings`)
     .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/`);
@@ -779,8 +879,12 @@ export async function sendOkuReviewEmail(
   }
 
   const subject = params.verified
-    ? "Your OKU status is verified"
-    : "We couldn't verify your OKU card";
+    ? about
+      ? `${about}'s OKU status is verified`
+      : "Your OKU status is verified"
+    : about
+      ? `We couldn't verify ${about}'s OKU card`
+      : "We couldn't verify your OKU card";
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
@@ -798,21 +902,35 @@ export async function sendOkuReviewEmail(
 export async function sendRegistrationConfirmationEmail(
   email: string,
   params: {
-    playerName: string;
+    recipientName: string;
     tournamentName: string;
     tournamentSlug: string | null;
     tournamentDates: string;
     venue: string;
     feePaidCents: number;
+    aboutPlayer?: string | null;
   },
 ) {
+  const about = params.aboutPlayer ?? null;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const tournamentUrl = params.tournamentSlug
     ? `${siteUrl}/tournaments/${encodeURIComponent(params.tournamentSlug)}`
     : `${siteUrl}/`;
 
   const html = loadTemplate("registration-confirmed.html")
-    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(
+      /\{\{lead\}\}/g,
+      escapeHtml(about ? `${about} is registered for` : "You are registered for"),
+    )
+    .replace(
+      /\{\{footerReason\}\}/g,
+      escapeHtml(
+        about
+          ? `You received this email because you look after ${about}'s entries`
+          : "You received this email because you registered for a tournament",
+      ),
+    )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
     .replace(/\{\{tournamentDates\}\}/g, escapeHtml(params.tournamentDates))
     .replace(/\{\{venue\}\}/g, escapeHtml(params.venue))
@@ -826,7 +944,9 @@ export async function sendRegistrationConfirmationEmail(
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: email,
-    subject: `You're registered for ${params.tournamentName}`,
+    subject: about
+      ? `${about} is registered for ${params.tournamentName}`
+      : `You're registered for ${params.tournamentName}`,
     html,
   });
 
@@ -841,19 +961,39 @@ export async function sendRegistrationConfirmationEmail(
 export async function sendRefundOutcomeEmail(
   email: string,
   params: {
-    playerName: string;
+    recipientName: string;
     tournamentName: string;
     amountCents: number;
     paymentMethod: string;
     completed: boolean;
+    aboutPlayer?: string | null;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const about = params.aboutPlayer ?? null;
+  const amount = formatRinggit(params.amountCents);
+
+  const lead = params.completed
+    ? about
+      ? `The refund for ${about}'s entry to`
+      : "Your refund for"
+    : about
+      ? `We tried to refund ${amount} for ${about}'s entry to`
+      : `We tried to refund ${amount} for`;
 
   const html = loadTemplate(
     params.completed ? "refund-completed.html" : "refund-failed.html",
   )
-    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(/\{\{lead\}\}/g, escapeHtml(lead))
+    .replace(
+      /\{\{footerReason\}\}/g,
+      escapeHtml(
+        about
+          ? `You received this email because you paid for ${about}'s entry to`
+          : "You received this email because you were registered for",
+      ),
+    )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
     .replace(/\{\{amount\}\}/g, formatRinggit(params.amountCents))
     .replace(/\{\{paymentMethod\}\}/g, escapeHtml(params.paymentMethod))
@@ -861,8 +1001,12 @@ export async function sendRefundOutcomeEmail(
     .replace(/\{\{siteUrl\}\}/g, siteUrl);
 
   const subject = params.completed
-    ? `Your refund for ${params.tournamentName} is on its way`
-    : `Action needed: your refund for ${params.tournamentName} was not completed`;
+    ? about
+      ? `The refund for ${about}'s entry to ${params.tournamentName} is on its way`
+      : `Your refund for ${params.tournamentName} is on its way`
+    : about
+      ? `Action needed: the refund for ${about}'s entry to ${params.tournamentName} was not completed`
+      : `Action needed: your refund for ${params.tournamentName} was not completed`;
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,

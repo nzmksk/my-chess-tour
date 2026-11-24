@@ -79,6 +79,31 @@ vi.mock("@/services/email/email", () => ({
   sendCancellationReviewEmail: mockSendReviewEmail,
 }));
 
+const { mockLoadContactsFor } = vi.hoisted(() => ({
+  mockLoadContactsFor: vi.fn(),
+}));
+vi.mock("@/services/email/participant-recipients", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/email/participant-recipients")>()),
+  loadParticipantRecipientsFor: mockLoadContactsFor,
+}));
+
+function contactsOf(
+  participantName: string,
+  guardians: Array<[string, string]>,
+  own: Array<[string, string]> = [],
+) {
+  return {
+    participantName,
+    recipients: new Map(
+      [...guardians, ...own].map(([email, name]) => [
+        email.toLowerCase(),
+        { email, name },
+      ]),
+    ),
+    participantAddresses: new Set(own.map(([email]) => email.toLowerCase())),
+  };
+}
+
 const { mockNotifyRefund } = vi.hoisted(() => ({ mockNotifyRefund: vi.fn() }));
 vi.mock("@/services/refunds/notify", () => ({
   notifyRefundSettlement: mockNotifyRefund,
@@ -183,11 +208,17 @@ beforeEach(() => {
   };
   mockRegistrationsBuilder.result = {
     data: [
-      { user: { email: "ali@example.com", first_name: "Ali" } },
-      { user: { email: "siti@example.com", first_name: "Siti" } },
+      { user_id: "ali-id", payment: null },
+      { user_id: "siti-id", payment: null },
     ],
     error: null,
   };
+  mockLoadContactsFor.mockResolvedValue(
+    new Map([
+      ["ali-id", contactsOf("Ali Hassan", [], [["ali@example.com", "Ali"]])],
+      ["siti-id", contactsOf("Siti Aminah", [], [["siti@example.com", "Siti"]])],
+    ]),
+  );
   mockMembershipsBuilder.result = {
     data: [
       {
@@ -361,14 +392,60 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
       "confirmed",
       "pending_payment",
     ]);
+    expect(mockLoadContactsFor).toHaveBeenCalledWith(["ali-id", "siti-id"]);
     expect(mockSendCancellationEmail).toHaveBeenCalledTimes(2);
     expect(mockSendCancellationEmail).toHaveBeenCalledWith("ali@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
+      aboutPlayer: null,
     });
     expect(mockSendCancellationEmail).toHaveBeenCalledWith("siti@example.com", {
-      playerName: "Siti",
+      recipientName: "Siti",
       tournamentName: "KL Open 2026",
+      aboutPlayer: null,
+    });
+  });
+
+  it("emails a dependent's guardians and payer, naming the dependent (#716)", async () => {
+    mockRegistrationsBuilder.result = {
+      data: [
+        {
+          user_id: "aina-id",
+          payment: { payer: { email: "mum@example.com", first_name: "Siti" } },
+        },
+        {
+          user_id: "aina-sister-id",
+          payment: { payer: { email: "uncle@example.com", first_name: "Hadi" } },
+        },
+      ],
+      error: null,
+    };
+    mockLoadContactsFor.mockResolvedValue(
+      new Map([
+        ["aina-id", contactsOf("Aina Rahman", [["mum@example.com", "Siti"]])],
+        ["aina-sister-id", contactsOf("Nur Rahman", [["mum@example.com", "Siti"]])],
+      ]),
+    );
+    await PATCH(makeRequest({ action: "approve" }), {
+      params: Promise.resolve({ id: REQ_ID }),
+    });
+    await runAfterCallbacks();
+
+    expect(mockSendCancellationEmail).toHaveBeenCalledTimes(3);
+    expect(mockSendCancellationEmail).toHaveBeenCalledWith("mum@example.com", {
+      recipientName: "Siti",
+      tournamentName: "KL Open 2026",
+      aboutPlayer: "Aina Rahman",
+    });
+    expect(mockSendCancellationEmail).toHaveBeenCalledWith("mum@example.com", {
+      recipientName: "Siti",
+      tournamentName: "KL Open 2026",
+      aboutPlayer: "Nur Rahman",
+    });
+    expect(mockSendCancellationEmail).toHaveBeenCalledWith("uncle@example.com", {
+      recipientName: "Hadi",
+      tournamentName: "KL Open 2026",
+      aboutPlayer: "Nur Rahman",
     });
   });
 
@@ -389,12 +466,18 @@ describe("PATCH /api/v1/admin/tournament-cancellations/[id]", () => {
   it("skips registrations with no linked user or email", async () => {
     mockRegistrationsBuilder.result = {
       data: [
-        { user: { email: "ali@example.com", first_name: "Ali" } },
-        { user: null },
-        { user: { email: null, first_name: "Ghost" } },
+        { user_id: "ali-id", payment: null },
+        { user_id: null, payment: null },
+        { user_id: "ghost-id", payment: null },
       ],
       error: null,
     };
+    mockLoadContactsFor.mockResolvedValue(
+      new Map([
+        ["ali-id", contactsOf("Ali Hassan", [], [["ali@example.com", "Ali"]])],
+        ["ghost-id", contactsOf("Ghost", [])],
+      ]),
+    );
     await PATCH(makeRequest({ action: "approve" }), {
       params: Promise.resolve({ id: REQ_ID }),
     });

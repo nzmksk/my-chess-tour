@@ -44,9 +44,12 @@ function givenRefund(overrides: Record<string, unknown> = {}) {
       data: {
         refund_amount_cents: 11000,
         registration: {
+          user_id: "farid-id",
+          participant: { first_name: "Farid", last_name: "Hamzah" },
           tournament: { name: "KL Open" },
           payment: {
             payment_method: "razer_grabpay",
+            user_id: "farid-id",
             payer: { email: "farid@example.com", first_name: "Farid" },
           },
         },
@@ -70,12 +73,35 @@ describe("notifyRefundSettlement", () => {
     await notifyRefundSettlement(REFUND, { newly_settled: true, newly_failed: false });
 
     expect(mockSendOutcome).toHaveBeenCalledWith("farid@example.com", {
-      playerName: "Farid",
+      recipientName: "Farid",
+      aboutPlayer: null,
       tournamentName: "KL Open",
       amountCents: 11000,
       paymentMethod: "GrabPay",
       completed: true,
     });
+  });
+
+  it("emails a guardian who paid, naming the dependent (#716)", async () => {
+    givenRefund({
+      registration: {
+        user_id: "aina-id",
+        participant: { first_name: "Aina", last_name: "Rahman" },
+        tournament: { name: "KL Open" },
+        payment: {
+          payment_method: "fpx_b2c",
+          user_id: "siti-id",
+          payer: { email: "mum@example.com", first_name: "Siti" },
+        },
+      },
+    });
+    await notifyRefundSettlement(REFUND, { newly_settled: true });
+
+    expect(mockSendOutcome).toHaveBeenCalledTimes(1);
+    expect(mockSendOutcome).toHaveBeenCalledWith(
+      "mum@example.com",
+      expect.objectContaining({ recipientName: "Siti", aboutPlayer: "Aina Rahman" }),
+    );
   });
 
   it("reads the address from the refunded payment's payer, not the registration", async () => {
@@ -85,7 +111,7 @@ describe("notifyRefundSettlement", () => {
     const builder = mockFrom.mock.results[0].value as { select: ReturnType<typeof vi.fn> };
     const columns = (builder.select.mock.calls[0][0] as string).replace(/\s+/g, " ");
     expect(columns).toContain(
-      "payment:payments!current_payment_id( payment_method, payer:users!user_id(email, first_name) )",
+      "payment:payments!current_payment_id( payment_method, user_id, payer:users!user_id(email, first_name) )",
     );
     expect(columns).not.toMatch(/registrations!registration_id\( user:/);
   });
@@ -115,9 +141,12 @@ describe("notifyRefundSettlement", () => {
   it("falls back when the name, tournament and payment method are missing", async () => {
     givenRefund({
       registration: {
+        user_id: "farid-id",
+        participant: null,
         tournament: null,
         payment: {
           payment_method: null,
+          user_id: "farid-id",
           payer: { email: "farid@example.com", first_name: null },
         },
       },
@@ -125,7 +154,8 @@ describe("notifyRefundSettlement", () => {
     await notifyRefundSettlement(REFUND, { newly_settled: true });
 
     expect(mockSendOutcome).toHaveBeenCalledWith("farid@example.com", {
-      playerName: "Player",
+      recipientName: "Player",
+      aboutPlayer: null,
       tournamentName: "your tournament",
       amountCents: 11000,
       paymentMethod: "your original payment method",

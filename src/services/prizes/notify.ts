@@ -5,6 +5,11 @@ import {
   sendPrizePaidEmail,
 } from "@/services/email/email";
 import { sendToAll, type EmailRecipient } from "@/services/email/recipients";
+import {
+  canActInSettings,
+  loadParticipantRecipients,
+  nameForRecipient,
+} from "@/services/email/participant-recipients";
 import { loadPlatformAdminRecipients } from "@/services/payouts/recipients";
 
 export function prizeLabel(category: string, place: string | null): string {
@@ -20,7 +25,6 @@ interface AwardEmailRow {
   chip_receipt_url: string | null;
   user_id: string | null;
   tournament: { name: string | null } | null;
-  winner: { email: string | null; first_name: string | null } | null;
   bank: { account_number: string } | null;
 }
 
@@ -30,7 +34,6 @@ async function loadAward(awardId: string): Promise<AwardEmailRow | null> {
     .select(
       `id, category, place, amount_cents, settled_amount_cents, chip_receipt_url, user_id,
        tournament:tournaments(name),
-       winner:users!user_id(email, first_name),
        bank:player_bank_accounts!bank_account_id(account_number)`,
     )
     .eq("id", awardId)
@@ -48,10 +51,11 @@ export async function notifyPrizeAwarded(
 ): Promise<void> {
   try {
     const award = await loadAward(awardId);
-    if (!award) return;
-    const email = award.winner?.email;
-    if (!email || !award.user_id) {
-      console.warn(`Prize award ${awardId}: the winner has no email; not notified`);
+    if (!award?.user_id) return;
+    const contacts = await loadParticipantRecipients(award.user_id);
+    if (!contacts) return;
+    if (contacts.recipients.size === 0) {
+      console.warn(`Prize award ${awardId}: nobody to email about the winner; not notified`);
       return;
     }
 
@@ -64,14 +68,21 @@ export async function notifyPrizeAwarded(
     const account = bank as { account_number: string; status: string } | null;
     const rejected = accountRejected || account?.status === "rejected";
 
-    await sendPrizeAwardedEmail(email, {
-      recipientName: award.winner?.first_name ?? "there",
-      tournamentName: award.tournament?.name ?? "your tournament",
-      prizeName: prizeLabel(award.category, award.place),
-      amountCents: award.amount_cents,
-      accountLast4: rejected || !account ? null : account.account_number.slice(-4),
-      accountRejected: rejected,
-    });
+    await sendToAll(
+      contacts.recipients,
+      (r) =>
+        sendPrizeAwardedEmail(r.email, {
+          recipientName: r.name,
+          tournamentName: award.tournament?.name ?? "your tournament",
+          prizeName: prizeLabel(award.category, award.place),
+          amountCents: award.amount_cents,
+          accountLast4: rejected || !account ? null : account.account_number.slice(-4),
+          accountRejected: rejected,
+          aboutPlayer: nameForRecipient(contacts, r),
+          canActInSettings: canActInSettings(contacts, r),
+        }),
+      `prize awarded email(s) for award ${awardId}`,
+    );
   } catch (err) {
     console.error(
       `Prize award ${awardId}: awarded email failed`,
@@ -83,20 +94,27 @@ export async function notifyPrizeAwarded(
 export async function notifyPrizePaid(awardId: string): Promise<void> {
   try {
     const award = await loadAward(awardId);
-    if (!award) return;
-    const email = award.winner?.email;
-    if (!email) {
-      console.warn(`Prize award ${awardId}: the winner has no email; not notified`);
+    if (!award?.user_id) return;
+    const contacts = await loadParticipantRecipients(award.user_id);
+    if (!contacts) return;
+    if (contacts.recipients.size === 0) {
+      console.warn(`Prize award ${awardId}: nobody to email about the winner; not notified`);
       return;
     }
-    await sendPrizePaidEmail(email, {
-      recipientName: award.winner?.first_name ?? "there",
-      tournamentName: award.tournament?.name ?? "your tournament",
-      prizeName: prizeLabel(award.category, award.place),
-      amountCents: award.settled_amount_cents ?? award.amount_cents,
-      accountLast4: award.bank?.account_number.slice(-4) ?? "",
-      receiptUrl: award.chip_receipt_url,
-    });
+    await sendToAll(
+      contacts.recipients,
+      (r) =>
+        sendPrizePaidEmail(r.email, {
+          recipientName: r.name,
+          tournamentName: award.tournament?.name ?? "your tournament",
+          prizeName: prizeLabel(award.category, award.place),
+          amountCents: award.settled_amount_cents ?? award.amount_cents,
+          accountLast4: award.bank?.account_number.slice(-4) ?? "",
+          receiptUrl: award.chip_receipt_url,
+          aboutPlayer: nameForRecipient(contacts, r),
+        }),
+      `prize paid email(s) for award ${awardId}`,
+    );
   } catch (err) {
     console.error(
       `Prize award ${awardId}: paid email failed`,

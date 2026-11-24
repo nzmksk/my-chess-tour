@@ -177,11 +177,25 @@ describe("sendPasswordResetEmail", () => {
 });
 
 describe("sendTournamentCancellationEmail", () => {
+  it("names the dependent to a guardian (#716)", async () => {
+    await sendTournamentCancellationEmail("g@example.com", {
+      recipientName: "Siti",
+      tournamentName: "KL Open 2026",
+      aboutPlayer: "Aina Rahman",
+    });
+
+    const { html, subject } = mockSend.mock.calls[0][0];
+    expect(subject).toBe("KL Open 2026, which Aina Rahman entered, has been cancelled");
+    expect(html).toContain("Dear Siti,");
+    expect(html).toContain("let you know that Aina Rahman&#39;s tournament KL Open 2026");
+    expect(html).toContain("because Aina Rahman was registered for");
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "<html>Dear {{playerName}}, {{tournamentName}} cancelled. " +
-        '<a href="{{browseUrl}}">browse</a></html>',
+      "<html>Dear {{recipientName}}, {{lead}} {{tournamentName}} cancelled. " +
+        '<a href="{{browseUrl}}">browse</a> {{footerReason}}</html>',
     );
     mockSend.mockResolvedValue({ error: null });
     process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
@@ -189,7 +203,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("loads the tournament-cancellation.html template", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -201,7 +215,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("injects player name, tournament name, and browse URL", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -209,14 +223,14 @@ describe("sendTournamentCancellationEmail", () => {
     expect(html).toContain("Ali");
     expect(html).toContain("KL Open 2026");
     expect(html).toContain('href="https://mychesstour.com/"');
-    expect(html).not.toContain("{{playerName}}");
+    expect(html).not.toContain("{{recipientName}}");
     expect(html).not.toContain("{{tournamentName}}");
     expect(html).not.toContain("{{browseUrl}}");
   });
 
   it("escapes HTML in user-supplied values to prevent injection", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "<script>x</script>",
+      recipientName: "<script>x</script>",
       tournamentName: "Rook & Roll <b>2026</b>",
     });
 
@@ -228,7 +242,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("sends to the correct email address", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -239,7 +253,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("includes the tournament name in the subject", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -253,7 +267,7 @@ describe("sendTournamentCancellationEmail", () => {
 
     await expect(
       sendTournamentCancellationEmail("player@example.com", {
-        playerName: "Ali",
+        recipientName: "Ali",
         tournamentName: "KL Open 2026",
       }),
     ).rejects.toThrow(/sending failed/i);
@@ -262,7 +276,7 @@ describe("sendTournamentCancellationEmail", () => {
   it("resolves without a value when send succeeds", async () => {
     await expect(
       sendTournamentCancellationEmail("player@example.com", {
-        playerName: "Ali",
+        recipientName: "Ali",
         tournamentName: "KL Open 2026",
       }),
     ).resolves.toBeUndefined();
@@ -803,7 +817,7 @@ describe("sendOkuReviewEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "{{recipientName}}|{{settingsUrl}}|{{browseUrl}}|{{rejectionReason}}",
+      "{{recipientName}}|{{settingsUrl}}|{{browseUrl}}|{{rejectionReason}}|{{lead}}|{{retryLine}}|{{footerReason}}|{{ctaUrl}}|{{ctaLabel}}",
     );
     mockSend.mockResolvedValue({ error: null });
   });
@@ -842,6 +856,56 @@ describe("sendOkuReviewEmail", () => {
     expect(sent().html).toContain("&lt;i&gt;F&lt;/i&gt;");
   });
 
+  it("names the dependent to a guardian when verified (#716)", async () => {
+    await sendOkuReviewEmail("g@example.com", {
+      recipientName: "Siti",
+      verified: true,
+      aboutPlayer: "Aina Rahman",
+    });
+    expect(sent().subject).toBe("Aina Rahman's OKU status is verified");
+    expect(sent().html).toContain(
+      "We have checked Aina Rahman&#39;s OKU card, and their OKU status is now verified.",
+    );
+    expect(sent().html).toContain("an OKU card for Aina Rahman was submitted");
+  });
+
+  it("names the dependent to a guardian when rejected (#716)", async () => {
+    await sendOkuReviewEmail("g@example.com", {
+      recipientName: "Siti",
+      verified: false,
+      rejectionReason: "Blurry",
+      aboutPlayer: "Aina Rahman",
+    });
+    expect(sent().subject).toBe("We couldn't verify Aina Rahman's OKU card");
+    expect(sent().html).toContain("We were unable to verify Aina Rahman&#39;s OKU card.");
+    expect(sent().html).toContain(
+      "To send a new copy of Aina Rahman&#39;s card, email support@mychesstour.com",
+    );
+    expect(sent().html).toContain("|mailto:support@mychesstour.com|Contact Support");
+  });
+
+  it("sends the player to Settings to upload again", async () => {
+    await sendOkuReviewEmail("p@example.com", {
+      recipientName: "Farid",
+      verified: false,
+      rejectionReason: "Blurry",
+    });
+    expect(sent().html).toContain("from your settings");
+    expect(sent().html).toMatch(/\|https?:\/\/[^|]+\/settings\|Upload Again$/);
+  });
+
+  it("sends a player who can't sign in to support instead (#716)", async () => {
+    await sendOkuReviewEmail("b@example.com", {
+      recipientName: "Badrul",
+      verified: false,
+      rejectionReason: "Blurry",
+      canActInSettings: false,
+    });
+    expect(sent().subject).toBe("We couldn't verify your OKU card");
+    expect(sent().html).toContain("To send a new copy of your card, email support@mychesstour.com");
+    expect(sent().html).not.toContain("from your settings");
+  });
+
   it("throws when the send fails", async () => {
     mockSend.mockResolvedValue({ error: { message: "nope" } });
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -853,7 +917,7 @@ describe("sendOkuReviewEmail", () => {
 
 describe("sendRegistrationConfirmationEmail", () => {
   const base = {
-    playerName: "Farid",
+    recipientName: "Farid",
     tournamentName: "KL Open",
     tournamentSlug: "kl-open-2026",
     tournamentDates: "10 Aug – 12 Aug 2026 (MYT)",
@@ -864,7 +928,7 @@ describe("sendRegistrationConfirmationEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "{{playerName}}|{{tournamentName}}|{{tournamentDates}}|{{venue}}|{{feePaid}}|{{tournamentUrl}}|{{siteUrl}}",
+      "{{recipientName}}|{{tournamentName}}|{{tournamentDates}}|{{venue}}|{{feePaid}}|{{tournamentUrl}}|{{siteUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
   });
@@ -908,6 +972,25 @@ describe("sendRegistrationConfirmationEmail", () => {
     mockSend.mockResolvedValue({ error: { message: "nope" } });
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(sendRegistrationConfirmationEmail("p@example.com", base)).rejects.toThrow(/nope/);
+  });
+
+  it("speaks to the player when they are the recipient", async () => {
+    await sendRegistrationConfirmationEmail("p@example.com", base);
+    expect(sent().html).toContain(
+      "|You are registered for|You received this email because you registered for a tournament",
+    );
+  });
+
+  it("names the dependent to a guardian (#716)", async () => {
+    await sendRegistrationConfirmationEmail("g@example.com", {
+      ...base,
+      recipientName: "Siti",
+      aboutPlayer: "Aina <Rahman>",
+    });
+    expect(sent().subject).toBe("Aina <Rahman> is registered for KL Open");
+    expect(sent().html).toMatch(/^Siti\|/);
+    expect(sent().html).toContain("|Aina &lt;Rahman&gt; is registered for|");
+    expect(sent().html).toContain("you look after Aina &lt;Rahman&gt;&#39;s entries");
   });
 });
 
@@ -973,7 +1056,7 @@ describe("sendNominationResponseEmail", () => {
 
 describe("sendRefundOutcomeEmail", () => {
   const base = {
-    playerName: "Farid",
+    recipientName: "Farid",
     tournamentName: "KL Open",
     amountCents: 11000,
     paymentMethod: "GrabPay",
@@ -982,7 +1065,7 @@ describe("sendRefundOutcomeEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "{{playerName}}|{{tournamentName}}|{{amount}}|{{paymentMethod}}|{{dashboardUrl}}|{{siteUrl}}",
+      "{{recipientName}}|{{tournamentName}}|{{amount}}|{{paymentMethod}}|{{dashboardUrl}}|{{siteUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
   });
@@ -1007,12 +1090,42 @@ describe("sendRefundOutcomeEmail", () => {
       "utf-8",
     );
     expect(sent().subject).toMatch(/^Action needed: your refund for KL Open/);
+    expect(sent().html).toContain("|We tried to refund RM 110.00 for|");
+  });
+
+  it("names the dependent whose entry the payer is refunded for (#716)", async () => {
+    await sendRefundOutcomeEmail("g@example.com", {
+      ...base,
+      recipientName: "Siti",
+      aboutPlayer: "Aina Rahman",
+      completed: true,
+    });
+    expect(sent().subject).toBe(
+      "The refund for Aina Rahman's entry to KL Open is on its way",
+    );
+    expect(sent().html).toContain("|The refund for Aina Rahman&#39;s entry to|");
+    expect(sent().html).toContain("you paid for Aina Rahman&#39;s entry to");
+  });
+
+  it("names the dependent when a refund fails (#716)", async () => {
+    await sendRefundOutcomeEmail("g@example.com", {
+      ...base,
+      recipientName: "Siti",
+      aboutPlayer: "Aina Rahman",
+      completed: false,
+    });
+    expect(sent().subject).toBe(
+      "Action needed: the refund for Aina Rahman's entry to KL Open was not completed",
+    );
+    expect(sent().html).toContain(
+      "|We tried to refund RM 110.00 for Aina Rahman&#39;s entry to|",
+    );
   });
 
   it("escapes organizer- and player-supplied values", async () => {
     await sendRefundOutcomeEmail("p@example.com", {
       ...base,
-      playerName: "<i>Farid</i>",
+      recipientName: "<i>Farid</i>",
       tournamentName: "<b>Open</b>",
       completed: true,
     });
@@ -1174,7 +1287,7 @@ describe("sendPrizeAwardedEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{bankLine}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}",
+      "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{bankLine}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
   });
@@ -1230,6 +1343,32 @@ describe("sendPrizeAwardedEmail", () => {
       "rate limited",
     );
   });
+
+  it("names the dependent to a guardian, without asking for the guardian's bank details (#716)", async () => {
+    await sendPrizeAwardedEmail("g@example.com", {
+      ...base,
+      recipientName: "Siti",
+      accountLast4: null,
+      aboutPlayer: "Aina Rahman",
+    });
+    expect(sent().subject).toBe("Aina Rahman has been awarded a prize at Merdeka Open");
+    expect(sent().html).toContain("|Congratulations! Aina Rahman has been awarded|");
+    expect(sent().html).toContain("We will contact you about where to send the prize.");
+    expect(sent().html).toContain("|View Settings|");
+    expect(sent().html).toContain("because Aina Rahman won a prize");
+  });
+
+  it("doesn't send a winner who can't sign in to Settings (#716)", async () => {
+    await sendPrizeAwardedEmail("b@example.com", {
+      ...base,
+      recipientName: "Badrul",
+      accountLast4: null,
+      canActInSettings: false,
+    });
+    expect(sent().subject).toBe("You've been awarded a prize at Merdeka Open");
+    expect(sent().html).toContain("We will contact you about where to send the prize.");
+    expect(sent().html).not.toContain("Add Bank Details");
+  });
 });
 
 describe("sendPrizePaidEmail", () => {
@@ -1244,7 +1383,7 @@ describe("sendPrizePaidEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{accountLast4}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}",
+      "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{accountLast4}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
   });
@@ -1274,6 +1413,23 @@ describe("sendPrizePaidEmail", () => {
     await sendPrizePaidEmail("w@example.com", { ...base, accountLast4: "514100000101" });
     expect(sentHtml()).toContain("|0101|");
     expect(sentHtml()).not.toContain("514100000101");
+  });
+
+  it("names the dependent to a guardian (#716)", async () => {
+    await sendPrizePaidEmail("g@example.com", {
+      ...base,
+      recipientName: "Siti",
+      aboutPlayer: "Aina Rahman",
+    });
+    expect(mockSend.mock.calls[0][0].subject).toBe(
+      "Aina Rahman's prize from Merdeka Open has been sent",
+    );
+    expect(sentHtml()).toContain("|Aina Rahman&#39;s prize for|");
+  });
+
+  it("speaks to the winner when they are the recipient", async () => {
+    await sendPrizePaidEmail("w@example.com", base);
+    expect(sentHtml()).toContain("|Your prize for|");
   });
 });
 

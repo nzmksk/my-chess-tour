@@ -1,17 +1,22 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { sendOkuReviewEmail } from "@/services/email/email";
+import { sendToAll } from "@/services/email/recipients";
+import {
+  canActInSettings,
+  loadParticipantRecipients,
+  nameForRecipient,
+} from "@/services/email/participant-recipients";
 
 interface ReviewedOkuRow {
   oku_status: "none" | "pending" | "verified" | "rejected";
   oku_rejection_reason: string | null;
-  user: { email: string | null; first_name: string | null } | null;
 }
 
 export async function notifyOkuReviewed(userId: string): Promise<void> {
   try {
     const { data, error } = await supabaseAdmin
       .from("player_profiles")
-      .select("oku_status, oku_rejection_reason, user:users!user_id(email, first_name)")
+      .select("oku_status, oku_rejection_reason")
       .eq("user_id", userId)
       .single();
     if (error || !data) {
@@ -28,17 +33,25 @@ export async function notifyOkuReviewed(userId: string): Promise<void> {
       );
       return;
     }
-    const email = profile.user?.email;
-    if (!email) {
+    const contacts = await loadParticipantRecipients(userId);
+    if (!contacts) return;
+    if (contacts.recipients.size === 0) {
       console.error(`User ${userId}: no address to send the OKU review email to`);
       return;
     }
 
-    await sendOkuReviewEmail(email, {
-      recipientName: profile.user?.first_name ?? "there",
-      verified: profile.oku_status === "verified",
-      rejectionReason: profile.oku_rejection_reason ?? undefined,
-    });
+    await sendToAll(
+      contacts.recipients,
+      (r) =>
+        sendOkuReviewEmail(r.email, {
+          recipientName: r.name,
+          verified: profile.oku_status === "verified",
+          rejectionReason: profile.oku_rejection_reason ?? undefined,
+          aboutPlayer: nameForRecipient(contacts, r),
+          canActInSettings: canActInSettings(contacts, r),
+        }),
+      `OKU review email(s) for user ${userId}`,
+    );
   } catch (err) {
     console.error(
       `User ${userId}: OKU review email failed`,
