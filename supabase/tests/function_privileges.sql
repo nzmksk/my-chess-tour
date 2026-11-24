@@ -84,6 +84,7 @@ DECLARE
     'list_admin_payout_candidates',
     'list_payable_tournaments',
     'withdraw_prize_award',
+    'prize_payees',
     'anonymise_user_audit_logs'
   ];
   -- SECURITY DEFINER functions clients may call. Adding to this list is a
