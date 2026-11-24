@@ -68,6 +68,7 @@ RESET storage.allow_delete_query;
 --    (Dropped explicitly because auth.users itself is not dropped below.)
 -- -----------------------------------------------------------------------------
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_confirmed ON auth.users;
 
 -- -----------------------------------------------------------------------------
 -- 3. View (migration 001)
@@ -96,6 +97,7 @@ DROP TABLE IF EXISTS public.organization_registered_names CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
 DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
 DROP TABLE IF EXISTS public.sensitive_data_consents CASCADE;
+DROP TABLE IF EXISTS public.account_claims          CASCADE;
 DROP TABLE IF EXISTS public.helper_invitations      CASCADE;
 DROP TABLE IF EXISTS public.guardianships           CASCADE;
 DROP TABLE IF EXISTS public.player_profiles         CASCADE;
@@ -153,6 +155,7 @@ DROP TYPE IF EXISTS public.guardianship_relationship CASCADE;
 DROP TYPE IF EXISTS public.guardianship_basis   CASCADE;
 DROP TYPE IF EXISTS public.guardianship_status  CASCADE;
 DROP TYPE IF EXISTS public.guardianship_authorisation_method CASCADE;
+DROP TYPE IF EXISTS public.account_claim_status CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
@@ -186,7 +189,7 @@ WHERE table_schema = 'public'
     'registrations','payments','refunds','payouts','tournament_cancellation_requests',
     'audit_logs','waitlist','bug_reports','player_bank_accounts','prize_awards',
     'prize_fundings','prize_funder_contacts','sensitive_data_consents',
-    'guardianships','helper_invitations'
+    'guardianships','helper_invitations','account_claims'
   );
 
 SELECT 'app_enums' AS check, count(*)

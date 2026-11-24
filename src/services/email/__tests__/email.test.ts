@@ -22,6 +22,7 @@ import {
   sendBeneficiaryNominationEmail,
   sendCancellationReviewEmail,
   sendHelperInvitationEmail,
+  sendAccountClaimEmail,
   sendInvitationResponseEmail,
   sendMemberInvitationEmail,
   sendNominationResponseEmail,
@@ -1562,6 +1563,56 @@ describe("sendHelperInvitationEmail", () => {
     mockSend.mockResolvedValue({ error: { message: "down" } });
     await expect(sendHelperInvitationEmail("h@example.com", base)).rejects.toThrow(
       "Failed to send helper invitation email: down",
+    );
+  });
+});
+
+describe("sendAccountClaimEmail (#720)", () => {
+  const base = {
+    playerName: "Ada",
+    guardianName: "Gwen Guardian",
+    claimUrl: "https://example.com/claim/abc_DEF-123",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadFileSync.mockReturnValue(
+      "{{playerName}}|{{guardianName}}|{{claimUrl}}|{{siteUrl}}",
+    );
+    mockSend.mockResolvedValue({ error: null });
+  });
+
+  const sent = () =>
+    mockSend.mock.calls[0][0] as { html: string; subject: string; to: string };
+
+  it("sends the player the link, naming who is handing the record over", async () => {
+    await sendAccountClaimEmail("ada@example.com", base);
+    expect(mockReadFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("account-claim.html"),
+      "utf-8",
+    );
+    expect(sent().to).toBe("ada@example.com");
+    expect(sent().subject).toBe(
+      "Gwen Guardian is handing your MY Chess Tour record over to you",
+    );
+    expect(sent().html).toContain(
+      "Ada|Gwen Guardian|https://example.com/claim/abc_DEF-123|",
+    );
+  });
+
+  it("escapes the names", async () => {
+    await sendAccountClaimEmail("ada@example.com", {
+      ...base,
+      guardianName: "<b>Gwen</b>",
+    });
+    expect(sent().html).toContain("&lt;b&gt;Gwen&lt;/b&gt;");
+  });
+
+  it("throws when the email can't be sent", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockSend.mockResolvedValue({ error: { message: "down" } });
+    await expect(sendAccountClaimEmail("ada@example.com", base)).rejects.toThrow(
+      "Failed to send account claim email: down",
     );
   });
 });
