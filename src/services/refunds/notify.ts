@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { sendRefundOutcomeEmail } from "@/services/email/email";
 import { describePaymentMethod } from "@/services/chip/payment-method-label";
+import { fullName } from "@/services/email/participant-recipients";
 
 export interface SettleRefundResult {
   newly_settled?: boolean;
@@ -10,9 +11,12 @@ export interface SettleRefundResult {
 interface RefundEmailRow {
   refund_amount_cents: number;
   registration: {
+    user_id: string | null;
+    participant: { first_name: string | null; last_name: string | null } | null;
     tournament: { name: string | null } | null;
     payment: {
       payment_method: string | null;
+      user_id: string | null;
       payer: { email: string | null; first_name: string | null } | null;
     } | null;
   } | null;
@@ -31,9 +35,12 @@ export async function notifyRefundSettlement(
       .select(
         `refund_amount_cents,
          registration:registrations!registration_id(
+           user_id,
+           participant:users!user_id(first_name, last_name),
            tournament:tournaments(name),
            payment:payments!current_payment_id(
              payment_method,
+             user_id,
              payer:users!user_id(email, first_name)
            )
          )`,
@@ -56,8 +63,14 @@ export async function notifyRefundSettlement(
       return;
     }
 
+    const registration = row.registration;
+    const paidForSomeoneElse =
+      registration?.payment?.user_id != null &&
+      registration.payment.user_id !== registration.user_id;
+
     await sendRefundOutcomeEmail(email, {
       recipientName: payer?.first_name ?? "Player",
+      aboutPlayer: paidForSomeoneElse ? fullName(registration.participant) : null,
       tournamentName: row.registration?.tournament?.name ?? "your tournament",
       amountCents: row.refund_amount_cents,
       paymentMethod: describePaymentMethod(row.registration?.payment?.payment_method),
