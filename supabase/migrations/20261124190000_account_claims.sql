@@ -46,8 +46,12 @@
 --    auth user's email is confirmed, inside the auth.users write that
 --    confirms it:
 --      - handle_new_user: a new auth user whose metadata carries
---        claim_token_hash never gets a users row of its own. If it is created
---        already confirmed, link_claimed_account runs in the INSERT;
+--        claim_token_hash never gets a users row of its own. That metadata
+--        can come from anyone calling the public Auth sign-up endpoint, so
+--        the INSERT is refused unless the hash names a pending, unexpired
+--        claim for the same mailbox (CLAIM_INVALID, CLAIM_EMAIL_MISMATCH):
+--        made-up metadata can't leave an auth user with no record. If it is
+--        created already confirmed, link_claimed_account runs in the INSERT;
 --      - handle_claimed_user_confirmed (new trigger on_auth_user_confirmed):
 --        otherwise it runs in the UPDATE that sets email_confirmed_at.
 --    The API's admin createUser(email_confirm) reaches one of the two in the
@@ -310,8 +314,23 @@ DECLARE
   v_terms_version varchar(20) := NULLIF(NEW.raw_user_meta_data->>'terms_version', '');
   v_date_of_birth date        := NULLIF(NEW.raw_user_meta_data->>'date_of_birth', '')::date;
   v_claim_hash    text        := NULLIF(NEW.raw_user_meta_data->>'claim_token_hash', '');
+  v_claim_email   text;
 BEGIN
   IF v_claim_hash IS NOT NULL THEN
+    SELECT email INTO v_claim_email
+      FROM account_claims
+      WHERE token_hash = v_claim_hash
+        AND status = 'pending'
+        AND expires_at > now();
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'CLAIM_INVALID: this handover link is no longer valid'
+        USING ERRCODE = 'P0001';
+    END IF;
+    IF canonical_email(NEW.email) IS DISTINCT FROM canonical_email(v_claim_email) THEN
+      RAISE EXCEPTION 'CLAIM_EMAIL_MISMATCH: the account must use the address the link was sent to'
+        USING ERRCODE = 'P0001';
+    END IF;
+
     IF NEW.email_confirmed_at IS NOT NULL THEN
       PERFORM link_claimed_account(NEW.id, NEW.email, NEW.email_confirmed_at,
                                    v_claim_hash, v_terms_version);

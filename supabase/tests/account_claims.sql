@@ -26,6 +26,9 @@
 --       a stranger reads none, and clients can't call the functions
 --   A10 a signup that isn't confirmed yet gets no users row; confirming its
 --       email links the record then, in the confirming UPDATE
+--   A11 an unconfirmed signup carrying made-up claim metadata, or a real
+--       claim's hash on another mailbox, is refused at the INSERT and leaves
+--       no auth user behind
 --
 -- HOW TO RUN: paste into the Supabase SQL editor AFTER applying the current
 -- migrations. Runs inside a transaction that ROLLBACKs, so it builds throwaway
@@ -374,6 +377,20 @@ BEGIN
     RAISE EXCEPTION 'A10 FAIL: the refused confirmation was kept';
   END IF;
   RAISE NOTICE 'A10 PASS — an unconfirmed signup links only when its email is confirmed';
+
+  -- ===== A11 ==============================================================
+  PERFORM pg_temp.expect_claim_refused('made-up hash, unconfirmed',
+    'anyone@test.local', repeat('7', 64), 'CLAIM_INVALID', false);
+  PERFORM create_account_claim(v_guardian,
+    (create_dependent(v_guardian, 'Wes', 'Wrongbox', v_adult_dob, 'carer', 'authorised',
+                      '2026-11-24')->>'dependent_id')::uuid,
+    'wes@test.local', repeat('6', 64));
+  PERFORM pg_temp.expect_claim_refused('real hash, other mailbox, unconfirmed',
+    'not-wes@test.local', repeat('6', 64), 'CLAIM_EMAIL_MISMATCH', false);
+  IF EXISTS (SELECT 1 FROM auth.users WHERE email IN ('anyone@test.local', 'not-wes@test.local')) THEN
+    RAISE EXCEPTION 'A11 FAIL: a refused claim signup left an auth user';
+  END IF;
+  RAISE NOTICE 'A11 PASS — claim metadata must name a live claim for this mailbox';
 
   RAISE NOTICE 'ALL SCENARIOS PASSED';
 END;
