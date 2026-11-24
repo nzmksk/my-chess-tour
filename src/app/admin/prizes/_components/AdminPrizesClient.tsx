@@ -131,6 +131,7 @@ function AwardCard({ award }: { award: PrizeAwardView }) {
             </Link>
             {award.organization_name ? ` · ${award.organization_name}` : ""} · entered{" "}
             {formatInstant(award.entered_at)}
+            {award.payee_reason === "guardian_of_minor" && " · Paid to a guardian (minor)"}
             {award.winner_bank_status
               ? ` · ${BANK_LABEL[award.winner_bank_status]}`
               : " · No bank account"}
