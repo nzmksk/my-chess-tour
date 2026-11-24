@@ -53,7 +53,7 @@ export async function notifyRegistrationConfirmed(registrationId: string): Promi
 
     const t = reg.tournament;
     await sendRegistrationConfirmationEmail(email, {
-      playerName: reg.user?.first_name ?? "Player",
+      recipientName: reg.user?.first_name ?? "Player",
       tournamentName: t.name ?? "your tournament",
       tournamentSlug: t.slug,
       tournamentDates: formatCalendarDateRange(

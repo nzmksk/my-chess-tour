@@ -57,7 +57,7 @@ export async function notifyRefundSettlement(
     }
 
     await sendRefundOutcomeEmail(email, {
-      playerName: payer?.first_name ?? "Player",
+      recipientName: payer?.first_name ?? "Player",
       tournamentName: row.registration?.tournament?.name ?? "your tournament",
       amountCents: row.refund_amount_cents,
       paymentMethod: describePaymentMethod(row.registration?.payment?.payment_method),

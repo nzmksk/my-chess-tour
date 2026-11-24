@@ -216,8 +216,8 @@
         <div class="divider"></div>
 
         <p class="message">
-          Hi {{playerName}},<br /><br />
-          Your refund for
+          Hi {{recipientName}},<br /><br />
+          {{lead}}
           <span class="tournament">{{tournamentName}}</span> has been processed.
         </p>
 
@@ -244,7 +244,7 @@
           ><span></span>
         </div>
         <p>
-          You received this email because you were registered for<br />
+          {{footerReason}}<br />
           {{tournamentName}} on <a href="{{siteUrl}}">mychesstour.com</a>.
         </p>
       </div>

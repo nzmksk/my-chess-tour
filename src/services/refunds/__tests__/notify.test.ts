@@ -70,7 +70,7 @@ describe("notifyRefundSettlement", () => {
     await notifyRefundSettlement(REFUND, { newly_settled: true, newly_failed: false });
 
     expect(mockSendOutcome).toHaveBeenCalledWith("farid@example.com", {
-      playerName: "Farid",
+      recipientName: "Farid",
       tournamentName: "KL Open",
       amountCents: 11000,
       paymentMethod: "GrabPay",
@@ -125,7 +125,7 @@ describe("notifyRefundSettlement", () => {
     await notifyRefundSettlement(REFUND, { newly_settled: true });
 
     expect(mockSendOutcome).toHaveBeenCalledWith("farid@example.com", {
-      playerName: "Player",
+      recipientName: "Player",
       tournamentName: "your tournament",
       amountCents: 11000,
       paymentMethod: "your original payment method",

@@ -216,8 +216,8 @@
         <div class="divider"></div>
 
         <p class="message">
-          Hi {{playerName}},<br /><br />
-          You are registered for
+          Hi {{recipientName}},<br /><br />
+          {{lead}}
           <span class="tournament">{{tournamentName}}</span>. See you at the
           board!
         </p>
@@ -240,7 +240,7 @@
           ><span></span>
         </div>
         <p>
-          You received this email because you registered for a tournament on
+          {{footerReason}} on
           <a href="{{siteUrl}}">mychesstour.com</a>.
         </p>
       </div>

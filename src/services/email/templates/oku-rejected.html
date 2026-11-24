@@ -217,7 +217,7 @@
 
         <p class="message">
           Hi {{recipientName}},<br /><br />
-          We were unable to verify the OKU card you uploaded.
+          {{lead}}
         </p>
 
         <div class="notice">
@@ -228,8 +228,7 @@
         </div>
 
         <p class="message">
-          You can upload a new copy of your card from your settings and we will
-          review it again.
+          {{retryLine}}
         </p>
 
         <a href="{{settingsUrl}}" class="cta-btn">Upload Again</a>
@@ -244,8 +243,7 @@
           ><span></span>
         </div>
         <p>
-          You received this email because you submitted an OKU card for
-          verification on <a href="{{settingsUrl}}">mychesstour.com</a>.
+          {{footerReason}} on <a href="{{settingsUrl}}">mychesstour.com</a>.
         </p>
       </div>
     </div>

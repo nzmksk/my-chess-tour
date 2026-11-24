@@ -74,7 +74,7 @@ describe("notifyRegistrationConfirmed", () => {
     await notifyRegistrationConfirmed(REG);
 
     expect(mockConfirm).toHaveBeenCalledWith("farid@example.com", {
-      playerName: "Farid",
+      recipientName: "Farid",
       tournamentName: "KL Open",
       tournamentSlug: "kl-open-2026",
       tournamentDates: "10 Aug – 12 Aug 2026 (MYT)",
