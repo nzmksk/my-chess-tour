@@ -139,6 +139,11 @@ function RegistrationCard({ registration, dimmed }: RegistrationCardProps) {
         <h4 className="font-lato text-text-primary truncate text-sm font-semibold">
           {tournament.name}
         </h4>
+        {registration.participant && (
+          <p className="font-lato text-gold-bright mt-0.5 text-xs font-semibold">
+            For {registration.participant.name}
+          </p>
+        )}
         <p className="font-lato text-xs text-text-muted mt-0.5">
           {tournament.venue_name}
           {format && tc && (
@@ -247,7 +252,8 @@ export default function RegistrationsClient({ registrations }: Props) {
         My Tournaments
       </h1>
       <p className="font-lato text-sm text-text-muted mb-6">
-        Manage your registrations and view upcoming events.
+        Manage your registrations, and those of players you look after, and
+        view upcoming events.
       </p>
 
       {/* Tabs */}

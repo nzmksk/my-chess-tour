@@ -15,6 +15,7 @@ function registration(
   const { tournamentStatus = "published", ...rest } = overrides;
   return {
     id: "reg-1",
+    participant: null,
     tournament: {
       id: "t1",
       slug: "kl-open",
@@ -178,5 +179,23 @@ describe("RegistrationsClient", () => {
     render(<RegistrationsClient registrations={[registration()]} />);
 
     expect(screen.getByText("KL Open")).toBeTruthy();
+  });
+
+  it("labels a dependent's registration with the player's name", () => {
+    render(
+      <RegistrationsClient
+        registrations={[
+          registration({ id: "mine" }),
+          registration({
+            id: "theirs",
+            participant: { id: "dep-1", name: "Aina Rahman" },
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("KL Open")).toHaveLength(2);
+    expect(screen.getAllByText(/^For /)).toHaveLength(1);
+    expect(screen.getByText("For Aina Rahman")).toBeTruthy();
   });
 });
