@@ -87,24 +87,6 @@ export function applicationRpcErrorResponse(
       "An approved organization already uses this name",
     );
   }
-  if (message.includes("BANK_ACCOUNT_IN_USE")) {
-    return conflict(
-      "BANK_ACCOUNT_IN_USE",
-      "This bank account is already the payout destination for another organization",
-    );
-  }
-  if (message.includes("BANK_ACCOUNT_REQUIRED")) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message:
-            "This application has no bank account to keep. Please enter one.",
-        },
-      },
-      { status: 400 },
-    );
-  }
   if (message.includes("TOO_MANY_DOCUMENTS")) {
     return NextResponse.json(
       {

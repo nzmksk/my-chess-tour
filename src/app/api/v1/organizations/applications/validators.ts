@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
 import { validateEmail } from "@/services/auth/auth-validation";
-import {
-  BANK_SWIFT_CODES,
-  accountNumberLengthError,
-} from "@/lib/reference/malaysian-banks";
 import { validateOrgLinks, type OrgLink } from "../_lib/org-fields";
 
 type OrgEntityType = "company" | "society" | "individual";
@@ -41,12 +37,6 @@ interface OrgDocumentInput {
   original_filename: string | null;
 }
 
-interface BankAccountInput {
-  bank_code: string;
-  bank_account_holder: string;
-  bank_account_number: string;
-}
-
 /** The organization's own details: the same on a first submission and an amendment. */
 interface OrgFields {
   name: string;
@@ -65,21 +55,16 @@ interface OrgFields {
 // against is decided by the server from src/lib/reference/legal.ts. Because this shape is
 // what the route inserts, a version in the request body cannot reach the
 // database even by accident.
-//
-// Likewise no bank_name: the client sends a SWIFT code and the server derives
-// the display name from src/lib/reference/malaysian-banks.ts, so the two cannot disagree.
-export interface ApplyRequest extends OrgFields, BankAccountInput {
+export interface ApplyRequest extends OrgFields {
   documents: OrgDocumentInput[];
 }
 
 /**
- * An amendment of a rejected application (#582). The applicant either keeps the
- * application's payout account (`bank` is null; its number never leaves the
- * database) or gives a new one, and keeps the listed documents while adding
- * `new_documents`. The documents left out are removed.
+ * An amendment of a rejected application (#582). The applicant keeps the
+ * listed documents while adding `new_documents`. The documents left out are
+ * removed.
  */
 export interface ResubmitRequest extends OrgFields {
-  bank: BankAccountInput | null;
   keep_document_ids: string[];
   new_documents: OrgDocumentInput[];
 }
@@ -200,49 +185,6 @@ function validateOrgFields(b: Record<string, unknown>): Validated<OrgFields> {
   };
 }
 
-function validateBankAccount(
-  b: Record<string, unknown>,
-): Validated<BankAccountInput> {
-  // An unknown SWIFT code is one CHIP Send will not recognise either, so it is
-  // rejected here rather than becoming a failed payout later.
-  if (typeof b.bank_code !== "string" || !BANK_SWIFT_CODES.has(b.bank_code)) {
-    return invalid("Please choose your bank from the list");
-  }
-
-  if (
-    typeof b.bank_account_holder !== "string" ||
-    b.bank_account_holder.trim() === ""
-  ) {
-    return invalid("Account holder name is required");
-  }
-
-  if (b.bank_account_holder.trim().length > 255) {
-    return invalid("Account holder name must be 255 characters or fewer");
-  }
-
-  // Same normalization as PATCH /api/v1/profile/banking: strip the spaces and
-  // dashes people copy off a bank statement, then require digits only.
-  if (typeof b.bank_account_number !== "string") {
-    return invalid("Account number is required");
-  }
-  const accountNumber = b.bank_account_number.replace(/[\s-]/g, "");
-  if (!/^\d{5,20}$/.test(accountNumber)) {
-    return invalid(
-      "Account number must contain 5 to 20 digits (spaces and dashes allowed)",
-    );
-  }
-  const lengthError = accountNumberLengthError(b.bank_code, accountNumber);
-  if (lengthError) return invalid(lengthError);
-
-  return {
-    data: {
-      bank_code: b.bank_code,
-      bank_account_holder: b.bank_account_holder.trim(),
-      bank_account_number: accountNumber,
-    },
-  };
-}
-
 function validateDocuments(
   value: unknown,
   appUserId: string,
@@ -341,9 +283,6 @@ export function validateApplyRequest(
   const fields = validateOrgFields(b);
   if ("error" in fields) return fields;
 
-  const bank = validateBankAccount(b);
-  if ("error" in bank) return bank;
-
   if (!Array.isArray(b.documents) || b.documents.length === 0) {
     return invalid("At least one verification document is required");
   }
@@ -357,7 +296,7 @@ export function validateApplyRequest(
   if (missing) return invalid(missing);
 
   return {
-    data: { ...fields.data, ...bank.data, documents: documents.data },
+    data: { ...fields.data, documents: documents.data },
   };
 }
 
@@ -377,13 +316,6 @@ export function validateResubmitRequest(
 
   const fields = validateOrgFields(b);
   if ("error" in fields) return fields;
-
-  let bank: BankAccountInput | null = null;
-  if (b.keep_bank_account !== true) {
-    const validated = validateBankAccount(b);
-    if ("error" in validated) return validated;
-    bank = validated.data;
-  }
 
   const keep = b.keep_document_ids ?? [];
   if (
@@ -406,7 +338,6 @@ export function validateResubmitRequest(
   return {
     data: {
       ...fields.data,
-      bank,
       keep_document_ids: keep as string[],
       new_documents: newDocuments.data,
     },
