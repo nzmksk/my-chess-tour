@@ -539,10 +539,28 @@ async function handlePost(
     if (insertErr.code === "23505") {
       const { data: raced } = await supabaseAdmin
         .from("registrations")
-        .select("id, status, current_payment_id")
+        .select("id, status, fee_tier, registered_at, current_payment_id")
         .eq("user_id", participantId)
         .eq("tournament_id", tournamentId)
         .maybeSingle();
+      if (
+        raced?.status === "pending_payment" &&
+        isHoldLive(raced.registered_at)
+      ) {
+        return continuePendingPayment(
+          raced.id,
+          userId,
+          raced.fee_tier,
+          fee_tier,
+          raced.registered_at,
+          raced.current_payment_id,
+          matchedTier.amount_cents,
+          slug,
+          tournament.name,
+          user.email!,
+          subject,
+        );
+      }
       if (
         raced &&
         (raced.status === "pending_payment" ||
@@ -606,6 +624,25 @@ async function continuePendingPayment(
         .maybeSingle()
     : { data: null };
 
+  const unlockAt = new Date(
+    new Date(registeredAt).getTime() + PAYMENT_TIMEOUT_MINUTES * 60_000,
+  ).toISOString();
+
+  if (payment?.user_id && payment.user_id !== payerUserId) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "PAYMENT_IN_PROGRESS",
+          message:
+            `Someone else has a payment in progress for ${subject?.name ?? "this player"}. ` +
+            `Try again after ${unlockAt} if it isn't completed.`,
+          unlock_at: unlockAt,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
   // No stored link (an earlier purchase-create failed) — nothing is actually in
   // progress to protect, so start a fresh attempt for whatever tier was requested
   // rather than leaving the user stuck or locking them out of a different tier.
@@ -624,25 +661,6 @@ async function continuePendingPayment(
 
   // A live link exists: the tier is locked until the hold lapses. A request for a
   // different tier is rejected with the time it unlocks.
-  const unlockAt = new Date(
-    new Date(registeredAt).getTime() + PAYMENT_TIMEOUT_MINUTES * 60_000,
-  ).toISOString();
-
-  if (payment.user_id && payment.user_id !== payerUserId) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "PAYMENT_IN_PROGRESS",
-          message:
-            `Someone else has a payment in progress for ${subject?.name ?? "this player"}. ` +
-            `Try again after ${unlockAt} if it isn't completed.`,
-          unlock_at: unlockAt,
-        },
-      },
-      { status: 409 },
-    );
-  }
-
   if (requestedFeeTier !== currentFeeTier) {
     return NextResponse.json(
       {

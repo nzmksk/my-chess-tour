@@ -1377,6 +1377,94 @@ describe("POST /api/v1/tournaments/:slug/checkout — registering a dependent (#
     expect(mockCancelChipPurchase).not.toHaveBeenCalled();
   });
 
+  it("doesn't supersede another payer's live attempt that has no link yet", async () => {
+    setThen(mockExistingBuilder, {
+      data: {
+        id: "reg-1",
+        status: "pending_payment",
+        fee_tier: "standard",
+        registered_at: RECENT,
+        current_payment_id: "pay-1",
+      },
+      error: null,
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: { checkout_url: null, user_id: "eeeeeeee-0000-4000-8000-000000000001" },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("PAYMENT_IN_PROGRESS");
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
+  });
+
+  function loseCreateRaceTo(winner: Record<string, unknown>) {
+    let regReads = 0;
+    mockExistingBuilder.then = (r: (v: unknown) => unknown) => {
+      regReads += 1;
+      return Promise.resolve(
+        regReads === 1 ? { data: null, error: null } : { data: winner, error: null },
+      ).then(r);
+    };
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "23505", message: "duplicate key value violates unique constraint" },
+    });
+  }
+
+  it("leaves a concurrent guardian's live attempt alone after losing the create race", async () => {
+    loseCreateRaceTo({
+      id: "reg-1",
+      status: "pending_payment",
+      fee_tier: "standard",
+      registered_at: RECENT,
+      current_payment_id: "pay-1",
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: {
+        checkout_url: "https://pay.example/winner",
+        user_id: "eeeeeeee-0000-4000-8000-000000000001",
+      },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error.code).toBe("PAYMENT_IN_PROGRESS");
+    expect(JSON.stringify(json)).not.toContain("winner");
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).not.toHaveBeenCalledWith("start_new_payment_attempt", expect.anything());
+    expect(mockCancelChipPurchase).not.toHaveBeenCalled();
+  });
+
+  it("reuses its own live link after losing a create race to its own double submit", async () => {
+    loseCreateRaceTo({
+      id: "reg-1",
+      status: "pending_payment",
+      fee_tier: "standard",
+      registered_at: RECENT,
+      current_payment_id: "pay-1",
+    });
+    setThen(mockPaymentPriorBuilder, {
+      data: { checkout_url: "https://pay.example/mine", user_id: appIdFor(USER_ID) },
+      error: null,
+    });
+    setPaymentBuilders([mockPaymentPriorBuilder]);
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(201);
+    expect((await res.json()).data.checkout_url).toBe("https://pay.example/mine");
+    expect(mockRpc).not.toHaveBeenCalledWith("start_new_payment_attempt", expect.anything());
+  });
+
   it("hands the guardian back their own live checkout link", async () => {
     setThen(mockExistingBuilder, {
       data: {
