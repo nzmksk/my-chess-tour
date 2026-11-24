@@ -11,6 +11,7 @@ import {
   nameForRecipient,
 } from "@/services/email/participant-recipients";
 import { loadPlatformAdminRecipients } from "@/services/payouts/recipients";
+import { loadPrizePayees } from "./payee";
 
 export function prizeLabel(category: string, place: string | null): string {
   return place ? `${category} — ${place}` : category;
@@ -59,10 +60,28 @@ export async function notifyPrizeAwarded(
       return;
     }
 
+    const payees = await loadPrizePayees([award.user_id]);
+    if (!payees.ok) {
+      console.error(
+        `Prize award ${awardId}: failed to work out whose account it is paid to`,
+        payees.error.message,
+      );
+    }
+    const payee = payees.ok ? payees.payees.get(award.user_id) : undefined;
+    const payeeId = payee?.payeeId ?? award.user_id;
+    let payeeEmail: string | null = null;
+    if (payee?.reason === "guardian_of_minor") {
+      const { data: payeeUser } = await supabaseAdmin
+        .from("users")
+        .select("email")
+        .eq("id", payeeId)
+        .maybeSingle();
+      payeeEmail = (payeeUser as { email: string | null } | null)?.email ?? null;
+    }
     const { data: bank } = await supabaseAdmin
       .from("player_bank_accounts")
       .select("account_number, status")
-      .eq("user_id", award.user_id)
+      .eq("user_id", payeeId)
       .eq("is_active", true)
       .maybeSingle();
     const account = bank as { account_number: string; status: string } | null;
@@ -80,6 +99,9 @@ export async function notifyPrizeAwarded(
           accountRejected: rejected,
           aboutPlayer: nameForRecipient(contacts, r),
           canActInSettings: canActInSettings(contacts, r),
+          paidToRecipientAsGuardian:
+            payeeEmail !== null &&
+            r.email.toLowerCase() === payeeEmail.toLowerCase(),
         }),
       `prize awarded email(s) for award ${awardId}`,
     );

@@ -50,6 +50,9 @@ vi.mock("@/services/email/participant-recipients", async (importOriginal) => ({
   loadParticipantRecipients: mockLoadContacts,
 }));
 
+const { mockLoadPayees } = vi.hoisted(() => ({ mockLoadPayees: vi.fn() }));
+vi.mock("../payee", () => ({ loadPrizePayees: mockLoadPayees }));
+
 import { notifyPrizeAwarded, notifyPrizePaid } from "../notify";
 
 const AWARD = "66666666-6666-4666-8666-666666666666";
@@ -99,6 +102,12 @@ beforeEach(() => {
   for (const k of Object.keys(tables)) delete tables[k];
   mockAwarded.mockResolvedValue(undefined);
   mockPaid.mockResolvedValue(undefined);
+  mockLoadPayees.mockImplementation(async (ids: string[]) => ({
+    ok: true,
+    payees: new Map(
+      ids.map((id) => [id, { winnerId: id, payeeId: id, reason: "winner" }]),
+    ),
+  }));
   mockLoadContacts.mockResolvedValue(
     contacts("Aisyah Karim", [], [["aisyah@example.com", "Aisyah"]]),
   );
@@ -127,6 +136,7 @@ describe("notifyPrizeAwarded", () => {
       accountRejected: false,
       aboutPlayer: null,
       canActInSettings: true,
+      paidToRecipientAsGuardian: false,
     });
   });
 
@@ -207,6 +217,50 @@ describe("notifyPrizeAwarded", () => {
     givenAward();
     mockAwarded.mockRejectedValue(new Error("resend down"));
     await expect(notifyPrizeAwarded(AWARD)).resolves.toBeUndefined();
+  });
+});
+
+describe("notifyPrizeAwarded for a minor (#718)", () => {
+  it("tells the guardian who is paid that it goes to their account", async () => {
+    mockLoadPayees.mockResolvedValue({
+      ok: true,
+      payees: new Map([
+        [WINNER, { winnerId: WINNER, payeeId: "guardian-1", reason: "guardian_of_minor" }],
+      ]),
+    });
+    mockLoadContacts.mockResolvedValue(
+      contacts(
+        "Cara Child",
+        [
+          ["Maria@example.com", "Maria"],
+          ["daniel@example.com", "Daniel"],
+        ],
+        [],
+        false,
+      ),
+    );
+    givenAward({ bank: null });
+    tables.users = [{ data: { email: "maria@example.com" }, error: null }];
+    tables.player_bank_accounts = [
+      { data: { account_number: "514100000404", status: "verified" }, error: null },
+    ];
+
+    await notifyPrizeAwarded(AWARD);
+
+    const bankQuery = mockFrom.mock.results[
+      mockFrom.mock.calls.findIndex(([t]) => t === "player_bank_accounts")
+    ].value as { eq: ReturnType<typeof vi.fn> };
+    expect(bankQuery.eq).toHaveBeenCalledWith("user_id", "guardian-1");
+    const byEmail = Object.fromEntries(
+      mockAwarded.mock.calls.map(([email, params]) => [email, params]),
+    );
+    expect(byEmail["Maria@example.com"]).toMatchObject({
+      accountLast4: "0404",
+      paidToRecipientAsGuardian: true,
+    });
+    expect(byEmail["daniel@example.com"]).toMatchObject({
+      paidToRecipientAsGuardian: false,
+    });
   });
 });
 

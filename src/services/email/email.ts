@@ -304,15 +304,27 @@ export async function sendPrizeAwardedEmail(
     accountRejected?: boolean;
     aboutPlayer?: string | null;
     canActInSettings?: boolean;
+    paidToRecipientAsGuardian?: boolean;
   },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const settingsUrl = `${siteUrl}/settings`;
   const last4 = params.accountLast4?.replace(/\D/g, "").slice(-4) || null;
   const about = params.aboutPlayer ?? null;
-  const selfService = !about && params.canActInSettings !== false;
+  const guardianPayee =
+    !!about &&
+    params.paidToRecipientAsGuardian === true &&
+    params.canActInSettings !== false;
+  const selfService =
+    guardianPayee || (!about && params.canActInSettings !== false);
 
-  const bankLine = !selfService
+  const bankLine = guardianPayee
+    ? params.accountRejected
+      ? `A minor's prize is paid into their guardian's account, and yours couldn't be verified. Please check your bank details in Settings so we can send ${about}'s prize.`
+      : last4
+        ? `As ${about}'s guardian, it will be sent to your account ending in ${last4}.`
+        : `A minor's prize is paid into their guardian's account. Please add your bank details in Settings so we can send ${about}'s prize.`
+    : !selfService
     ? last4
       ? `It will be sent to the account ending in ${last4}.`
       : "We will contact you about where to send the prize."

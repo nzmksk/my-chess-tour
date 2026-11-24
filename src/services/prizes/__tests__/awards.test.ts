@@ -22,6 +22,18 @@ const { results, calls, mockFrom } = vi.hoisted(() => {
 
 vi.mock("@/services/supabase/admin", () => ({ supabaseAdmin: { from: mockFrom } }));
 
+const { mockLoadPayees } = vi.hoisted(() => ({ mockLoadPayees: vi.fn() }));
+vi.mock("../payee", () => ({ loadPrizePayees: mockLoadPayees }));
+
+function payeesOf(entries: Array<[string, string, "winner" | "guardian_of_minor"]>) {
+  return {
+    ok: true,
+    payees: new Map(
+      entries.map(([winnerId, payeeId, reason]) => [winnerId, { winnerId, payeeId, reason }]),
+    ),
+  };
+}
+
 import { canRetryAward, listAdminAwards, listTournamentAwards } from "../awards";
 
 function row(overrides: Record<string, unknown> = {}) {
@@ -41,6 +53,8 @@ function row(overrides: Record<string, unknown> = {}) {
     entered_at: "2026-11-18T00:00:00Z",
     reviewed_at: null,
     processed_at: null,
+    payee_user_id: null,
+    payee_reason: null,
     tournament: { name: "KL Open", organization: { name: "Chess Club" } },
     winner: { first_name: "Aina", last_name: "Rahman" },
     ...overrides,
@@ -51,6 +65,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   results.length = 0;
   calls.length = 0;
+  mockLoadPayees.mockImplementation(async (ids: string[]) =>
+    payeesOf(ids.map((id) => [id, id, "winner"])),
+  );
 });
 
 describe("listTournamentAwards", () => {
@@ -177,7 +194,10 @@ describe("listAdminAwards", () => {
 
     const result = await listAdminAwards();
 
-    expect(calls[2].ops).toContainEqual(["select", "user_id, status, account_holder, bank_holder_name"]);
+    expect(calls[2].ops).toContainEqual([
+      "select",
+      "user_id, status, account_holder, bank_holder_name, entered_by, user:users!user_id(first_name, last_name)",
+    ]);
     expect(
       result.ok &&
         result.awards.map((a) => [a.id, a.winner_bank_status, a.winner_bank_holder_name, a.winner_bank_name_check]),
@@ -185,6 +205,80 @@ describe("listAdminAwards", () => {
       ["a1", "verified", "AINA BINTI RAHMAN", "match"],
       ["a2", "name_mismatch", "SOMEONE ELSE", "mismatch"],
     ]);
+  });
+
+  it("checks a helper-entered account against the player's name, not the typed holder (#718)", async () => {
+    results.push(
+      { data: [row({ id: "a1", user_id: "u1" })], error: null },
+      { data: [], error: null },
+      {
+        data: [
+          {
+            user_id: "u1",
+            status: "verified",
+            account_holder: "Hana Helper",
+            bank_holder_name: "HANA HELPER",
+            entered_by: "helper-1",
+            user: { first_name: "Aziz", last_name: "Adult" },
+          },
+        ],
+        error: null,
+      },
+    );
+
+    const result = await listAdminAwards();
+
+    expect(result.ok && result.awards[0].winner_bank_name_check).toBe("mismatch");
+  });
+
+  it("reads a minor's bank status from the guardian who is paid (#718)", async () => {
+    mockLoadPayees.mockResolvedValue(payeesOf([["child-1", "guardian-1", "guardian_of_minor"]]));
+    results.push(
+      { data: [row({ id: "a1", user_id: "child-1" })], error: null },
+      { data: [], error: null },
+      {
+        data: [
+          {
+            user_id: "guardian-1",
+            status: "verified",
+            account_holder: "Maria Mother",
+            bank_holder_name: "MARIA MOTHER",
+            entered_by: null,
+            user: { first_name: "Maria", last_name: "Mother" },
+          },
+        ],
+        error: null,
+      },
+    );
+
+    const result = await listAdminAwards();
+
+    expect(calls[2].ops).toContainEqual(["in", "user_id", ["guardian-1"]]);
+    expect(result.ok && result.awards[0]).toMatchObject({
+      payee_user_id: "guardian-1",
+      payee_reason: "guardian_of_minor",
+      winner_bank_status: "verified",
+      winner_bank_name_check: "match",
+    });
+  });
+
+  it("keeps the payee recorded at the claim", async () => {
+    results.push(
+      {
+        data: [
+          row({ id: "a1", user_id: "child-1", payee_user_id: "guardian-2", payee_reason: "guardian_of_minor" }),
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+      { data: [], error: null },
+    );
+
+    const result = await listAdminAwards();
+
+    expect(mockLoadPayees).toHaveBeenCalledWith([]);
+    expect(calls[2].ops).toContainEqual(["in", "user_id", ["guardian-2"]]);
+    expect(result.ok && result.awards[0].payee_reason).toBe("guardian_of_minor");
   });
 
   it("copes with null data from both queries", async () => {

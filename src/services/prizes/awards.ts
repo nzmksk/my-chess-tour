@@ -3,6 +3,8 @@ import {
   checkHolderName,
   type HolderNameCheck,
 } from "@/services/payouts/holder-name";
+import { expectedPlayerHolderName } from "@/services/payouts/player-holder";
+import { loadPrizePayees, type PrizePayeeReason } from "./payee";
 
 export interface PrizeAwardView {
   id: string;
@@ -23,6 +25,8 @@ export interface PrizeAwardView {
   entered_at: string;
   reviewed_at: string | null;
   processed_at: string | null;
+  payee_user_id: string | null;
+  payee_reason: PrizePayeeReason | null;
   winner_bank_status: "pending" | "verified" | "rejected" | "name_mismatch" | null;
   winner_bank_holder_name?: string | null;
   winner_bank_name_check?: HolderNameCheck | null;
@@ -43,7 +47,7 @@ interface AwardRow extends Omit<
 
 const COLUMNS = `id, tournament_id, user_id, category, place, amount_cents, settled_amount_cents,
   approval, status, rejection_reason, failure_reason, chip_receipt_url,
-  entered_at, reviewed_at, processed_at,
+  entered_at, reviewed_at, processed_at, payee_user_id, payee_reason,
   tournament:tournaments(name, organization:organizations!organization_id(name)),
   winner:users!user_id(first_name, last_name)`;
 
@@ -56,19 +60,45 @@ interface WinnerBank {
   status: PrizeAwardView["winner_bank_status"];
   account_holder?: string;
   bank_holder_name?: string | null;
+  entered_by?: string | null;
+  user?: { first_name: string | null; last_name: string | null } | null;
 }
 
 async function toViews(
   rows: AwardRow[],
   { withHolderNames = false }: { withHolderNames?: boolean } = {},
 ): Promise<AwardsResult> {
-  const userIds = [...new Set(rows.map((r) => r.user_id).filter((id): id is string => !!id))];
+  const winnerIds = [
+    ...new Set(
+      rows
+        .filter((r) => !r.payee_user_id)
+        .map((r) => r.user_id)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  const payees = await loadPrizePayees(winnerIds);
+  if (!payees.ok) return { ok: false, error: payees.error };
+  const payeeOf = (r: AwardRow) =>
+    r.payee_user_id
+      ? { id: r.payee_user_id, reason: r.payee_reason }
+      : r.user_id
+        ? {
+            id: payees.payees.get(r.user_id)?.payeeId ?? r.user_id,
+            reason: payees.payees.get(r.user_id)?.reason ?? ("winner" as const),
+          }
+        : null;
+
+  const userIds = [
+    ...new Set(rows.map((r) => payeeOf(r)?.id).filter((id): id is string => !!id)),
+  ];
   const banks = new Map<string, WinnerBank>();
   if (userIds.length > 0) {
     const { data, error } = await supabaseAdmin
       .from("player_bank_accounts")
       .select(
-        withHolderNames ? "user_id, status, account_holder, bank_holder_name" : "user_id, status",
+        withHolderNames
+          ? "user_id, status, account_holder, bank_holder_name, entered_by, user:users!user_id(first_name, last_name)"
+          : "user_id, status",
       )
       .in("user_id", userIds)
       .eq("is_active", true);
@@ -80,10 +110,14 @@ async function toViews(
 
   return {
     ok: true,
-    awards: rows.map(({ tournament, winner, ...r }) => {
-      const bank = r.user_id ? banks.get(r.user_id) : undefined;
+    awards: rows.map((row) => {
+      const { tournament, winner, ...r } = row;
+      const payee = payeeOf(row);
+      const bank = payee ? banks.get(payee.id) : undefined;
       return {
         ...r,
+        payee_user_id: payee?.id ?? null,
+        payee_reason: payee?.reason ?? null,
         tournament_name: tournament?.name ?? null,
         organization_name: tournament?.organization?.name ?? null,
         winner_name:
@@ -92,7 +126,18 @@ async function toViews(
         ...(withHolderNames && {
           winner_bank_holder_name: bank?.bank_holder_name ?? null,
           winner_bank_name_check: bank
-            ? checkHolderName(bank.bank_holder_name, bank.account_holder)
+            ? checkHolderName(
+                bank.bank_holder_name,
+                bank.account_holder === undefined
+                  ? null
+                  : expectedPlayerHolderName(
+                      {
+                        account_holder: bank.account_holder,
+                        entered_by: bank.entered_by ?? null,
+                      },
+                      bank.user ?? null,
+                    ),
+              )
             : null,
         }),
       };
