@@ -85,6 +85,9 @@ DECLARE
     'list_payable_tournaments',
     'withdraw_prize_award',
     'prize_payees',
+    'minor_guardianship_aged_out',
+    'claim_guardianship_age_out_notices',
+    'end_aged_out_minor_guardianships',
     'anonymise_user_audit_logs'
   ];
   -- SECURITY DEFINER functions clients may call. Adding to this list is a
