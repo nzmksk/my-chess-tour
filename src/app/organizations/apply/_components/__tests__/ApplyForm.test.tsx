@@ -89,21 +89,12 @@ function acceptAgreement() {
 }
 
 /**
- * Fill everything the form now refuses to submit without: the payout bank
- * account, the entity registration number, and one verification document of the
- * type the selected entity requires. Defaults to the 'company' entity, which is
+ * Fill everything the form now refuses to submit without: the entity
+ * registration number, and one verification document of the type the selected
+ * entity requires. Defaults to the 'company' entity, which is
  * what the form opens on.
  */
-function fillPayoutAndKyb() {
-  fireEvent.change(screen.getByLabelText("Bank"), {
-    target: { value: "MBBEMYKL" },
-  });
-  fireEvent.change(screen.getByLabelText("Account Holder Name"), {
-    target: { value: "Test Org" },
-  });
-  fireEvent.change(screen.getByLabelText("Account Number"), {
-    target: { value: "5140 1234-5678" },
-  });
+function fillKyb() {
   fireEvent.change(screen.getByLabelText(/SSM Registration Number/), {
     target: { value: "202001234567" },
   });
@@ -228,7 +219,7 @@ describe("ApplyForm", () => {
     async function submitForm() {
       render(<ApplyForm />);
       fillOrgBasics();
-      fillPayoutAndKyb();
+      fillKyb();
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
       });
@@ -286,7 +277,7 @@ describe("ApplyForm", () => {
 
       fireEvent.click(getAddLinkButton()); // add a second (empty) link row
       fillOrgBasics();
-      fillPayoutAndKyb();
+      fillKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -302,7 +293,7 @@ describe("ApplyForm", () => {
       fireEvent.click(getAddLinkButton());
       // leave URL empty
       fillOrgBasics();
-      fillPayoutAndKyb();
+      fillKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -316,7 +307,7 @@ describe("ApplyForm", () => {
       render(<ApplyForm />);
       acceptAgreement();
       fillOrgBasics();
-      fillPayoutAndKyb();
+      fillKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -327,15 +318,12 @@ describe("ApplyForm", () => {
       expect(body).not.toHaveProperty("agreement_version");
     });
 
-    it("sends a SWIFT code and a normalized account number, never a bank name", async () => {
-      // The server derives the display name from the code, so the two cannot
-      // disagree about which bank the money is going to.
+    it("asks for no bank account (#671)", async () => {
       await submitForm();
 
+      expect(screen.queryByLabelText("Account Number")).toBeNull();
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.bank_code).toBe("MBBEMYKL");
-      expect(body.bank_account_number).toBe("514012345678");
-      expect(body).not.toHaveProperty("bank_name");
+      expect(Object.keys(body).filter((key) => /bank/.test(key))).toEqual([]);
     });
 
     it("uploads each document to the user's own folder and submits its path", async () => {
@@ -369,23 +357,8 @@ describe("ApplyForm", () => {
       });
     }
 
-    it("refuses to submit without a bank chosen", async () => {
-      await submitWith(() => {});
-      expect(mockFetch).not.toHaveBeenCalled();
-      expect(screen.getByText("Please choose your bank.")).toBeDefined();
-    });
-
     it("refuses to submit without a registration number", async () => {
       await submitWith(() => {
-        fireEvent.change(screen.getByLabelText("Bank"), {
-          target: { value: "MBBEMYKL" },
-        });
-        fireEvent.change(screen.getByLabelText("Account Holder Name"), {
-          target: { value: "Test Org" },
-        });
-        fireEvent.change(screen.getByLabelText("Account Number"), {
-          target: { value: "514012345678" },
-        });
       });
       expect(mockFetch).not.toHaveBeenCalled();
       expect(
@@ -395,15 +368,6 @@ describe("ApplyForm", () => {
 
     it("refuses to submit without the document the entity type requires", async () => {
       await submitWith(() => {
-        fireEvent.change(screen.getByLabelText("Bank"), {
-          target: { value: "MBBEMYKL" },
-        });
-        fireEvent.change(screen.getByLabelText("Account Holder Name"), {
-          target: { value: "Test Org" },
-        });
-        fireEvent.change(screen.getByLabelText("Account Number"), {
-          target: { value: "514012345678" },
-        });
         fireEvent.change(screen.getByLabelText(/SSM Registration Number/), {
           target: { value: "202001234567" },
         });
@@ -421,7 +385,7 @@ describe("ApplyForm", () => {
 
     it("refuses to submit without the registered name", async () => {
       await submitWith(() => {
-        fillPayoutAndKyb();
+        fillKyb();
         fireEvent.change(screen.getByLabelText(/Registered Company Name/), {
           target: { value: "   " },
         });
@@ -437,7 +401,7 @@ describe("ApplyForm", () => {
     async function submitReady() {
       render(<ApplyForm />);
       fillOrgBasics();
-      fillPayoutAndKyb();
+      fillKyb();
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
       });
@@ -480,7 +444,7 @@ describe("ApplyForm", () => {
       render(<ApplyForm />);
       acceptAgreement();
       fillOrgBasics();
-      fillPayoutAndKyb();
+      fillKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -503,7 +467,7 @@ describe("ApplyForm", () => {
       );
       render(<ApplyForm />);
       fillOrgBasics();
-      fillPayoutAndKyb();
+      fillKyb();
 
       await act(async () => {
         fireEvent.submit(document.querySelector("form")!);
@@ -538,12 +502,6 @@ const AMEND: AmendApplication = {
   entityType: "company",
   registrationNumber: "202001234567",
   registeredName: "KL Chess Association Sdn Bhd",
-  bank: {
-    bankName: "Maybank",
-    bankCode: "MBBEMYKL",
-    accountHolder: "KL Chess Association",
-    last4: "5678",
-  },
   documents: [
     {
       id: "cccccccc-0000-0000-0000-000000000001",
@@ -595,12 +553,11 @@ describe("ApplyForm — amending a rejected application", () => {
         .value,
     ).toBe("202001234567");
     expect(screen.getByText("ssm-blurry.pdf")).toBeDefined();
-    expect(screen.getByText(/••••\s*5678/)).toBeDefined();
     // The agreement is accepted again, never carried over.
     expect(getAgreementCheckbox().checked).toBe(false);
   });
 
-  it("resubmits with PUT, keeping the account and the documents left in place", async () => {
+  it("resubmits with PUT, keeping the documents left in place", async () => {
     mockFetch.mockResolvedValueOnce(makeSuccessFetch());
     render(<ApplyForm amend={AMEND} />);
 
@@ -613,8 +570,7 @@ describe("ApplyForm — amending a rejected application", () => {
       expect.objectContaining({ method: "PUT" }),
     );
     const body = sentBody();
-    expect(body.keep_bank_account).toBe(true);
-    expect(body.bank_account_number).toBeUndefined();
+    expect(Object.keys(body).filter((key) => /bank/.test(key))).toEqual([]);
     expect(body.keep_document_ids).toEqual([AMEND.documents[0].id]);
     expect(body.new_documents).toEqual([]);
     expect(body.agreement_accepted).toBe(true);
@@ -644,31 +600,6 @@ describe("ApplyForm — amending a rejected application", () => {
     expect(body.new_documents).toHaveLength(1);
     expect(body.new_documents[0].doc_type).toBe("ssm");
     expect(body.new_documents[0].original_filename).toBe("ssm-clear.pdf");
-  });
-
-  it("sends a replacement account once the applicant chooses a different one", async () => {
-    mockFetch.mockResolvedValueOnce(makeSuccessFetch());
-    render(<ApplyForm amend={AMEND} />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Use a different account" }),
-    );
-    fireEvent.change(screen.getByLabelText("Bank"), {
-      target: { value: "RHBBMYKL" },
-    });
-    fireEvent.change(screen.getByLabelText("Account Holder Name"), {
-      target: { value: "KL Chess Association" },
-    });
-    fireEvent.change(screen.getByLabelText("Account Number"), {
-      target: { value: "2120 0000-1111 22" },
-    });
-    acceptAgreement();
-    await submit();
-
-    const body = sentBody();
-    expect(body.keep_bank_account).toBeUndefined();
-    expect(body.bank_code).toBe("RHBBMYKL");
-    expect(body.bank_account_number).toBe("21200000111122");
   });
 
   it("refuses to resubmit when the required document was removed and not replaced", async () => {

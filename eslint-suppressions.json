@@ -1091,12 +1091,12 @@
   },
   "src/app/my/organizations/applications/[id]/amend/__tests__/page.test.ts": {
     "local/no-comments": {
-      "count": 5
+      "count": 4
     }
   },
   "src/app/my/organizations/applications/[id]/amend/page.tsx": {
     "local/no-comments": {
-      "count": 4
+      "count": 1
     }
   },
   "src/app/my/organizations/applications/_components/ApplicationsClient.tsx": {
@@ -1151,12 +1151,12 @@
   },
   "src/app/organizations/apply/_components/ApplyForm.tsx": {
     "local/no-comments": {
-      "count": 31
+      "count": 27
     }
   },
   "src/app/organizations/apply/_components/__tests__/ApplyForm.test.tsx": {
     "local/no-comments": {
-      "count": 27
+      "count": 25
     }
   },
   "src/app/organizations/page.tsx": {

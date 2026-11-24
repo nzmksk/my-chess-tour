@@ -414,7 +414,8 @@ export default function ApplicationDetailClient({ application }: Props) {
             </>
           ) : (
             <p className="font-lato text-text-muted text-sm">
-              No bank account on file.
+              No bank account on file. Organizations add one in their settings
+              once approved.
             </p>
           )}
         </div>
