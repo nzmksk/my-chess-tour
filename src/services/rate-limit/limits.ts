@@ -31,6 +31,12 @@ export const RATE_LIMITS = {
     perIp: 60,
     message: "You've sent a lot of invitations in a short time.",
   },
+  helperInvite: {
+    windowSeconds: HOUR,
+    perUser: 10,
+    perIp: 30,
+    message: "You've sent several helper invitations in a short time.",
+  },
   funderLinks: {
     windowSeconds: HOUR,
     perUser: 30,
