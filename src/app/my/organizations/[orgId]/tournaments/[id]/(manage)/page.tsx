@@ -1,8 +1,8 @@
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
-import TournamentManageClient from "./_components/TournamentManageClient";
-import { getTournamentManageData } from "./_data/getTournamentManageData";
+import TournamentManageClient from "../_components/TournamentManageClient";
+import { getTournamentManageData } from "../_data/getTournamentManageData";
 
 export async function generateMetadata({
   params,
