@@ -17,6 +17,11 @@ import { internalErrorResponse } from "@/lib/http/internal-error";
 import { afterResponse } from "@/lib/http/after-response";
 import { syncPrizeFundingRequests } from "@/services/prizes/funding-requests";
 import { withAuditContext } from "@/services/supabase/audit-context";
+import { addRecipient } from "@/services/email/recipients";
+import {
+  loadParticipantRecipientsFor,
+  nameForRecipient,
+} from "@/services/email/participant-recipients";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,7 +32,10 @@ const UUID_RE =
 const NOTIFIABLE_STATUSES = ["confirmed", "pending_payment"];
 
 interface RegistrationRecipient {
-  user: { email: string | null; first_name: string | null } | null;
+  user_id: string | null;
+  payment: {
+    payer: { email: string | null; first_name: string | null } | null;
+  } | null;
 }
 
 // Emails every player with an active registration that the tournament has been
@@ -39,7 +47,9 @@ async function notifyRegisteredPlayers(
 ): Promise<void> {
   const { data, error } = await supabaseAdmin
     .from("registrations")
-    .select("user:users(email, first_name)")
+    .select(
+      "user_id, payment:payments!current_payment_id(payer:users!user_id(email, first_name))",
+    )
     .eq("tournament_id", tournamentId)
     .in("status", NOTIFIABLE_STATUSES);
 
@@ -51,25 +61,40 @@ async function notifyRegisteredPlayers(
     return;
   }
 
-  const recipients = (data as unknown as RegistrationRecipient[])
-    .map((r) => r.user)
-    .filter((u): u is { email: string; first_name: string | null } =>
-      Boolean(u?.email),
-    );
-
-  const results = await Promise.allSettled(
-    recipients.map((u) =>
-      sendTournamentCancellationEmail(u.email, {
-        playerName: u.first_name ?? "Player",
-        tournamentName,
-      }),
-    ),
+  const registrations = data as unknown as RegistrationRecipient[];
+  const contactsById = await loadParticipantRecipientsFor(
+    registrations.flatMap((r) => (r.user_id ? [r.user_id] : [])),
   );
+  if (!contactsById) return;
 
+  const sends: Promise<unknown>[] = [];
+  for (const registration of registrations) {
+    const contacts = registration.user_id
+      ? contactsById.get(registration.user_id)
+      : undefined;
+    if (!contacts) continue;
+    const recipients = new Map(contacts.recipients);
+    addRecipient(
+      recipients,
+      registration.payment?.payer?.email,
+      registration.payment?.payer?.first_name,
+    );
+    for (const recipient of recipients.values()) {
+      sends.push(
+        sendTournamentCancellationEmail(recipient.email, {
+          recipientName: recipient.name,
+          tournamentName,
+          aboutPlayer: nameForRecipient(contacts, recipient),
+        }),
+      );
+    }
+  }
+
+  const results = await Promise.allSettled(sends);
   const failed = results.filter((r) => r.status === "rejected").length;
   if (failed > 0) {
     console.error(
-      `Failed to send ${failed}/${recipients.length} cancellation email(s) for tournament ${tournamentId}`,
+      `Failed to send ${failed}/${sends.length} cancellation email(s) for tournament ${tournamentId}`,
     );
   }
 }

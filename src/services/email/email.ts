@@ -58,18 +58,41 @@ export async function sendPasswordResetEmail(email: string, resetLink: string) {
 
 export async function sendTournamentCancellationEmail(
   email: string,
-  params: { playerName: string; tournamentName: string },
+  params: {
+    recipientName: string;
+    tournamentName: string;
+    aboutPlayer?: string | null;
+  },
 ) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const about = params.aboutPlayer ?? null;
   const html = loadTemplate("tournament-cancellation.html")
-    .replace(/\{\{playerName\}\}/g, escapeHtml(params.playerName))
+    .replace(
+      /\{\{lead\}\}/g,
+      escapeHtml(
+        about
+          ? `We're sorry to let you know that ${about}'s tournament`
+          : "We're sorry to let you know that",
+      ),
+    )
+    .replace(
+      /\{\{footerReason\}\}/g,
+      escapeHtml(
+        about
+          ? `You received this email because ${about} was registered for`
+          : "You received this email because you were registered for",
+      ),
+    )
+    .replace(/\{\{recipientName\}\}/g, escapeHtml(params.recipientName))
     .replace(/\{\{tournamentName\}\}/g, escapeHtml(params.tournamentName))
     .replace(/\{\{browseUrl\}\}/g, `${siteUrl}/`);
 
   const { error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: email,
-    subject: `${params.tournamentName} has been cancelled`,
+    subject: about
+      ? `${params.tournamentName}, which ${about} entered, has been cancelled`
+      : `${params.tournamentName} has been cancelled`,
     html,
   });
 

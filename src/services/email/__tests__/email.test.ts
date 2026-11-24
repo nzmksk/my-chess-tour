@@ -177,11 +177,25 @@ describe("sendPasswordResetEmail", () => {
 });
 
 describe("sendTournamentCancellationEmail", () => {
+  it("names the dependent to a guardian (#716)", async () => {
+    await sendTournamentCancellationEmail("g@example.com", {
+      recipientName: "Siti",
+      tournamentName: "KL Open 2026",
+      aboutPlayer: "Aina Rahman",
+    });
+
+    const { html, subject } = mockSend.mock.calls[0][0];
+    expect(subject).toBe("KL Open 2026, which Aina Rahman entered, has been cancelled");
+    expect(html).toContain("Dear Siti,");
+    expect(html).toContain("let you know that Aina Rahman&#39;s tournament KL Open 2026");
+    expect(html).toContain("because Aina Rahman was registered for");
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockReadFileSync.mockReturnValue(
-      "<html>Dear {{playerName}}, {{tournamentName}} cancelled. " +
-        '<a href="{{browseUrl}}">browse</a></html>',
+      "<html>Dear {{recipientName}}, {{lead}} {{tournamentName}} cancelled. " +
+        '<a href="{{browseUrl}}">browse</a> {{footerReason}}</html>',
     );
     mockSend.mockResolvedValue({ error: null });
     process.env.NEXT_PUBLIC_SITE_URL = "https://mychesstour.com";
@@ -189,7 +203,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("loads the tournament-cancellation.html template", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -201,7 +215,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("injects player name, tournament name, and browse URL", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -209,14 +223,14 @@ describe("sendTournamentCancellationEmail", () => {
     expect(html).toContain("Ali");
     expect(html).toContain("KL Open 2026");
     expect(html).toContain('href="https://mychesstour.com/"');
-    expect(html).not.toContain("{{playerName}}");
+    expect(html).not.toContain("{{recipientName}}");
     expect(html).not.toContain("{{tournamentName}}");
     expect(html).not.toContain("{{browseUrl}}");
   });
 
   it("escapes HTML in user-supplied values to prevent injection", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "<script>x</script>",
+      recipientName: "<script>x</script>",
       tournamentName: "Rook & Roll <b>2026</b>",
     });
 
@@ -228,7 +242,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("sends to the correct email address", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -239,7 +253,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   it("includes the tournament name in the subject", async () => {
     await sendTournamentCancellationEmail("player@example.com", {
-      playerName: "Ali",
+      recipientName: "Ali",
       tournamentName: "KL Open 2026",
     });
 
@@ -253,7 +267,7 @@ describe("sendTournamentCancellationEmail", () => {
 
     await expect(
       sendTournamentCancellationEmail("player@example.com", {
-        playerName: "Ali",
+        recipientName: "Ali",
         tournamentName: "KL Open 2026",
       }),
     ).rejects.toThrow(/sending failed/i);
@@ -262,7 +276,7 @@ describe("sendTournamentCancellationEmail", () => {
   it("resolves without a value when send succeeds", async () => {
     await expect(
       sendTournamentCancellationEmail("player@example.com", {
-        playerName: "Ali",
+        recipientName: "Ali",
         tournamentName: "KL Open 2026",
       }),
     ).resolves.toBeUndefined();

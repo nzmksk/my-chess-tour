@@ -210,8 +210,8 @@
         <div class="divider"></div>
 
         <p class="message">
-          Dear {{playerName}},<br /><br />
-          We're sorry to let you know that
+          Dear {{recipientName}},<br /><br />
+          {{lead}}
           <span class="tournament">{{tournamentName}}</span> has been cancelled
           and will no longer take place.
         </p>
@@ -237,7 +237,7 @@
           ><span></span>
         </div>
         <p>
-          You received this email because you were registered for<br />
+          {{footerReason}}<br />
           {{tournamentName}} on <a href="{{browseUrl}}">mychesstour.com</a>.
         </p>
       </div>
