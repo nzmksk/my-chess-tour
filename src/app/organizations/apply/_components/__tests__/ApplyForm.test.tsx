@@ -9,6 +9,7 @@ import {
   act,
 } from "@testing-library/react";
 import ApplyForm, { type AmendApplication } from "../ApplyForm";
+import { NAME_CHECK_DELAY_MS } from "../useOrgNameAvailability";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -629,5 +630,108 @@ describe("ApplyForm — amending a rejected application", () => {
       screen.getByText("An approved organization already uses this name"),
     ).toBeDefined();
     expect(getResubmitButton().disabled).toBe(false);
+  });
+});
+
+describe("organization name availability (#672)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function availabilityResponse(available: boolean) {
+    return {
+      ok: true,
+      json: vi.fn().mockResolvedValue({ data: { available } }),
+    };
+  }
+
+  function nameInput() {
+    return screen.getByLabelText(/Organization Name/) as HTMLInputElement;
+  }
+
+  async function typeName(value: string) {
+    fireEvent.change(nameInput(), { target: { value } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(NAME_CHECK_DELAY_MS);
+    });
+  }
+
+  it("checks the name once typing pauses, not on every keystroke", async () => {
+    mockFetch.mockResolvedValue(availabilityResponse(true));
+    render(<ApplyForm />);
+
+    fireEvent.change(nameInput(), { target: { value: "KL" } });
+    fireEvent.change(nameInput(), { target: { value: "KL Chess" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(NAME_CHECK_DELAY_MS);
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      "/api/v1/organizations/name-availability?name=KL%20Chess",
+    );
+  });
+
+  it("says when the name is available", async () => {
+    mockFetch.mockResolvedValue(availabilityResponse(true));
+    render(<ApplyForm />);
+    await typeName("KL Chess Association");
+
+    expect(screen.getByText("This name is available.")).toBeDefined();
+    expect(nameInput().getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("warns as soon as an approved organization uses the name", async () => {
+    mockFetch.mockResolvedValue(availabilityResponse(false));
+    render(<ApplyForm />);
+    await typeName("KL Chess Association");
+
+    const status = document.getElementById("org_name_status")!;
+    expect(status.textContent).toMatch(/already uses this name/);
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(nameInput().getAttribute("aria-invalid")).toBe("true");
+    expect(nameInput().getAttribute("aria-describedby")).toBe(
+      "org_name_status",
+    );
+  });
+
+  it("refuses to submit a name that is taken", async () => {
+    mockFetch.mockResolvedValue(availabilityResponse(false));
+    render(<ApplyForm />);
+    fillOrgBasics("KL Chess Association");
+    fillKyb();
+    acceptAgreement();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(NAME_CHECK_DELAY_MS);
+    });
+    mockFetch.mockClear();
+
+    await act(async () => {
+      fireEvent.submit(document.querySelector("form")!);
+    });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(screen.getAllByText(/already uses this name/).length).toBe(2);
+  });
+
+  it("stays quiet and lets the server decide when the check fails", async () => {
+    mockFetch.mockRejectedValue(new Error("offline"));
+    render(<ApplyForm />);
+    await typeName("KL Chess Association");
+
+    expect(document.getElementById("org_name_status")!.textContent).toBe("");
+    expect(nameInput().getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("checks nothing for a blank name", async () => {
+    render(<ApplyForm />);
+    await typeName("   ");
+
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

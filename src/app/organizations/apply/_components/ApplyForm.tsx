@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/services/supabase/client";
+import {
+  type NameAvailability,
+  useOrgNameAvailability,
+} from "./useOrgNameAvailability";
 
 const LINK_TYPES = [
   { value: "website", label: "Website" },
@@ -141,9 +145,29 @@ const DOC_TYPE_LABELS: Record<string, string> = Object.fromEntries(
     .map((t) => [t.value, t.label]),
 );
 
+const NAME_TAKEN_MESSAGE =
+  "An approved organization already uses this name. Please choose another.";
+
+const NAME_STATUS_TEXT: Record<NameAvailability, string> = {
+  idle: "",
+  checking: "Checking availability…",
+  available: "This name is available.",
+  taken: NAME_TAKEN_MESSAGE,
+  unknown: "",
+};
+
+const NAME_STATUS_CLASS: Record<NameAvailability, string> = {
+  idle: "text-text-muted",
+  checking: "text-text-muted",
+  available: "text-success",
+  taken: "text-error",
+  unknown: "text-text-muted",
+};
+
 export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
   const router = useRouter();
   const [name, setName] = useState(amend?.name ?? "");
+  const nameAvailability = useOrgNameAvailability(name);
   const [description, setDescription] = useState(amend?.description ?? "");
   const [links, setLinks] = useState<LinkEntry[]>(() =>
     linkEntriesFrom(amend?.links),
@@ -256,6 +280,12 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (status === "submitting") return;
+
+    if (nameAvailability === "taken") {
+      setErrorMessage(NAME_TAKEN_MESSAGE);
+      setStatus("error");
+      return;
+    }
 
     if (entityType !== "individual" && !registrationNumber.trim()) {
       setErrorMessage(`Please enter your ${entityConfig.registrationLabel}.`);
@@ -453,17 +483,30 @@ export default function ApplyForm({ amend }: { amend?: AmendApplication }) {
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Organization Name */}
         <div className="flex flex-col gap-1.5">
-          <label className="font-lato text-text-secondary text-sm font-medium">
+          <label
+            htmlFor="org_name"
+            className="font-lato text-text-secondary text-sm font-medium"
+          >
             Organization Name <span className="text-error">*</span>
           </label>
           <input
+            id="org_name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., KL Chess Association"
             required
-            className="border-border bg-bg-raised font-lato text-text-primary placeholder:text-text-disabled focus:border-gold-bright w-full rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none"
+            aria-invalid={nameAvailability === "taken"}
+            aria-describedby="org_name_status"
+            className={`bg-bg-raised font-lato text-text-primary placeholder:text-text-disabled focus:border-gold-bright w-full rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none ${nameAvailability === "taken" ? "border-error" : "border-border"}`}
           />
+          <p
+            id="org_name_status"
+            aria-live="polite"
+            className={`font-lato min-h-4 text-xs ${NAME_STATUS_CLASS[nameAvailability]}`}
+          >
+            {NAME_STATUS_TEXT[nameAvailability]}
+          </p>
         </div>
 
         {/* Description */}
