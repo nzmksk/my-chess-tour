@@ -121,4 +121,36 @@ describe("CompleteProfilePrompt", () => {
     ).toBeDefined();
     expect(onSaved).not.toHaveBeenCalled();
   });
+
+  it("saves to the given URL and names the player", async () => {
+    render(
+      <CompleteProfilePrompt
+        missing={["gender"]}
+        onSaved={vi.fn()}
+        saveUrl="/api/v1/me/dependents/dep-1"
+        playerName="Aina"
+      />,
+    );
+    expect(
+      screen.getByText("A few of Aina's details are needed for this tournament"),
+    ).toBeDefined();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save & Continue" }));
+    });
+    expect(screen.getByText("Please select Aina's gender.")).toBeDefined();
+
+    await act(async () => {
+      fireEvent.change(screen.getByRole("combobox"), {
+        target: { value: "female" },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save & Continue" }));
+    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/v1/me/dependents/dep-1",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+  });
 });

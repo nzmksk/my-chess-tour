@@ -7,6 +7,7 @@ import { internalErrorResponse } from "@/lib/http/internal-error";
 import { liveRefund, refundState } from "@/lib/refunds/state";
 import { resolveTimeZone } from "@/lib/tournaments/datetime";
 import { withAuditContext } from "@/services/supabase/audit-context";
+import { listDependents } from "@/services/guardianship/dependents";
 
 const VALID_STATUSES = new Set([
   "pending_payment",
@@ -43,6 +44,7 @@ type RefundRow = {
 
 type RegistrationRow = {
   id: string;
+  user_id: string;
   fee_tier: string;
   status: string;
   registered_at: string;
@@ -112,27 +114,45 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   // as expired rather than lingering "pending" (CHIP sends no expiry event).
   // Bulk sweep skips the per-row CHIP cancel — the purchase `due` already makes
   // the link unpayable. Best-effort: never block the listing.
-  const { error: expireErr } = await supabaseAdmin.rpc(
-    "expire_stale_pending_payments",
-    { p_ttl: PAYMENT_TIMEOUT_INTERVAL, p_user_id: claims.id },
-  );
-  if (expireErr) {
-    console.warn(
-      "expire_stale_pending_payments failed (continuing):",
-      expireErr,
+  const dependents = await listDependents(claims.id);
+  if (!dependents.ok) {
+    return internalErrorResponse(
+      "GET /api/v1/me/registrations: dependents lookup failed",
+      dependents.error,
     );
+  }
+  const dependentNames = new Map(
+    dependents.data.map((d) => [d.id, `${d.first_name} ${d.last_name}`]),
+  );
+  const playerIds = [claims.id, ...dependentNames.keys()];
+
+  const expiries = await Promise.all(
+    playerIds.map((playerId) =>
+      supabaseAdmin.rpc("expire_stale_pending_payments", {
+        p_ttl: PAYMENT_TIMEOUT_INTERVAL,
+        p_user_id: playerId,
+      }),
+    ),
+  );
+  for (const { error: expireErr } of expiries) {
+    if (expireErr) {
+      console.warn(
+        "expire_stale_pending_payments failed (continuing):",
+        expireErr,
+      );
+    }
   }
 
   let query = supabaseAdmin
     .from("registrations")
     .select(
-      `id, fee_tier, status, registered_at, confirmed_at,
+      `id, user_id, fee_tier, status, registered_at, confirmed_at,
       tournaments!inner (
         id, slug, name, start_date, end_date, timezone, venue_name, venue_state, format, time_control, entry_fees, status
       ),
       refunds (status, refund_amount_cents, requested_at, processed_at, failed_at)`,
     )
-    .eq("user_id", claims.id)
+    .in("user_id", playerIds)
     // Deterministic base order so equal sort keys (e.g. same start_date) resolve
     // to a stable "most recently registered first" tiebreak. The requested sort
     // is applied in-memory below because `start_date` lives on the joined
@@ -170,8 +190,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     // how a player follows the money the cancellation email promised (#511).
     const refund = liveRefund(row.refunds);
 
+    const dependentName = dependentNames.get(row.user_id);
+
     return {
       id: row.id,
+      participant: dependentName
+        ? { id: row.user_id, name: dependentName }
+        : null,
       tournament: {
         id: row.tournaments.id,
         slug: row.tournaments.slug,

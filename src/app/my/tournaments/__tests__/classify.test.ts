@@ -8,6 +8,7 @@ function registration(
 ): PlayerRegistration {
   return {
     id: "reg-1",
+    participant: null,
     tournament: {
       id: "t1",
       slug: "kl-open",

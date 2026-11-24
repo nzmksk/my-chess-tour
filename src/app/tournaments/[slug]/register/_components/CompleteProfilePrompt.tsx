@@ -28,9 +28,17 @@ interface Props {
   missing: CompletableField[];
   /** Receives the saved values so the parent can merge them into its profile. */
   onSaved: (updated: Partial<PlayerProfile>) => void;
+  saveUrl?: string;
+  playerName?: string | null;
 }
 
-export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
+export default function CompleteProfilePrompt({
+  missing,
+  onSaved,
+  saveUrl = "/api/v1/profile",
+  playerName = null,
+}: Props) {
+  const whose = playerName ? `${playerName}'s` : "your";
   const [gender, setGender] = useState("");
   const [dob, setDob] = useState("");
   const [fideId, setFideId] = useState("");
@@ -44,10 +52,10 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
 
   function validate(): string | null {
     if (needs("gender") && gender !== "male" && gender !== "female") {
-      return "Please select your gender.";
+      return `Please select ${whose} gender.`;
     }
     if (needs("nationality") && !nationality) {
-      return "Please select your nationality.";
+      return `Please select ${whose} nationality.`;
     }
     if (needs("date_of_birth")) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
@@ -108,7 +116,7 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
     }
 
     try {
-      const res = await fetch("/api/v1/profile", {
+      const res = await fetch(saveUrl, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -129,7 +137,9 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
   return (
     <div className="card card--featured flex flex-col gap-3 p-6">
       <p className="font-cinzel text-text-muted text-xs font-semibold tracking-widest uppercase">
-        A few details are needed for this tournament
+        {playerName
+          ? `A few of ${playerName}'s details are needed for this tournament`
+          : "A few details are needed for this tournament"}
       </p>
 
       {needs("gender") && (
@@ -169,7 +179,7 @@ export default function CompleteProfilePrompt({ missing, onSaved }: Props) {
             {FIELD_LABELS.nationality}
           </span>
           <CountryDropdown
-            placeholder="Select your nationality"
+            placeholder={`Select ${whose} nationality`}
             onChange={(c) => setNationality(c.name)}
           />
         </div>

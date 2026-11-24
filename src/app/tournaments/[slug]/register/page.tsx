@@ -14,6 +14,8 @@ import type { FeeBreakdownByTier } from "./_components/RegisterForm";
 import RegisterForm from "./_components/RegisterForm";
 import RegisterFormSkeleton from "./_components/RegisterFormSkeleton";
 import PaymentInProgress from "./_components/PaymentInProgress";
+import ParticipantPicker from "./_components/ParticipantPicker";
+import { loadRegisterParticipants } from "./_lib/participant";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,7 @@ async function fetchTournament(slug: string): Promise<TournamentDetail | null> {
 // form. Kept out of the component body so the time check stays out of render.
 async function getLivePendingPayment(
   userId: string,
+  payerId: string,
   tournamentId: string,
   feeBreakdown: FeeBreakdownByTier,
 ): Promise<{
@@ -72,11 +75,12 @@ async function getLivePendingPayment(
   // Reuse the current attempt's stored link.
   const { data: payment } = await supabaseAdmin
     .from("payments")
-    .select("checkout_url")
+    .select("checkout_url, user_id")
     .eq("id", existingReg.current_payment_id)
     .maybeSingle();
 
   if (!payment?.checkout_url) return null;
+  if (payment.user_id && payment.user_id !== payerId) return null;
 
   return {
     feeTier: existingReg.fee_tier,
@@ -102,7 +106,13 @@ export async function generateMetadata({
   };
 }
 
-async function RegisterPageContent({ slug }: { slug: string }) {
+async function RegisterPageContent({
+  slug,
+  requestedParticipant,
+}: {
+  slug: string;
+  requestedParticipant: string | undefined;
+}) {
   const tournament = await fetchTournament(slug);
   if (!tournament) notFound();
 
@@ -115,13 +125,33 @@ async function RegisterPageContent({ slug }: { slug: string }) {
     redirect(`/auth/login?next=/tournaments/${slug}/register`);
   }
 
+  const choice = await loadRegisterParticipants(
+    claims.id,
+    requestedParticipant,
+  );
+  if (!choice.ok) {
+    console.error(
+      "Register page: failed to load the caller's dependents",
+      choice.error,
+    );
+  }
+  const participants = choice.ok ? choice.participants : [];
+  const participant = choice.ok
+    ? choice.selected
+    : requestedParticipant && requestedParticipant !== claims.id
+      ? null
+      : { id: claims.id, firstName: "You", name: "Myself", isSelf: true };
+  if (!participant) {
+    redirect(`/tournaments/${slug}/register`);
+  }
+
   const supabase = await createClient();
   const { data: playerProfile } = await supabase
     .from("player_profiles")
     .select(
       "gender, oku_status, date_of_birth, title, fide_rating, national_rating, fide_id, mcf_id, nationality",
     )
-    .eq("user_id", claims.id)
+    .eq("user_id", participant.id)
     .single();
 
   // Commission rates are server-only; compute the player-facing totals here so
@@ -154,39 +184,67 @@ async function RegisterPageContent({ slug }: { slug: string }) {
   // link with the tier locked — so show a "Continue payment" screen instead of
   // the tier form. Once the hold lapses the row expires and the form returns.
   const livePending = await getLivePendingPayment(
+    participant.id,
     claims.id,
     tournamentId,
     feeBreakdown,
   );
+
+  const picker =
+    participants.length > 1 ? (
+      <ParticipantPicker
+        participants={participants}
+        selectedId={participant.id}
+      />
+    ) : null;
+
   if (livePending) {
-    return <PaymentInProgress tournamentSlug={slug} {...livePending} />;
+    return (
+      <>
+        {picker}
+        <PaymentInProgress tournamentSlug={slug} {...livePending} />
+      </>
+    );
   }
 
   return (
-    <Suspense fallback={<RegisterFormSkeleton />}>
-      <RegisterForm
-        tournament={tournament}
-        userId={claims.id}
-        playerProfile={playerProfile ?? null}
-        restrictions={normalizeRestrictions(tournament.restrictions)}
-        feeBreakdown={feeBreakdown}
-      />
-    </Suspense>
+    <>
+      {picker}
+      <Suspense fallback={<RegisterFormSkeleton />}>
+        <RegisterForm
+          key={participant.id}
+          tournament={tournament}
+          userId={claims.id}
+          playerProfile={playerProfile ?? null}
+          restrictions={normalizeRestrictions(tournament.restrictions)}
+          feeBreakdown={feeBreakdown}
+          participant={participant}
+        />
+      </Suspense>
+    </>
   );
 }
 
 export default async function RegisterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ participant?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const { participant } = await searchParams;
 
   return (
     <div className="bg-bg-base flex-1">
       <NavBar />
       <main className="mx-auto max-w-2xl px-6 py-10 md:px-10">
-        <RegisterPageContent slug={slug} />
+        <RegisterPageContent
+          slug={slug}
+          requestedParticipant={
+            typeof participant === "string" ? participant : undefined
+          }
+        />
       </main>
     </div>
   );
