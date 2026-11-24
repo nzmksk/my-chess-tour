@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase/admin";
-import { getAuthClaims } from "@/services/supabase/permission";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
 import { withAuditContext } from "@/services/supabase/audit-context";
 import { internalErrorResponse } from "@/lib/http/internal-error";
@@ -8,7 +7,6 @@ import {
   UNDER_18_SELF_ACCOUNT_MESSAGE,
   isUnderAdultAge,
 } from "@/lib/auth/adult-age";
-import { UUID_RE } from "@/app/api/v1/organizations/_lib/authorize-org";
 import {
   resolveNewFideId,
   validateProfileFields,
@@ -16,54 +14,21 @@ import {
 import { CONTACT_EMAIL_RE } from "@/lib/guardianship/dependent-options";
 import {
   dependentErrorResponse,
-  dependentNotFoundResponse,
   getDependent,
-  type DependentView,
 } from "@/services/guardianship/dependents";
+import {
+  resolveDependentForCaller,
+  type ResolvedDependent,
+} from "@/services/guardianship/resolve-dependent";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-type Resolved =
-  | { ok: true; guardianId: string; dependent: DependentView }
-  | { ok: false; response: NextResponse };
 
 async function resolveDependent(
   context: RouteContext,
   action: string,
-): Promise<Resolved> {
+): Promise<ResolvedDependent> {
   const { id } = await context.params;
-
-  const claims = await getAuthClaims();
-  if (!claims) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: { code: "UNAUTHORIZED", message: "Authentication required" },
-        },
-        { status: 401 },
-      ),
-    };
-  }
-
-  if (!UUID_RE.test(id)) {
-    return { ok: false, response: dependentNotFoundResponse() };
-  }
-
-  const result = await getDependent(claims.id, id);
-  if (!result.ok) {
-    return {
-      ok: false,
-      response: internalErrorResponse(
-        `${action} /api/v1/me/dependents/[id]: lookup failed`,
-        result.error,
-      ),
-    };
-  }
-  if (!result.data) {
-    return { ok: false, response: dependentNotFoundResponse() };
-  }
-  return { ok: true, guardianId: claims.id, dependent: result.data };
+  return resolveDependentForCaller(id, `${action} /api/v1/me/dependents/[id]`);
 }
 
 async function handleGet(
