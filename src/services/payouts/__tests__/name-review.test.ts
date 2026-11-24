@@ -49,6 +49,34 @@ beforeEach(() => {
 });
 
 describe("loadBankNameReviews", () => {
+  it("expects the player's own name for an account a helper entered (#718)", async () => {
+    results.organization_bank_accounts = { data: [], error: null };
+    results.player_bank_accounts = {
+      data: [
+        {
+          ...common,
+          id: "helper-acct",
+          user_id: "u-2",
+          entered_by: "helper-1",
+          user: { first_name: "Aziz", last_name: "Adult" },
+          account_holder: "Hana Helper",
+          account_number: "800000000303",
+          status: "name_mismatch",
+          created_at: "2026-11-21T00:00:00Z",
+        },
+      ],
+      error: null,
+    };
+
+    const { data } = await loadBankNameReviews();
+
+    expect(data!.pending[0]).toMatchObject({
+      owner_name: "Aziz Adult",
+      account_holder: "Hana Helper",
+      expected_name: "Aziz Adult",
+    });
+  });
+
   it("lists both owners' accounts under review, oldest first, masked to the last 4 digits", async () => {
     results.organization_bank_accounts = {
       data: [

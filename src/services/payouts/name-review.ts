@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import type { BankAccountOwner, BankAccountStatus } from "./bank-account";
+import { expectedPlayerHolderName } from "./player-holder";
 
 export interface BankNameReview {
   id: string;
@@ -50,6 +51,7 @@ interface OrgRow extends CommonRow {
 
 interface PlayerRow extends CommonRow {
   user_id: string;
+  entered_by: string | null;
   user:
     | { first_name: string | null; last_name: string | null }
     | { first_name: string | null; last_name: string | null }[]
@@ -77,7 +79,9 @@ export async function loadBankNameReviews(): Promise<{
       .limit(LIMIT),
     supabaseAdmin
       .from("player_bank_accounts")
-      .select(`${COMMON}, user_id, user:users!user_id(first_name, last_name)`)
+      .select(
+        `${COMMON}, user_id, entered_by, user:users!user_id(first_name, last_name)`,
+      )
       .or(ACTIVE_IN_REVIEW_OR_DECIDED)
       .order("created_at", { ascending: false })
       .limit(LIMIT),
@@ -116,16 +120,18 @@ export async function loadBankNameReviews(): Promise<{
         expected_is_registered_name: registeredName !== undefined,
       };
     }),
-    ...playerRows.map(({ user_id, user, ...row }) => {
+    ...playerRows.map(({ user_id, user, entered_by, ...row }) => {
       const u = one(user);
+      const ownerName =
+        [u?.first_name, u?.last_name].filter(Boolean).join(" ") ||
+        "Deleted account";
       return {
         ...base(row),
         owner: "player" as const,
         owner_id: user_id,
-        owner_name:
-          [u?.first_name, u?.last_name].filter(Boolean).join(" ") ||
-          "Deleted account",
-        expected_name: row.account_holder,
+        owner_name: ownerName,
+        expected_name:
+          expectedPlayerHolderName({ ...row, entered_by }, u) ?? ownerName,
         expected_is_registered_name: false,
       };
     }),
