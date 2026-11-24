@@ -10,7 +10,9 @@
 -- the auth metadata from its own check, the way it puts terms_version there.
 -- handle_new_user stamps the time itself, in the statement that creates the
 -- row, so there's no window where the account exists without it. Like
--- terms_accepted_at, the time is never taken from metadata.
+-- terms_accepted_at, the time is never taken from metadata. Only the JSON
+-- boolean true counts: the route always sends a boolean, and ->> would read
+-- the string "true" the same way, so the value is compared as jsonb.
 --
 -- NULL on accounts from before this, on rows created outside signup, and on
 -- every managed account: a dependent didn't confirm anything, their guardian
@@ -29,7 +31,7 @@ CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
   v_terms_version varchar(20) := NULLIF(NEW.raw_user_meta_data->>'terms_version', '');
-  v_adult         boolean     := COALESCE(NEW.raw_user_meta_data->>'adult_confirmed', '') = 'true';
+  v_adult         boolean     := COALESCE(NEW.raw_user_meta_data->'adult_confirmed' = 'true'::jsonb, false);
 BEGIN
   INSERT INTO public.users (
     id, auth_user_id, email, first_name, last_name,
