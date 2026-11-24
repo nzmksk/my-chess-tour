@@ -37,6 +37,12 @@ describe("scrubUrl", () => {
     );
   });
 
+  it("masks helper invitation tokens in the path", () => {
+    expect(scrubUrl(`${SITE}/helper-invitations/9f8e7d6c5b4a`)).toBe(
+      `${SITE}/helper-invitations/:token`,
+    );
+  });
+
   it("scrubs bare paths too", () => {
     expect(scrubUrl("/invitations/9f8e7d6c5b4a")).toBe("/invitations/:token");
     expect(scrubUrl("/?status=open&q=ahmad")).toBe("/?status=open");
