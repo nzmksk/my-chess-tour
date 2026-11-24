@@ -5,6 +5,7 @@ import NavBar from "@/components/NavBar";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
 import { resolvePaymentState } from "../_lib/resolvePaymentState";
+import { resolveReturnParticipant } from "../_lib/participant";
 import PaymentStatusView from "../_components/PaymentStatusView";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +25,13 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export default async function PaymentSuccessPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ participant?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const { participant: requested } = await searchParams;
 
   const claims = await getAuthClaims();
 
@@ -61,8 +65,14 @@ export default async function PaymentSuccessPage({
 
   if (!tournament) notFound();
 
+  const participant = await resolveReturnParticipant(
+    claims.id,
+    typeof requested === "string" ? requested : undefined,
+  );
+
   const { state, registration } = await resolvePaymentState(
     tournament.id,
+    participant.id,
     claims.id,
   );
 
@@ -72,6 +82,7 @@ export default async function PaymentSuccessPage({
         state={state}
         registration={registration}
         tournamentSlug={slug}
+        participant={participant.isSelf ? null : participant}
       />
     </Shell>
   );

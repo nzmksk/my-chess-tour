@@ -63,11 +63,12 @@ async function expireIfStale(reg: RegistrationRow): Promise<ResolvedPayment> {
 export function resolvePaymentState(
   tournamentId: string,
   userId: string,
+  actorId: string = userId,
 ): Promise<ResolvedPayment> {
   return runWithAuditContext(
     "registration.payment-return",
     () => resolvePaymentStateInScope(tournamentId, userId),
-    userId,
+    actorId,
   );
 }
 
