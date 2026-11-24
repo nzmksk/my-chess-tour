@@ -36,6 +36,7 @@ function award(overrides: Partial<PrizeAwardView> = {}): PrizeAwardView {
     chip_receipt_url: null,
     entered_at: "2026-11-15T10:00:00Z",
     reviewed_at: null,
+    withdrawn_at: null,
     processed_at: null,
     winner_bank_status: null,
     ...overrides,
