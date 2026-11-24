@@ -16,6 +16,9 @@
 --   P5  payments.user_id is documented as the payer
 --   P6  the admin's stuck-refunds list names the payer, who is owed the money
 --
+-- Since #714 a payer other than the participant needs an active guardianship
+-- of them, so the fixtures give the guardian and the helper one.
+--
 -- HOW TO RUN: paste into the Supabase SQL editor AFTER applying the current
 -- migrations. Runs inside a transaction that ROLLBACKs, so it builds throwaway
 -- fixtures and persists NOTHING. A failing assertion RAISEs; on success it
@@ -58,6 +61,14 @@ BEGIN
     VALUES ('payer-helper@test.local', 'Hal', 'Helper') RETURNING id INTO v_helper;
   INSERT INTO users (email, first_name, last_name)
     VALUES ('payer-solo@test.local', 'Sol', 'Solo') RETURNING id INTO v_solo;
+  INSERT INTO users (email, first_name, last_name)
+    VALUES ('payer-kid@test.local', 'Kit', 'Kid') RETURNING id INTO v_kid;
+
+  INSERT INTO guardianships (guardian_user_id, dependent_user_id, relationship,
+                             basis, authorisation_method, terms_version, terms_accepted_at)
+  VALUES (v_guardian, v_player, 'carer',  'authorised', 'guardian_attestation', '2026-11-24', now()),
+         (v_helper,   v_player, 'carer',  'authorised', 'player_invite',        '2026-11-24', now()),
+         (v_guardian, v_kid,    'parent', 'minor',      NULL,                   '2026-11-24', now());
 
   INSERT INTO tournaments (
     organization_id, name, venue_name, venue_state, venue_address,
@@ -145,8 +156,6 @@ BEGIN
   RAISE NOTICE 'P5 PASS — payments.user_id is documented as the payer';
 
   -- ===== P6 ===============================================================
-  INSERT INTO users (email, first_name, last_name)
-    VALUES ('payer-kid@test.local', 'Kit', 'Kid') RETURNING id INTO v_kid;
   v_res := create_registration_with_payment(
     v_kid, v_tournament, 'standard', 4000, p_payer_user_id => v_guardian);
   v_kid_reg := (v_res->>'registration_id')::uuid;
