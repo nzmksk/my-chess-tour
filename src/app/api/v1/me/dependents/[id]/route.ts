@@ -13,8 +13,8 @@ import {
   resolveNewFideId,
   validateProfileFields,
 } from "@/services/profile/profile-fields";
+import { CONTACT_EMAIL_RE } from "@/lib/guardianship/dependent-options";
 import {
-  CONTACT_EMAIL_RE,
   dependentErrorResponse,
   dependentNotFoundResponse,
   getDependent,

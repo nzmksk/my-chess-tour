@@ -14,11 +14,13 @@ import {
   GUARDIANSHIP_RELATIONSHIPS,
   MAX_DEPENDENT_NAME_LENGTH,
   MINOR_RELATIONSHIPS,
+  type GuardianshipBasis,
+  type GuardianshipRelationship,
+} from "@/lib/guardianship/dependent-options";
+import {
   dependentErrorResponse,
   getDependent,
   listDependents,
-  type GuardianshipBasis,
-  type GuardianshipRelationship,
 } from "@/services/guardianship/dependents";
 
 function unauthorized(): NextResponse {

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/popover";
 
 interface CountryDropdownProps {
+  id?: string;
   options?: Country[];
   onChange?: (country: Country) => void;
   defaultValue?: string;
@@ -41,6 +42,7 @@ const DEFAULT_OPTIONS: Country[] = (countries.all as Country[])
   .sort((a, b) => a.name.localeCompare(b.name));
 
 export function CountryDropdown({
+  id,
   options = DEFAULT_OPTIONS,
   onChange,
   defaultValue,
@@ -72,6 +74,7 @@ export function CountryDropdown({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           type="button"
           variant="outline"
           role="combobox"

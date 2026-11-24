@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import type { PlayerProfile, Gender } from "@/app/profile/types";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { SUPPORT_EMAIL } from "@/lib/reference/contact";
@@ -729,6 +730,19 @@ export default function ProfileClient({ profile }: Props) {
           />
 
           <HelpersCard />
+
+          <SectionCard title="Dependents">
+            <p className="font-lato text-text-muted mb-4 text-sm">
+              Register your children under 18, or an adult who has asked you to
+              act for them, from your own account.
+            </p>
+            <Link
+              href="/settings/dependents"
+              className="btn-secondary inline-block px-6"
+            >
+              Manage Dependents
+            </Link>
+          </SectionCard>
 
           {/* Chess Details */}
           <SectionCard title="Chess Details">
