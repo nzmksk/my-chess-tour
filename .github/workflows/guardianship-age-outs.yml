@@ -1,0 +1,33 @@
+name: Guardianship age-outs
+
+# A minor dependent turning 18 (src/app/api/v1/cron/guardianships/route.ts,
+# #721). Each run emails guardians whose dependent turns 18 within 30 days or
+# has just turned 18, and ends 'minor' guardianships whose 30-day grace period
+# is over (unless a handover is pending). Each notice goes out once, so a
+# missed or repeated run is harmless. Daily at 03:00 UTC (11:00 MYT), clear of
+# the payout and audit-log runs. Also runnable on demand from the Actions tab.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: guardianship-age-outs
+  cancel-in-progress: false
+
+jobs:
+  age-outs:
+    name: Notify and end aged-out guardianships
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST to the cron route
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          curl -fsS --max-time 70 -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${PRODUCTION_URL}/api/v1/cron/guardianships"
