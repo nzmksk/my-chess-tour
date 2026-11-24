@@ -1306,6 +1306,29 @@ describe("sendPrizeAwardedEmail", () => {
     expect(sent().subject).toBe("You've been awarded a prize at Merdeka Open");
   });
 
+  it("tells the guardian a minor's prize goes to their own account (#718)", async () => {
+    await sendPrizeAwardedEmail("mum@example.com", {
+      ...base,
+      aboutPlayer: "Cara",
+      canActInSettings: true,
+      paidToRecipientAsGuardian: true,
+    });
+    expect(sent().html).toContain("As Cara&#39;s guardian, it will be sent to your account ending in 0101.");
+    expect(sent().html).toContain("View Settings");
+  });
+
+  it("asks the paid guardian for their bank details when they have none (#718)", async () => {
+    await sendPrizeAwardedEmail("mum@example.com", {
+      ...base,
+      accountLast4: null,
+      aboutPlayer: "Cara",
+      canActInSettings: true,
+      paidToRecipientAsGuardian: true,
+    });
+    expect(sent().html).toContain("paid into their guardian&#39;s account");
+    expect(sent().html).toContain("Add Bank Details");
+  });
+
   it("asks for bank details when there is no verified account", async () => {
     await sendPrizeAwardedEmail("w@example.com", { ...base, accountLast4: null });
     expect(sent().html).toContain("Please add your bank details");

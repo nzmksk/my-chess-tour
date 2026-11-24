@@ -21,8 +21,10 @@ import {
   redactDigits,
 } from "@/services/payouts/send-errors";
 import { afterResponse } from "@/lib/http/after-response";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 import { notifyAdminsOfPrizes, notifyPrizeAwarded } from "./notify";
 import { settlePrizeAward } from "./settle";
+import { loadPrizePayees, minorDependentIds, type PrizePayee } from "./payee";
 
 export type ExecutePrizeAwardResult = ExecutePayoutResult;
 
@@ -38,14 +40,25 @@ interface AwardRow {
   chip_send_instruction_id: number | null;
   chip_send_limit_id: number | null;
   tournament: { name: string | null } | null;
-  winner: { email: string | null } | null;
+  winner: Contact | null;
+  payee: Contact | null;
   bank: { chip_bank_account_id: number | null } | null;
+}
+
+interface Contact {
+  email: string | null;
+  contact_email: string | null;
+}
+
+function sendNotificationEmail(contact: Contact | null): string {
+  return contact?.email ?? contact?.contact_email ?? SUPPORT_EMAIL;
 }
 
 const AWARD_COLUMNS = `id, tournament_id, user_id, category, amount_cents, approval, status, processed_at,
   chip_send_instruction_id, chip_send_limit_id,
   tournament:tournaments(name),
-  winner:users!user_id(email),
+  winner:users!user_id(email, contact_email),
+  payee:users!payee_user_id(email, contact_email),
   bank:player_bank_accounts!bank_account_id(chip_bank_account_id)`;
 
 async function loadAward(
@@ -156,22 +169,32 @@ async function awaitBudget(
   return "awaiting_budget";
 }
 
-async function ensureWinnerAccount(award: AwardRow): Promise<string | null> {
+async function ensurePayeeAccount(payee: PrizePayee): Promise<string | null> {
+  const whose = payee.reason === "guardian_of_minor" ? "the winner's guardian's" : "the winner's";
   const { data, error } = await supabaseAdmin
     .from("player_bank_accounts")
     .select("id, status, chip_bank_account_id")
-    .eq("user_id", award.user_id!)
+    .eq("user_id", payee.payeeId)
     .eq("is_active", true)
     .maybeSingle();
-  if (error) return `could not load the winner's bank account (${describeDbError(error)})`;
+  if (error) return `could not load ${whose} bank account (${describeDbError(error)})`;
 
   const bank = data as { id: string; status: string; chip_bank_account_id: number | null } | null;
-  if (!bank) return "the winner has no bank account";
+  if (!bank) return payee.reason === "guardian_of_minor" ? "the winner's guardian has no bank account" : "the winner has no bank account";
   if (bank.status === "verified" && bank.chip_bank_account_id !== null) return null;
-  if (bank.status === "rejected") return "the winner's bank account could not be verified";
+  if (bank.status === "rejected") return `${whose} bank account could not be verified`;
 
   const outcome = await registerPlayerBankAccount(bank.id);
-  return outcome === "verified" ? null : `the winner's bank account is ${outcome === "rejected" ? "rejected" : "awaiting verification"}`;
+  return outcome === "verified" ? null : `${whose} bank account is ${outcome === "rejected" ? "rejected" : "awaiting verification"}`;
+}
+
+async function loadPayeeContact(payeeId: string): Promise<Contact | null> {
+  const { data } = await supabaseAdmin
+    .from("users")
+    .select("email, contact_email")
+    .eq("id", payeeId)
+    .maybeSingle();
+  return (data as Contact | null) ?? null;
 }
 
 export async function executePrizeAward(awardId: string): Promise<ExecutePrizeAwardResult> {
@@ -209,28 +232,35 @@ async function execute(awardId: string): Promise<ExecutePrizeAwardResult> {
 
   if (claimed) {
     const chipBankAccountId = award.bank?.chip_bank_account_id;
-    const email = award.winner?.email;
-    if (!chipBankAccountId || !email) {
+    if (!chipBankAccountId) {
       console.error(
-        `Prize award ${awardId}: claimed for sending but its bank account or email is gone; left processing`,
+        `Prize award ${awardId}: claimed for sending but its bank account is gone; left processing`,
       );
       return "error";
     }
     console.info(`Prize award ${awardId}: resuming an earlier send`);
-    return send(award, chipBankAccountId, email);
+    return send(award, chipBankAccountId, sendNotificationEmail(award.payee ?? award.winner));
   }
 
   if (!award.user_id) {
     console.warn(`Prize award ${awardId}: the winner's account was deleted; left pending`);
     return "blocked";
   }
-  const email = award.winner?.email;
-  if (!email) {
-    console.error(`Prize award ${awardId}: the winner has no email; left pending`);
+  const payees = await loadPrizePayees([award.user_id]);
+  if (!payees.ok) {
+    console.error(`Prize award ${awardId}: failed to work out whose account to pay`, describeDbError(payees.error));
     return "error";
   }
+  const payee = payees.payees.get(award.user_id) ?? {
+    winnerId: award.user_id,
+    payeeId: award.user_id,
+    reason: "winner" as const,
+  };
+  const email = sendNotificationEmail(
+    payee.payeeId === award.user_id ? award.winner : await loadPayeeContact(payee.payeeId),
+  );
 
-  const accountProblem = await ensureWinnerAccount(award);
+  const accountProblem = await ensurePayeeAccount(payee);
   if (accountProblem) {
     console.info(`Prize award ${awardId}: waiting, ${accountProblem}`);
     return "blocked";
@@ -364,15 +394,31 @@ async function send(
   return "paid";
 }
 
+async function awardsAwaitingAccountOf(
+  userId: string,
+): Promise<{ data: { id: string }[] | null; error: { code?: string; message: string } | null }> {
+  const minors = await minorDependentIds(userId);
+  if (!minors.ok) return { data: null, error: minors.error };
+  const { data, error } = await supabaseAdmin
+    .from("prize_awards")
+    .select("id, user_id")
+    .in("user_id", [userId, ...minors.ids])
+    .eq("approval", "approved")
+    .eq("status", "pending")
+    .is("processed_at", null);
+  if (error) return { data: null, error };
+  const rows = (data ?? []) as { id: string; user_id: string }[];
+  const payees = await loadPrizePayees(rows.map((r) => r.user_id));
+  if (!payees.ok) return { data: null, error: payees.error };
+  return {
+    data: rows.filter((r) => (payees.payees.get(r.user_id)?.payeeId ?? r.user_id) === userId),
+    error: null,
+  };
+}
+
 export async function sendAwardsAwaitingBank(userId: string): Promise<void> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("prize_awards")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("approval", "approved")
-      .eq("status", "pending")
-      .is("processed_at", null);
+    const { data, error } = await awardsAwaitingAccountOf(userId);
     if (error) {
       console.error(`User ${userId}: failed to load prize awards awaiting a bank account`, describeDbError(error));
       return;
@@ -391,13 +437,7 @@ export async function onPlayerBankVerdict(userId: string, verified: boolean): Pr
     await sendAwardsAwaitingBank(userId);
     return;
   }
-  const { data, error } = await supabaseAdmin
-    .from("prize_awards")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("approval", "approved")
-    .eq("status", "pending")
-    .is("processed_at", null);
+  const { data, error } = await awardsAwaitingAccountOf(userId);
   if (error) {
     console.error(`User ${userId}: failed to load prize awards for a rejected account`, describeDbError(error));
     return;
