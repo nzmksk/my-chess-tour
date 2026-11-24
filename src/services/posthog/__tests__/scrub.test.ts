@@ -37,6 +37,10 @@ describe("scrubUrl", () => {
     );
   });
 
+  it("masks account claim tokens in the path (#720)", () => {
+    expect(scrubUrl(`${SITE}/claim/9f8e7d6c5b4a`)).toBe(`${SITE}/claim/:token`);
+  });
+
   it("masks helper invitation tokens in the path", () => {
     expect(scrubUrl(`${SITE}/helper-invitations/9f8e7d6c5b4a`)).toBe(
       `${SITE}/helper-invitations/:token`,
