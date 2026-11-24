@@ -93,6 +93,69 @@ export function currentConsent(
   return SENSITIVE_DATA_CONSENT_HISTORY[category][0];
 }
 
+export type ConsentBasis = "minor" | "authorised" | "appointed";
+
+export const ON_BEHALF_CONSENT_HISTORY: Readonly<
+  Record<
+    SensitiveDataCategory,
+    Readonly<Record<ConsentBasis, readonly ConsentVersion[]>>
+  >
+> = {
+  health: {
+    minor: [
+      {
+        version: "2026-11-24",
+        statement:
+          "As this player's parent or legal guardian, I consent on their behalf to MY Chess Tour processing their OKU card and disability status to verify them for OKU fee tiers, categories and special prizes. Only platform reviewers see the card. Organisers of tournaments they enter see only that they are verified OKU. I can withdraw this consent at any time, which deletes the card and removes their OKU verification.",
+      },
+    ],
+    authorised: [
+      {
+        version: "2026-11-24",
+        statement:
+          "This player has agreed to MY Chess Tour processing their OKU card and disability status to verify them for OKU fee tiers, categories and special prizes, and has asked me to record that for them. Only platform reviewers see the card. Organisers of tournaments they enter see only that they are verified OKU. They can withdraw this consent at any time, themselves or through me, which deletes the card and removes their OKU verification.",
+      },
+    ],
+    appointed: [
+      {
+        version: "2026-11-24",
+        statement:
+          "As this player's legally appointed guardian, I consent on their behalf to MY Chess Tour processing their OKU card and disability status to verify them for OKU fee tiers, categories and special prizes. Only platform reviewers see the card. Organisers of tournaments they enter see only that they are verified OKU. I can withdraw this consent at any time, which deletes the card and removes their OKU verification.",
+      },
+    ],
+  },
+  financial: {
+    minor: [
+      {
+        version: "2026-11-24",
+        statement:
+          "As this player's parent or legal guardian, I consent on their behalf to MY Chess Tour storing the bank name, account holder name and account number I give for their prizes, and sharing them with CHIP, its payment processor, to verify the account and make the transfer. Organisers never see them. I can withdraw this consent at any time by removing the bank details, which deletes them. For an account a prize was sent to, only the bank, account holder name and last 4 digits are kept, for 7 years, as the law requires.",
+      },
+    ],
+    authorised: [
+      {
+        version: "2026-11-24",
+        statement:
+          "This player has agreed to MY Chess Tour storing their bank name, account holder name and account number to pay them prizes, and sharing them with CHIP, its payment processor, to verify the account and make the transfer, and has asked me to record that for them. Organisers never see them. They can withdraw this consent at any time, themselves or through me, by removing the bank details, which deletes them. For an account a prize was sent to, only the bank, account holder name and last 4 digits are kept, for 7 years, as the law requires.",
+      },
+    ],
+    appointed: [
+      {
+        version: "2026-11-24",
+        statement:
+          "As this player's legally appointed guardian, I consent on their behalf to MY Chess Tour storing their bank name, account holder name and account number to pay them prizes, and sharing them with CHIP, its payment processor, to verify the account and make the transfer. Organisers never see them. I can withdraw this consent at any time by removing the bank details, which deletes them. For an account a prize was sent to, only the bank, account holder name and last 4 digits are kept, for 7 years, as the law requires.",
+      },
+    ],
+  },
+};
+
+export function onBehalfConsent(
+  category: SensitiveDataCategory,
+  basis: ConsentBasis,
+): ConsentVersion {
+  return ON_BEHALF_CONSENT_HISTORY[category][basis][0];
+}
+
 export function isSensitiveDataCategory(
   value: unknown,
 ): value is SensitiveDataCategory {

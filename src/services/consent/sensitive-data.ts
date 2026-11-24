@@ -1,8 +1,24 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import {
   currentConsent,
+  onBehalfConsent,
+  type ConsentBasis,
   type SensitiveDataCategory,
 } from "@/lib/reference/legal";
+
+export interface RecordedBy {
+  actorId: string;
+  basis: ConsentBasis;
+}
+
+export function consentWording(
+  category: SensitiveDataCategory,
+  recordedBy?: RecordedBy,
+) {
+  return recordedBy
+    ? onBehalfConsent(category, recordedBy.basis)
+    : currentConsent(category);
+}
 
 export type ConsentResult =
   | { ok: true; changed: boolean }
@@ -11,6 +27,7 @@ export type ConsentResult =
 export async function grantSensitiveDataConsent(
   userId: string,
   category: SensitiveDataCategory,
+  recordedBy?: RecordedBy,
 ): Promise<ConsentResult> {
   const { data, error } = await supabaseAdmin.rpc(
     "record_sensitive_data_consent",
@@ -18,7 +35,8 @@ export async function grantSensitiveDataConsent(
       p_user_id: userId,
       p_category: category,
       p_granted: true,
-      p_version: currentConsent(category).version,
+      p_version: consentWording(category, recordedBy).version,
+      ...(recordedBy ? { p_recorded_by: recordedBy.actorId } : {}),
     },
   );
   if (error) return { ok: false, error };
@@ -28,6 +46,7 @@ export async function grantSensitiveDataConsent(
 export async function withdrawSensitiveDataConsent(
   userId: string,
   category: SensitiveDataCategory,
+  recordedById?: string,
 ): Promise<ConsentResult> {
   const { data, error } = await supabaseAdmin.rpc(
     "record_sensitive_data_consent",
@@ -35,6 +54,9 @@ export async function withdrawSensitiveDataConsent(
       p_user_id: userId,
       p_category: category,
       p_granted: false,
+      ...(recordedById && recordedById !== userId
+        ? { p_recorded_by: recordedById }
+        : {}),
     },
   );
   if (error) return { ok: false, error };

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
+  ON_BEHALF_CONSENT_HISTORY,
   ORGANIZER_AGREEMENT_HISTORY,
   ORGANIZER_AGREEMENT_VERSION,
   SENSITIVE_DATA_CONSENT_HISTORY,
@@ -10,6 +11,7 @@ import {
   changesSince,
   currentConsent,
   formatLegalVersion,
+  onBehalfConsent,
   isSensitiveDataCategory,
 } from "../legal";
 
@@ -221,4 +223,42 @@ describe("sensitive data consent statements", () => {
       Object.keys(SENSITIVE_DATA_CONSENT_HISTORY).sort(),
     );
   });
+});
+
+describe("consent recorded on a player's behalf (#717)", () => {
+  const cases = (["health", "financial"] as const).flatMap((category) =>
+    (["minor", "authorised", "appointed"] as const).map(
+      (basis) => [category, basis] as const,
+    ),
+  );
+
+  it.each(cases)(
+    "%s / %s has a dated, newest-first history",
+    (category, basis) => {
+      const history = ON_BEHALF_CONSENT_HISTORY[category][basis];
+      expect(history.length).toBeGreaterThan(0);
+      for (const entry of history) {
+        expect(entry.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(entry.statement.trim().length).toBeGreaterThan(0);
+      }
+      const versions = history.map((entry) => entry.version);
+      expect(versions).toEqual([...versions].sort().reverse());
+      expect(onBehalfConsent(category, basis)).toBe(history[0]);
+    },
+  );
+
+  it.each(["health", "financial"] as const)(
+    "a guardian of a minor consents on the child's behalf, a helper records the player's agreement (%s)",
+    (category) => {
+      expect(onBehalfConsent(category, "minor").statement).toMatch(
+        /^As this player's parent or legal guardian, I consent on their behalf/,
+      );
+      expect(onBehalfConsent(category, "authorised").statement).toMatch(
+        /^This player has agreed to/,
+      );
+      expect(onBehalfConsent(category, "authorised").statement).toMatch(
+        /asked me to record that for them/,
+      );
+    },
+  );
 });
