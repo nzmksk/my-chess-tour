@@ -25,6 +25,12 @@ ALTER TABLE prize_funder_contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prize_awards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bug_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_application_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE organization_registered_names ENABLE ROW LEVEL SECURITY;
+ALTER TABLE guardianships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE guardianship_age_out_notices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE helper_invitations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account_claims ENABLE ROW LEVEL SECURITY;
 
 -- =============================================
 -- RBAC REFERENCE TABLES (read-only for all authenticated)
@@ -229,6 +235,14 @@ USING (has_global_permission(app_user_id(), 'platform.manage'));
 -- through the API (service role) and the functions in 003.
 -- =============================================
 REVOKE ALL ON organization_invitations FROM anon, authenticated;
+
+-- =============================================
+-- ORGANIZATION APPLICATION EVENTS / REGISTERED NAMES
+-- Server-only, like invitations. An individual organizer's registered name is
+-- their legal name: personal data, not public record.
+-- =============================================
+REVOKE ALL ON organization_application_events FROM anon, authenticated;
+REVOKE ALL ON organization_registered_names FROM anon, authenticated;
 
 -- =============================================
 -- TOURNAMENTS
@@ -565,6 +579,48 @@ USING (
   table_name IN ('users', 'player_profiles')
   AND record_id = app_user_id()::text
 );
+
+-- =============================================
+-- GUARDIANSHIPS (#705)
+-- The guardian, and the dependent if they have a login, can read the row. The
+-- policy compares app_user_id() directly, not can_act_for(): can_act_for() is
+-- defined in terms of this table, and a guardian must not gain sight of other
+-- guardians' rows through it. Clients can't write; every write goes through
+-- the functions in 003.
+-- =============================================
+CREATE POLICY "Guardian and dependent can view their guardianship"
+ON guardianships FOR SELECT
+USING (
+  guardian_user_id = app_user_id()
+  OR dependent_user_id = app_user_id()
+);
+
+REVOKE ALL ON guardianships FROM anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON guardianships FROM authenticated;
+
+-- Service role only: no policies, no client grants.
+REVOKE ALL ON guardianship_age_out_notices FROM anon, authenticated;
+
+-- The player can read their own helper invitations. The helper reads one
+-- through the API by its token.
+CREATE POLICY "Players can view their own helper invitations"
+ON helper_invitations FOR SELECT
+USING (player_user_id = app_user_id());
+
+REVOKE ALL ON helper_invitations FROM anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON helper_invitations FROM authenticated;
+
+-- The guardian who started a claim can read it, every column but token_hash:
+-- the hash is what a signup presents to claim the record.
+CREATE POLICY "Guardian can view the claims they started"
+ON account_claims FOR SELECT
+USING (guardian_user_id = app_user_id());
+
+REVOKE ALL ON account_claims FROM anon;
+REVOKE ALL ON account_claims FROM authenticated;
+GRANT SELECT (id, dependent_user_id, guardian_user_id, email, status,
+              created_at, expires_at, accepted_at, auth_user_id, cancelled_at)
+  ON account_claims TO authenticated;
 
 -- =============================================
 -- TOURNAMENT PAYOUT SUMMARY VIEW

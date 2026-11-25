@@ -5,9 +5,38 @@ CREATE INDEX idx_user_global_roles_role ON user_global_roles (role_id);
 
 -- Users (partial unique: allows email reuse after soft delete)
 CREATE UNIQUE INDEX idx_users_email_active ON users (email) WHERE deleted_at IS NULL;
+-- One account per mailbox (#286): email_canonical is what an address delivers to.
+CREATE UNIQUE INDEX idx_users_email_canonical_active
+  ON users (email_canonical)
+  WHERE deleted_at IS NULL;
 
--- Organizations (case-insensitive unique name among active, non-deleted orgs)
-CREATE UNIQUE INDEX idx_organizations_name_active ON organizations (lower(name)) WHERE deleted_at IS NULL;
+-- Guardianships
+CREATE INDEX idx_guardianships_dependent ON guardianships (dependent_user_id);
+CREATE INDEX idx_guardianships_guardian_active
+  ON guardianships (guardian_user_id)
+  WHERE status = 'active';
+
+-- Helper invitations: one pending invitation per player and address; the
+-- player's page lists theirs, newest first.
+CREATE UNIQUE INDEX idx_helper_invitations_pending
+  ON helper_invitations (player_user_id, email)
+  WHERE status = 'pending';
+CREATE INDEX idx_helper_invitations_player
+  ON helper_invitations (player_user_id, created_at DESC);
+
+-- Account claims: at most one pending handover per dependent.
+CREATE UNIQUE INDEX uq_account_claims_one_pending
+  ON account_claims (dependent_user_id)
+  WHERE status = 'pending';
+CREATE INDEX idx_account_claims_guardian ON account_claims (guardian_user_id);
+
+-- Organizations (case-insensitive unique name among approved, non-deleted
+-- orgs). Pending and rejected applications may share a name (#582); approving
+-- one whose name is taken fails here.
+CREATE UNIQUE INDEX idx_organizations_name_active ON organizations (lower(name))
+  WHERE deleted_at IS NULL AND approval_status = 'approved';
+CREATE INDEX idx_org_application_events_org
+  ON organization_application_events (organization_id, created_at);
 
 -- Organization bank accounts
 -- Exactly one active account per org. Changing details = deactivate + insert a
@@ -40,6 +69,9 @@ CREATE INDEX idx_player_bank_accounts_chip_id ON player_bank_accounts (chip_bank
 -- OKU upload.
 CREATE INDEX idx_sensitive_data_consents_latest
   ON sensitive_data_consents (user_id, category, id DESC);
+CREATE INDEX idx_sensitive_data_consents_granted_by
+  ON sensitive_data_consents (granted_by)
+  WHERE granted_by IS NOT NULL;
 
 -- Organization documents (fetched as a set per application/organization)
 CREATE INDEX idx_org_documents_org ON organization_documents (organization_id);
@@ -69,6 +101,9 @@ CREATE UNIQUE INDEX tournaments_slug_key ON tournaments (slug);
 -- Registrations
 CREATE INDEX idx_registrations_user ON registrations (user_id);
 CREATE INDEX idx_registrations_tournament_status ON registrations (tournament_id, status);
+CREATE INDEX idx_registrations_registered_by
+  ON registrations (registered_by)
+  WHERE registered_by IS NOT NULL;
 
 -- Tournament cancellation requests
 -- At most one live (pending) request per tournament; a rejected request may be
@@ -83,6 +118,8 @@ CREATE INDEX idx_audit_logs_table_record ON audit_logs (table_name, record_id);
 CREATE INDEX idx_audit_logs_org ON audit_logs (organization_id) WHERE organization_id IS NOT NULL;
 CREATE INDEX idx_audit_logs_changed_by ON audit_logs (changed_by) WHERE changed_by IS NOT NULL;
 CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at);
+-- prune_audit_logs deletes per table, oldest first.
+CREATE INDEX idx_audit_logs_table_created ON audit_logs (table_name, created_at);
 
 -- Payments
 -- Unique so one CHIP purchase id maps to at most one payment row (webhook

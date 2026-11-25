@@ -57,8 +57,9 @@ USING (
 -- =============================================
 -- OKU DOCUMENTS BUCKET (private)
 -- Upload convention: oku-documents/users/{user_id}/oku/{filename}
--- Sensitive government IDs — NOT public. Read only by the owner or a platform
--- admin (who views via a server-generated signed URL).
+-- Sensitive government IDs — NOT public. Read only by the player, those acting
+-- for them (can_act_for: their guardian or helper, #705), or a platform admin
+-- (who views via a server-generated signed URL).
 -- =============================================
 -- file_size_limit and allowed_mime_types make Storage itself reject an
 -- oversized or unsupported upload, so the API's assertUploadedObject check is a
@@ -75,20 +76,26 @@ ON CONFLICT (id) DO UPDATE
   SET file_size_limit    = EXCLUDED.file_size_limit,
       allowed_mime_types = EXCLUDED.allowed_mime_types;
 
--- Owner can upload their own OKU document, and only once they have given
--- separate consent to the processing of their health data (#451). The card is
--- health data the moment it lands in this bucket, before any API route sees
--- it, so the consent check has to sit here rather than in POST
--- /api/v1/profile/oku alone. has_sensitive_data_consent runs as the uploader,
--- who can read their own consent rows (004_rls.sql).
-CREATE POLICY "Users can upload own OKU document"
+-- The player, or someone acting for them, can upload the player's OKU
+-- document, and only once the player's health-data consent is on record (#451,
+-- possibly recorded on their behalf, #717). The card is health data the moment
+-- it lands in this bucket, before any API route sees it, so the consent check
+-- has to sit here rather than in POST /api/v1/profile/oku alone. The folder
+-- must be a uuid before it is cast, so a malformed path is refused rather than
+-- raising.
+CREATE POLICY "Players and those acting for them can upload an OKU document"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
   bucket_id = 'oku-documents'
   AND (storage.foldername(name))[1] = 'users'
-  AND (storage.foldername(name))[2] = app_user_id()::text
-  AND has_sensitive_data_consent(app_user_id(), 'health')
+  AND CASE
+        WHEN (storage.foldername(name))[2]
+             ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        THEN can_act_for(((storage.foldername(name))[2])::uuid)
+             AND has_sensitive_data_consent(((storage.foldername(name))[2])::uuid, 'health')
+        ELSE false
+      END
 );
 
 -- No DELETE (or UPDATE) policy, deliberately. With INSERT alone an object
@@ -100,14 +107,20 @@ WITH CHECK (
 -- The client never needs to delete: every upload, including a re-upload after
 -- rejection, goes to a fresh timestamped path.
 
--- Owner or a platform admin can read OKU documents.
-CREATE POLICY "OKU documents readable by owner or admin"
+-- The player, those acting for them, or a platform admin can read OKU
+-- documents.
+CREATE POLICY "OKU documents readable by those acting for the player or admin"
 ON storage.objects FOR SELECT
 TO authenticated
 USING (
   bucket_id = 'oku-documents'
   AND (
-    (storage.foldername(name))[2] = app_user_id()::text
+    CASE
+      WHEN (storage.foldername(name))[2]
+           ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      THEN can_act_for(((storage.foldername(name))[2])::uuid)
+      ELSE false
+    END
     OR has_global_permission(app_user_id(), 'platform.manage')
   )
 );

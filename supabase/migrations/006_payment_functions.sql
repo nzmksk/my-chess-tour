@@ -43,16 +43,127 @@ END;
 $$;
 
 -- =============================================
+-- CHECKOUT GUARDS (#705)
+-- self_managed_minor (#711): true when the user's account is 'self' and their
+-- date of birth makes them under 18 today in Malaysia (Asia/Kuala_Lumpur).
+-- "Under 18" is date_of_birth > today - 18 years, so someone born on 29
+-- February is 18 on 1 March in a common year, matching isUnderAdultAge in
+-- src/lib/auth/adult-age.ts. No date of birth means no refusal. Managed
+-- accounts (dependents) are exempt: a guardian registers them.
+--
+-- Signup refuses under-18s (#710), PATCH /api/v1/profile won't save an
+-- under-18 date of birth on a self-managed account, and checkout refuses an
+-- under-18 self-managed participant (checkParticipantAge in
+-- registrations/validators.ts). This is the database backstop, for a date of
+-- birth written some other way: support or a script.
+-- =============================================
+CREATE FUNCTION self_managed_minor(p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM users u
+    JOIN player_profiles p ON p.user_id = u.id
+    WHERE u.id = p_user_id
+      AND u.account_type = 'self'
+      AND p.date_of_birth >
+          ((now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date - interval '18 years')::date
+  );
+$$;
+
+-- =============================================
+-- ASSERT PARTICIPANT NOT SELF MANAGED MINOR
+-- =============================================
+-- Raises UNDER_18 (P0001), which the checkout route maps to the same 422 as its
+-- own check. Both checkout functions call it for the participant
+-- (registrations.user_id), whoever pays. Confirmed registrations and
+-- settlement aren't touched.
+CREATE FUNCTION assert_participant_not_self_managed_minor(p_user_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+STABLE
+SET search_path = public
+AS $$
+BEGIN
+  IF self_managed_minor(p_user_id) THEN
+    RAISE EXCEPTION 'UNDER_18: a self-managed account holder under 18 can''t register; under-18s take part through a parent or guardian''s account'
+      USING ERRCODE = 'P0001';
+  END IF;
+END;
+$$;
+
+-- =============================================
+-- ASSERT PAYER ACTS FOR
+-- =============================================
+-- Passes when payer and participant are the same person (#714). Otherwise it
+-- needs an active guardianship from the payer to the participant (NOT_GUARDIAN,
+-- 42501) whose minor-basis authority hasn't aged out (AGED_OUT, 42501, #721),
+-- and takes a FOR SHARE lock on that row until the transaction ends.
+-- revoke_dependent locks the same row FOR UPDATE before it looks for a pending
+-- payment, so the two serialise: a revoke that commits first makes this raise,
+-- and a checkout that commits first makes the revoke refuse with
+-- DEPENDENT_HAS_PENDING_PAYMENT. The checkout functions run as the service
+-- role, where app_user_id() is NULL, so this is the backstop for the route's
+-- can_act_for() check.
+CREATE OR REPLACE FUNCTION assert_payer_acts_for(
+  p_payer_user_id       uuid,
+  p_participant_user_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_basis guardianship_basis;
+BEGIN
+  IF p_payer_user_id = p_participant_user_id THEN
+    RETURN;
+  END IF;
+
+  SELECT basis INTO v_basis
+  FROM guardianships
+  WHERE guardian_user_id = p_payer_user_id
+    AND dependent_user_id = p_participant_user_id
+    AND status = 'active'
+  FOR SHARE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'NOT_GUARDIAN: the payer can''t register this participant'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF minor_guardianship_aged_out(
+       v_basis,
+       (SELECT date_of_birth FROM player_profiles WHERE user_id = p_participant_user_id)
+     ) THEN
+    RAISE EXCEPTION 'AGED_OUT: the participant has turned 18, so their guardian can no longer register them'
+      USING ERRCODE = '42501';
+  END IF;
+END;
+$$;
+
+-- =============================================
 -- CREATE: first attempt. Atomically inserts the registration + its first payment
 -- row, points the registration at it, and returns {registration_id, payment_id}
 -- so the caller can initiate CHIP on that exact row. Capacity is enforced by the
 -- check_tournament_capacity INSERT trigger (003).
+-- The payer is kept apart from the participant (#708): registrations.user_id is
+-- who plays, payments.user_id whose money it is (p_payer_user_id; NULL means
+-- the participant pays). Mixing them up would send a refund to the wrong
+-- person, or hand a guardian's payment history to the dependent on a claim.
+-- Both are checked first: assert_payer_acts_for and
+-- assert_participant_not_self_managed_minor. registered_by is set to the payer
+-- when the payer isn't the participant.
 -- =============================================
 CREATE OR REPLACE FUNCTION create_registration_with_payment(
   p_user_id        uuid,
   p_tournament_id  uuid,
   p_fee_tier       varchar(50),
-  p_amount_cents   integer
+  p_amount_cents   integer,
+  p_payer_user_id  uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -66,6 +177,7 @@ DECLARE
   v_organization_id          uuid;
   v_amounts                  record;
   v_payment_id               uuid;
+  v_payer_user_id            uuid := COALESCE(p_payer_user_id, p_user_id);
 BEGIN
   -- A platform-distributed prize pool must be fully funded before anyone can
   -- enter (#523). The checkout route checks first; this is the backstop.
@@ -78,8 +190,12 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  INSERT INTO registrations (user_id, tournament_id, fee_tier, status)
-  VALUES (p_user_id, p_tournament_id, p_fee_tier, 'pending_payment')
+  PERFORM assert_participant_not_self_managed_minor(p_user_id);
+  PERFORM assert_payer_acts_for(v_payer_user_id, p_user_id);
+
+  INSERT INTO registrations (user_id, tournament_id, fee_tier, status, registered_by)
+  VALUES (p_user_id, p_tournament_id, p_fee_tier, 'pending_payment',
+          NULLIF(v_payer_user_id, p_user_id))
   RETURNING * INTO v_registration;
 
   SELECT commission_rate, organizer_commission_pct, organization_id
@@ -110,7 +226,7 @@ BEGIN
     'registration',
     p_tournament_id,
     v_registration.id,
-    p_user_id,
+    v_payer_user_id,
     v_organization_id,
     v_amounts.gross_amount_cents,
     v_amounts.platform_fee_cents,
@@ -137,11 +253,15 @@ $$;
 -- Re-checks capacity excluding this row, supersedes the prior attempt (marks it
 -- failed so its webhooks can't settle the registration), appends a fresh pending
 -- payment, re-arms the hold, and points current_payment_id at the new row.
+-- The payer is whoever retries, checked as on create, and registered_by is
+-- rewritten on every attempt: a retry by the player clears it and a retry by a
+-- guardian records them.
 -- =============================================
 CREATE OR REPLACE FUNCTION start_new_payment_attempt(
   p_registration_id uuid,
   p_fee_tier        varchar(50),
-  p_amount_cents    integer
+  p_amount_cents    integer,
+  p_payer_user_id   uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -155,6 +275,7 @@ DECLARE
   v_organization_id          uuid;
   v_amounts                  record;
   v_payment_id               uuid;
+  v_payer_user_id            uuid;
 BEGIN
   SELECT * INTO v_reg FROM registrations WHERE id = p_registration_id FOR UPDATE;
 
@@ -166,6 +287,11 @@ BEGIN
     RAISE EXCEPTION 'registration % is not resumable (status %)', p_registration_id, v_reg.status
       USING ERRCODE = 'P0001';
   END IF;
+
+  PERFORM assert_participant_not_self_managed_minor(v_reg.user_id);
+
+  v_payer_user_id := COALESCE(p_payer_user_id, v_reg.user_id);
+  PERFORM assert_payer_acts_for(v_payer_user_id, v_reg.user_id);
 
   -- Under the tournament row lock, for the same reason as the first attempt.
   -- assert_tournament_capacity below takes it again.
@@ -200,15 +326,20 @@ BEGIN
     gross_amount_cents, platform_fee_cents, organizer_commission_cents,
     player_commission_cents, net_amount_cents, fee_tier, currency, status
   ) VALUES (
-    'registration', v_reg.tournament_id, v_reg.id, v_reg.user_id, v_organization_id,
+    'registration', v_reg.tournament_id, v_reg.id, v_payer_user_id, v_organization_id,
     v_amounts.gross_amount_cents, v_amounts.platform_fee_cents,
     v_amounts.organizer_commission_cents, v_amounts.player_commission_cents,
     v_amounts.net_amount_cents, p_fee_tier, 'MYR', 'pending'
   )
   RETURNING id INTO v_payment_id;
 
+  -- registered_by follows whoever started this attempt, not only the first
+  -- one. It is a stopgap: payments.user_id already records the payer of each
+  -- attempt, and if checkout ever covers several participants in one payment,
+  -- a per-attempt payer record should replace this column.
   UPDATE registrations
-    SET fee_tier            = p_fee_tier,
+    SET registered_by       = NULLIF(v_payer_user_id, v_reg.user_id),
+        fee_tier            = p_fee_tier,
         status              = 'pending_payment',
         registered_at       = now(),
         cancelled_at        = NULL,
@@ -542,14 +673,14 @@ $$;
 -- purchase: claim_refund_fire refuses those ('no_purchase'), so the page shows
 -- them as needing a hand rather than offering a retry.
 -- =============================================
-CREATE OR REPLACE FUNCTION list_stuck_refunds(p_min_age interval)
+CREATE FUNCTION list_stuck_refunds(p_min_age interval)
 RETURNS TABLE (
   refund_id                 uuid,
   registration_id           uuid,
   tournament_id             uuid,
   tournament_name           varchar(255),
-  player_name               text,
-  player_email              varchar(255),
+  payer_name                text,
+  payer_email               varchar(255),
   amount_cents              integer,
   requested_at              timestamptz,
   last_fired_at             timestamptz,
@@ -569,10 +700,11 @@ AS $$
   FROM refunds rf
   JOIN registrations r ON r.id = rf.registration_id
   JOIN tournaments t   ON t.id = r.tournament_id
-  LEFT JOIN users u    ON u.id = r.user_id
   LEFT JOIN payments p ON p.id = r.current_payment_id
    AND p.type = 'registration'
    AND p.status = 'paid'
+  LEFT JOIN payments cp ON cp.id = r.current_payment_id
+  LEFT JOIN users u     ON u.id = cp.user_id
   WHERE rf.status = 'pending'
     AND rf.processed_at IS NULL
     AND rf.chip_refund_id IS NULL
@@ -710,7 +842,11 @@ $$;
 --     account gets a NEW row (set_organization_bank_account supersedes), so
 --     there is never a legitimate reason to flip verified ↔ rejected in place.
 --
---   p_verified = true  → status 'verified', verified_at stamped, reason cleared.
+--   p_verified = true  → status 'verified', verified_at stamped, reason cleared,
+--                        or 'name_mismatch' when p_name_matched is false
+--                        (#374): the bank's holder name (recorded in
+--                        bank_holder_name) isn't who the money is for, so an
+--                        admin reviews it (review_bank_account_name).
 --   p_verified = false → status 'rejected' with p_reason (or a generic reason;
 --                        the organizer is shown it, so it must not be blank).
 -- p_chip_bank_account_id is recorded when given and never cleared by a NULL.
@@ -725,11 +861,13 @@ $$;
 -- in both. `owner` says which it was: 'organization' (organization_id set) or
 -- 'player' (user_id set).
 -- =============================================
-CREATE OR REPLACE FUNCTION settle_bank_account_verification(
+CREATE FUNCTION settle_bank_account_verification(
   p_bank_account_id      uuid,
   p_chip_bank_account_id bigint,
   p_verified             boolean,
-  p_reason               text DEFAULT NULL
+  p_reason               text    DEFAULT NULL,
+  p_bank_holder_name     text    DEFAULT NULL,
+  p_name_matched         boolean DEFAULT false
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -738,13 +876,146 @@ SET search_path = public
 AS $$
 DECLARE
   c_default_reason CONSTANT text := 'The bank could not verify these account details.';
-  v_owner     text;
-  v_org_id    uuid;
-  v_user_id   uuid;
-  v_status    bank_account_status;
-  v_is_active boolean;
-  v_reason    text := COALESCE(NULLIF(btrim(p_reason), ''), c_default_reason);
+  v_owner       text;
+  v_org_id      uuid;
+  v_user_id     uuid;
+  v_status      bank_account_status;
+  v_is_active   boolean;
+  v_bank_name   varchar(255);
+  v_reviewed_at timestamptz;
+  v_new_name    varchar(255) := left(NULLIF(btrim(p_bank_holder_name), ''), 255);
+  v_reason      text := COALESCE(NULLIF(btrim(p_reason), ''), c_default_reason);
+  v_new_status  bank_account_status;
 BEGIN
+  SELECT 'organization', organization_id, NULL::uuid, status, is_active,
+         bank_holder_name, name_reviewed_at
+    INTO v_owner, v_org_id, v_user_id, v_status, v_is_active, v_bank_name, v_reviewed_at
+    FROM organization_bank_accounts
+    WHERE id = p_bank_account_id
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    SELECT 'player', NULL::uuid, user_id, status, is_active,
+           bank_holder_name, name_reviewed_at
+      INTO v_owner, v_org_id, v_user_id, v_status, v_is_active, v_bank_name, v_reviewed_at
+      FROM player_bank_accounts
+      WHERE id = p_bank_account_id
+      FOR UPDATE;
+  END IF;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'bank account % not found', p_bank_account_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF NOT (
+    v_status = 'pending'
+    OR (v_status = 'name_mismatch' AND v_bank_name IS NULL AND v_reviewed_at IS NULL
+        AND p_verified AND v_new_name IS NOT NULL)
+  ) THEN
+    -- The verdict stands, but a holder name it was settled without is still
+    -- worth keeping.
+    IF v_bank_name IS NULL AND v_new_name IS NOT NULL THEN
+      IF v_owner = 'organization' THEN
+        UPDATE organization_bank_accounts SET bank_holder_name = v_new_name WHERE id = p_bank_account_id;
+      ELSE
+        UPDATE player_bank_accounts SET bank_holder_name = v_new_name WHERE id = p_bank_account_id;
+      END IF;
+    END IF;
+
+    RETURN jsonb_build_object(
+      'bank_account_id',   p_bank_account_id,
+      'owner',             v_owner,
+      'organization_id',   v_org_id,
+      'user_id',           v_user_id,
+      'already_processed', true,
+      'verified',          v_status = 'verified',
+      'status',            v_status,
+      'is_active',         v_is_active
+    );
+  END IF;
+
+  v_new_status := CASE
+    WHEN NOT p_verified THEN 'rejected'
+    WHEN p_name_matched THEN 'verified'
+    ELSE 'name_mismatch'
+  END::bank_account_status;
+
+  IF v_owner = 'organization' THEN
+    UPDATE organization_bank_accounts
+      SET status               = v_new_status,
+          verified_at          = CASE WHEN v_new_status = 'verified' THEN now() END,
+          rejection_reason     = CASE WHEN v_new_status = 'rejected' THEN v_reason END,
+          bank_holder_name     = COALESCE(v_new_name, bank_holder_name),
+          chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+      WHERE id = p_bank_account_id;
+  ELSE
+    UPDATE player_bank_accounts
+      SET status               = v_new_status,
+          verified_at          = CASE WHEN v_new_status = 'verified' THEN now() END,
+          rejection_reason     = CASE WHEN v_new_status = 'rejected' THEN v_reason END,
+          bank_holder_name     = COALESCE(v_new_name, bank_holder_name),
+          chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
+      WHERE id = p_bank_account_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'bank_account_id',   p_bank_account_id,
+    'owner',             v_owner,
+    'organization_id',   v_org_id,
+    'user_id',           v_user_id,
+    'already_processed', false,
+    'verified',          v_new_status = 'verified',
+    'status',            v_new_status,
+    'is_active',         v_is_active
+  );
+END;
+$$;
+
+-- =============================================
+-- REVIEW BANK ACCOUNT NAME
+-- =============================================
+-- An admin confirms a 'name_mismatch' account ('verified') or rejects it
+-- ('rejected'), with a note either way (#374). Who decided and why stays on
+-- the row (name_reviewed_by / _at / _note) and in its audit trail. Only the
+-- active row can be reviewed (#704): every payout and prize check reads the
+-- active row only, and the queue at /admin/bank-accounts lists active rows. A
+-- superseded row keeps 'name_mismatch': that is what CHIP said about it.
+--
+-- Refuses with:
+--   P0002            no such bank account
+--   NOT_UNDER_REVIEW (P0001) the account isn't 'name_mismatch' (already
+--                    decided, or never needed review)
+--   SUPERSEDED       (P0001) the owner has replaced the account since
+--   NOTE_REQUIRED    (P0001) a blank note
+--   22023            an action other than 'confirm' or 'reject'
+CREATE OR REPLACE FUNCTION review_bank_account_name(
+  p_bank_account_id uuid,
+  p_reviewer_id     uuid,
+  p_action          text,
+  p_note            text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_owner      text;
+  v_org_id     uuid;
+  v_user_id    uuid;
+  v_status     bank_account_status;
+  v_is_active  boolean;
+  v_note       text := NULLIF(btrim(p_note), '');
+  v_new_status bank_account_status;
+BEGIN
+  IF p_action IS NULL OR p_action NOT IN ('confirm', 'reject') THEN
+    RAISE EXCEPTION 'action must be confirm or reject, got %', p_action USING ERRCODE = '22023';
+  END IF;
+  IF v_note IS NULL THEN
+    RAISE EXCEPTION 'NOTE_REQUIRED: say why the account is confirmed or rejected'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   SELECT 'organization', organization_id, NULL::uuid, status, is_active
     INTO v_owner, v_org_id, v_user_id, v_status, v_is_active
     FROM organization_bank_accounts
@@ -763,50 +1034,36 @@ BEGIN
     RAISE EXCEPTION 'bank account % not found', p_bank_account_id USING ERRCODE = 'P0002';
   END IF;
 
-  IF v_status <> 'pending' THEN
-    RETURN jsonb_build_object(
-      'bank_account_id',   p_bank_account_id,
-      'owner',             v_owner,
-      'organization_id',   v_org_id,
-      'user_id',           v_user_id,
-      'already_processed', true,
-      'verified',          v_status = 'verified',
-      'is_active',         v_is_active
-    );
+  IF v_status <> 'name_mismatch' THEN
+    RAISE EXCEPTION 'NOT_UNDER_REVIEW: this account is %, not awaiting a name review', v_status
+      USING ERRCODE = 'P0001';
   END IF;
 
+  IF NOT v_is_active THEN
+    RAISE EXCEPTION 'SUPERSEDED: the owner has replaced this account since'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  v_new_status := CASE p_action WHEN 'confirm' THEN 'verified' ELSE 'rejected' END::bank_account_status;
+
   IF v_owner = 'organization' THEN
-    IF p_verified THEN
-      UPDATE organization_bank_accounts
-        SET status               = 'verified',
-            verified_at          = now(),
-            rejection_reason     = NULL,
-            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
-        WHERE id = p_bank_account_id;
-    ELSE
-      UPDATE organization_bank_accounts
-        SET status               = 'rejected',
-            verified_at          = NULL,
-            rejection_reason     = v_reason,
-            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
-        WHERE id = p_bank_account_id;
-    END IF;
+    UPDATE organization_bank_accounts
+      SET status           = v_new_status,
+          verified_at      = CASE WHEN v_new_status = 'verified' THEN now() END,
+          rejection_reason = CASE WHEN v_new_status = 'rejected' THEN v_note END,
+          name_reviewed_by = p_reviewer_id,
+          name_reviewed_at = now(),
+          name_review_note = v_note
+      WHERE id = p_bank_account_id;
   ELSE
-    IF p_verified THEN
-      UPDATE player_bank_accounts
-        SET status               = 'verified',
-            verified_at          = now(),
-            rejection_reason     = NULL,
-            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
-        WHERE id = p_bank_account_id;
-    ELSE
-      UPDATE player_bank_accounts
-        SET status               = 'rejected',
-            verified_at          = NULL,
-            rejection_reason     = v_reason,
-            chip_bank_account_id = COALESCE(p_chip_bank_account_id, chip_bank_account_id)
-        WHERE id = p_bank_account_id;
-    END IF;
+    UPDATE player_bank_accounts
+      SET status           = v_new_status,
+          verified_at      = CASE WHEN v_new_status = 'verified' THEN now() END,
+          rejection_reason = CASE WHEN v_new_status = 'rejected' THEN v_note END,
+          name_reviewed_by = p_reviewer_id,
+          name_reviewed_at = now(),
+          name_review_note = v_note
+      WHERE id = p_bank_account_id;
   END IF;
 
   RETURN jsonb_build_object(
@@ -815,7 +1072,8 @@ BEGIN
     'organization_id',   v_org_id,
     'user_id',           v_user_id,
     'already_processed', false,
-    'verified',          p_verified,
+    'verified',          v_new_status = 'verified',
+    'status',            v_new_status,
     'is_active',         v_is_active
   );
 END;
@@ -1159,9 +1417,6 @@ BEGIN
   END IF;
   IF v_tournament.status <> 'published' THEN
     RETURN 'tournament_not_published';
-  END IF;
-  IF v_tournament.registration_closed_at IS NULL OR v_tournament.registration_closed_at > now() THEN
-    RETURN 'registration_open';
   END IF;
   IF v_tournament.beneficiary_organization_id IS NOT NULL THEN
     RETURN 'beneficiary_set';
@@ -2483,6 +2738,50 @@ END;
 $$;
 
 -- =============================================
+-- PRIZE PAYEES
+-- =============================================
+-- Whose account each winner's prize is paid to (#718), for many winners at
+-- once, so the award lists and emails read the same rule as
+-- claim_prize_award_send. A winner with an active 'minor' guardianship is paid
+-- to a guardian: the one whose active account is verified, else one who has an
+-- account at all, else the earliest guardianship, then the guardian's id, so
+-- the same guardian is chosen every time. Everyone else is paid to their own
+-- account.
+CREATE OR REPLACE FUNCTION prize_payees(p_winners uuid[])
+RETURNS TABLE (
+  winner_user_id uuid,
+  payee_user_id  uuid,
+  reason         prize_payee_reason
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT w.id,
+         COALESCE(g.guardian_user_id, w.id),
+         CASE WHEN g.guardian_user_id IS NULL THEN 'winner'
+              ELSE 'guardian_of_minor' END::prize_payee_reason
+    FROM unnest(p_winners) AS w(id)
+    LEFT JOIN LATERAL (
+      SELECT gs.guardian_user_id
+        FROM guardianships gs
+        JOIN users gu ON gu.id = gs.guardian_user_id AND gu.deleted_at IS NULL
+        LEFT JOIN player_bank_accounts b
+          ON b.user_id = gs.guardian_user_id AND b.is_active
+       WHERE gs.dependent_user_id = w.id
+         AND gs.status = 'active'
+         AND gs.basis = 'minor'
+       ORDER BY (b.status = 'verified') DESC NULLS LAST,
+                (b.id IS NOT NULL) DESC,
+                gs.created_at,
+                gs.guardian_user_id
+       LIMIT 1
+    ) g ON true
+   WHERE w.id IS NOT NULL;
+$$;
+
+-- =============================================
 -- ENTER PRIZE AWARD
 -- The organizer names a winner, after the event. Nothing is reserved and
 -- nothing moves until a platform admin approves it (review_prize_award). Refused
@@ -2644,6 +2943,10 @@ BEGIN
   SELECT * INTO v_tournament FROM tournaments WHERE id = v_tournament_id FOR UPDATE;
   SELECT * INTO v_award FROM prize_awards WHERE id = p_award_id FOR UPDATE;
 
+  IF v_award.withdrawn_at IS NOT NULL THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_WITHDRAWN: the organizer withdrew prize award %', p_award_id
+      USING ERRCODE = 'P0001';
+  END IF;
   IF v_award.approval <> 'pending' THEN
     RAISE EXCEPTION 'PRIZE_AWARD_ALREADY_REVIEWED: prize award % already reviewed', p_award_id
       USING ERRCODE = 'P0001';
@@ -2707,12 +3010,80 @@ END;
 $$;
 
 -- =============================================
+-- WITHDRAW PRIZE AWARD
+-- =============================================
+-- The organizer withdraws an award while it awaits review (#611): approval
+-- 'rejected' with withdrawn_at / withdrawn_by, and no admin review. Takes the
+-- tournament lock, then the award, the same order as enter_prize_award and
+-- review_prize_award, so a withdrawal and an approval serialise. Once approved
+-- its money is reserved and the send may be under way, so reversing it stays
+-- an admin decision.
+--
+-- Refuses with:
+--   P0002                                    no such award in that tournament
+--   PRIZE_AWARD_NOT_WITHDRAWABLE: approved   (P0001) an admin approved it
+--   PRIZE_AWARD_NOT_WITHDRAWABLE: rejected   (P0001) an admin rejected it
+--   PRIZE_AWARD_NOT_WITHDRAWABLE: withdrawn  (P0001) already withdrawn
+CREATE OR REPLACE FUNCTION withdraw_prize_award(
+  p_tournament_id uuid,
+  p_award_id      uuid,
+  p_withdrawn_by  uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_award        prize_awards;
+  v_withdrawn_at timestamptz := now();
+BEGIN
+  PERFORM 1 FROM tournaments WHERE id = p_tournament_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament % not found', p_tournament_id USING ERRCODE = 'P0002';
+  END IF;
+
+  SELECT * INTO v_award FROM prize_awards
+    WHERE id = p_award_id AND tournament_id = p_tournament_id
+    FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'prize award % not found', p_award_id USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_award.withdrawn_at IS NOT NULL THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_WITHDRAWABLE: withdrawn' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_award.approval <> 'pending' THEN
+    RAISE EXCEPTION 'PRIZE_AWARD_NOT_WITHDRAWABLE: %', v_award.approval USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE prize_awards
+    SET approval     = 'rejected',
+        withdrawn_by = p_withdrawn_by,
+        withdrawn_at = v_withdrawn_at
+    WHERE id = p_award_id;
+
+  RETURN jsonb_build_object(
+    'id',              v_award.id,
+    'tournament_id',   v_award.tournament_id,
+    'organization_id', v_award.organization_id,
+    'user_id',         v_award.user_id,
+    'category',        v_award.category,
+    'place',           v_award.place,
+    'amount_cents',    v_award.amount_cents,
+    'withdrawn_at',    v_withdrawn_at
+  );
+END;
+$$;
+
+-- =============================================
 -- CLAIM PRIZE AWARD SEND
 -- claim_payout_send for an award. executePrizeAward calls it immediately before
 -- asking CHIP for the transfer. Under the tournament lock it re-checks that the
 -- tournament isn't cancelled or cancelling and that the award still fits in the
--- pool, snapshots the winner's active VERIFIED bank account, and moves the row
--- from 'pending' to 'processing'.
+-- pool, snapshots the payee's active VERIFIED bank account (prize_payees: the
+-- winner's own, or a minor winner's guardian's, #718) with payee_user_id /
+-- payee_reason, and moves the row from 'pending' to 'processing'.
 --
 -- Returns NULL once claimed, else why not: 'not_claimable' (missing, unapproved,
 -- settled or already claimed), 'tournament_cancelled', 'cancellation_pending',
@@ -2729,6 +3100,7 @@ DECLARE
   v_tournament_id uuid;
   v_status        tournament_status;
   v_award         prize_awards;
+  v_payee         record;
   v_bank_id       uuid;
 BEGIN
   SELECT tournament_id INTO v_tournament_id FROM prize_awards WHERE id = p_award_id;
@@ -2758,15 +3130,15 @@ BEGIN
     RETURN 'winner_missing';
   END IF;
 
-  -- The reservation was made at approval; this only catches a ledger that moved
-  -- underneath it (e.g. an over-settled award booked in between).
   IF v_award.amount_cents > available_prize_pool_cents(v_tournament_id, p_award_id) THEN
     RETURN 'pool_insufficient';
   END IF;
 
+  SELECT * INTO v_payee FROM prize_payees(ARRAY[v_award.user_id]);
+
   SELECT b.id INTO v_bank_id
     FROM player_bank_accounts b
-    WHERE b.user_id = v_award.user_id
+    WHERE b.user_id = v_payee.payee_user_id
       AND b.is_active
       AND b.status = 'verified'
       AND b.chip_bank_account_id IS NOT NULL;
@@ -2775,7 +3147,10 @@ BEGIN
   END IF;
 
   UPDATE prize_awards
-    SET status = 'processing', bank_account_id = v_bank_id
+    SET status          = 'processing',
+        bank_account_id = v_bank_id,
+        payee_user_id   = v_payee.payee_user_id,
+        payee_reason    = v_payee.reason
     WHERE id = p_award_id;
   RETURN NULL;
 END;
@@ -2942,6 +3317,12 @@ REVOKE EXECUTE ON FUNCTION enter_prize_award                 FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION review_prize_award                FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION claim_prize_award_send            FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION settle_prize_award                FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION review_bank_account_name FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION self_managed_minor FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION assert_participant_not_self_managed_minor FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION assert_payer_acts_for FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION withdraw_prize_award FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION prize_payees FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION create_registration_with_payment  TO service_role;
 GRANT EXECUTE ON FUNCTION start_new_payment_attempt         TO service_role;
@@ -2976,3 +3357,9 @@ GRANT EXECUTE ON FUNCTION enter_prize_award                 TO service_role;
 GRANT EXECUTE ON FUNCTION review_prize_award                TO service_role;
 GRANT EXECUTE ON FUNCTION claim_prize_award_send            TO service_role;
 GRANT EXECUTE ON FUNCTION settle_prize_award                TO service_role;
+GRANT EXECUTE ON FUNCTION review_bank_account_name TO service_role;
+GRANT EXECUTE ON FUNCTION self_managed_minor TO service_role;
+GRANT EXECUTE ON FUNCTION assert_participant_not_self_managed_minor TO service_role;
+GRANT EXECUTE ON FUNCTION assert_payer_acts_for TO service_role;
+GRANT EXECUTE ON FUNCTION withdraw_prize_award TO service_role;
+GRANT EXECUTE ON FUNCTION prize_payees TO service_role;
