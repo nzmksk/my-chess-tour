@@ -1,18 +1,32 @@
 import { supabaseAdmin } from "@/services/supabase/admin";
 import type { ChessTitle, FideRating } from "@/app/profile/types";
 
-const FIDE_PROFILE_URL = "https://ratings.fide.com/profile";
+const LICHESS_FIDE_PLAYER_URL = "https://lichess.org/api/fide/player";
+const LOOKUP_TIMEOUT_MS = 8000;
 
-const FIDE_TITLE_MAP: Record<string, ChessTitle> = {
-  grandmaster: "GM",
-  "international master": "IM",
-  "fide master": "FM",
-  "candidate master": "CM",
-  "woman grandmaster": "WGM",
-  "woman international master": "WIM",
-  "woman fide master": "WFM",
-  "woman candidate master": "WCM",
-};
+const CHESS_TITLES: ReadonlySet<string> = new Set<ChessTitle>([
+  "GM",
+  "IM",
+  "FM",
+  "CM",
+  "WGM",
+  "WIM",
+  "WFM",
+  "WCM",
+]);
+
+export interface LichessFidePlayer {
+  id: number;
+  name: string;
+  federation: string;
+  title?: string;
+  year?: number | null;
+  inactive?: number;
+  standard?: number;
+  rapid?: number;
+  blitz?: number;
+  gender?: "M" | "F";
+}
 
 export interface FidePlayer {
   name: string;
@@ -22,25 +36,24 @@ export interface FidePlayer {
   title: ChessTitle | null;
 }
 
-export function parseRating(raw: string | null | undefined): number | null {
-  if (raw == null) return null;
-  const n = parseInt(raw.replace(/\D/g, ""), 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+function rating(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : null;
 }
 
-export function parseFideTitle(
-  raw: string | null | undefined,
-): ChessTitle | null {
-  if (raw == null) return null;
-  return FIDE_TITLE_MAP[raw.trim().toLowerCase()] ?? null;
+function title(value: string | undefined): ChessTitle | null {
+  return value !== undefined && CHESS_TITLES.has(value)
+    ? (value as ChessTitle)
+    : null;
 }
 
-function extractRating(html: string, blockClass: string): number | null {
-  const re = new RegExp(
-    `class="${blockClass}[^"]*"[\\s\\S]*?<p>([^<]*)</p>`,
-    "i",
+function isLichessFidePlayer(body: unknown): body is LichessFidePlayer {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    typeof (body as { name?: unknown }).name === "string"
   );
-  return parseRating(html.match(re)?.[1]);
 }
 
 function nameTokens(value: string): string[] {
@@ -70,34 +83,33 @@ export async function fetchFidePlayer(
   if (!Number.isInteger(fideId) || fideId <= 0 || fideId > 2147483647) {
     throw new Error(`Invalid FIDE ID: ${fideId}`);
   }
-  const res = await fetch(`${FIDE_PROFILE_URL}/${encodeURIComponent(fideId)}`, {
+  const res = await fetch(`${LICHESS_FIDE_PLAYER_URL}/${fideId}`, {
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; MyChessTour/1.0; +https://mychesstour.com)",
+      Accept: "application/json",
+      "User-Agent": "MyChessTour/1.0 (+https://mychesstour.com)",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
   });
 
   if (res.status === 404) return null;
   if (!res.ok) {
-    throw new Error(`FIDE profile fetch failed: HTTP ${res.status}`);
+    throw new Error(`FIDE player lookup failed: HTTP ${res.status}`);
   }
 
-  const html = await res.text();
-
-  const name = html
-    .match(/<h1 class="player-title">([^<]*)<\/h1>/i)?.[1]
-    ?.trim();
+  const player: unknown = await res.json();
+  if (!isLichessFidePlayer(player)) {
+    throw new Error("FIDE player lookup returned an unexpected body");
+  }
+  const name = player.name.trim();
   if (!name) return null;
 
   return {
     name,
-    standard: extractRating(html, "profile-standart"),
-    rapid: extractRating(html, "profile-rapid"),
-    blitz: extractRating(html, "profile-blitz"),
-    title: parseFideTitle(
-      html.match(/class="profile-info-title[^"]*">\s*<p>([^<]*)<\/p>/i)?.[1],
-    ),
+    standard: rating(player.standard),
+    rapid: rating(player.rapid),
+    blitz: rating(player.blitz),
+    title: title(player.title),
   };
 }
 

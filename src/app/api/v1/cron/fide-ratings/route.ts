@@ -8,14 +8,14 @@ import { withAuditContext } from "@/services/supabase/audit-context";
 // only and needs the Node runtime.
 export const runtime = "nodejs";
 // FIDE publishes its new monthly rating list on the 2nd, so this runs then.
-// One outbound FIDE page fetch per player; keep the window generous.
+// One Lichess FIDE player lookup per player; keep the window generous.
 export const maxDuration = 300;
 
 const PAGE_SIZE = 500;
-// Fetch a handful of FIDE profiles at a time, with a short pause between chunks,
-// to avoid hammering ratings.fide.com.
-const CONCURRENCY = 4;
-const CHUNK_DELAY_MS = 500;
+// Lichess asks API clients to make one request at a time, so players are looked
+// up one by one with a short pause between them.
+const CONCURRENCY = 1;
+const CHUNK_DELAY_MS = 200;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
