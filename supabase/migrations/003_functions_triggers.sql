@@ -454,9 +454,8 @@ $$;
 -- decides it, called by audit_trigger_func on the way in. Tables not listed come
 -- back unchanged. Any new sensitive column belongs here in the same PR that
 -- adds the column.
---   player_profiles.bank_account_number (a column since moved to
---     player_bank_accounts, kept for rows written before), organization_bank_accounts.
---     account_number, player_bank_accounts.account_number: masked to the last 4 digits.
+--   organization_bank_accounts.account_number, player_bank_accounts.account_number:
+--     masked to the last 4 digits.
 --   player_profiles.oku_document_path, organization_documents.storage_path:
 --     capability-bearing; anyone holding one can be issued a signed URL to a
 --     private-bucket document. Filename rule: only the extension survives.
@@ -470,9 +469,7 @@ IMMUTABLE
 AS $$
   SELECT CASE p_table_name
     WHEN 'player_profiles' THEN
-      redact_jsonb_filenames(
-        redact_jsonb_columns(p_data, ARRAY['bank_account_number']),
-        ARRAY['oku_document_path'])
+      redact_jsonb_filenames(p_data, ARRAY['oku_document_path'])
     WHEN 'organization_bank_accounts' THEN
       redact_jsonb_columns(p_data, ARRAY['account_number'])
     WHEN 'player_bank_accounts' THEN
@@ -1873,11 +1870,7 @@ CREATE FUNCTION create_organization_application(
   p_phone               varchar(20) DEFAULT NULL,
   p_past_tournament_refs text   DEFAULT NULL,
   p_registration_number varchar(100) DEFAULT NULL,
-  p_registered_name     varchar(255) DEFAULT NULL,
-  p_bank_code           varchar(11)  DEFAULT NULL,
-  p_bank_name           varchar(100) DEFAULT NULL,
-  p_account_holder      varchar(255) DEFAULT NULL,
-  p_account_number      varchar(50)  DEFAULT NULL
+  p_registered_name     varchar(255) DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1954,12 +1947,7 @@ CREATE FUNCTION resubmit_organization_application(
   p_phone               varchar(20) DEFAULT NULL,
   p_past_tournament_refs text   DEFAULT NULL,
   p_registration_number varchar(100) DEFAULT NULL,
-  p_registered_name     varchar(255) DEFAULT NULL,
-  p_keep_bank_account   boolean      DEFAULT NULL,
-  p_bank_code           varchar(11)  DEFAULT NULL,
-  p_bank_name           varchar(100) DEFAULT NULL,
-  p_account_holder      varchar(255) DEFAULT NULL,
-  p_account_number      varchar(50)  DEFAULT NULL
+  p_registered_name     varchar(255) DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql

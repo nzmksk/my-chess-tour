@@ -556,8 +556,7 @@ $$;
 -- Whether a pending refund may be sent to CHIP again. `pending` is overloaded: a
 -- refund that was fired a moment ago and is waiting on its payment.refunded
 -- webhook looks exactly like one that is stuck. So a refund is due only when:
---   * it was never fired (the refund sweep hasn't reached it, or rows that
---     predate last_fired_at), or
+--   * it was never fired (the refund sweep hasn't reached it), or
 --   * it was fired at least p_min_age ago and nothing has settled it since.
 -- A reported failure does NOT shorten the wait. purchase.refund_failure is
 -- correlated by the original purchase only, so a late failure from an earlier

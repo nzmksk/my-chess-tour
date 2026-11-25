@@ -35,7 +35,6 @@
 --   C5  the registry document must MATCH the entity: a company with only an
 --       ROS document, or a society with only an SSM one, raises
 --       ENTITY_DOCS_REQUIRED
---   C6  bank details an older app version still sends are ignored (#671)
 --   A1  audit snapshots redact account_number and storage_path, and carry the
 --       organization_id
 --   R1  pending applications can share a name (any case); the first approval
@@ -342,25 +341,6 @@ BEGIN
   END;
   RAISE NOTICE 'C5 PASS — the wrong registry''s document is rejected for both entity types';
 
-  -- ---- C6: bank details from an older app version are ignored (#671) -------
-  v_result := create_organization_application(
-    p_created_by        => v_user,
-    p_name              => 'OLD CLIENT ORG',
-    p_email             => 'old-client@test.local',
-    p_entity_type       => 'individual',
-    p_agreement_version => '2026-08-02',
-    p_documents         => '[{"doc_type":"identity_document","storage_path":"users/x/org-kyb/old.pdf"}]'::jsonb,
-    p_bank_code         => 'HLBBMYKL',
-    p_bank_name         => 'Hong Leong Bank',
-    p_account_holder    => 'Old Client',
-    p_account_number    => '1231231234'
-  );
-  IF EXISTS (SELECT 1 FROM organization_bank_accounts
-             WHERE organization_id = (v_result->>'id')::uuid) THEN
-    RAISE EXCEPTION 'C6 FAIL: bank details sent with an application were stored';
-  END IF;
-  RAISE NOTICE 'C6 PASS — bank details sent with an application are ignored';
-
   -- ---- C3: duplicate name --------------------------------------------------
   -- Only an approved organization holds its name (#582), so approve C1's first.
   PERFORM review_organization_application(v_id, v_user, 'approve', NULL);
@@ -509,7 +489,6 @@ BEGIN
     p_email             => 'shared-b@test.local',
     p_entity_type       => 'individual',
     p_agreement_version => '2026-11-20',
-    p_keep_bank_account => true,
     p_keep_document_ids => ARRAY[v_doc_keep],
     p_new_documents     => '[{"doc_type":"authorization_letter","storage_path":"users/y/org-kyb/letter.pdf","original_filename":"letter.pdf"}]'::jsonb,
     p_registered_name   => 'Second Applicant'

@@ -842,7 +842,7 @@ CREATE TABLE payments (
   -- attempt only and changes on a retry (a corrected DOB, an OKU verification
   -- landing between attempts); this is the tier AS CHARGED, and never changes.
   -- Count tiers from here, not from registrations. NULL on non-registration
-  -- rows, and on registration rows written before this column existed.
+  -- rows.
   fee_tier                    varchar(50),
   currency                   varchar(3) NOT NULL DEFAULT 'MYR',
   payment_method              varchar(50),
