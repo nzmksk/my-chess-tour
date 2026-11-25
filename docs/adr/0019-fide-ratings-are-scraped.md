@@ -1,6 +1,6 @@
 # 0019. FIDE ratings are scraped from profile pages
 
-- Status: Accepted; the name check's effect superseded by [0028](0028-a-fide-id-must-carry-the-players-name.md)
+- Status: Superseded by [0029](0029-fide-players-come-from-the-lichess-api.md); the name check's effect superseded by [0028](0028-a-fide-id-must-carry-the-players-name.md)
 - Date: 2026-11-21
 - Issue: #675
 
