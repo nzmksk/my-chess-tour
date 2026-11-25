@@ -88,10 +88,14 @@ function SectionCard({ title, children }: SectionCardProps) {
 
 interface Props {
   profile: PlayerProfile;
+  startEditing?: boolean;
 }
 
-export default function ProfileClient({ profile }: Props) {
-  const [editing, setEditing] = useState(false);
+export default function ProfileClient({
+  profile,
+  startEditing = false,
+}: Props) {
+  const [editing, setEditing] = useState(startEditing);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -123,6 +127,15 @@ export default function ProfileClient({ profile }: Props) {
     setEditing(true);
     setSaveError(null);
     setSaveSuccess(false);
+  }
+
+  function leaveEditing() {
+    setEditing(false);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("edit")) {
+      url.searchParams.delete("edit");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
   }
 
   function handleAvatarClick() {
@@ -165,7 +178,7 @@ export default function ProfileClient({ profile }: Props) {
   }
 
   function handleCancel() {
-    setEditing(false);
+    leaveEditing();
     setSaveError(null);
     setAvatarFile(null);
     setAvatarPreview(null);
@@ -312,7 +325,7 @@ export default function ProfileClient({ profile }: Props) {
       setAvatarPreview(null);
       setRemoveAvatar(false);
       setSaveSuccess(true);
-      setEditing(false);
+      leaveEditing();
     } catch {
       setSaveError("Network error. Please try again.");
     } finally {

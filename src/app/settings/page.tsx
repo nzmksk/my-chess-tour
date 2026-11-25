@@ -33,7 +33,11 @@ async function fetchProfile(
   }
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ edit?: string | string[] }>;
+}) {
   const claims = await getAuthClaims();
 
   if (!claims) {
@@ -52,7 +56,10 @@ export default async function SettingsPage() {
   return (
     <div className="bg-bg-base flex-1">
       <NavBar />
-      <ProfileClient profile={profile} />
+      <ProfileClient
+        profile={profile}
+        startEditing={(await searchParams).edit === "1"}
+      />
     </div>
   );
 }

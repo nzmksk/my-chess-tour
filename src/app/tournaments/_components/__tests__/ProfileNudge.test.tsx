@@ -27,7 +27,7 @@ describe("ProfileNudge", () => {
   it("renders the nudge with a link to settings when not dismissed", () => {
     render(<ProfileNudge />);
     const link = screen.getByText("Complete profile →");
-    expect(link.getAttribute("href")).toBe("/settings");
+    expect(link.getAttribute("href")).toBe("/settings?edit=1");
   });
 
   it("renders nothing when previously dismissed", () => {
