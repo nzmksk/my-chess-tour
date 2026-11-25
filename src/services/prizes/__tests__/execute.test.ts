@@ -13,13 +13,15 @@ const {
   mockSettle,
   mockNotifyAwarded,
   mockNotifyAdmins,
+  mockLoadPayees,
+  mockMinorIds,
 } = vi.hoisted(() => {
   const tables: Record<string, Array<{ data: unknown; error: unknown }>> = {};
   const updates: Array<{ table: string; patch: unknown }> = [];
 
   function makeBuilder(table: string) {
     const b: Record<string, unknown> = {};
-    for (const m of ["select", "eq", "is", "order", "maybeSingle", "single"]) {
+    for (const m of ["select", "eq", "in", "is", "order", "maybeSingle", "single"]) {
       b[m] = vi.fn(() => b);
     }
     b.update = vi.fn((patch: unknown) => {
@@ -50,6 +52,8 @@ const {
     mockSettle: vi.fn(),
     mockNotifyAwarded: vi.fn(),
     mockNotifyAdmins: vi.fn(),
+    mockLoadPayees: vi.fn(),
+    mockMinorIds: vi.fn(),
   };
 });
 
@@ -71,6 +75,19 @@ vi.mock("../notify", () => ({
   notifyPrizeAwarded: mockNotifyAwarded,
   notifyAdminsOfPrizes: mockNotifyAdmins,
 }));
+vi.mock("../payee", () => ({
+  loadPrizePayees: mockLoadPayees,
+  minorDependentIds: mockMinorIds,
+}));
+
+function payeesOf(entries: Array<[string, string, "winner" | "guardian_of_minor"]>) {
+  return {
+    ok: true,
+    payees: new Map(
+      entries.map(([winnerId, payeeId, reason]) => [winnerId, { winnerId, payeeId, reason }]),
+    ),
+  };
+}
 
 import { ChipSendError } from "@/services/chip/send";
 import { runAfterCallbacks } from "@/test/after";
@@ -116,6 +133,10 @@ beforeEach(() => {
   mockCreateInstruction.mockResolvedValue({ id: 7001, state: "accepted", amount: "300.00", receipt_url: null });
   mockSettle.mockResolvedValue({ error: null, settled: true });
   mockRegister.mockResolvedValue("pending");
+  mockLoadPayees.mockImplementation(async (ids: string[]) =>
+    payeesOf(ids.map((id) => [id, id, "winner"])),
+  );
+  mockMinorIds.mockResolvedValue({ ok: true, ids: [] });
   vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -297,10 +318,54 @@ describe("executePrizeAward", () => {
   });
 });
 
+describe("executePrizeAward for a minor (#718)", () => {
+  it("registers and pays the guardian's account, emailing CHIP the guardian's address", async () => {
+    mockLoadPayees.mockResolvedValue(payeesOf([["child-1", "guardian-1", "guardian_of_minor"]]));
+    tables.prize_awards = [
+      { data: award({ user_id: "child-1", winner: { email: null, contact_email: null } }), error: null },
+      { data: award({ status: "processing", bank: { chip_bank_account_id: 930101 } }), error: null },
+    ];
+    tables.users = [{ data: { email: "guardian@test.local", contact_email: null }, error: null }];
+    tables.player_bank_accounts = [{ data: verifiedBank, error: null }];
+
+    expect(await executePrizeAward(AWARD_ID)).toBe("sent");
+    const bankQuery = mockFrom.mock.results[mockFrom.mock.calls.findIndex(([t]) => t === "player_bank_accounts")]
+      .value as { eq: ReturnType<typeof vi.fn> };
+    expect(bankQuery.eq).toHaveBeenCalledWith("user_id", "guardian-1");
+    expect(mockCreateInstruction).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "guardian@test.local" }),
+    );
+  });
+
+  it("waits when the guardian has no bank account", async () => {
+    mockLoadPayees.mockResolvedValue(payeesOf([["child-1", "guardian-1", "guardian_of_minor"]]));
+    tables.prize_awards = [{ data: award({ user_id: "child-1" }), error: null }];
+    tables.users = [{ data: { email: "guardian@test.local", contact_email: null }, error: null }];
+    tables.player_bank_accounts = [{ data: null, error: null }];
+
+    expect(await executePrizeAward(AWARD_ID)).toBe("blocked");
+    expect(mockRpc).not.toHaveBeenCalledWith("claim_prize_award_send", expect.anything());
+  });
+
+  it("falls back to support for CHIP's email when a managed winner has none", async () => {
+    queueHappyPath();
+    tables.prize_awards[0] = {
+      data: award({ winner: { email: null, contact_email: null } }),
+      error: null,
+    };
+
+    expect(await executePrizeAward(AWARD_ID)).toBe("sent");
+    expect(mockCreateInstruction).toHaveBeenCalledWith(
+      expect.objectContaining({ email: expect.stringContaining("@") }),
+    );
+    expect(mockCreateInstruction.mock.calls[0][0].email).not.toBe("winner@test.local");
+  });
+});
+
 describe("sendAwardsAwaitingBank", () => {
   it("sends each approved award waiting on the winner", async () => {
     tables.prize_awards = [
-      { data: [{ id: "a1" }, { id: "a2" }], error: null },
+      { data: [{ id: "a1", user_id: "user-1" }, { id: "a2", user_id: "user-1" }], error: null },
       { data: award({ id: "a1", approval: "pending" }), error: null },
       { data: award({ id: "a2", approval: "pending" }), error: null },
     ];
@@ -314,11 +379,37 @@ describe("sendAwardsAwaitingBank", () => {
     expect(mockFrom).toHaveBeenCalledTimes(1);
     expect(mockRegister).not.toHaveBeenCalled();
   });
+
+  it("includes the awards of a guardian's minor dependents paid into the guardian's account (#718)", async () => {
+    mockMinorIds.mockResolvedValue({ ok: true, ids: ["child-1", "child-2"] });
+    mockLoadPayees.mockResolvedValue(
+      payeesOf([
+        ["child-1", "user-1", "guardian_of_minor"],
+        ["child-2", "other-guardian", "guardian_of_minor"],
+      ]),
+    );
+    tables.prize_awards = [
+      {
+        data: [
+          { id: "a-child", user_id: "child-1" },
+          { id: "a-sibling", user_id: "child-2" },
+        ],
+        error: null,
+      },
+    ];
+
+    await onPlayerBankVerdict("user-1", false);
+
+    expect(mockNotifyAwarded).toHaveBeenCalledWith("a-child", { accountRejected: true });
+    expect(mockNotifyAwarded).not.toHaveBeenCalledWith("a-sibling", expect.anything());
+  });
 });
 
 describe("onPlayerBankVerdict", () => {
   it("tells the winner of each waiting award that their account was rejected", async () => {
-    tables.prize_awards = [{ data: [{ id: "a1" }, { id: "a2" }], error: null }];
+    tables.prize_awards = [
+      { data: [{ id: "a1", user_id: "user-1" }, { id: "a2", user_id: "user-1" }], error: null },
+    ];
     await onPlayerBankVerdict("user-1", false);
     expect(mockNotifyAwarded).toHaveBeenCalledWith("a1", { accountRejected: true });
     expect(mockNotifyAwarded).toHaveBeenCalledWith("a2", { accountRejected: true });

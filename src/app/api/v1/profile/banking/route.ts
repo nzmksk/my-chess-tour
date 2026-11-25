@@ -90,6 +90,18 @@ async function handlePatch(request: NextRequest): Promise<NextResponse> {
         { status: 404 },
       );
     }
+    if (error.code === "P0001" && error.message?.startsWith("MINOR_DEPENDENT")) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "MINOR_DEPENDENT",
+            message:
+              "Your prizes are paid into your guardian's bank account while you are under 18",
+          },
+        },
+        { status: 409 },
+      );
+    }
     if (error.code === "P0001" && error.message?.startsWith("CONSENT_REQUIRED")) {
       return NextResponse.json(
         {

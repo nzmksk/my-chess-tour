@@ -38,6 +38,8 @@ function award(overrides: Partial<PrizeAwardView> = {}): PrizeAwardView {
     reviewed_at: null,
     withdrawn_at: null,
     processed_at: null,
+    payee_user_id: null,
+    payee_reason: null,
     winner_bank_status: null,
     ...overrides,
   };
@@ -139,5 +141,14 @@ describe("AdminPrizesClient", () => {
     expect(screen.getByText("To Review (0)")).toBeTruthy();
     expect(screen.getByText("Paid")).toBeTruthy();
     expect(screen.getByText("Rejected: Wrong player")).toBeTruthy();
+  });
+
+  it("says when a minor's prize goes to a guardian's account", () => {
+    render(
+      <AdminPrizesClient
+        awards={[award({ payee_user_id: "guardian-1", payee_reason: "guardian_of_minor" })]}
+      />,
+    );
+    expect(screen.getByText(/Paid to a guardian \(minor\)/)).toBeTruthy();
   });
 });
