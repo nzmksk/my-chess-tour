@@ -207,12 +207,7 @@ function EditForm({
               inputMode="numeric"
               value={fideId}
               onChange={(e) => setFideId(e.target.value)}
-              aria-describedby={`${idPrefix}-fide-hint`}
             />
-            <p id={`${idPrefix}-fide-hint`} className="input-hint">
-              The name on the FIDE profile must match theirs. Their rating and
-              title are fetched from FIDE when you save.
-            </p>
           </div>
         ) : (
           <LockedValue label="FIDE ID" value={String(dependent.fide_id)} />
