@@ -12,20 +12,9 @@ import {
   startOfMonth,
 } from "@/lib/tournaments/datetime";
 import FilterBar from "./FilterBar";
-import TournamentCard from "./TournamentCard";
+import TournamentSection from "./TournamentSection";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function SectionBanner({ label }: { label: string }) {
-  return (
-    <div className="mb-4 flex items-center gap-4">
-      <span className="font-cinzel text-text-muted shrink-0 text-xs tracking-widest uppercase">
-        {label}
-      </span>
-      <div className="bg-border h-px flex-1" />
-    </div>
-  );
-}
 
 // Every supported country's regions, flattened — discovery filters across all
 // venues, not one country at a time.
@@ -151,6 +140,13 @@ export default function TournamentsClient({ tournaments, now }: Props) {
   }, [filtered, todayByZone]);
 
   const totalVisible = ongoing.length + upcoming.length + past.length;
+  const filterKey = JSON.stringify([
+    search.trim().toLowerCase(),
+    formats,
+    states,
+    ratings,
+    dateFilter,
+  ]);
 
   return (
     <>
@@ -183,34 +179,29 @@ export default function TournamentsClient({ tournaments, now }: Props) {
         ) : (
           <div className="flex flex-col gap-8">
             {ongoing.length > 0 && (
-              <section>
-                <SectionBanner label="Ongoing" />
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
-                  {ongoing.map((t) => (
-                    <TournamentCard key={t.id} tournament={t} now={now} />
-                  ))}
-                </div>
-              </section>
+              <TournamentSection
+                key={`ongoing-${filterKey}`}
+                label="Ongoing"
+                tournaments={ongoing}
+                now={now}
+              />
             )}
             {upcoming.length > 0 && (
-              <section>
-                <SectionBanner label="Upcoming" />
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
-                  {upcoming.map((t) => (
-                    <TournamentCard key={t.id} tournament={t} now={now} />
-                  ))}
-                </div>
-              </section>
+              <TournamentSection
+                key={`upcoming-${filterKey}`}
+                label="Upcoming"
+                tournaments={upcoming}
+                now={now}
+              />
             )}
             {past.length > 0 && (
-              <section>
-                <SectionBanner label="Past Tournaments" />
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-4">
-                  {past.map((t) => (
-                    <TournamentCard key={t.id} tournament={t} now={now} dimmed />
-                  ))}
-                </div>
-              </section>
+              <TournamentSection
+                key={`past-${filterKey}`}
+                label="Past Tournaments"
+                tournaments={past}
+                now={now}
+                dimmed
+              />
             )}
           </div>
         )}
