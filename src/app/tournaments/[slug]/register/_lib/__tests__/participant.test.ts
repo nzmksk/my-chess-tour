@@ -38,6 +38,10 @@ describe("loadRegisterParticipants", () => {
         { id: "u1", firstName: "You", name: "Myself", isSelf: true },
         { id: "dep-1", firstName: "Aina", name: "Aina Rahman", isSelf: false },
       ],
+      options: [
+        { id: "u1", label: "Myself", isSelf: true, disabled: false },
+        { id: "dep-1", label: "Aina Rahman", isSelf: false, disabled: false },
+      ],
       selected: { id: "u1", firstName: "You", name: "Myself", isSelf: true },
     });
     expect(mockListDependents).toHaveBeenCalledWith("u1");
@@ -64,6 +68,62 @@ describe("loadRegisterParticipants", () => {
       "dep-1",
     ]);
     expect(choice.ok && choice.selected).toBeNull();
+  });
+
+  it("still shows a minor who has turned 18 in the picker, disabled and explained", async () => {
+    mockListDependents.mockResolvedValue({
+      ok: true,
+      data: [AINA, { ...AINA, id: "dep-2", date_of_birth: "2008-11-26" }],
+    });
+    const choice = await loadRegisterParticipants(
+      "u1",
+      undefined,
+      "2026-11-26",
+    );
+    expect(choice.ok && choice.options.map((o) => [o.id, o.disabled])).toEqual([
+      ["u1", false],
+      ["dep-1", false],
+      ["dep-2", true],
+    ]);
+    expect(choice.ok && choice.options[2].label).toMatch(/turned 18/);
+  });
+
+  it("tells dependents who share a name apart by date of birth", async () => {
+    mockListDependents.mockResolvedValue({
+      ok: true,
+      data: [
+        { ...AINA, id: "dep-1", date_of_birth: "2012-05-01" },
+        {
+          ...AINA,
+          id: "dep-2",
+          first_name: "aina ",
+          last_name: "RAHMAN",
+          date_of_birth: "2015-03-09",
+        },
+        {
+          ...AINA,
+          id: "dep-3",
+          first_name: "Siti",
+          date_of_birth: "2013-01-01",
+        },
+      ],
+    });
+    const choice = await loadRegisterParticipants(
+      "u1",
+      undefined,
+      "2026-11-26",
+    );
+    expect(choice.ok && choice.participants.map((p) => p.id)).toEqual([
+      "u1",
+      "dep-1",
+      "dep-2",
+      "dep-3",
+    ]);
+    const labels = choice.ok ? choice.options.map((o) => o.label) : [];
+    expect(labels[1]).toMatch(/^Aina Rahman \(born .*2012\)$/);
+    expect(labels[2]).toMatch(/\(born .*2015\)$/);
+    expect(labels[1]).not.toBe(labels[2]);
+    expect(labels[3]).toBe("Siti Rahman");
   });
 
   it("reports a failed lookup", async () => {
