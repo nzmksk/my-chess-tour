@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 async function fetchRegistrations(
   host: string,
   cookieHeader: string,
-): Promise<PlayerRegistration[]> {
+): Promise<PlayerRegistration[] | null> {
   const protocol =
     host.startsWith("localhost") || host.startsWith("127.0.0.1")
       ? "http"
@@ -31,11 +31,17 @@ async function fetchRegistrations(
       cache: "no-store",
       headers: { cookie: cookieHeader },
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.error(
+        `My dashboard: failed to load registrations (HTTP ${res.status})`,
+      );
+      return null;
+    }
     const json = await res.json();
     return json.data ?? [];
-  } catch {
-    return [];
+  } catch (err) {
+    console.error("My dashboard: failed to load registrations", err);
+    return null;
   }
 }
 
