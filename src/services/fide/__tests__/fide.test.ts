@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 const { mockEq, mockUpdate, mockFrom } = vi.hoisted(() => {
   const mockEq = vi.fn();
@@ -15,69 +13,44 @@ vi.mock("@/services/supabase/admin", () => ({
 import {
   fetchFidePlayer,
   matchesFideName,
-  parseFideTitle,
-  parseRating,
   syncFidePlayer,
+  type LichessFidePlayer,
 } from "../fide";
 
-const titledHtml = `
-<html><head><title>Carlsen, Magnus FIDE Profile</title></head><body>
-  <h1 class="player-title">Carlsen, Magnus</h1>
-  <div class="profile-info-title "><p>Grandmaster</p></div>
-  <div class="profile-standart profile-game "><img src="/img/logo_std.svg" alt="standart" height=25><p>2823</p><p style="font-size:8px;">STANDARD</p></div>
-  <div class="profile-rapid profile-game "><img src="/img/logo_rpd.svg" alt="rapid" height=25><p>2803</p><p style="font-size:8px;">RAPID</p></div>
-  <div class="profile-blitz profile-game "><img src="/img/logo_blitz.svg" alt="blitz" height=25><p>2860</p><p style="font-size:8px;">BLITZ</p></div>
-</body></html>`;
+const UNTITLED: LichessFidePlayer = {
+  id: 2309114,
+  name: "Magnusdottir, Veronika Steinunn",
+  federation: "ISL",
+  year: 1998,
+  standard: 1711,
+  rapid: 1708,
+  blitz: 1708,
+  gender: "F",
+};
 
-const untitledUnratedHtml = `
-<html><body>
-  <h1 class="player-title">Novice, Jane</h1>
-  <div class="profile-info-title "><p>None</p></div>
-  <div class="profile-standart profile-game "><img><p>0</p><p>STANDARD</p></div>
-  <div class="profile-rapid profile-game "><img><p>0</p><p>RAPID</p></div>
-  <div class="profile-blitz profile-game "><img><p>1650</p><p>BLITZ</p></div>
-</body></html>`;
+const TITLED: LichessFidePlayer = {
+  id: 1503014,
+  name: "Carlsen, Magnus",
+  federation: "NOR",
+  year: 1990,
+  title: "GM",
+  standard: 2823,
+  rapid: 2801,
+  blitz: 2860,
+  gender: "M",
+};
 
-const notFoundHtml = `<html><body><div class="content">nothing here</div></body></html>`;
+const BLITZ_ONLY: LichessFidePlayer = {
+  id: 5702100,
+  name: "Moy, Chee Ban",
+  federation: "MAS",
+  year: null,
+  blitz: 1469,
+};
 
-function okResponse(html: string) {
-  return { status: 200, ok: true, text: async () => html };
+function okResponse(body: unknown) {
+  return { status: 200, ok: true, json: async () => body };
 }
-
-describe("parseRating", () => {
-  it("parses a positive integer", () => {
-    expect(parseRating("2823")).toBe(2823);
-    expect(parseRating(" 1 750 ")).toBe(1750);
-  });
-  it("maps unrated (0/blank/non-numeric/null) to null", () => {
-    expect(parseRating("0")).toBeNull();
-    expect(parseRating("")).toBeNull();
-    expect(parseRating("Unrated")).toBeNull();
-    expect(parseRating(null)).toBeNull();
-    expect(parseRating(undefined)).toBeNull();
-  });
-});
-
-describe("parseFideTitle", () => {
-  it("maps each FIDE title string to the enum", () => {
-    expect(parseFideTitle("Grandmaster")).toBe("GM");
-    expect(parseFideTitle("International Master")).toBe("IM");
-    expect(parseFideTitle("FIDE Master")).toBe("FM");
-    expect(parseFideTitle("Candidate Master")).toBe("CM");
-    expect(parseFideTitle("Woman Grandmaster")).toBe("WGM");
-    expect(parseFideTitle("Woman International Master")).toBe("WIM");
-    expect(parseFideTitle("Woman FIDE Master")).toBe("WFM");
-    expect(parseFideTitle("Woman Candidate Master")).toBe("WCM");
-  });
-  it("is case/whitespace insensitive", () => {
-    expect(parseFideTitle("  grandmaster ")).toBe("GM");
-  });
-  it("returns null for None / Arena / unknown", () => {
-    expect(parseFideTitle("None")).toBeNull();
-    expect(parseFideTitle("Arena Grandmaster")).toBeNull();
-    expect(parseFideTitle(null)).toBeNull();
-  });
-});
 
 describe("matchesFideName", () => {
   it("matches exact first/last against FIDE 'Last, First'", () => {
@@ -100,52 +73,55 @@ describe("matchesFideName", () => {
 describe("fetchFidePlayer", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("parses name, ratings and title from a titled profile", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(titledHtml)));
-    const player = await fetchFidePlayer(1503014);
-    expect(player).toEqual({
-      name: "Carlsen, Magnus",
-      standard: 2823,
-      rapid: 2803,
-      blitz: 2860,
-      title: "GM",
-    });
+  it("asks the Lichess FIDE player API for the ID", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(okResponse(UNTITLED));
+    vi.stubGlobal("fetch", fetchSpy);
+    await fetchFidePlayer(2309114);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://lichess.org/api/fide/player/2309114",
+      expect.objectContaining({ cache: "no-store" }),
+    );
   });
 
-  it("parses a real ratings.fide.com profile slice (guards against markup drift)", async () => {
-    const realHtml = readFileSync(
-      join(__dirname, "fixtures", "real-profile.html"),
-      "utf-8",
-    );
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(realHtml)));
-    const player = await fetchFidePlayer(1503014);
-    expect(player).toEqual({
-      name: "Carlsen, Magnus",
-      standard: 2823,
-      rapid: 2803,
-      blitz: 2860,
-      title: "GM",
-    });
-  });
-
-  it("maps unrated categories to null and 'None' title to null", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(okResponse(untitledUnratedHtml)),
-    );
-    const player = await fetchFidePlayer(123);
-    expect(player).toEqual({
-      name: "Novice, Jane",
-      standard: null,
-      rapid: null,
-      blitz: 1650,
+  it("maps an untitled player's name and ratings", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(UNTITLED)));
+    expect(await fetchFidePlayer(2309114)).toEqual({
+      name: "Magnusdottir, Veronika Steinunn",
+      standard: 1711,
+      rapid: 1708,
+      blitz: 1708,
       title: null,
     });
   });
 
-  it("returns null for a not-found page (no player-title)", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(notFoundHtml)));
-    expect(await fetchFidePlayer(99999999)).toBeNull();
+  it("maps a FIDE title onto the chess_title enum", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(TITLED)));
+    expect(await fetchFidePlayer(1503014)).toEqual({
+      name: "Carlsen, Magnus",
+      standard: 2823,
+      rapid: 2801,
+      blitz: 2860,
+      title: "GM",
+    });
+  });
+
+  it("maps categories Lichess leaves out to null", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(BLITZ_ONLY)));
+    expect(await fetchFidePlayer(5702100)).toEqual({
+      name: "Moy, Chee Ban",
+      standard: null,
+      rapid: null,
+      blitz: 1469,
+      title: null,
+    });
+  });
+
+  it("ignores a title outside the chess_title enum", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(okResponse({ ...UNTITLED, title: "LM" })),
+    );
+    expect((await fetchFidePlayer(2309114))?.title).toBeNull();
   });
 
   it("returns null on HTTP 404", async () => {
@@ -156,12 +132,25 @@ describe("fetchFidePlayer", () => {
     expect(await fetchFidePlayer(1)).toBeNull();
   });
 
+  it("returns null when the name is blank", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(okResponse({ ...UNTITLED, name: "  " })),
+    );
+    expect(await fetchFidePlayer(2309114)).toBeNull();
+  });
+
+  it("throws on a body that isn't a player", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(null)));
+    await expect(fetchFidePlayer(2309114)).rejects.toThrow(/unexpected body/);
+  });
+
   it("throws on an unexpected non-2xx response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ status: 503, ok: false }),
+      vi.fn().mockResolvedValue({ status: 429, ok: false }),
     );
-    await expect(fetchFidePlayer(1503014)).rejects.toThrow(/HTTP 503/);
+    await expect(fetchFidePlayer(1503014)).rejects.toThrow(/HTTP 429/);
   });
 
   it("throws when the network request fails", async () => {
@@ -191,7 +180,7 @@ describe("syncFidePlayer", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("writes ratings, title and a positive name match", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(titledHtml)));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(TITLED)));
     const result = await syncFidePlayer(
       "user-1",
       1503014,
@@ -204,7 +193,7 @@ describe("syncFidePlayer", () => {
     const payload = mockUpdate.mock.calls[0][0];
     expect(payload.fide_rating).toEqual({
       standard: 2823,
-      rapid: 2803,
+      rapid: 2801,
       blitz: 2860,
     });
     expect(payload.title).toBe("GM");
@@ -215,7 +204,7 @@ describe("syncFidePlayer", () => {
   });
 
   it("flags a name mismatch and drops the ratings and title", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(titledHtml)));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(TITLED)));
     const result = await syncFidePlayer(
       "user-2",
       1503014,
@@ -233,16 +222,22 @@ describe("syncFidePlayer", () => {
   });
 
   it("omits title when FIDE reports none", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(okResponse(untitledUnratedHtml)),
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(UNTITLED)));
+    await syncFidePlayer(
+      "u",
+      2309114,
+      "Veronika Steinunn",
+      "Magnusdottir",
+      "2026-07-02T00:00:00.000Z",
     );
-    await syncFidePlayer("u", 1, "Jane", "Novice", "2026-07-02T00:00:00.000Z");
     expect("title" in mockUpdate.mock.calls[0][0]).toBe(false);
   });
 
   it("returns 'not_found' and writes nothing for an unknown ID", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(notFoundHtml)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ status: 404, ok: false }),
+    );
     const result = await syncFidePlayer(
       "u",
       99999999,
@@ -268,7 +263,7 @@ describe("syncFidePlayer", () => {
   });
 
   it("returns 'failed' when the DB write errors", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(titledHtml)));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(TITLED)));
     mockEq.mockResolvedValue({ error: { message: "db down" } });
     const result = await syncFidePlayer(
       "u",
