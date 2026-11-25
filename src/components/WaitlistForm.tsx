@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { joinWaitlist } from "@/app/_actions/joinWaitlist";
+import { WAITLIST_ROLES } from "@/lib/waitlist-roles";
 
 const initialState = { error: null, submitted: false };
 
@@ -34,12 +35,20 @@ export default function WaitlistForm() {
         />
         <select
           name="user_type"
-          defaultValue="player"
+          aria-label="Your role"
+          required
+          defaultValue=""
           disabled={pending}
           className="input disabled:opacity-50"
         >
-          <option value="player">I am a player</option>
-          <option value="organizer">I am an organizer</option>
+          <option value="" disabled>
+            Your role
+          </option>
+          {WAITLIST_ROLES.map((role) => (
+            <option key={role.value} value={role.value}>
+              {role.label}
+            </option>
+          ))}
         </select>
         <button
           type="submit"

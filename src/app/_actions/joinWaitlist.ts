@@ -1,16 +1,20 @@
 "use server";
 
 import { createClient } from "@/services/supabase/server";
+import { isWaitlistRole } from "@/lib/waitlist-roles";
 
 export async function joinWaitlist(
   _prevState: { error: string | null; submitted: boolean },
   formData: FormData,
 ): Promise<{ error: string | null; submitted: boolean }> {
   const email = formData.get("email")?.toString().trim();
-  const userType = formData.get("user_type")?.toString() ?? "player";
+  const userType = formData.get("user_type")?.toString();
 
   if (!email)
     return { error: "Please enter your email address.", submitted: false };
+
+  if (!isWaitlistRole(userType))
+    return { error: "Please choose your role.", submitted: false };
 
   const supabase = await createClient();
   const { error } = await supabase
