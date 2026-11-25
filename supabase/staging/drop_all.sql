@@ -1,7 +1,9 @@
 -- =============================================================================
 -- DROP ALL — full teardown of the MY Chess Tour schema
 -- Reverses every migration in supabase/migrations so you can re-apply them from
--- scratch.
+-- scratch. Tables, functions and enums are found in the catalog rather than
+-- listed, since everything in `public` belongs to this app, so a new one can't
+-- be left behind.
 --
 -- Scope: drops everything this app owns in `public`, the avatars,
 -- oku-documents and organization-documents storage buckets and their policies,
@@ -27,13 +29,11 @@ DROP POLICY IF EXISTS "Org managers can manage org avatar" ON storage.objects;
 DROP POLICY IF EXISTS "Org managers can delete org avatar" ON storage.objects;
 
 -- oku-documents bucket (private)
-DROP POLICY IF EXISTS "Users can upload own OKU document"     ON storage.objects;
-DROP POLICY IF EXISTS "Users can delete own OKU document"     ON storage.objects;
-DROP POLICY IF EXISTS "OKU documents readable by owner or admin" ON storage.objects;
+DROP POLICY IF EXISTS "Players and those acting for them can upload an OKU document" ON storage.objects;
+DROP POLICY IF EXISTS "OKU documents readable by those acting for the player or admin" ON storage.objects;
 
 -- organization-documents bucket (private)
 DROP POLICY IF EXISTS "Users can upload own org document"     ON storage.objects;
-DROP POLICY IF EXISTS "Users can delete own org document"     ON storage.objects;
 DROP POLICY IF EXISTS "Org documents readable by uploader or admin" ON storage.objects;
 
 -- Uploaded files, then the buckets themselves. Dropping the policies alone left
@@ -42,7 +42,7 @@ DROP POLICY IF EXISTS "Org documents readable by uploader or admin" ON storage.o
 -- orphaned blobs whose paths point at ids that no longer exist — and OKU cards
 -- and KYB documents are scanned identity documents, so leaving them in a "full
 -- teardown" is the wrong default. Objects first: they FK to buckets. 005
--- recreates the buckets (ON CONFLICT DO NOTHING), so this is safe to re-apply.
+-- recreates the buckets, so this is safe to re-apply.
 --
 -- Supabase guards both tables with statement triggers (protect_objects_delete /
 -- protect_buckets_delete → storage.protect_delete()) that reject any direct
@@ -76,39 +76,22 @@ DROP TRIGGER IF EXISTS on_auth_user_confirmed ON auth.users;
 DROP VIEW IF EXISTS public.tournament_payout_summary CASCADE;
 
 -- -----------------------------------------------------------------------------
--- 4. Tables (migrations 001 / 006). CASCADE also removes their RLS policies,
---    triggers, indexes, and foreign keys.
+-- 4. Tables (migration 001): every table in `public`. CASCADE also removes
+--    their RLS policies, triggers, indexes and foreign keys.
 -- -----------------------------------------------------------------------------
-DROP TABLE IF EXISTS public.audit_logs              CASCADE;
-DROP TABLE IF EXISTS public.tournament_cancellation_requests CASCADE;
-DROP TABLE IF EXISTS public.prize_awards            CASCADE;
-DROP TABLE IF EXISTS public.prize_fundings          CASCADE;
-DROP TABLE IF EXISTS public.prize_funder_contacts   CASCADE;
-DROP TABLE IF EXISTS public.payouts                 CASCADE;
-DROP TABLE IF EXISTS public.refunds                 CASCADE;
-DROP TABLE IF EXISTS public.payments                CASCADE;
-DROP TABLE IF EXISTS public.registrations           CASCADE;
-DROP TABLE IF EXISTS public.tournaments             CASCADE;
-DROP TABLE IF EXISTS public.organization_invitations CASCADE;
-DROP TABLE IF EXISTS public.organization_memberships CASCADE;
-DROP TABLE IF EXISTS public.organization_documents  CASCADE;
-DROP TABLE IF EXISTS public.organization_bank_accounts CASCADE;
-DROP TABLE IF EXISTS public.organization_registered_names CASCADE;
-DROP TABLE IF EXISTS public.organizations           CASCADE;
-DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
-DROP TABLE IF EXISTS public.sensitive_data_consents CASCADE;
-DROP TABLE IF EXISTS public.guardianship_age_out_notices CASCADE;
-DROP TABLE IF EXISTS public.account_claims          CASCADE;
-DROP TABLE IF EXISTS public.helper_invitations      CASCADE;
-DROP TABLE IF EXISTS public.guardianships           CASCADE;
-DROP TABLE IF EXISTS public.player_profiles         CASCADE;
-DROP TABLE IF EXISTS public.user_global_roles       CASCADE;
-DROP TABLE IF EXISTS public.users                   CASCADE;
-DROP TABLE IF EXISTS public.role_permissions        CASCADE;
-DROP TABLE IF EXISTS public.permissions             CASCADE;
-DROP TABLE IF EXISTS public.roles                   CASCADE;
-DROP TABLE IF EXISTS public.bug_reports             CASCADE;
-DROP TABLE IF EXISTS public.waitlist                CASCADE;
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN
+    SELECT c.oid::regclass AS tbl
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+  LOOP
+    EXECUTE 'DROP TABLE IF EXISTS ' || r.tbl || ' CASCADE';
+  END LOOP;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- 5. Functions (migrations 003 / 006). Drops every function in `public`
@@ -132,35 +115,21 @@ BEGIN
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 6. Enums / types (migration 001)
+-- 6. Enums (migration 001): every enum type in `public`.
 -- -----------------------------------------------------------------------------
-DROP TYPE IF EXISTS public.role_scope           CASCADE;
-DROP TYPE IF EXISTS public.gender               CASCADE;
-DROP TYPE IF EXISTS public.chess_title          CASCADE;
-DROP TYPE IF EXISTS public.oku_status           CASCADE;
-DROP TYPE IF EXISTS public.approval_status      CASCADE;
-DROP TYPE IF EXISTS public.org_entity_type      CASCADE;
-DROP TYPE IF EXISTS public.org_document_type    CASCADE;
-DROP TYPE IF EXISTS public.bank_account_status  CASCADE;
-DROP TYPE IF EXISTS public.tournament_status    CASCADE;
-DROP TYPE IF EXISTS public.registration_status  CASCADE;
-DROP TYPE IF EXISTS public.payment_type         CASCADE;
-DROP TYPE IF EXISTS public.payment_status       CASCADE;
-DROP TYPE IF EXISTS public.refund_status        CASCADE;
-DROP TYPE IF EXISTS public.payout_kind          CASCADE;
-DROP TYPE IF EXISTS public.payout_status        CASCADE;
-DROP TYPE IF EXISTS public.invitation_status    CASCADE;
-DROP TYPE IF EXISTS public.sensitive_data_category CASCADE;
-DROP TYPE IF EXISTS public.account_type         CASCADE;
-DROP TYPE IF EXISTS public.guardianship_relationship CASCADE;
-DROP TYPE IF EXISTS public.guardianship_basis   CASCADE;
-DROP TYPE IF EXISTS public.guardianship_status  CASCADE;
-DROP TYPE IF EXISTS public.guardianship_authorisation_method CASCADE;
-DROP TYPE IF EXISTS public.account_claim_status CASCADE;
-DROP TYPE IF EXISTS public.prize_payee_reason   CASCADE;
-DROP TYPE IF EXISTS public.guardianship_age_out_stage CASCADE;
-DROP TYPE IF EXISTS public.audit_action         CASCADE;
-DROP TYPE IF EXISTS public.waitlist_user_type   CASCADE;
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN
+    SELECT t.oid::regtype AS typ
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typtype = 'e'
+  LOOP
+    EXECUTE 'DROP TYPE IF EXISTS ' || r.typ || ' CASCADE';
+  END LOOP;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
@@ -184,31 +153,13 @@ DROP SCHEMA IF EXISTS supabase_migrations CASCADE;
 -- -----------------------------------------------------------------------------
 -- Verification (all should return 0)
 -- -----------------------------------------------------------------------------
-SELECT 'app_tables' AS check, count(*)
-FROM information_schema.tables
-WHERE table_schema = 'public'
-  AND table_name IN (
-    'roles','permissions','role_permissions','users','user_global_roles',
-    'player_profiles','organizations','organization_memberships','organization_invitations',
-    'organization_bank_accounts','organization_documents','tournaments',
-    'registrations','payments','refunds','payouts','tournament_cancellation_requests',
-    'audit_logs','waitlist','bug_reports','player_bank_accounts','prize_awards',
-    'prize_fundings','prize_funder_contacts','sensitive_data_consents',
-    'guardianships','helper_invitations','account_claims',
-    'guardianship_age_out_notices'
-  );
+SELECT 'public_tables_and_views' AS check, count(*)
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm');
 
-SELECT 'app_enums' AS check, count(*)
-FROM pg_type t
-JOIN pg_namespace n ON n.oid = t.typnamespace
-WHERE n.nspname = 'public'
-  AND t.typname IN (
-    'role_scope','gender','chess_title','oku_status','approval_status',
-    'org_entity_type','org_document_type','bank_account_status',
-    'tournament_status','registration_status','payment_type','payment_status',
-    'refund_status','payout_kind','payout_status','invitation_status',
-    'sensitive_data_category'
-  );
+SELECT 'public_enums' AS check, count(*)
+FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+WHERE n.nspname = 'public' AND t.typtype = 'e';
 
 SELECT 'public_functions' AS check, count(*)
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -224,3 +175,13 @@ WHERE id IN ('avatars', 'oku-documents', 'organization-documents');
 SELECT 'app_storage_objects' AS check, count(*)
 FROM storage.objects
 WHERE bucket_id IN ('avatars', 'oku-documents', 'organization-documents');
+
+SELECT 'app_storage_policies' AS check, count(*)
+FROM pg_policies
+WHERE schemaname = 'storage' AND tablename = 'objects'
+  AND concat(qual, with_check) ~ '(avatars|oku-documents|organization-documents)';
+
+SELECT 'app_auth_triggers' AS check, count(*)
+FROM pg_trigger
+WHERE tgrelid = 'auth.users'::regclass AND NOT tgisinternal
+  AND tgname IN ('on_auth_user_created', 'on_auth_user_confirmed');
