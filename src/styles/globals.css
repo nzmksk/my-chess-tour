@@ -186,6 +186,12 @@
   h3 {
     @apply font-cinzel text-text-secondary text-lg font-normal tracking-wide;
   }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
+    cursor: pointer;
+  }
 }
 
 @keyframes skeleton-shimmer {
