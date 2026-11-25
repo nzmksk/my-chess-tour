@@ -2,6 +2,8 @@ import {
   getDependent,
   listDependents,
 } from "@/services/guardianship/dependents";
+import { minorAgeOut } from "@/lib/guardianship/age-out";
+import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
 
 export interface RegisterParticipant {
   id: string;
@@ -28,18 +30,21 @@ const selfParticipant = (userId: string): RegisterParticipant => ({
 export async function loadRegisterParticipants(
   userId: string,
   requested: string | undefined,
+  today: string = getTodayInTimeZone(),
 ): Promise<ParticipantChoice> {
   const dependents = await listDependents(userId);
   if (!dependents.ok) return { ok: false, error: dependents.error };
 
   const participants = [
     selfParticipant(userId),
-    ...dependents.data.map((d) => ({
-      id: d.id,
-      firstName: d.first_name,
-      name: `${d.first_name} ${d.last_name}`,
-      isSelf: false,
-    })),
+    ...dependents.data
+      .filter((d) => minorAgeOut(d, today).state !== "grace")
+      .map((d) => ({
+        id: d.id,
+        firstName: d.first_name,
+        name: `${d.first_name} ${d.last_name}`,
+        isSelf: false,
+      })),
   ];
   const wanted = requested ?? userId;
   return {
