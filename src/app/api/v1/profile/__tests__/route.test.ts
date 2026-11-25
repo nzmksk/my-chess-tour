@@ -104,15 +104,27 @@ describe("PATCH /api/v1/profile — FIDE sync", () => {
     expect(typeof payload.fide_rating_synced_at).toBe("string");
   });
 
-  it("flags a mismatch when the stored name differs", async () => {
+  it("rejects a FIDE ID registered to someone else, saving nothing", async () => {
     mockSingle.mockResolvedValue({
       data: { first_name: "Someone", last_name: "Else" },
       error: null,
     });
     mockFetchFidePlayer.mockResolvedValue(CARLSEN);
+    const res = await PATCH(makeReq({ fide_id: 1503014, gender: "male" }));
+    expect(res.status).toBe(422);
+    const { error } = await res.json();
+    expect(error.code).toBe("FIDE_NAME_MISMATCH");
+    expect(error.message).toContain("1503014");
+    expect(error.message).toContain("Carlsen, Magnus");
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects the FIDE ID when the player's name can't be read", async () => {
+    mockSingle.mockResolvedValue({ data: null, error: null });
+    mockFetchFidePlayer.mockResolvedValue(CARLSEN);
     const res = await PATCH(makeReq({ fide_id: 1503014 }));
-    expect(res.status).toBe(200);
-    expect(mockUpsert.mock.calls[0][0].fide_name_verified).toBe(false);
+    expect(res.status).toBe(422);
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("rejects a FIDE ID that does not exist on FIDE (404/not found)", async () => {
@@ -125,15 +137,13 @@ describe("PATCH /api/v1/profile — FIDE sync", () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
-  it("still saves the FIDE ID (without ratings) when FIDE is unreachable", async () => {
+  it("refuses an unchecked FIDE ID when FIDE is unreachable", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mockFetchFidePlayer.mockRejectedValue(new Error("network down"));
     const res = await PATCH(makeReq({ fide_id: 1503014 }));
-    expect(res.status).toBe(200);
-    const payload = mockUpsert.mock.calls[0][0];
-    expect(payload.fide_id).toBe(1503014);
-    expect(payload.fide_rating).toBeUndefined();
-    expect(payload.fide_rating_synced_at).toBeUndefined();
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe("FIDE_UNAVAILABLE");
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("does not call FIDE for a non-FIDE field update", async () => {

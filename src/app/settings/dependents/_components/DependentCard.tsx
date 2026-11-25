@@ -210,7 +210,8 @@ function EditForm({
               aria-describedby={`${idPrefix}-fide-hint`}
             />
             <p id={`${idPrefix}-fide-hint`} className="input-hint">
-              Their rating and title are fetched from FIDE when you save.
+              The name on the FIDE profile must match theirs. Their rating and
+              title are fetched from FIDE when you save.
             </p>
           </div>
         ) : (

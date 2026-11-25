@@ -214,7 +214,7 @@ describe("syncFidePlayer", () => {
     expect(mockEq).toHaveBeenCalledWith("user_id", "user-1");
   });
 
-  it("flags a name mismatch but still stores ratings", async () => {
+  it("flags a name mismatch and drops the ratings and title", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okResponse(titledHtml)));
     const result = await syncFidePlayer(
       "user-2",
@@ -224,7 +224,12 @@ describe("syncFidePlayer", () => {
       "2026-07-02T00:00:00.000Z",
     );
     expect(result).toBe("updated");
-    expect(mockUpdate.mock.calls[0][0].fide_name_verified).toBe(false);
+    const payload = mockUpdate.mock.calls[0][0];
+    expect(payload.fide_name_verified).toBe(false);
+    expect(payload.fide_verified_name).toBe("Carlsen, Magnus");
+    expect(payload.fide_rating).toBeNull();
+    expect("title" in payload).toBe(false);
+    expect(payload.fide_rating_synced_at).toBe("2026-07-02T00:00:00.000Z");
   });
 
   it("omits title when FIDE reports none", async () => {

@@ -50,3 +50,4 @@ old one `Superseded by NNNN`, and link both ways.
 | 0025 | [The CHIP Collect and CHIP Send clients](0025-chip-clients.md)                                         | Accepted |
 | 0026 | [Payout accounts are matched by holder name](0026-payout-accounts-are-matched-by-holder-name.md)       | Accepted |
 | 0027 | [One account per mailbox](0027-one-account-per-mailbox.md)                                             | Accepted |
+| 0028 | [A FIDE ID must carry the player's name](0028-a-fide-id-must-carry-the-players-name.md)                | Accepted |

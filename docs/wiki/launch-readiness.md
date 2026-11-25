@@ -178,7 +178,7 @@ Resend), not Supabase's built-in confirmation link, and **email/password only** 
 ### P5. Profile / progressive profiling — ✅ Built
 - **Entry:** `/settings` (`_components/ProfileClient.tsx`) → `PATCH /api/v1/profile`. The `player_profiles` row is auto-created empty at signup by the `handle_new_user` trigger, so profiling is genuinely just-in-time.
 - **Happy path:** fill avatar (≤2 MB → public `avatars` bucket), DOB, gender, nationality, FIDE ID, MCF ID as needed.
-- **Scenarios:** DOB/gender/nationality/`fide_id`/`mcf_id` are **set-once** (enforced server *and* client); `title`/`national_rating` are never user-editable (come from FIDE). First time `fide_id` is set, ratings/title backfill from FIDE; a nonexistent ID is rejected (400); if FIDE is unreachable the ID is saved and the monthly cron backfills later (see S1).
+- **Scenarios:** DOB/gender/nationality/`fide_id`/`mcf_id` are **set-once** (enforced server *and* client); `title`/`national_rating` are never user-editable (come from FIDE). First time `fide_id` is set, ratings/title backfill from FIDE; a nonexistent ID is rejected (400), an ID whose FIDE name doesn't match the player's is rejected (422 `FIDE_NAME_MISMATCH`), and if FIDE is unreachable the save is refused (503 `FIDE_UNAVAILABLE`) so an unchecked ID is never stored ([ADR 0028](../adr/0028-a-fide-id-must-carry-the-players-name.md)).
 - **Gaps:** 🟡 **no self-serve correction** for a mistyped set-once field, and **no self-serve email/name change or account deletion** — all routed to support. Expect support load; consider an admin correction tool.
 - **Deletion runbook:** [account-deletion.md](./account-deletion.md). Support deletes the rows and then calls `anonymise_user_audit_logs` in the same transaction, because deleting `users`/`player_profiles` alone leaves full copies in `audit_logs` (S3, #503). Financial audit rows (`payments`, `refunds`, `payouts`, `registrations`) are deliberately left alone under the 7-year obligation. A self-serve deletion flow should call the same function.
 
@@ -342,7 +342,7 @@ Admin = the `platform.manage` global permission. Pages `redirect("/")` and API r
 
 ### S1. FIDE ratings sync — ✅ Built
 - **Two paths sharing one code path** (so they can't drift): **on-save** when a player sets/edits their `fide_id` (profile PATCH), and a **monthly cron** — GitHub Actions `.github/workflows/fide-ratings.yml` (2nd of each month) → `POST /api/v1/cron/fide-ratings` (bearer `CRON_SECRET`), paging all players with a `fide_id`.
-- **Mechanism:** FIDE has no API, so `src/services/fide/fide.ts` **scrapes the HTML profile** and parses ratings/title with lenient name-matching.
+- **Mechanism:** FIDE has no API, so `src/services/fide/fide.ts` **scrapes the HTML profile** and parses ratings/title with lenient name-matching. A name that no longer matches clears `fide_rating` and keeps `fide_id` ([ADR 0028](../adr/0028-a-fide-id-must-carry-the-players-name.md)).
 - **Gaps:** the scrape is brittle — a FIDE markup change silently breaks sync; worth monitoring 🟡. (One of three scheduled jobs, all GitHub Actions: `fide-ratings.yml` monthly, `organizer-payouts.yml` daily, `cancellation-refunds.yml` every 5 minutes. `tests.yml`, `staging-migrations.yml` and `claude.yml` are CI, not crons.)
 
 ### S2. Payment-expiry sweep — ⚠️ Partial (lazy, no schedule)

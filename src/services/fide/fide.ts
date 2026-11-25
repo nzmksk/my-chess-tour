@@ -142,28 +142,31 @@ export function buildFideProfileUpdate(
   lastName: string,
   syncedAt: string,
 ): {
-  fide_rating: FideRating;
+  fide_rating: FideRating | null;
   fide_rating_synced_at: string;
   fide_name_verified: boolean;
   fide_verified_name: string;
   title?: ChessTitle;
 } {
+  const nameMatches = matchesFideName(firstName, lastName, player.name);
   const update: {
-    fide_rating: FideRating;
+    fide_rating: FideRating | null;
     fide_rating_synced_at: string;
     fide_name_verified: boolean;
     fide_verified_name: string;
     title?: ChessTitle;
   } = {
-    fide_rating: {
-      standard: player.standard,
-      rapid: player.rapid,
-      blitz: player.blitz,
-    },
+    fide_rating: nameMatches
+      ? {
+          standard: player.standard,
+          rapid: player.rapid,
+          blitz: player.blitz,
+        }
+      : null,
     fide_rating_synced_at: syncedAt,
-    fide_name_verified: matchesFideName(firstName, lastName, player.name),
+    fide_name_verified: nameMatches,
     fide_verified_name: player.name,
   };
-  if (player.title) update.title = player.title;
+  if (nameMatches && player.title) update.title = player.title;
   return update;
 }
