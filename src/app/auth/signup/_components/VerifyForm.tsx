@@ -95,6 +95,7 @@ export default function VerifyForm() {
       // Profile details are completed later in /settings.
       clearForm();
       router.push(takeSignupReturnTo() ?? "/");
+      router.refresh();
     } catch {
       setVerifyError("Network error. Please try again.");
     } finally {

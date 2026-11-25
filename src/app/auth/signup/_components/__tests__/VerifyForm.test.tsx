@@ -13,10 +13,13 @@ import {
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockPush } = vi.hoisted(() => ({ mockPush: vi.fn() }));
+const { mockPush, mockRefresh } = vi.hoisted(() => ({
+  mockPush: vi.fn(),
+  mockRefresh: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
 }));
 
 vi.mock("../StepTracker", () => ({ default: () => null }));
@@ -156,6 +159,45 @@ describe("VerifyForm", () => {
     });
 
     expect(mockPush).toHaveBeenCalledWith("/");
+  });
+
+  it("refreshes the server tree after verifying so the navbar shows the new session", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ message: "Email verified successfully" }),
+      }),
+    );
+
+    render(<VerifyForm />);
+    await act(async () => {
+      fireEvent.change(getCodeInput(), { target: { value: VALID_CODE } });
+    });
+
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockPush.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRefresh.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("doesn't refresh when verification fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          error: { code: "CODE_INVALID", message: "Incorrect code." },
+        }),
+      }),
+    );
+
+    render(<VerifyForm />);
+    await act(async () => {
+      fireEvent.change(getCodeInput(), { target: { value: VALID_CODE } });
+    });
+
+    expect(mockRefresh).not.toHaveBeenCalled();
   });
 
   it("shows an inline error when verification fails", async () => {
