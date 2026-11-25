@@ -2,7 +2,42 @@ import { Suspense } from "react";
 import WaitlistForm from "@/components/WaitlistForm";
 import BuildProgress from "@/components/BuildProgress";
 import ProgressSkeleton from "@/components/ProgressSkeleton";
-import { BrowseIcon, PayIcon, TrophyIcon } from "@/app/components/Icons";
+import {
+  BrowseIcon,
+  FamilyIcon,
+  PayIcon,
+  ProfileCardIcon,
+  SparklesIcon,
+  TrophyIcon,
+} from "@/app/components/Icons";
+
+const FEATURES = [
+  {
+    icon: BrowseIcon,
+    title: "Browse Tournaments",
+    body: "All upcoming events in one place, filterable by state, format, and rating.",
+  },
+  {
+    icon: PayIcon,
+    title: "Register & Pay Online",
+    body: "FPX, DuitNow QR, e-wallets. No bank transfer receipts. No Google Forms.",
+  },
+  {
+    icon: ProfileCardIcon,
+    title: "One Player Profile",
+    body: "Enter your FIDE ID, ratings, and details once. Every registration reuses them.",
+  },
+  {
+    icon: FamilyIcon,
+    title: "For Parents",
+    body: "Add your children once, then register and pay for their entries from your own account.",
+  },
+  {
+    icon: TrophyIcon,
+    title: "For Organizers",
+    body: "Publish tournaments, manage registrations, and track payouts from one dashboard.",
+  },
+];
 
 export default function LandingPage() {
   return (
@@ -30,40 +65,27 @@ export default function LandingPage() {
         </p>
         {/* Feature cards */}
         <div className="my-6 grid gap-4 sm:grid-cols-3">
-          <div className="card flex flex-col p-4">
+          {FEATURES.map(({ icon: Icon, title, body }) => (
+            <div key={title} className="card flex flex-col p-4">
+              <span className="icon--landing-page">
+                <Icon />
+              </span>
+              <p className="text--ui-label text-gold-bright mb-2 grow">
+                {title}
+              </p>
+              <p className="text--small">{body}</p>
+            </div>
+          ))}
+          <div className="card flex flex-col border-dashed p-4">
             <span className="icon--landing-page">
-              <BrowseIcon />
+              <SparklesIcon />
             </span>
             <p className="text--ui-label text-gold-bright mb-2 grow">
-              Browse Tournaments
+              More Coming Soon
             </p>
             <p className="text--small">
-              All upcoming events in one place, filterable by state, format, and
-              rating.
-            </p>
-          </div>
-          <div className="card flex flex-col p-4">
-            <span className="icon--landing-page">
-              <PayIcon />
-            </span>
-            <p className="text--ui-label text-gold-bright mb-2 grow">
-              Register &amp; Pay Online
-            </p>
-            <p className="text--small">
-              FPX, DuitNow QR, e-wallets. No bank transfer receipts. No Google
-              Forms.
-            </p>
-          </div>
-          <div className="card flex flex-col p-4">
-            <span className="icon--landing-page">
-              <TrophyIcon />
-            </span>
-            <p className="text--ui-label text-gold-bright mb-2 grow">
-              For Organizers
-            </p>
-            <p className="text--small">
-              Publish tournaments, manage registrations, and track payouts from
-              one dashboard.
+              More exciting features are on the way. Join the waitlist to hear
+              about them first.
             </p>
           </div>
         </div>
