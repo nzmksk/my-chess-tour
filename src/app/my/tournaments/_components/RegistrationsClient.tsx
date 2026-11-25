@@ -10,7 +10,7 @@ import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 import { classifyRegistration, type RegistrationTab as Tab } from "../classify";
 
 interface Props {
-  registrations: PlayerRegistration[];
+  registrations: PlayerRegistration[] | null;
 }
 
 function formatTimeControl(tc: TimeControl): string {
@@ -195,6 +195,7 @@ function EmptyState({ tab }: { tab: Tab }) {
 }
 
 export default function RegistrationsClient({ registrations }: Props) {
+  const loadFailed = registrations === null;
   const categorised = useMemo(() => {
     const ongoing: PlayerRegistration[] = [];
     const upcoming: PlayerRegistration[] = [];
@@ -202,7 +203,7 @@ export default function RegistrationsClient({ registrations }: Props) {
     const cancelled: PlayerRegistration[] = [];
 
     const now = new Date();
-    for (const reg of registrations) {
+    for (const reg of registrations ?? []) {
       const tab = classifyRegistration(reg, now);
       if (tab === "ongoing") ongoing.push(reg);
       else if (tab === "upcoming") upcoming.push(reg);
@@ -256,47 +257,58 @@ export default function RegistrationsClient({ registrations }: Props) {
         view upcoming events.
       </p>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border mb-5">
-        {tabs.map(({ key, label, count }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`font-lato text-sm font-medium px-4 py-2.5 border-b-2 transition-colors duration-150 cursor-pointer bg-transparent ${
-              activeTab === key
-                ? "text-text-primary border-gold-bright"
-                : "text-text-muted border-transparent hover:text-text-secondary"
-            }`}
-          >
-            {label}
-            {count > 0 && (
-              <span
-                className={`ml-1.5 font-cinzel text-xs font-bold px-1.5 py-0.5 rounded-full ${
+      {loadFailed ? (
+        <div className="error-banner" role="alert">
+          <p className="error-text">
+            We couldn&apos;t load your tournaments. Refresh the page to try
+            again.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Tabs */}
+          <div className="flex border-b border-border mb-5">
+            {tabs.map(({ key, label, count }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`font-lato text-sm font-medium px-4 py-2.5 border-b-2 transition-colors duration-150 cursor-pointer bg-transparent ${
                   activeTab === key
-                    ? "bg-gold-ghost text-gold-bright"
-                    : "bg-bg-raised text-text-muted"
+                    ? "text-text-primary border-gold-bright"
+                    : "text-text-muted border-transparent hover:text-text-secondary"
                 }`}
               >
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+                {label}
+                {count > 0 && (
+                  <span
+                    className={`ml-1.5 font-cinzel text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                      activeTab === key
+                        ? "bg-gold-ghost text-gold-bright"
+                        : "bg-bg-raised text-text-muted"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
 
-      {/* Registration list */}
-      {items.length === 0 ? (
-        <EmptyState tab={activeTab} />
-      ) : (
-        <div className="flex flex-col gap-3">
-          {items.map((reg) => (
-            <RegistrationCard
-              key={reg.id}
-              registration={reg}
-              dimmed={activeTab === "past"}
-            />
-          ))}
-        </div>
+          {/* Registration list */}
+          {items.length === 0 ? (
+            <EmptyState tab={activeTab} />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {items.map((reg) => (
+                <RegistrationCard
+                  key={reg.id}
+                  registration={reg}
+                  dimmed={activeTab === "past"}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

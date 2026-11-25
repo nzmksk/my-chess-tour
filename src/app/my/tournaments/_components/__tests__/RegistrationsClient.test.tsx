@@ -198,4 +198,21 @@ describe("RegistrationsClient", () => {
     expect(screen.getAllByText(/^For /)).toHaveLength(1);
     expect(screen.getByText("For Aina Rahman")).toBeTruthy();
   });
+
+  it("says the list couldn't load instead of showing it empty", () => {
+    render(<RegistrationsClient registrations={null} />);
+
+    expect(screen.getByRole("alert").textContent).toMatch(
+      /couldn.t load your tournaments/,
+    );
+    expect(screen.queryByRole("button", { name: /Upcoming/ })).toBeNull();
+    expect(screen.queryByText(/No upcoming tournaments/)).toBeNull();
+  });
+
+  it("shows the empty state when the load worked and there's nothing", () => {
+    render(<RegistrationsClient registrations={[]} />);
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText(/No upcoming tournaments/)).toBeTruthy();
+  });
 });
