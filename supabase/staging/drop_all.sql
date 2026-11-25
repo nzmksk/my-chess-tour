@@ -97,6 +97,7 @@ DROP TABLE IF EXISTS public.organization_registered_names CASCADE;
 DROP TABLE IF EXISTS public.organizations           CASCADE;
 DROP TABLE IF EXISTS public.player_bank_accounts    CASCADE;
 DROP TABLE IF EXISTS public.sensitive_data_consents CASCADE;
+DROP TABLE IF EXISTS public.guardianship_age_out_notices CASCADE;
 DROP TABLE IF EXISTS public.account_claims          CASCADE;
 DROP TABLE IF EXISTS public.helper_invitations      CASCADE;
 DROP TABLE IF EXISTS public.guardianships           CASCADE;
@@ -157,6 +158,7 @@ DROP TYPE IF EXISTS public.guardianship_status  CASCADE;
 DROP TYPE IF EXISTS public.guardianship_authorisation_method CASCADE;
 DROP TYPE IF EXISTS public.account_claim_status CASCADE;
 DROP TYPE IF EXISTS public.prize_payee_reason   CASCADE;
+DROP TYPE IF EXISTS public.guardianship_age_out_stage CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.
@@ -190,7 +192,8 @@ WHERE table_schema = 'public'
     'registrations','payments','refunds','payouts','tournament_cancellation_requests',
     'audit_logs','waitlist','bug_reports','player_bank_accounts','prize_awards',
     'prize_fundings','prize_funder_contacts','sensitive_data_consents',
-    'guardianships','helper_invitations','account_claims'
+    'guardianships','helper_invitations','account_claims',
+    'guardianship_age_out_notices'
   );
 
 SELECT 'app_enums' AS check, count(*)

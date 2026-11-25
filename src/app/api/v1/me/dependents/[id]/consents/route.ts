@@ -8,6 +8,7 @@ import {
 import { dependentNotFoundResponse } from "@/services/guardianship/dependents";
 import { resolveDependentForCaller } from "@/services/guardianship/resolve-dependent";
 import { withAuditContext } from "@/services/supabase/audit-context";
+import { agedOutResponse } from "@/services/guardianship/aged-out-response";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,6 +22,8 @@ async function handlePost(
   const resolved = await resolveDependentForCaller(id, ROUTE);
   if (!resolved.ok) return resolved.response;
   const { guardianId, dependent } = resolved;
+  const agedOut = agedOutResponse(dependent);
+  if (agedOut) return agedOut;
 
   let body: { category?: unknown };
   try {
@@ -54,6 +57,9 @@ async function handlePost(
   if (!result.ok) {
     const message = (result.error as { message?: string } | null)?.message;
     if (message?.startsWith("NOT_GUARDIAN")) return dependentNotFoundResponse();
+    if (message?.startsWith("AGED_OUT")) {
+      return agedOutResponse(dependent) ?? dependentNotFoundResponse();
+    }
     return internalErrorResponse(
       `${ROUTE}: record_sensitive_data_consent failed`,
       result.error,

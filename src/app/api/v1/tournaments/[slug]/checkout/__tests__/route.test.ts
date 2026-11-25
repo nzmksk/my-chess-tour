@@ -1247,6 +1247,22 @@ describe("POST /api/v1/tournaments/:slug/checkout — registering a dependent (#
     expect(mockCreateChipPurchase).not.toHaveBeenCalled();
   });
 
+  it("maps the database's AGED_OUT refusal for a dependent who has turned 18 (#721)", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "42501",
+        message: "AGED_OUT: the participant has turned 18, so their guardian can no longer register them",
+      },
+    });
+
+    const res = await callFor(DEPENDENT_ID);
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("AGED_OUT");
+    expect(mockCreateChipPurchase).not.toHaveBeenCalled();
+  });
+
   it("refuses a participant_id that isn't a player id", async () => {
     const res = await callFor("not-a-uuid");
 
