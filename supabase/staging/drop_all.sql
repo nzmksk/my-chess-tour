@@ -159,6 +159,8 @@ DROP TYPE IF EXISTS public.guardianship_authorisation_method CASCADE;
 DROP TYPE IF EXISTS public.account_claim_status CASCADE;
 DROP TYPE IF EXISTS public.prize_payee_reason   CASCADE;
 DROP TYPE IF EXISTS public.guardianship_age_out_stage CASCADE;
+DROP TYPE IF EXISTS public.audit_action         CASCADE;
+DROP TYPE IF EXISTS public.waitlist_user_type   CASCADE;
 
 -- -----------------------------------------------------------------------------
 -- 7. Auth accounts. Deleting from auth.users cascades to auth.identities.

@@ -561,7 +561,7 @@ BEGIN
   VALUES (
     TG_TABLE_NAME,
     v_record_id,
-    TG_OP,
+    TG_OP::audit_action,
     v_changed_by,
     v_org_id,
     left(COALESCE(

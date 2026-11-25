@@ -1111,11 +1111,13 @@ COMMENT ON COLUMN prize_awards.payee_reason IS
 -- Captures full row snapshots for regulated tables.
 -- organization_id denormalized for efficient RLS scoping.
 -- =============================================
+CREATE TYPE audit_action AS ENUM ('INSERT', 'UPDATE', 'DELETE');
+
 CREATE TABLE audit_logs (
   id               bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   table_name       varchar(50)  NOT NULL,
   record_id        text         NOT NULL,  -- text to support composite PKs
-  action           varchar(10)  NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
+  action           audit_action NOT NULL,
   changed_by       uuid         REFERENCES users(id)         ON DELETE SET NULL,
   organization_id  uuid         REFERENCES organizations(id) ON DELETE SET NULL,
   context          varchar(100) NOT NULL DEFAULT 'trigger',
@@ -1128,10 +1130,12 @@ CREATE TABLE audit_logs (
 -- WAITLIST
 -- Pre-launch email capture. user_type segments players vs organizers.
 -- =============================================
+CREATE TYPE waitlist_user_type AS ENUM ('player', 'organizer');
+
 CREATE TABLE waitlist (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email      varchar(255) UNIQUE NOT NULL,
-  user_type  text NOT NULL DEFAULT 'player' CHECK (user_type IN ('player', 'organizer')),
+  user_type  waitlist_user_type NOT NULL DEFAULT 'player',
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
