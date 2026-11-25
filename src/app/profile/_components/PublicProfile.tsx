@@ -127,7 +127,7 @@ export default function PublicProfile({ profile, isOwner }: Props) {
         </div>
         {isOwner && (
           <Link
-            href="/settings"
+            href="/settings?edit=1"
             className="btn-secondary shrink-0 px-4 py-2 text-xs"
           >
             Edit Profile
