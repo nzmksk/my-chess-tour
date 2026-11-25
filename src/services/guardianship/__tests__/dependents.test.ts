@@ -92,6 +92,15 @@ describe("listDependents", () => {
     chain.order.mockResolvedValue({ data: null, error });
     expect(await listDependents("guardian")).toEqual({ ok: false, error });
   });
+
+  it("names the foreign key for each embed that has more than one path to users", async () => {
+    chain.order.mockResolvedValue({ data: [], error: null });
+    await listDependents("guardian");
+    const select = String(chain.select.mock.calls[0][0]);
+    expect(select).toContain("users!dependent_user_id(");
+    expect(select).toContain("player_profiles!user_id(");
+    expect(select).not.toMatch(/player_profiles\(/);
+  });
 });
 
 describe("getDependent", () => {

@@ -64,7 +64,7 @@ interface DependentRow {
 const DEPENDENT_SELECT = `id, relationship, basis, authorisation_method,
   terms_version, terms_accepted_at, created_at,
   dependent:users!dependent_user_id(id, first_name, last_name, account_type, contact_email,
-    player_profiles(date_of_birth, gender, nationality, fide_id, mcf_id, title, national_rating, oku_status))`;
+    player_profiles!user_id(date_of_birth, gender, nationality, fide_id, mcf_id, title, national_rating, oku_status))`;
 
 function toDependentView(row: DependentRow): DependentView | null {
   if (!row.dependent) return null;
