@@ -60,7 +60,7 @@ function conflict(code: string, message: string): NextResponse {
 
 /**
  * Maps the sentinel prefixes the application RPCs raise
- * (supabase/migrations/20261120165346_amend_rejected_org_application.sql) to
+ * (supabase/migrations/003_functions_triggers.sql) to
  * responses. The whole transaction has already rolled back. Returns null for
  * an error that isn't one of them, which the caller treats as a 500.
  */

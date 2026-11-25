@@ -116,7 +116,7 @@ Registration with CHIP Send reuses `src/services/payouts/bank-account.ts` (`regi
 
 ### Dependents' prizes (#718)
 
-`prize_awards.user_id` is always the winner. Whose account the money goes to is decided by `prize_payees()` (migration `20261124210000`), the one rule that the claim, the award lists and the emails all read:
+`prize_awards.user_id` is always the winner. Whose account the money goes to is decided by `prize_payees()` (`006_payment_functions.sql`), the one rule that the claim, the award lists and the emails all read:
 
 - **A minor** (an active guardianship with basis `minor`) holds no bank details: `set_player_bank_account` refuses them with `MINOR_DEPENDENT`. Their prize goes to a guardian's own `player_bank_accounts` row. That is the guardian with a verified account, else one who has an account, else the earliest guardianship. A guardian saving or verifying their account sends their minor dependents' waiting prizes too. The awarded email tells the guardian who is paid that the money goes to their account, or asks them to add one.
 - **An adult with a helper** (`authorised` / `appointed`) keeps their own row. The helper enters it with `PUT /api/v1/me/dependents/[id]/bank-account`, under the financial consent they recorded (#717). The row records `entered_by`, and the holder-name check compares CHIP's holder name with **the player's name**, never the holder the helper typed. The route also refuses a holder that isn't the player (`HOLDER_NOT_PLAYER`).

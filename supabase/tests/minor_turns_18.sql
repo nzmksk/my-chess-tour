@@ -1,6 +1,6 @@
 -- =============================================================================
--- Regression test: a minor dependent turns 18 (#721,
--- 20261124220000_minor_turns_18.sql).
+-- Regression test: a minor dependent turns 18 (#721: the age-out functions in
+-- 003, assert_payer_acts_for in 006).
 --
 -- Covers:
 --   A1  minor_guardianship_aged_out: true from the 18th birthday, only on the

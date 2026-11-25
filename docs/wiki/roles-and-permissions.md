@@ -194,7 +194,7 @@ an `auth.uid()`. The two are different identifier spaces bridged only by
   (`src/services/supabase/identity.ts`).
 - **`can_act_for(p_user_id)`** answers "may the caller act on this user's
   behalf": the caller is `p_user_id`, or holds an `active` guardianship of them
-  (#707, `20261124100000_guardians_can_act_for_dependents.sql`). A revoked or
+  (#707, `003_functions_triggers.sql`). A revoked or
   claimed guardianship stops counting at once, and a dependent never gains
   access to their guardian. It began as the bare self check (#501) so that this
   widening was one function body rather than another policy sweep. Used by the
