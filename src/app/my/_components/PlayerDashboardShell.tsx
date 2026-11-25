@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, User, Building2 } from "lucide-react";
+import { Trophy, User, Settings, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // The personal-account dashboard chrome: a left sidebar (My Tournaments /
-// Profile, plus the "Become an Organizer" affordance) wrapping the section
-// content. The pages under /my (and the owner's /profile) render their existing
-// view inside this shell so the personal surfaces read as one dashboard with
-// tabs.
+// Profile / Settings, plus the "Become an Organizer" affordance) wrapping the
+// section content. The pages under /my, /settings and the owner's /profile
+// render their existing view inside this shell so the personal surfaces read
+// as one dashboard with tabs.
 const NAV = [
   {
     href: "/my",
@@ -22,6 +22,12 @@ const NAV = [
     label: "Profile",
     icon: User,
     isActive: (p: string) => p === "/profile",
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: Settings,
+    isActive: (p: string) => p === "/settings" || p.startsWith("/settings/"),
   },
 ];
 
