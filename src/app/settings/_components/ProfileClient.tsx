@@ -587,9 +587,10 @@ export default function ProfileClient({ profile }: Props) {
                   >
                     ?
                     <div className="tooltip" role="tooltip">
-                      Your FIDE player ID number. Your standard, rapid and blitz
-                      ratings and title are fetched from FIDE when you save your
-                      ID, then refreshed automatically every month.
+                      Your FIDE player ID number. The name on your FIDE profile
+                      must match yours. Your standard, rapid and blitz ratings
+                      and title are fetched from FIDE when you save your ID,
+                      then refreshed automatically every month.
                     </div>
                   </span>
                 </div>
