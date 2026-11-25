@@ -139,10 +139,18 @@ function buildBody(form: FormState): Record<string, unknown> {
   };
 }
 
-function FieldError({ id, message }: { id: string; message?: string }) {
+function FieldError({
+  id,
+  message,
+  className = "",
+}: {
+  id: string;
+  message?: string;
+  className?: string;
+}) {
   if (!message) return null;
   return (
-    <p id={id} className="input-hint error">
+    <p id={id} className={`input-hint error ${className}`.trim()}>
       {message}
     </p>
   );
@@ -462,7 +470,10 @@ export default function AddDependentForm({
                 aria-invalid={Boolean(errors.authorisedByPlayer)}
                 aria-describedby={describedBy("authorisedByPlayer")}
               />
-              <label className="check-label" htmlFor="dep-authorised">
+              <label
+                className={`check-label ${errors.authorisedByPlayer ? "mb-0" : ""}`}
+                htmlFor="dep-authorised"
+              >
                 {playerName} has authorised me to register them for tournaments,
                 pay for their entries and manage their player profile for them.
               </label>
@@ -472,6 +483,7 @@ export default function AddDependentForm({
             <FieldError
               id="authorisedByPlayer-error"
               message={errors.authorisedByPlayer}
+              className="mb-4"
             />
           )}
 
@@ -485,7 +497,10 @@ export default function AddDependentForm({
               aria-invalid={Boolean(errors.acceptTerms)}
               aria-describedby={describedBy("acceptTerms")}
             />
-            <label className="check-label" htmlFor="dep-terms">
+            <label
+              className={`check-label ${errors.acceptTerms ? "mb-0" : ""}`}
+              htmlFor="dep-terms"
+            >
               {isMinor
                 ? `As ${playerName}'s parent or legal guardian, I accept the `
                 : `I'll act for ${playerName} under the `}
@@ -501,7 +516,11 @@ export default function AddDependentForm({
                 : ", only as they authorise."}
             </label>
           </div>
-          <FieldError id="acceptTerms-error" message={errors.acceptTerms} />
+          <FieldError
+            id="acceptTerms-error"
+            message={errors.acceptTerms}
+            className="mb-4"
+          />
         </>
       )}
 
