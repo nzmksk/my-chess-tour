@@ -277,3 +277,18 @@ export function getStartingFee(
 // Moved to src/lib so lib code (the edit policy) can use it; re-exported here
 // for the pages that already import it from this module.
 export { getTournamentDateState } from "@/lib/tournaments/datetime";
+
+export function paginate<T>(
+  items: T[],
+  page: number,
+  pageSize: number,
+): { items: T[]; page: number; pageCount: number } {
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const current = Math.min(Math.max(1, Math.floor(page) || 1), pageCount);
+  const start = (current - 1) * pageSize;
+  return {
+    items: items.slice(start, start + pageSize),
+    page: current,
+    pageCount,
+  };
+}
