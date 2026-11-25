@@ -5,7 +5,6 @@ import Link from "next/link";
 import { CountryDropdown } from "@/components/ui/country-dropdown";
 import { isUnderAdultAge } from "@/lib/auth/adult-age";
 import { getTodayInTimeZone } from "@/lib/tournaments/datetime";
-import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 import {
   ADULT_HELPER_RELATIONSHIPS,
   CONTACT_EMAIL_RE,
@@ -31,11 +30,6 @@ const BASIS_CHOICES: {
     value: "authorised",
     label: "An adult I help, with their permission",
     hint: "For example, you are a carer and the player has asked you to manage their entries.",
-  },
-  {
-    value: "appointed",
-    label: "An adult I'm legally appointed for",
-    hint: "For example, under a court order for an adult who can't manage their own affairs.",
   },
 ];
 
@@ -282,20 +276,7 @@ export default function AddDependentForm({
         </div>
       </fieldset>
 
-      {form.basis === "appointed" && (
-        <div className="info-banner" role="status">
-          <p className="info-text">
-            Acting for an adult you are legally appointed for needs proof of the
-            appointment, which we can&apos;t take online yet. Email{" "}
-            <a href={`mailto:${SUPPORT_EMAIL}`} className="underline">
-              {SUPPORT_EMAIL}
-            </a>{" "}
-            and we&apos;ll set it up with you.
-          </p>
-        </div>
-      )}
-
-      {form.basis && form.basis !== "appointed" && (
+      {form.basis && (
         <>
           <div className="form-group">
             <div className="label-row">

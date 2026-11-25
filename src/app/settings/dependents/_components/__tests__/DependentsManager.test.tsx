@@ -149,7 +149,11 @@ describe("DependentsManager", () => {
       const group = screen.getByRole("group", {
         name: "Who is the player to you?",
       });
-      expect(within(group).getAllByRole("radio")).toHaveLength(3);
+      expect(
+        within(group)
+          .getAllByRole("radio")
+          .map((r) => (r as HTMLInputElement).value),
+      ).toEqual(["minor", "authorised"]);
       expect(screen.queryByLabelText("First name")).toBeNull();
       expect(
         screen.queryByRole("button", { name: "Add Dependent" }),
@@ -264,17 +268,6 @@ describe("DependentsManager", () => {
         screen.getByLabelText("Date of birth").getAttribute("aria-describedby"),
       ).toContain("dateOfBirth-error");
       expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it("sends an appointed guardian to support instead of a form", async () => {
-      await renderWith([]);
-      openAddForm();
-      fireEvent.click(screen.getByLabelText(/legally appointed for/));
-      expect(screen.getByText(/needs proof of the appointment/)).toBeDefined();
-      expect(screen.queryByLabelText("First name")).toBeNull();
-      expect(
-        screen.queryByRole("button", { name: "Add Dependent" }),
-      ).toBeNull();
     });
 
     it("shows the server's refusal", async () => {
