@@ -292,7 +292,7 @@ export default function AddDependentForm({
           <div className="form-group">
             <div className="label-row">
               <label className="input-label" htmlFor="dep-relationship">
-                They are your
+                You are their
               </label>
             </div>
             <select
@@ -311,9 +311,7 @@ export default function AddDependentForm({
               <option value="">Select…</option>
               {relationshipsFor(form.basis).map((value) => (
                 <option key={value} value={value}>
-                  {isAdult && value === "parent"
-                    ? "Parent (of an adult)"
-                    : RELATIONSHIP_LABELS[value]}
+                  {RELATIONSHIP_LABELS[value]}
                 </option>
               ))}
             </select>

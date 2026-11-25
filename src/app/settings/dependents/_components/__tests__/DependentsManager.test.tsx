@@ -81,7 +81,7 @@ function openAddForm() {
 
 function fillMinor() {
   fireEvent.click(screen.getByLabelText(/My child under 18/));
-  fireEvent.change(screen.getByLabelText("They are your"), {
+  fireEvent.change(screen.getByLabelText("You are their"), {
     target: { value: "parent" },
   });
   fireEvent.change(screen.getByLabelText("First name"), {
@@ -97,7 +97,7 @@ function fillMinor() {
 
 function fillAdult() {
   fireEvent.click(screen.getByLabelText(/An adult I help/));
-  fireEvent.change(screen.getByLabelText("They are your"), {
+  fireEvent.change(screen.getByLabelText("You are their"), {
     target: { value: "carer" },
   });
   fireEvent.change(screen.getByLabelText("First name"), {
@@ -192,7 +192,7 @@ describe("DependentsManager", () => {
       await renderWith([]);
       openAddForm();
       fireEvent.click(screen.getByLabelText(/My child under 18/));
-      const options = within(screen.getByLabelText("They are your"))
+      const options = within(screen.getByLabelText("You are their"))
         .getAllByRole("option")
         .map((o) => o.textContent);
       expect(options).toEqual(["Select…", "Parent", "Legal guardian"]);
