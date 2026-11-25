@@ -55,7 +55,7 @@ export default function ProfileNudge() {
         Complete your player profile to speed up tournament registration and
         unlock age, rated, and category entries.{" "}
         <Link
-          href="/settings"
+          href="/settings?edit=1"
           className="text-gold-bright whitespace-nowrap hover:underline"
         >
           Complete profile →
