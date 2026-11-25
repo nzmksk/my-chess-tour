@@ -19,11 +19,9 @@ export default function LandingPage() {
 
       <div className="mx-auto max-w-2xl px-6 pb-8">
         {/* Eyebrow */}
-        <p className="text--eyebrow">♟ Coming Soon 2026</p>
+        <p className="text--eyebrow">♟ Coming Soon 2027</p>
         {/* Headline */}
-        <h1 className="my-2">
-          Malaysia&apos;s tournament circuit, finally online.
-        </h1>
+        <h1 className="my-2">Malaysia&apos;s finest chess tournament hub.</h1>
         {/* Body copy */}
         <p className="text--body mb-2">
           MY Chess Tour is a dedicated platform for discovering, registering,
