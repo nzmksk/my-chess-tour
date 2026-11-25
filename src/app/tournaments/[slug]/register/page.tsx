@@ -135,7 +135,7 @@ async function RegisterPageContent({
       choice.error,
     );
   }
-  const participants = choice.ok ? choice.participants : [];
+  const pickerOptions = choice.ok ? choice.options : [];
   const participant = choice.ok
     ? choice.selected
     : requestedParticipant && requestedParticipant !== claims.id
@@ -191,9 +191,9 @@ async function RegisterPageContent({
   );
 
   const picker =
-    participants.length > 1 ? (
+    pickerOptions.length > 1 ? (
       <ParticipantPicker
-        participants={participants}
+        participants={pickerOptions}
         selectedId={participant.id}
       />
     ) : null;
