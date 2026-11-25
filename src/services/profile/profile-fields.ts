@@ -3,9 +3,11 @@ import type { Gender, UpdateProfilePayload } from "@/app/profile/types";
 import {
   buildFideProfileUpdate,
   fetchFidePlayer,
+  matchesFideName,
   type FidePlayer,
 } from "@/services/fide/fide";
 import { enforceRateLimit } from "@/services/rate-limit/limiter";
+import { SUPPORT_EMAIL } from "@/lib/reference/contact";
 
 const VALID_GENDERS = new Set<string>(["male", "female"]);
 
@@ -206,12 +208,29 @@ export async function resolveNewFideId(
   if (!player) return { ok: true, fields: {} };
 
   const name = await playerName();
+  const firstName = name?.first_name ?? "";
+  const lastName = name?.last_name ?? "";
+  if (!matchesFideName(firstName, lastName, player.name)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            code: "FIDE_NAME_MISMATCH",
+            message: `FIDE ID ${fideId} is registered to ${player.name}, which doesn't match the name on this profile. Please check the number. If it is the right ID, contact ${SUPPORT_EMAIL}.`,
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
+
   return {
     ok: true,
     fields: buildFideProfileUpdate(
       player,
-      name?.first_name ?? "",
-      name?.last_name ?? "",
+      firstName,
+      lastName,
       new Date().toISOString(),
     ),
   };

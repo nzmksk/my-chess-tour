@@ -513,6 +513,20 @@ describe("PATCH /api/v1/me/dependents/[id]", () => {
     });
   });
 
+  it("rejects a FIDE ID whose name isn't the dependent's", async () => {
+    mockFetchFidePlayer.mockResolvedValue({
+      name: "Stranger, Sam",
+      standard: 2400,
+      rapid: null,
+      blitz: null,
+      title: "IM",
+    });
+    const res = await patch({ fide_id: 123 });
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("FIDE_NAME_MISMATCH");
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
   it("sets and clears an adult dependent's contact email", async () => {
     mockGetDependent.mockResolvedValue({ ok: true, data: ADULT });
     const res = await patch({ contact_email: " New@Example.com " }, ADULT_ID);
