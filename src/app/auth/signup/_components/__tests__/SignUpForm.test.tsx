@@ -208,15 +208,14 @@ describe("SignUpForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("asks for a date of birth and points under-18s to a guardian", () => {
+  it("asks for a date of birth without a standing hint", () => {
     renderForm();
     const input = screen.getByLabelText("Date of Birth") as HTMLInputElement;
     expect(input.type).toBe("date");
     expect(input.value).toBe("");
-    expect(input.getAttribute("aria-describedby")).toBe("dateOfBirth-hint");
-    expect(
-      screen.getByText(/Under 18\? You\s+take part through a parent or guardian/),
-    ).toBeDefined();
+    expect(input.getAttribute("aria-describedby")).toBeNull();
+    expect(document.getElementById("dateOfBirth-hint")).toBeNull();
+    expect(screen.queryByText(/parent or guardian/)).toBeNull();
     expect(screen.queryByLabelText("I am 18 or over")).toBeNull();
   });
 
@@ -233,13 +232,11 @@ describe("SignUpForm", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(document.getElementById("dateOfBirth-error")?.textContent).toMatch(
-      /18 or over/,
+      /18 or over.*parent or guardian/,
     );
     const input = screen.getByLabelText("Date of Birth");
     expect(input.getAttribute("aria-invalid")).toBe("true");
-    expect(input.getAttribute("aria-describedby")).toBe(
-      "dateOfBirth-hint dateOfBirth-error",
-    );
+    expect(input.getAttribute("aria-describedby")).toBe("dateOfBirth-error");
     vi.unstubAllGlobals();
   });
 

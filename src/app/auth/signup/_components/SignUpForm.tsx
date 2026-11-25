@@ -227,16 +227,9 @@ export default function SignUpForm() {
                 autoComplete="bday"
                 aria-invalid={!!errors.dateOfBirth}
                 aria-describedby={
-                  errors.dateOfBirth
-                    ? "dateOfBirth-hint dateOfBirth-error"
-                    : "dateOfBirth-hint"
+                  errors.dateOfBirth ? "dateOfBirth-error" : undefined
                 }
               />
-              <p id="dateOfBirth-hint" className="input-hint">
-                You must be 18 or over to hold your own account. Under 18? You
-                take part through a parent or guardian&apos;s account. You
-                can&apos;t change this later without contacting support.
-              </p>
               {errors.dateOfBirth && (
                 <p id="dateOfBirth-error" className="input-hint error">
                   {errors.dateOfBirth}
