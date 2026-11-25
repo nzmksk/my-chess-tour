@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { getAuthClaims } from "@/services/supabase/permission";
 import { supabaseAdmin } from "@/services/supabase/admin";
+import { loadRegisterParticipants } from "./register/_lib/participant";
 import { registrationStatus as computeRegistrationStatus } from "@/lib/tournaments/registration-status";
 import { formatCalendarDate } from "@/lib/tournaments/datetime";
 import {
@@ -207,6 +208,42 @@ export async function generateMetadata({
   };
 }
 
+async function findDependentToRegister(
+  userId: string,
+  tournamentId: string,
+): Promise<string | null> {
+  const choice = await loadRegisterParticipants(userId, undefined);
+  if (!choice.ok) {
+    console.error(
+      `Tournament ${tournamentId}: failed to load the caller's dependents`,
+      choice.error,
+    );
+    return null;
+  }
+  const dependentIds = choice.participants
+    .filter((p) => !p.isSelf)
+    .map((p) => p.id);
+  if (dependentIds.length === 0) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("registrations")
+    .select("user_id")
+    .eq("tournament_id", tournamentId)
+    .eq("status", "confirmed")
+    .in("user_id", dependentIds);
+  if (error) {
+    console.error(
+      `Tournament ${tournamentId}: failed to check dependents' registrations`,
+      error.message,
+    );
+    return null;
+  }
+  const registered = new Set(
+    (data as Array<{ user_id: string }>).map((r) => r.user_id),
+  );
+  return dependentIds.find((id) => !registered.has(id)) ?? null;
+}
+
 export async function TournamentDetailData({ slug }: { slug: string }) {
   const tournament = await fetchTournament(slug);
 
@@ -230,6 +267,10 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
     registrationStatus = registration?.status ?? null;
   }
   const isConfirmed = registrationStatus === "confirmed";
+  const dependentToRegisterId =
+    claims && isConfirmed
+      ? await findDependentToRegister(claims.id, tournamentId)
+      : null;
 
   // A platform-distributed prize pool must be fully funded before anyone can
   // register (#523). Read live, outside the tournament cache: it changes when a
@@ -274,6 +315,7 @@ export async function TournamentDetailData({ slug }: { slug: string }) {
       tournament={tournament}
       isAuthenticated={!!claims}
       registrationStatus={registrationStatus}
+      dependentToRegisterId={dependentToRegisterId}
       awaitingPrizeFunding={awaitingPrizeFunding}
       canViewStartingRank={canViewStartingRank}
       startingRank={startingRank}

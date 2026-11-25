@@ -704,6 +704,65 @@ describe("CTA button auth states", () => {
   });
 });
 
+describe("registering a dependent (#774)", () => {
+  function renderGuardian(
+    overrides: Partial<TournamentDetailType> = {},
+    dependentToRegisterId: string | null = "dep-1",
+    awaitingPrizeFunding = false,
+  ): string {
+    return renderToStaticMarkup(
+      <TournamentDetail
+        tournament={{ ...base, ...overrides }}
+        isAuthenticated
+        registrationStatus="confirmed"
+        dependentToRegisterId={dependentToRegisterId}
+        awaitingPrizeFunding={awaitingPrizeFunding}
+        canViewStartingRank={false}
+        startingRank={null}
+        now={NOW}
+      />,
+    );
+  }
+
+  it("lets a registered guardian register a dependent who isn't yet", () => {
+    const html = renderGuardian();
+    expect(html).toContain("You&#x27;re registered for this tournament.");
+    expect(html).toContain("Register a Dependent");
+    expect(html).toContain(
+      `href="/tournaments/${base.slug}/register?participant=dep-1"`,
+    );
+    expect(html).not.toContain(">Registered<");
+  });
+
+  it("shows 'Registered' when every dependent is registered too", () => {
+    const html = renderGuardian({}, null);
+    expect(html).toContain(">Registered<");
+    expect(html).not.toContain("Register a Dependent");
+  });
+
+  it("shows 'Registered' once registration has closed", () => {
+    const pastDeadline = new Date(Date.now() - 1000).toISOString();
+    const html = renderGuardian({ registration_deadline: pastDeadline });
+    expect(html).toContain(">Registered<");
+    expect(html).not.toContain("Register a Dependent");
+  });
+
+  it("shows 'Registered' when the tournament is full", () => {
+    const html = renderGuardian({
+      max_participants: 100,
+      current_participants: 100,
+    });
+    expect(html).toContain(">Registered<");
+    expect(html).not.toContain("Register a Dependent");
+  });
+
+  it("shows 'Registered' while the prize pool is unfunded", () => {
+    const html = renderGuardian({}, "dep-1", true);
+    expect(html).toContain(">Registered<");
+    expect(html).not.toContain("Register a Dependent");
+  });
+});
+
 // ── Starting rank tab visibility ──────────────────────────────
 // StartingRankTab display logic is tested in StartingRankTab.test.tsx.
 // Here we only verify it renders without error under various prop combinations.

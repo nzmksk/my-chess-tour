@@ -63,6 +63,7 @@ interface Props {
   tournament: TournamentDetailType;
   isAuthenticated: boolean;
   registrationStatus?: string | null;
+  dependentToRegisterId?: string | null;
   /**
    * MY Chess Tour distributes this tournament's prizes and the pool isn't fully
    * funded yet, so registration hasn't opened (#523).
@@ -81,6 +82,7 @@ export default function TournamentDetail({
   tournament: t,
   isAuthenticated,
   registrationStatus = null,
+  dependentToRegisterId = null,
   awaitingPrizeFunding = false,
   canViewStartingRank,
   startingRank,
@@ -427,7 +429,23 @@ export default function TournamentDetail({
           </div>
 
           {/* CTA */}
-          {registrationStatus === "confirmed" ? (
+          {registrationStatus === "confirmed" &&
+          dependentToRegisterId &&
+          !isRegistrationClosed &&
+          !awaitingPrizeFunding &&
+          spotsLeft > 0 ? (
+            <div className="flex flex-col gap-2">
+              <p className="font-lato text-text-secondary text-sm">
+                You&apos;re registered for this tournament.
+              </p>
+              <Link
+                href={`/tournaments/${t.slug}/register?participant=${encodeURIComponent(dependentToRegisterId)}`}
+                className="btn-primary block w-full rounded-md text-center"
+              >
+                Register a Dependent
+              </Link>
+            </div>
+          ) : registrationStatus === "confirmed" ? (
             <button
               className="btn-primary w-full rounded-md opacity-50"
               disabled

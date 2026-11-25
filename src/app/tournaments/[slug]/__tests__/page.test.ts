@@ -52,6 +52,14 @@ vi.mock("@/services/supabase/admin", () => ({
   },
 }));
 
+const mockLoadParticipants = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ ok: true, participants: [], selected: null }),
+);
+
+vi.mock("@/app/tournaments/[slug]/register/_lib/participant", () => ({
+  loadRegisterParticipants: mockLoadParticipants,
+}));
+
 // ── Helpers ───────────────────────────────────────────────────
 
 const mockFetch = vi.fn();
@@ -893,5 +901,145 @@ describe("starting rank visibility rules", () => {
     const result = await TournamentDetailData({ slug: SLUG });
 
     expect(canViewProp(result)).toBe(false);
+  });
+});
+
+describe("dependent to register (#774)", () => {
+  let mockFrom: ReturnType<typeof vi.fn>;
+  let dependentsQuery: ReturnType<typeof makeChain>;
+
+  const self = {
+    id: "app-auth-1",
+    firstName: "You",
+    name: "Myself",
+    isSelf: true,
+  };
+  const aina = {
+    id: "dep-1",
+    firstName: "Aina",
+    name: "Aina Ahmad",
+    isSelf: false,
+  };
+  const badrul = {
+    id: "dep-2",
+    firstName: "Badrul",
+    name: "Badrul Ahmad",
+    isSelf: false,
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    globalThis.fetch = mockFetch;
+    mockHeadersGet.mockReturnValue("localhost:3000");
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () =>
+        makeTournamentPayload({
+          start_date: "2999-01-01",
+          end_date: "2999-01-02",
+          registration_deadline: "2999-01-01T00:00:00Z",
+        }),
+    });
+    const serverModule = await import("@/services/supabase/server");
+    vi.mocked(serverModule.createClient).mockResolvedValue({
+      auth: {
+        getClaims: vi
+          .fn()
+          .mockResolvedValue({ data: { claims: { sub: "auth-1" } } }),
+      },
+    } as unknown as Awaited<ReturnType<typeof serverModule.createClient>>);
+    const mod = await import("@/services/supabase/admin");
+    mockFrom = vi.mocked(mod.supabaseAdmin.from);
+  });
+
+  function stubRegistrations(
+    status: string | null,
+    confirmedDependents: string[],
+  ) {
+    dependentsQuery = makeChain({ data: [], error: null });
+    dependentsQuery.in = vi.fn(() =>
+      Promise.resolve({
+        data: confirmedDependents.map((user_id) => ({ user_id })),
+        error: null,
+      }),
+    );
+    let regCallIdx = 0;
+    mockFrom.mockImplementation((t: string) => {
+      if (t === "registrations") {
+        regCallIdx++;
+        if (regCallIdx === 1) {
+          return {
+            select: vi.fn(() =>
+              makeChain({ data: status ? { status } : null, error: null }),
+            ),
+          };
+        }
+        return { select: vi.fn(() => dependentsQuery) };
+      }
+      return { select: vi.fn(() => makeChain({ data: null, error: null })) };
+    });
+  }
+
+  async function dependentProp() {
+    const { TournamentDetailData } = await import("../page");
+    const result = await TournamentDetailData({ slug: SLUG });
+    return (result as { props: { dependentToRegisterId: string | null } }).props
+      .dependentToRegisterId;
+  }
+
+  it("offers the first dependent who isn't registered when the caller is", async () => {
+    mockLoadParticipants.mockResolvedValue({
+      ok: true,
+      participants: [self, aina, badrul],
+      selected: self,
+    });
+    stubRegistrations("confirmed", ["dep-1"]);
+
+    expect(await dependentProp()).toBe("dep-2");
+    expect(mockLoadParticipants).toHaveBeenCalledWith("app-auth-1", undefined);
+    expect(dependentsQuery.eq).toHaveBeenCalledWith("tournament_id", "t1");
+    expect(dependentsQuery.eq).toHaveBeenCalledWith("status", "confirmed");
+    expect(dependentsQuery.in).toHaveBeenCalledWith("user_id", [
+      "dep-1",
+      "dep-2",
+    ]);
+  });
+
+  it("offers no one when every dependent is registered", async () => {
+    mockLoadParticipants.mockResolvedValue({
+      ok: true,
+      participants: [self, aina],
+      selected: self,
+    });
+    stubRegistrations("confirmed", ["dep-1"]);
+
+    expect(await dependentProp()).toBeNull();
+  });
+
+  it("offers no one when the caller has no dependents", async () => {
+    mockLoadParticipants.mockResolvedValue({
+      ok: true,
+      participants: [self],
+      selected: self,
+    });
+    stubRegistrations("confirmed", []);
+
+    expect(await dependentProp()).toBeNull();
+    expect(dependentsQuery.in).not.toHaveBeenCalled();
+  });
+
+  it("offers no one when the dependents can't be loaded", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockLoadParticipants.mockResolvedValue({ ok: false, error: "boom" });
+    stubRegistrations("confirmed", []);
+
+    expect(await dependentProp()).toBeNull();
+  });
+
+  it("doesn't look up dependents when the caller isn't registered", async () => {
+    stubRegistrations(null, []);
+
+    expect(await dependentProp()).toBeNull();
+    expect(mockLoadParticipants).not.toHaveBeenCalled();
   });
 });
