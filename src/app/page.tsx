@@ -41,9 +41,9 @@ const FEATURES = [
 
 export default function LandingPage() {
   return (
-    <main className="bg-bg-base">
+    <main className="bg-bg-base flex min-h-dvh flex-col justify-center">
       {/* Decorative top bar */}
-      <div className="mx-auto flex max-w-2xl gap-2 px-6 py-8">
+      <div className="mx-auto flex w-full max-w-2xl gap-2 px-6 py-8">
         {Array.from({ length: 8 }).map((_, i) => (
           <div
             key={i}
@@ -52,7 +52,7 @@ export default function LandingPage() {
         ))}
       </div>
 
-      <div className="mx-auto max-w-2xl px-6 pb-8">
+      <div className="mx-auto w-full max-w-2xl px-6 pb-8">
         {/* Eyebrow */}
         <p className="text--eyebrow">♟ Coming Soon 2027</p>
         {/* Headline */}
@@ -95,7 +95,7 @@ export default function LandingPage() {
       {/* Build progress — second section */}
       <section
         id="progress"
-        className="border-border mx-auto max-w-2xl border-t px-6 py-8"
+        className="border-border mx-auto w-full max-w-2xl border-t px-6 py-8"
       >
         <Suspense fallback={<ProgressSkeleton />}>
           <BuildProgress />
