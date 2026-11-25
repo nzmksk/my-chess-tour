@@ -5,7 +5,7 @@ import type { Tournament } from "../types";
 import { paginate } from "../utils";
 import TournamentCard from "./TournamentCard";
 
-export const TOURNAMENTS_PAGE_SIZE = 12;
+export const TOURNAMENTS_PAGE_SIZE = 6;
 
 interface Props {
   label: string;
