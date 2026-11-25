@@ -15,7 +15,13 @@ import {
   resolveReturnParticipant,
 } from "../participant";
 
-const AINA = { id: "dep-1", first_name: "Aina", last_name: "Rahman" };
+const AINA = {
+  id: "dep-1",
+  first_name: "Aina",
+  last_name: "Rahman",
+  basis: "minor",
+  date_of_birth: "2012-05-01",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -44,6 +50,19 @@ describe("loadRegisterParticipants", () => {
 
   it("selects nobody for a player the caller doesn't look after", async () => {
     const choice = await loadRegisterParticipants("u1", "stranger");
+    expect(choice.ok && choice.selected).toBeNull();
+  });
+
+  it("leaves out a minor who has turned 18, as their guardian can no longer register them", async () => {
+    mockListDependents.mockResolvedValue({
+      ok: true,
+      data: [AINA, { ...AINA, id: "dep-2", date_of_birth: "2008-11-20" }],
+    });
+    const choice = await loadRegisterParticipants("u1", "dep-2", "2026-11-25");
+    expect(choice.ok && choice.participants.map((p) => p.id)).toEqual([
+      "u1",
+      "dep-1",
+    ]);
     expect(choice.ok && choice.selected).toBeNull();
   });
 
