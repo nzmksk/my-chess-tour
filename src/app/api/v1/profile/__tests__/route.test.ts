@@ -137,15 +137,13 @@ describe("PATCH /api/v1/profile — FIDE sync", () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
-  it("still saves the FIDE ID (without ratings) when FIDE is unreachable", async () => {
+  it("refuses an unchecked FIDE ID when FIDE is unreachable", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mockFetchFidePlayer.mockRejectedValue(new Error("network down"));
     const res = await PATCH(makeReq({ fide_id: 1503014 }));
-    expect(res.status).toBe(200);
-    const payload = mockUpsert.mock.calls[0][0];
-    expect(payload.fide_id).toBe(1503014);
-    expect(payload.fide_rating).toBeUndefined();
-    expect(payload.fide_rating_synced_at).toBeUndefined();
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe("FIDE_UNAVAILABLE");
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("does not call FIDE for a non-FIDE field update", async () => {

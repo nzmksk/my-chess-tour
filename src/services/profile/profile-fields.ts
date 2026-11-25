@@ -176,21 +176,32 @@ export async function resolveNewFideId(
   const limited = await enforceRateLimit("fideLookup", request, callerId);
   if (limited) return { ok: false, response: limited };
 
-  let player: FidePlayer | null = null;
-  let reachable = true;
+  let player: FidePlayer | null;
   try {
     player = await fetchFidePlayer(fideId);
   } catch (error) {
-    reachable = false;
     console.error(
       `FIDE lookup unavailable for user %s (fide_id %d):`,
       callerId,
       fideId,
       error,
     );
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            code: "FIDE_UNAVAILABLE",
+            message:
+              "We couldn't reach FIDE to check this FIDE ID. Please try again in a few minutes.",
+          },
+        },
+        { status: 503 },
+      ),
+    };
   }
 
-  if (reachable && player === null) {
+  if (player === null) {
     return {
       ok: false,
       response: NextResponse.json(
@@ -204,8 +215,6 @@ export async function resolveNewFideId(
       ),
     };
   }
-
-  if (!player) return { ok: true, fields: {} };
 
   const name = await playerName();
   const firstName = name?.first_name ?? "";
