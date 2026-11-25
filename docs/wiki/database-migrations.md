@@ -1,15 +1,15 @@
 # Database migrations
 
-How schema changes reach staging and production (#631). The Supabase CLI applies every migration a database hasn't run yet: staging automatically on merge, production by hand. Databases are never rebuilt, only migrated forward.
+How schema changes reach staging and production (#631). The Supabase CLI applies every migration a database hasn't run yet: staging automatically on merge, production by hand. Databases are migrated forward, not rebuilt; the one exception was #696, which flattened the history and reset both databases ([Resetting a database](#resetting-a-database)).
 
 ## Layout
 
-| Path                                    | What                                                                                                                                                                                           |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `supabase/migrations/001`–`007`         | The original migrations, from before #631: the schema (001–006) and the RBAC roles and permissions (007).                                                                                      |
-| `supabase/migrations/<14 digits>_*.sql` | Every change since, one file each, applied in filename order.                                                                                                                                  |
-| `supabase/staging/`                     | Staging-only scripts, run by hand: `seed.sql` (test data), `drop_all.sql` (local teardown), and the QA access scripts ([staging-db-access.md](staging-db-access.md)). Never run on production. |
-| `supabase/tests/`                       | SQL regression suites, run by CI on every PR ([Tests](#tests)). Each prints `ALL SCENARIOS PASSED`.                                                                                            |
+| Path                                    | What                                                                                                                                                                                                                         |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `supabase/migrations/001`–`007`         | The schema, flattened in #696: tables and enums (001), indexes (002), functions and triggers (003), row-level security (004), storage buckets and policies (005), payment functions (006), RBAC roles and permissions (007). |
+| `supabase/migrations/<14 digits>_*.sql` | Every change since #696, one file each, applied in filename order.                                                                                                                                                           |
+| `supabase/staging/`                     | Staging-only scripts, run by hand: `seed.sql` (test data), `drop_all.sql` (local teardown), and the QA access scripts ([staging-db-access.md](staging-db-access.md)). Never run on production.                               |
+| `supabase/tests/`                       | SQL regression suites, run by CI on every PR ([Tests](#tests)). Each prints `ALL SCENARIOS PASSED`.                                                                                                                          |
 
 `supabase/migrations` is where the CLI looks by default, so it runs from the repo root with no extra setup.
 
@@ -46,8 +46,6 @@ The migration workflow and the Netlify staging deploy start from the same push a
 PRs don't trigger it. A PR runs the workflow file from its own branch, so it could be edited to print the database URL. The URL is therefore a secret of the `staging` GitHub environment, which only jobs on the `staging` branch can use.
 
 `--include-all` lets through a migration whose timestamp is older than the newest one applied, which happens when two PRs merge in the opposite order from how they were written.
-
-Before `db push`, a step records `001`–`007` as applied (`supabase migration repair --status applied`) when the database already has the schema (`public.users` exists) but its history is empty (#646). Staging got those files by hand before the CLI tracked it, so without this `db push` would run `001` again and fail with `type "role_scope" already exists`. Once they're recorded the step does nothing, and it never touches a brand-new database, which gets them from `db push`.
 
 Each migration commits or rolls back on its own. If the second of three fails, the first stays applied, the third is never tried, and the job goes red. Fix it with a new commit: the failed migration was never recorded, so you may still edit it.
 
@@ -98,8 +96,15 @@ npx supabase@2.122.1 db push --db-url "$DB_URL" --include-all --dry-run
 npx supabase@2.122.1 db push --db-url "$DB_URL" --include-all
 ```
 
-If production's schema was built by hand, `migration list` shows `001`–`007` with no **Remote** version, and `db push` would run them again and fail (#646). Record them as applied first, once:
+## Resetting a database
 
-```sh
-npx supabase@2.122.1 migration repair --db-url "$DB_URL" --status applied 001 002 003 004 005 006 007
-```
+Only when the migration history itself is rewritten, as in #696, which folded every timestamped migration into `001`–`007`. A database that recorded the old files can't take `db push` afterwards: the CLI refuses a history that names versions the folder no longer has. Rebuild it instead.
+
+Staging:
+
+1. Empty the `avatars`, `oku-documents` and `organization-documents` buckets from the dashboard (Storage). SQL can only remove their metadata.
+2. Run `supabase/staging/drop_all.sql` in the SQL editor. Every check at the end must return 0. It also drops the CLI's migration history.
+3. Run the **Staging database migrations** workflow from the Actions tab, or `db push` by hand as in [Production](#production).
+4. Run `supabase/staging/seed.sql`, then `apply_qa_readonly_role.sql` with `COMMIT` ([staging-db-access.md](staging-db-access.md)) so `qa_readonly` can read the new tables. It's idempotent, and the testers' logins survive the reset: roles live outside `public`.
+
+Production is reset the same way, before merging `staging` into `master`, but without the seed, and only after exporting anything that must survive: `drop_all.sql` deletes every table and every auth account (the waitlist included). It lives in `supabase/staging/` because it's never part of a normal deploy.

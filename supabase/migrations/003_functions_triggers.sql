@@ -46,6 +46,9 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_funder_contacts
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_awards
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON organization_registered_names
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- =============================================
 -- AUTH SIGNUP TRIGGER
 -- Creates user + player_profile on auth signup.
@@ -54,8 +57,17 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON prize_awards
 -- Self-signup keeps users.id = auth.users.id so no existing id changes meaning;
 -- auth_user_id is written explicitly and is what every lookup goes through.
 -- The two being equal here is an implementation detail of self-signup, NOT an
--- invariant — a record created for someone without a login (see #504) will have
--- a generated id and a NULL auth_user_id until it is claimed.
+-- invariant — a record created for someone without a login (a dependent, #712)
+-- has a generated id and a NULL auth_user_id until it is claimed.
+-- date_of_birth (#710) comes through the metadata too and lands in
+-- player_profiles in the same statement; an under-18 date is refused here as
+-- well as in the signup route (UNDER_18), so an account created another way (a
+-- direct Auth API call) can't carry one either.
+-- Account claims (#720): a new auth user whose metadata carries
+-- claim_token_hash never gets a users row of its own. The INSERT is refused
+-- unless the hash names a pending, unexpired claim for the same mailbox
+-- (CLAIM_INVALID, CLAIM_EMAIL_MISMATCH), and if the user is created already
+-- confirmed, link_claimed_account binds the dependent's existing row instead.
 -- terms_version comes through raw_user_meta_data the same way the names do, but
 -- the signup route puts it there from a server constant (src/lib/reference/legal.ts), not
 -- from the request body. Writing it here rather than in a follow-up UPDATE keeps
@@ -67,7 +79,38 @@ CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
   v_terms_version varchar(20) := NULLIF(NEW.raw_user_meta_data->>'terms_version', '');
+  v_date_of_birth date        := NULLIF(NEW.raw_user_meta_data->>'date_of_birth', '')::date;
+  v_claim_hash    text        := NULLIF(NEW.raw_user_meta_data->>'claim_token_hash', '');
+  v_claim_email   text;
 BEGIN
+  IF v_claim_hash IS NOT NULL THEN
+    SELECT email INTO v_claim_email
+      FROM account_claims
+      WHERE token_hash = v_claim_hash
+        AND status = 'pending'
+        AND expires_at > now();
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'CLAIM_INVALID: this handover link is no longer valid'
+        USING ERRCODE = 'P0001';
+    END IF;
+    IF canonical_email(NEW.email) IS DISTINCT FROM canonical_email(v_claim_email) THEN
+      RAISE EXCEPTION 'CLAIM_EMAIL_MISMATCH: the account must use the address the link was sent to'
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    IF NEW.email_confirmed_at IS NOT NULL THEN
+      PERFORM link_claimed_account(NEW.id, NEW.email, NEW.email_confirmed_at,
+                                   v_claim_hash, v_terms_version);
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF v_date_of_birth >
+     ((now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date - interval '18 years')::date THEN
+    RAISE EXCEPTION 'UNDER_18: an account holder must be 18 or over; under-18s take part through a parent or guardian''s account'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   INSERT INTO public.users (
     id, auth_user_id, email, first_name, last_name,
     terms_version, terms_accepted_at
@@ -82,8 +125,8 @@ BEGIN
     CASE WHEN v_terms_version IS NULL THEN NULL ELSE now() END
   );
 
-  INSERT INTO public.player_profiles (user_id)
-  VALUES (NEW.id);
+  INSERT INTO public.player_profiles (user_id, date_of_birth)
+  VALUES (NEW.id, v_date_of_birth);
 
   RETURN NEW;
 EXCEPTION
@@ -96,6 +139,91 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- =============================================
+-- CANONICAL EMAIL
+-- =============================================
+-- The mailbox an address reaches (#286), so test@gmail.com, test+123@gmail.com
+-- and t.e.s.t@googlemail.com count as one:
+--   - lower-cased and trimmed
+--   - a "+tag" sub-address dropped, on every domain (Gmail, Outlook, iCloud,
+--     Fastmail, Proton and Google Workspace all deliver it to the base address)
+--   - for gmail.com / googlemail.com only: dots dropped, and googlemail.com
+--     read as gmail.com
+CREATE OR REPLACE FUNCTION canonical_email(p_email text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+PARALLEL SAFE
+AS $$
+DECLARE
+  v_email  text := lower(btrim(p_email));
+  v_at     int;
+  v_local  text;
+  v_domain text;
+BEGIN
+  IF strpos(v_email, '@') = 0 THEN
+    RETURN v_email;
+  END IF;
+
+  v_at     := length(v_email) - strpos(reverse(v_email), '@') + 1;
+  v_local  := left(v_email, v_at - 1);
+  v_domain := substr(v_email, v_at + 1);
+
+  IF strpos(v_local, '+') > 1 THEN
+    v_local := split_part(v_local, '+', 1);
+  END IF;
+
+  IF v_domain IN ('gmail.com', 'googlemail.com') THEN
+    v_local  := replace(v_local, '.', '');
+    v_domain := 'gmail.com';
+  END IF;
+
+  RETURN v_local || '@' || v_domain;
+END;
+$$;
+
+-- =============================================
+-- SET USERS EMAIL CANONICAL
+-- =============================================
+-- Keeps users.email_canonical in step with users.email. Fires on INSERT and on
+-- UPDATE OF email only. email_canonical is personal data like email, and
+-- anonymise_user_audit_logs strips it from audit history.
+CREATE OR REPLACE FUNCTION set_users_email_canonical()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  NEW.email_canonical := canonical_email(NEW.email);
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER set_email_canonical
+  BEFORE INSERT OR UPDATE OF email ON users
+  FOR EACH ROW EXECUTE FUNCTION set_users_email_canonical();
+
+-- =============================================
+-- EMAIL REGISTERED
+-- =============================================
+-- Whether an active account already uses the mailbox p_email reaches. The
+-- signup route asks before creating the auth user, so a variant gets the usual
+-- "already exists" answer instead of failing inside handle_new_user.
+CREATE OR REPLACE FUNCTION email_registered(p_email text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE email_canonical = canonical_email(p_email)
+      AND deleted_at IS NULL
+  );
+$$;
 
 -- =============================================
 -- IDENTITY RESOLUTION
@@ -115,20 +243,34 @@ RETURNS uuid AS $$
   SELECT id FROM public.users WHERE auth_user_id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
 
--- Can the caller act on behalf of p_user_id?
+-- Can the caller act on behalf of p_user_id? Yes for themselves, and for a
+-- dependent they hold an 'active' guardianship of (#707). A revoked or claimed
+-- guardianship stops counting the moment its status changes. Every policy that
+-- calls it widens at once: a guardian reads a dependent's player_profiles
+-- (and writes them), registrations, payments, refunds, player_bank_accounts,
+-- sensitive_data_consents, prize_awards and OKU documents.
 --
--- Today this is exactly the self check, so it is a pure rename of
--- "app_user_id() = user_id" with no behaviour change. It exists as a seam: when
--- guardianships arrive (#504) this function body grows an OR and every policy
--- using it widens at once, instead of another sweep across every policy.
+-- One direction only: a dependent with a login of their own doesn't gain sight
+-- of the guardian's data. SECURITY DEFINER, so it reads guardianships without
+-- that table's RLS, which compares app_user_id() directly so a guardian can't
+-- see other guardians' rows for the same dependent.
 --
 -- DO NOT use this for organization_memberships, user_global_roles, or any
 -- admin-scoped policy. Those are deliberately self-only and must NOT widen when
 -- this body changes — see the comments at each of those policies in 004_rls.sql.
 CREATE OR REPLACE FUNCTION can_act_for(p_user_id uuid)
-RETURNS boolean AS $$
-  SELECT p_user_id = app_user_id();
-$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public;
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT p_user_id = app_user_id()
+      OR EXISTS (SELECT 1 FROM guardianships g
+                 WHERE g.guardian_user_id = app_user_id()
+                   AND g.dependent_user_id = p_user_id
+                   AND g.status = 'active');
+$$;
 
 -- =============================================
 -- IDENTITY COLUMN GUARD
@@ -312,9 +454,8 @@ $$;
 -- decides it, called by audit_trigger_func on the way in. Tables not listed come
 -- back unchanged. Any new sensitive column belongs here in the same PR that
 -- adds the column.
---   player_profiles.bank_account_number (a column since moved to
---     player_bank_accounts, kept for rows written before), organization_bank_accounts.
---     account_number, player_bank_accounts.account_number: masked to the last 4 digits.
+--   organization_bank_accounts.account_number, player_bank_accounts.account_number:
+--     masked to the last 4 digits.
 --   player_profiles.oku_document_path, organization_documents.storage_path:
 --     capability-bearing; anyone holding one can be issued a signed URL to a
 --     private-bucket document. Filename rule: only the extension survives.
@@ -328,15 +469,15 @@ IMMUTABLE
 AS $$
   SELECT CASE p_table_name
     WHEN 'player_profiles' THEN
-      redact_jsonb_filenames(
-        redact_jsonb_columns(p_data, ARRAY['bank_account_number']),
-        ARRAY['oku_document_path'])
+      redact_jsonb_filenames(p_data, ARRAY['oku_document_path'])
     WHEN 'organization_bank_accounts' THEN
       redact_jsonb_columns(p_data, ARRAY['account_number'])
     WHEN 'player_bank_accounts' THEN
       redact_jsonb_columns(p_data, ARRAY['account_number'])
     WHEN 'organization_documents' THEN
       redact_jsonb_filenames(p_data, ARRAY['storage_path', 'original_filename'])
+    WHEN 'organization_invitations' THEN
+      redact_jsonb_columns(p_data, ARRAY['token_hash'])
     ELSE p_data
   END;
 $$;
@@ -358,8 +499,10 @@ DECLARE
   v_new        jsonb;
   v_changed_by uuid;
   v_pk_col     text := COALESCE(TG_ARGV[0], 'id');
+  v_claims     jsonb := NULLIF(current_setting('request.jwt.claims', true), '')::jsonb;
+  v_headers    jsonb;
+  v_actor      text;
 BEGIN
-  -- Build row snapshots
   IF TG_OP IN ('UPDATE', 'DELETE') THEN
     v_old := row_to_json(OLD)::jsonb;
   END IF;
@@ -367,24 +510,23 @@ BEGIN
     v_new := row_to_json(NEW)::jsonb;
   END IF;
 
-  -- Extract record_id from the appropriate column
+  IF TG_OP = 'UPDATE'
+     AND TG_TABLE_NAME = 'registrations'
+     AND (v_old - 'current_payment_id') = (v_new - 'current_payment_id') THEN
+    RETURN NEW;
+  END IF;
+
   v_record_id := COALESCE(v_new, v_old) ->> v_pk_col;
 
-  -- Redact sensitive columns before the snapshot is persisted. Done after
-  -- record_id extraction so a redacted column can never be the PK. Without this
-  -- every bank-account write is copied verbatim into audit_logs, which is
-  -- retained far longer than the row itself.
-  -- What to redact per table lives in redact_audit_snapshot. Unlisted tables
-  -- pass through untouched.
   v_old := redact_audit_snapshot(TG_TABLE_NAME, v_old);
   v_new := redact_audit_snapshot(TG_TABLE_NAME, v_new);
 
-  -- Resolve organization_id based on source table
   IF TG_TABLE_NAME = 'organizations' THEN
     v_org_id := v_record_id::uuid;
   ELSIF TG_TABLE_NAME IN (
     'organization_memberships', 'tournaments', 'payments', 'payouts',
-    'organization_bank_accounts', 'organization_documents', 'prize_awards'
+    'organization_bank_accounts', 'organization_documents', 'prize_awards',
+    'organization_invitations'
   ) THEN
     v_org_id := (COALESCE(v_new, v_old) ->> 'organization_id')::uuid;
   ELSIF TG_TABLE_NAME IN ('registrations', 'prize_fundings') THEN
@@ -396,28 +538,37 @@ BEGIN
     FROM registrations r JOIN tournaments t ON t.id = r.tournament_id
     WHERE r.id = (COALESCE(v_new, v_old) ->> 'registration_id')::uuid;
   END IF;
-  -- users, player_profiles, player_bank_accounts, user_global_roles → v_org_id stays NULL
 
-  -- changed_by is a FK to users(id), but the JWT carries the AUTH id, so it has
-  -- to be resolved through users.auth_user_id. Reading the claim directly would
-  -- write an id that only coincidentally resolves while self-signup keeps the
-  -- two equal, and would violate the FK the moment they diverge.
-  -- Not app_user_id(): this trigger also fires under the service role and from
-  -- SECURITY DEFINER functions, where auth.uid() is NULL — reading the claim
-  -- keeps attribution working in those paths, and NULL means "no user acted".
+  IF v_claims ->> 'role' = 'service_role' THEN
+    v_headers := NULLIF(current_setting('request.headers', true), '')::jsonb;
+  END IF;
+
   SELECT u.id INTO v_changed_by
   FROM public.users u
-  WHERE u.auth_user_id =
-    NULLIF(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
+  WHERE u.auth_user_id = NULLIF(v_claims ->> 'sub', '')::uuid;
+
+  IF v_changed_by IS NULL THEN
+    v_actor := COALESCE(
+      NULLIF(current_setting('app.audit_actor', true), ''),
+      v_headers ->> 'x-audit-actor'
+    );
+    IF v_actor ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      SELECT u.id INTO v_changed_by FROM public.users u WHERE u.id = v_actor::uuid;
+    END IF;
+  END IF;
 
   INSERT INTO public.audit_logs (table_name, record_id, action, changed_by, organization_id, context, old_data, new_data)
   VALUES (
     TG_TABLE_NAME,
     v_record_id,
-    TG_OP,
+    TG_OP::audit_action,
     v_changed_by,
     v_org_id,
-    COALESCE(NULLIF(current_setting('app.audit_context', true), ''), 'trigger'),
+    left(COALESCE(
+      NULLIF(current_setting('app.audit_context', true), ''),
+      NULLIF(v_headers ->> 'x-audit-context', ''),
+      'trigger'
+    ), 100),
     v_old,
     v_new
   );
@@ -478,6 +629,21 @@ CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON registrations
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON tournament_cancellation_requests
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON organization_invitations
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+-- Guardianships, helper invitations and account claims are the record of who
+-- was allowed to act, and pay, for whom: audited, and never pruned
+-- (audit_log_retention leaves them out).
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON guardianships
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON helper_invitations
+  FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+
+CREATE TRIGGER audit_trail AFTER INSERT OR UPDATE OR DELETE ON account_claims
   FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 -- =============================================
@@ -547,10 +713,18 @@ DECLARE
   c_keep_player_bank     constant text[] := ARRAY[
     'id', 'user_id', 'status', 'is_active', 'verified_at', 'created_at', 'updated_at'
   ];
+  -- The address is what identifies the invitee; token_hash is already masked
+  -- and goes too.
+  c_keep_invitations     constant text[] := ARRAY[
+    'id', 'organization_id', 'role_id', 'status', 'invited_by', 'created_at',
+    'expires_at', 'responded_at', 'responded_by'
+  ];
   c_financial            constant text[] := ARRAY[
     'payments', 'refunds', 'payouts', 'registrations', 'prize_awards', 'prize_fundings'
   ];
   v_bank_rows            integer;
+  v_invitation_rows      integer;
+  v_emails               text[];
 BEGIN
   IF p_user_id IS NULL THEN
     RAISE EXCEPTION 'USER_ID_REQUIRED' USING ERRCODE = 'P0001';
@@ -561,6 +735,19 @@ BEGIN
       USING ERRCODE = 'P0001',
             DETAIL  = 'Delete the users row, or set deleted_at, before anonymising its audit history.';
   END IF;
+
+  -- Every address the account has had, while the users snapshots still say.
+  SELECT array_agg(DISTINCT lower(e.email)) INTO v_emails
+  FROM (
+    SELECT a.old_data ->> 'email' AS email
+      FROM audit_logs a WHERE a.table_name = 'users' AND a.record_id = p_user_id::text
+    UNION ALL
+    SELECT a.new_data ->> 'email'
+      FROM audit_logs a WHERE a.table_name = 'users' AND a.record_id = p_user_id::text
+    UNION ALL
+    SELECT u.email FROM users u WHERE u.id = p_user_id
+  ) e
+  WHERE e.email IS NOT NULL AND e.email <> '[anonymised]';
 
   UPDATE audit_logs a
   SET old_data = anonymise_jsonb_except(a.old_data, k.keep),
@@ -584,6 +771,18 @@ BEGIN
   GET DIAGNOSTICS v_bank_rows = ROW_COUNT;
   snapshots_anonymised := snapshots_anonymised + v_bank_rows;
 
+  -- Invitations addressed to the user, found by address (the email never
+  -- changes on an invitation row, so either snapshot carries it).
+  UPDATE audit_logs a
+  SET old_data = anonymise_jsonb_except(a.old_data, c_keep_invitations),
+      new_data = anonymise_jsonb_except(a.new_data, c_keep_invitations)
+  WHERE a.table_name = 'organization_invitations'
+    AND lower(COALESCE(a.new_data, a.old_data) ->> 'email') = ANY (v_emails)
+    AND (   a.old_data IS DISTINCT FROM anonymise_jsonb_except(a.old_data, c_keep_invitations)
+         OR a.new_data IS DISTINCT FROM anonymise_jsonb_except(a.new_data, c_keep_invitations));
+  GET DIAGNOSTICS v_invitation_rows = ROW_COUNT;
+  snapshots_anonymised := snapshots_anonymised + v_invitation_rows;
+
   UPDATE audit_logs
   SET changed_by = NULL
   WHERE changed_by = p_user_id
@@ -592,6 +791,182 @@ BEGIN
 
   RETURN NEXT;
 END;
+$$;
+
+-- =============================================
+-- AUDIT LOG RETENTION AND PRUNING (#507)
+-- audit_log_retention() is the single source of truth for how long audit rows
+-- are kept (the wiki and /privacy describe it):
+--   never pruned  payments, refunds, payouts, prize_awards, prize_fundings,
+--                 organization_bank_accounts, player_bank_accounts,
+--                 tournaments, tournament_cancellation_requests, and
+--                 registrations that were ever paid or confirmed: financial
+--                 records or the evidence for one, kept for the 7-year
+--                 obligation. Disposal after 7 years is not automated.
+--   1 year        users, player_profiles, organizations,
+--                 organization_memberships, organization_documents,
+--                 organization_invitations, user_global_roles
+--   30 days       registrations that were never paid (abandoned, failed and
+--                 expired checkouts), counted from the day their tournament's
+--                 registration closed
+-- A table not listed is never pruned, so a newly audited table (guardianships,
+-- helper_invitations, account_claims) is kept until someone decides otherwise.
+--
+-- An unpaid registration isn't dead while registration is open: checkout
+-- reuses a failed or cancelled row (start_new_payment_attempt), so counting
+-- from the close means a registration that can still be paid keeps all its
+-- history.
+--
+-- scope 'all': every row of the table past keep_for.
+-- scope 'never_paid': registrations only; rows of a registration that still
+-- exists, isn't confirmed or forfeited, has no paid payment, and whose
+-- tournament closed registration more than keep_for ago.
+-- =============================================
+CREATE OR REPLACE FUNCTION audit_log_retention()
+RETURNS TABLE (audited_table text, keep_for interval, scope text)
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  VALUES
+    ('organization_documents',   interval '1 year',  'all'),
+    ('organization_invitations', interval '1 year',  'all'),
+    ('organization_memberships', interval '1 year',  'all'),
+    ('organizations',            interval '1 year',  'all'),
+    ('player_profiles',          interval '1 year',  'all'),
+    ('registrations',            interval '30 days', 'never_paid'),
+    ('user_global_roles',        interval '1 year',  'all'),
+    ('users',                    interval '1 year',  'all');
+$$;
+
+-- =============================================
+-- PRUNE AUDIT LOGS
+-- =============================================
+-- Reports, per policy table, how many rows are past retention, and deletes at
+-- most p_limit of them per call, oldest first (dry run by default). The caller
+-- (/api/v1/cron/audit-logs) repeats the call, so no single statement deletes
+-- millions of rows. The tables never pruned are refused twice: the policy may
+-- not name one, and the DELETE excludes them whatever the policy says. The
+-- registration rows it deletes for are locked FOR UPDATE SKIP LOCKED, so a
+-- settlement in flight is skipped.
+CREATE OR REPLACE FUNCTION prune_audit_logs(
+  p_dry_run boolean DEFAULT true,
+  p_limit   integer DEFAULT 5000
+)
+RETURNS TABLE (audited_table text, eligible bigint, deleted bigint)
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  c_never_pruned constant text[] := ARRAY[
+    'payments', 'refunds', 'payouts', 'prize_awards', 'prize_fundings',
+    'organization_bank_accounts', 'player_bank_accounts',
+    'tournaments', 'tournament_cancellation_requests'
+  ];
+  v_policy  record;
+  v_cutoff  timestamptz;
+  v_budget  integer;
+BEGIN
+  IF p_dry_run IS NULL THEN
+    RAISE EXCEPTION 'DRY_RUN_REQUIRED' USING ERRCODE = 'P0001';
+  END IF;
+  IF p_limit IS NULL OR p_limit < 1 THEN
+    RAISE EXCEPTION 'LIMIT_REQUIRED' USING ERRCODE = 'P0001';
+  END IF;
+  v_budget := p_limit;
+
+  FOR v_policy IN SELECT * FROM audit_log_retention() ORDER BY 1 LOOP
+    IF v_policy.audited_table = ANY (c_never_pruned) THEN
+      RAISE EXCEPTION 'RETENTION_POLICY_COVERS_FINANCIAL_TABLE'
+        USING ERRCODE = 'P0001', DETAIL = v_policy.audited_table;
+    END IF;
+    IF v_policy.scope NOT IN ('all', 'never_paid')
+       OR (v_policy.scope = 'never_paid' AND v_policy.audited_table <> 'registrations') THEN
+      RAISE EXCEPTION 'UNKNOWN_RETENTION_SCOPE'
+        USING ERRCODE = 'P0001', DETAIL = v_policy.audited_table || ': ' || v_policy.scope;
+    END IF;
+
+    v_cutoff := now() - v_policy.keep_for;
+    audited_table := v_policy.audited_table;
+    deleted := 0;
+
+    IF v_policy.scope = 'all' THEN
+      SELECT count(*) INTO eligible
+      FROM audit_logs a
+      WHERE a.table_name = v_policy.audited_table
+        AND a.created_at < v_cutoff;
+
+      IF NOT p_dry_run AND v_budget > 0 AND eligible > 0 THEN
+        DELETE FROM audit_logs d
+        WHERE d.id IN (
+          SELECT a.id
+          FROM audit_logs a
+          WHERE a.table_name = v_policy.audited_table
+            AND a.table_name <> ALL (c_never_pruned)
+            AND a.created_at < v_cutoff
+          ORDER BY a.created_at
+          LIMIT v_budget
+        );
+        GET DIAGNOSTICS deleted = ROW_COUNT;
+      END IF;
+    ELSE
+      SELECT count(*) INTO eligible
+      FROM audit_logs a
+      JOIN registrations r ON r.id::text = a.record_id
+      JOIN tournaments t ON t.id = r.tournament_id
+      WHERE a.table_name = 'registrations'
+        AND a.created_at < v_cutoff
+        AND COALESCE(t.registration_closed_at, t.registration_deadline) < v_cutoff
+        AND r.status NOT IN ('confirmed', 'forfeited')
+        AND NOT EXISTS (
+          SELECT 1 FROM payments p
+          WHERE p.registration_id = r.id AND p.status = 'paid'
+        );
+
+      IF NOT p_dry_run AND v_budget > 0 AND eligible > 0 THEN
+        DELETE FROM audit_logs d
+        WHERE d.id IN (
+          SELECT a.id
+          FROM audit_logs a
+          JOIN registrations r ON r.id::text = a.record_id
+          JOIN tournaments t ON t.id = r.tournament_id
+          WHERE a.table_name = 'registrations'
+            AND a.table_name <> ALL (c_never_pruned)
+            AND a.created_at < v_cutoff
+            AND COALESCE(t.registration_closed_at, t.registration_deadline) < v_cutoff
+            AND r.status NOT IN ('confirmed', 'forfeited')
+            AND NOT EXISTS (
+              SELECT 1 FROM payments p
+              WHERE p.registration_id = r.id AND p.status = 'paid'
+            )
+          ORDER BY a.created_at
+          LIMIT v_budget
+          FOR UPDATE OF r SKIP LOCKED
+        );
+        GET DIAGNOSTICS deleted = ROW_COUNT;
+      END IF;
+    END IF;
+
+    v_budget := v_budget - deleted;
+
+    RETURN NEXT;
+  END LOOP;
+END;
+$$;
+
+-- =============================================
+-- AUDIT LOGS STORAGE
+-- =============================================
+-- The audit_logs table's size, for monitoring.
+CREATE OR REPLACE FUNCTION audit_logs_storage()
+RETURNS TABLE (total_bytes bigint, estimated_rows bigint)
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT pg_total_relation_size('public.audit_logs'::regclass),
+         GREATEST(c.reltuples, 0)::bigint
+  FROM pg_class c
+  WHERE c.oid = 'public.audit_logs'::regclass;
 $$;
 
 -- =============================================
@@ -1083,9 +1458,13 @@ $$;
 -- bypass RLS. As a definer function anyone could ask it about anyone, and
 -- whether a stranger has agreed to share health data is itself health data.
 --
--- record_sensitive_data_consent is the only write path for the log. It locks
--- the users row (as set_player_bank_account does, so a save and a withdrawal
--- cannot interleave) and writes a row only when the position changes:
+-- record_sensitive_data_consent is the only write path for the log. A guardian
+-- or helper may record it for the player they act for (p_recorded_by, #717),
+-- under an active guardianship whose basis names the wording; a guardian whose
+-- minor-basis authority has aged out may still withdraw but not grant
+-- (AGED_OUT, #721). It locks the users row (as set_player_bank_account does, so
+-- a save and a withdrawal cannot interleave) and writes a row only when the
+-- position changes:
 -- re-granting the same wording, or withdrawing what was never granted, is a
 -- no-op that returns false. A grant of NEWER wording is written, so the log
 -- shows the user agreed to it. p_version must come from legal.ts on the
@@ -1110,10 +1489,11 @@ AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION record_sensitive_data_consent(
-  p_user_id  uuid,
-  p_category sensitive_data_category,
-  p_granted  boolean,
-  p_version  varchar(20) DEFAULT NULL
+  p_user_id     uuid,
+  p_category    sensitive_data_category,
+  p_granted     boolean,
+  p_version     varchar(20) DEFAULT NULL,
+  p_recorded_by uuid        DEFAULT NULL
 )
 RETURNS boolean
 LANGUAGE plpgsql
@@ -1121,7 +1501,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_latest sensitive_data_consents;
+  v_latest      sensitive_data_consents;
+  v_recorded_by uuid := NULLIF(p_recorded_by, p_user_id);
+  v_basis       guardianship_basis;
 BEGIN
   IF p_granted IS NULL THEN
     RAISE EXCEPTION 'p_granted is required' USING ERRCODE = '22023';
@@ -1130,6 +1512,28 @@ BEGIN
   IF p_granted AND p_version IS NULL THEN
     RAISE EXCEPTION 'a consent grant must name the version agreed to'
       USING ERRCODE = '22023';
+  END IF;
+
+  IF v_recorded_by IS NOT NULL THEN
+    SELECT basis INTO v_basis
+      FROM guardianships
+      WHERE guardian_user_id = v_recorded_by
+        AND dependent_user_id = p_user_id
+        AND status = 'active'
+      FOR SHARE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'NOT_GUARDIAN: only the player or someone acting for them can record their consent'
+        USING ERRCODE = '42501';
+    END IF;
+
+    IF p_granted AND minor_guardianship_aged_out(
+         v_basis,
+         (SELECT date_of_birth FROM player_profiles WHERE user_id = p_user_id)
+       ) THEN
+      RAISE EXCEPTION 'AGED_OUT: the player has turned 18 and gives their own consent'
+        USING ERRCODE = '42501';
+    END IF;
   END IF;
 
   PERFORM 1 FROM users
@@ -1147,16 +1551,20 @@ BEGIN
     LIMIT 1;
 
   IF p_granted THEN
-    IF FOUND AND v_latest.granted AND v_latest.version = p_version THEN
+    IF FOUND AND v_latest.granted AND v_latest.version = p_version
+       AND v_latest.granted_by IS NOT DISTINCT FROM v_recorded_by
+       AND v_latest.on_behalf_basis IS NOT DISTINCT FROM v_basis THEN
       RETURN false;
     END IF;
   ELSIF NOT FOUND OR NOT v_latest.granted THEN
     RETURN false;
   END IF;
 
-  INSERT INTO sensitive_data_consents (user_id, category, granted, version)
+  INSERT INTO sensitive_data_consents
+      (user_id, category, granted, version, granted_by, on_behalf_basis)
     VALUES (p_user_id, p_category, p_granted,
-            CASE WHEN p_granted THEN p_version END);
+            CASE WHEN p_granted THEN p_version END,
+            v_recorded_by, v_basis);
 
   RETURN true;
 END;
@@ -1205,12 +1613,13 @@ CREATE TRIGGER guard_consent_immutable
 -- Nothing reads a full number off an inactive row: CHIP registration skips
 -- them, and emails show the last 4 only.
 -- =============================================
-CREATE OR REPLACE FUNCTION set_player_bank_account(
+CREATE FUNCTION set_player_bank_account(
   p_user_id        uuid,
   p_bank_code      varchar(11),
   p_bank_name      varchar(100),
   p_account_holder varchar(255),
-  p_account_number varchar(50)
+  p_account_number varchar(50),
+  p_entered_by     uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1218,12 +1627,25 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_current player_bank_accounts;
-  v_row     player_bank_accounts;
-  v_changed boolean := true;
-  v_clear   boolean := p_bank_code IS NULL AND p_bank_name IS NULL
-                       AND p_account_holder IS NULL AND p_account_number IS NULL;
+  v_current    player_bank_accounts;
+  v_row        player_bank_accounts;
+  v_changed    boolean := true;
+  v_entered_by uuid := NULLIF(p_entered_by, p_user_id);
+  v_clear      boolean := p_bank_code IS NULL AND p_bank_name IS NULL
+                          AND p_account_holder IS NULL AND p_account_number IS NULL;
 BEGIN
+  IF v_entered_by IS NOT NULL THEN
+    PERFORM 1 FROM guardianships
+      WHERE guardian_user_id = v_entered_by
+        AND dependent_user_id = p_user_id
+        AND status = 'active'
+      FOR SHARE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'NOT_GUARDIAN: only the player or someone acting for them can set their bank details'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+
   PERFORM 1 FROM users
     WHERE id = p_user_id AND deleted_at IS NULL
     FOR UPDATE;
@@ -1251,8 +1673,16 @@ BEGIN
           redacted_at    = now()
       WHERE user_id = p_user_id AND redacted_at IS NULL;
 
-    PERFORM record_sensitive_data_consent(p_user_id, 'financial', false);
+    PERFORM record_sensitive_data_consent(p_user_id, 'financial', false, NULL, v_entered_by);
     RETURN jsonb_build_object('changed', v_changed, 'id', NULL);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM guardianships
+    WHERE dependent_user_id = p_user_id AND status = 'active' AND basis = 'minor'
+  ) THEN
+    RAISE EXCEPTION 'MINOR_DEPENDENT: a minor''s prizes are paid to their guardian''s bank account'
+      USING ERRCODE = 'P0001';
   END IF;
 
   IF NOT has_sensitive_data_consent(p_user_id, 'financial') THEN
@@ -1260,11 +1690,12 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  IF FOUND
+  IF v_current.id IS NOT NULL
      AND v_current.bank_code      = p_bank_code
      AND v_current.bank_name      = p_bank_name
      AND v_current.account_holder = p_account_holder
      AND v_current.account_number = p_account_number
+     AND v_current.entered_by IS NOT DISTINCT FROM v_entered_by
      AND v_current.status <> 'rejected'
   THEN
     v_changed := false;
@@ -1275,9 +1706,9 @@ BEGIN
       WHERE user_id = p_user_id AND is_active;
 
     INSERT INTO player_bank_accounts (
-      user_id, bank_name, bank_code, account_holder, account_number
+      user_id, bank_name, bank_code, account_holder, account_number, entered_by
     ) VALUES (
-      p_user_id, p_bank_name, p_bank_code, p_account_holder, p_account_number
+      p_user_id, p_bank_name, p_bank_code, p_account_holder, p_account_number, v_entered_by
     )
     RETURNING * INTO v_row;
   END IF;
@@ -1297,50 +1728,53 @@ END;
 $$;
 
 -- =============================================
--- CREATE ORGANIZATION APPLICATION
--- Creates the organization, its payout bank account, its KYB document rows and
--- its agreement stamp in ONE transaction.
---
--- This replaced a read-then-insert in the API route. Two things were wrong with
--- that: the ILIKE name pre-check lost a concurrent race, and once bank details
--- and documents were added, a failure partway through would leave the
--- organization created — and its name taken — with no way for the applicant to
--- retry. All or nothing is the only correct shape here.
---
--- The entity rule is enforced HERE, not only in the route, so it cannot be
--- bypassed by calling the RPC directly.
---
--- Failures RAISE with a stable sentinel prefix so the route can map them to
--- distinct HTTP codes; same approach as the "Tournament is full" message the
--- checkout route matches on.
+-- ASSERT ORG NAME AVAILABLE
 -- =============================================
-CREATE OR REPLACE FUNCTION create_organization_application(
-  p_created_by          uuid,
-  p_name                varchar(255),
-  p_email               varchar(255),
-  p_entity_type         org_entity_type,
-  p_agreement_version   varchar(20),
-  p_bank_code           varchar(11),
-  p_bank_name           varchar(100),
-  p_account_holder      varchar(255),
-  p_account_number      varchar(50),
-  p_documents           jsonb,
-  p_description         text    DEFAULT NULL,
-  p_links               jsonb   DEFAULT NULL,
-  p_phone               varchar(20) DEFAULT NULL,
-  p_past_tournament_refs text   DEFAULT NULL,
-  p_registration_number varchar(100) DEFAULT NULL
+-- Raises NAME_TAKEN if an approved organization other than p_except_org_id
+-- already uses p_name (case-insensitive). A pending or rejected one doesn't
+-- count. Not a race guard on its own: two approvals of the same name are
+-- stopped by idx_organizations_name_active.
+CREATE OR REPLACE FUNCTION assert_org_name_available(
+  p_name          varchar(255),
+  p_except_org_id uuid DEFAULT NULL
 )
-RETURNS jsonb
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM organizations
+     WHERE lower(name) = lower(p_name)
+       AND approval_status = 'approved'
+       AND deleted_at IS NULL
+       AND id IS DISTINCT FROM p_except_org_id
+  ) THEN
+    RAISE EXCEPTION 'NAME_TAKEN: an approved organization already uses this name'
+      USING ERRCODE = 'P0001';
+  END IF;
+END;
+$$;
+
+-- =============================================
+-- ASSERT ORG ENTITY DOCUMENTS
+-- =============================================
+-- Normalises the registration number and checks the documents match the
+-- entity, raising ENTITY_DOCS_REQUIRED otherwise. p_doc_types is the full set
+-- of document types the application will hold.
+CREATE OR REPLACE FUNCTION assert_org_entity_documents(
+  p_entity_type         org_entity_type,
+  p_registration_number varchar(100),
+  p_doc_types           text[]
+)
+RETURNS varchar(100)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_org_id    uuid;
-  v_docs      jsonb := COALESCE(p_documents, '[]'::jsonb);
-  v_reg_no    varchar(100);
-  v_accepted  timestamptz := now();
+  v_reg_no varchar(100);
 BEGIN
   IF p_entity_type IS NULL THEN
     RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: an entity type is required'
@@ -1356,13 +1790,8 @@ BEGIN
     END IF;
 
     -- The registry that matches the entity, not either one: a company is
-    -- registered with SSM and a society with ROS, so the other registry's
-    -- extract is not evidence for it.
-    IF NOT EXISTS (
-      SELECT 1 FROM jsonb_array_elements(v_docs) d
-      WHERE d->>'doc_type' =
-        CASE p_entity_type WHEN 'company' THEN 'ssm' ELSE 'ros' END
-    ) THEN
+    -- registered with SSM and a society with ROS.
+    IF NOT (CASE p_entity_type WHEN 'company' THEN 'ssm' ELSE 'ros' END = ANY (COALESCE(p_doc_types, '{}'))) THEN
       RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: a % must supply an % document',
         p_entity_type,
         CASE p_entity_type WHEN 'company' THEN 'SSM' ELSE 'ROS' END
@@ -1373,44 +1802,107 @@ BEGIN
     -- than rejected, so the column means exactly one thing.
     v_reg_no := NULL;
 
-    IF NOT EXISTS (
-      SELECT 1 FROM jsonb_array_elements(v_docs) d
-      WHERE d->>'doc_type' IN ('identity_document', 'authorization_letter')
-    ) THEN
+    IF NOT (COALESCE(p_doc_types, '{}') && ARRAY['identity_document', 'authorization_letter']) THEN
       RAISE EXCEPTION 'ENTITY_DOCS_REQUIRED: an individual organizer must supply an identity document or authorization letter'
         USING ERRCODE = 'P0001';
     END IF;
   END IF;
 
-  BEGIN
-    INSERT INTO organizations (
-      name, description, links, email, phone, past_tournament_refs,
-      entity_type, registration_number, created_by,
-      agreement_version, agreement_accepted_at, agreement_accepted_by
-    ) VALUES (
-      p_name, p_description, p_links, p_email, p_phone, p_past_tournament_refs,
-      p_entity_type, v_reg_no, p_created_by,
-      p_agreement_version, v_accepted, p_created_by
-    )
-    RETURNING id INTO v_org_id;
-  EXCEPTION
-    WHEN unique_violation THEN
-      -- idx_organizations_name_active (002_indexes.sql). Catching the index
-      -- rather than pre-checking is what makes this race-free.
-      RAISE EXCEPTION 'NAME_TAKEN: an organization with this name already exists'
-        USING ERRCODE = 'P0001';
-  END;
+  RETURN v_reg_no;
+END;
+$$;
 
-  BEGIN
-    PERFORM set_organization_bank_account(
-      v_org_id, p_bank_code, p_bank_name, p_account_holder, p_account_number, p_created_by
-    );
-  EXCEPTION
-    WHEN unique_violation THEN
-      -- uniq_active_bank_destination (002_indexes.sql).
-      RAISE EXCEPTION 'BANK_ACCOUNT_IN_USE: this bank account is already the payout destination for another organization'
-        USING ERRCODE = 'P0001';
-  END;
+-- =============================================
+-- SET ORGANIZATION REGISTERED NAME
+-- =============================================
+-- Records p_name as the organization's registered name, or leaves it untouched
+-- when p_name is blank.
+CREATE OR REPLACE FUNCTION set_organization_registered_name(
+  p_org_id uuid,
+  p_name   varchar(255)
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_name varchar(255) := NULLIF(btrim(p_name), '');
+BEGIN
+  IF v_name IS NULL THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO organization_registered_names (organization_id, registered_name)
+    VALUES (p_org_id, v_name)
+    ON CONFLICT (organization_id) DO UPDATE SET registered_name = EXCLUDED.registered_name;
+END;
+$$;
+
+-- =============================================
+-- CREATE ORGANIZATION APPLICATION
+-- Creates the organization, its registered name, its KYB document rows and its
+-- agreement stamp in ONE transaction. No bank account (#671): an approved
+-- organization adds its payout account in its settings.
+--
+-- This replaced a read-then-insert in the API route. Two things were wrong with
+-- that: the ILIKE name pre-check lost a concurrent race, and once bank details
+-- and documents were added, a failure partway through would leave the
+-- organization created — and its name taken — with no way for the applicant to
+-- retry. All or nothing is the only correct shape here.
+--
+-- The entity rule is enforced HERE, not only in the route, so it cannot be
+-- bypassed by calling the RPC directly.
+--
+-- Failures RAISE with a stable sentinel prefix so the route can map them to
+-- distinct HTTP codes; same approach as the "Tournament is full" message the
+-- checkout route matches on.
+-- =============================================
+CREATE FUNCTION create_organization_application(
+  p_created_by          uuid,
+  p_name                varchar(255),
+  p_email               varchar(255),
+  p_entity_type         org_entity_type,
+  p_agreement_version   varchar(20),
+  p_documents           jsonb,
+  p_description         text    DEFAULT NULL,
+  p_links               jsonb   DEFAULT NULL,
+  p_phone               varchar(20) DEFAULT NULL,
+  p_past_tournament_refs text   DEFAULT NULL,
+  p_registration_number varchar(100) DEFAULT NULL,
+  p_registered_name     varchar(255) DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org_id    uuid;
+  v_docs      jsonb := COALESCE(p_documents, '[]'::jsonb);
+  v_reg_no    varchar(100);
+  v_accepted  timestamptz := now();
+BEGIN
+  v_reg_no := assert_org_entity_documents(
+    p_entity_type,
+    p_registration_number,
+    ARRAY(SELECT d->>'doc_type' FROM jsonb_array_elements(v_docs) d)
+  );
+
+  PERFORM assert_org_name_available(p_name);
+
+  INSERT INTO organizations (
+    name, description, links, email, phone, past_tournament_refs,
+    entity_type, registration_number, created_by,
+    agreement_version, agreement_accepted_at, agreement_accepted_by
+  ) VALUES (
+    p_name, p_description, p_links, p_email, p_phone, p_past_tournament_refs,
+    p_entity_type, v_reg_no, p_created_by,
+    p_agreement_version, v_accepted, p_created_by
+  )
+  RETURNING id INTO v_org_id;
+
+  PERFORM set_organization_registered_name(v_org_id, p_registered_name);
 
   INSERT INTO organization_documents (
     organization_id, doc_type, storage_path, original_filename, uploaded_by
@@ -1423,6 +1915,9 @@ BEGIN
     p_created_by
   FROM jsonb_array_elements(v_docs) d;
 
+  INSERT INTO organization_application_events (organization_id, event, actor_id, created_at)
+    VALUES (v_org_id, 'submitted', p_created_by, v_accepted);
+
   RETURN jsonb_build_object(
     'id',                    v_org_id,
     'name',                  p_name,
@@ -1431,6 +1926,128 @@ BEGIN
     'registration_number',   v_reg_no,
     'agreement_version',     p_agreement_version,
     'agreement_accepted_at', v_accepted
+  );
+END;
+$$;
+
+-- =============================================
+-- RESUBMIT ORGANIZATION APPLICATION
+-- =============================================
+CREATE FUNCTION resubmit_organization_application(
+  p_org_id              uuid,
+  p_user_id             uuid,
+  p_name                varchar(255),
+  p_email               varchar(255),
+  p_entity_type         org_entity_type,
+  p_agreement_version   varchar(20),
+  p_keep_document_ids   uuid[],
+  p_new_documents       jsonb,
+  p_description         text    DEFAULT NULL,
+  p_links               jsonb   DEFAULT NULL,
+  p_phone               varchar(20) DEFAULT NULL,
+  p_past_tournament_refs text   DEFAULT NULL,
+  p_registration_number varchar(100) DEFAULT NULL,
+  p_registered_name     varchar(255) DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_org        organizations;
+  v_keep       uuid[] := COALESCE(p_keep_document_ids, '{}');
+  v_new_docs   jsonb  := COALESCE(p_new_documents, '[]'::jsonb);
+  v_doc_types  text[];
+  v_doc_count  integer;
+  v_reg_no     varchar(100);
+  v_removed    text[];
+  v_now        timestamptz := now();
+BEGIN
+  SELECT * INTO v_org
+    FROM organizations
+    WHERE id = p_org_id AND created_by = p_user_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'APPLICATION_NOT_FOUND: no such application' USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_org.approval_status <> 'rejected' THEN
+    RAISE EXCEPTION 'APPLICATION_NOT_REJECTED: only a rejected application can be amended'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Kept documents must be this application's own. Anything else in the list
+  -- is ignored rather than adopted from another application.
+  SELECT COALESCE(array_agg(doc_type::text), '{}'), count(*)
+    INTO v_doc_types, v_doc_count
+    FROM organization_documents
+    WHERE organization_id = p_org_id AND id = ANY (v_keep);
+
+  v_doc_types := v_doc_types
+    || ARRAY(SELECT d->>'doc_type' FROM jsonb_array_elements(v_new_docs) d);
+  v_doc_count := v_doc_count + jsonb_array_length(v_new_docs);
+
+  IF v_doc_count > 10 THEN
+    RAISE EXCEPTION 'TOO_MANY_DOCUMENTS: at most 10 documents can be submitted'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  v_reg_no := assert_org_entity_documents(p_entity_type, p_registration_number, v_doc_types);
+
+  PERFORM assert_org_name_available(p_name, p_org_id);
+
+  UPDATE organizations
+    SET name                  = p_name,
+        description           = p_description,
+        links                 = p_links,
+        email                 = p_email,
+        phone                 = p_phone,
+        past_tournament_refs  = p_past_tournament_refs,
+        entity_type           = p_entity_type,
+        registration_number   = v_reg_no,
+        agreement_version     = p_agreement_version,
+        agreement_accepted_at = v_now,
+        agreement_accepted_by = p_user_id,
+        approval_status       = 'pending',
+        rejection_reason      = NULL,
+        reviewed_by           = NULL,
+        reviewed_at           = NULL
+    WHERE id = p_org_id;
+
+  PERFORM set_organization_registered_name(p_org_id, p_registered_name);
+
+  WITH removed AS (
+    DELETE FROM organization_documents
+      WHERE organization_id = p_org_id AND NOT (id = ANY (v_keep))
+      RETURNING storage_path
+  )
+  SELECT COALESCE(array_agg(storage_path), '{}') INTO v_removed FROM removed;
+
+  INSERT INTO organization_documents (
+    organization_id, doc_type, storage_path, original_filename, uploaded_by
+  )
+  SELECT
+    p_org_id,
+    (d->>'doc_type')::org_document_type,
+    d->>'storage_path',
+    NULLIF(d->>'original_filename', ''),
+    p_user_id
+  FROM jsonb_array_elements(v_new_docs) d;
+
+  INSERT INTO organization_application_events (organization_id, event, actor_id, created_at)
+    VALUES (p_org_id, 'resubmitted', p_user_id, v_now);
+
+  RETURN jsonb_build_object(
+    'id',                    p_org_id,
+    'name',                  p_name,
+    'approval_status',       'pending',
+    'entity_type',           p_entity_type,
+    'registration_number',   v_reg_no,
+    'agreement_version',     p_agreement_version,
+    'agreement_accepted_at', v_now,
+    'removed_storage_paths', to_jsonb(v_removed)
   );
 END;
 $$;
@@ -1471,14 +2088,29 @@ BEGIN
     RAISE EXCEPTION 'organization % not found', p_org_id USING ERRCODE = 'P0002';
   END IF;
 
+  -- Its payout account was released when it was rejected, and the applicant
+  -- may be part-way through amending it.
+  IF p_action = 'approve' AND v_org.approval_status = 'rejected' THEN
+    RAISE EXCEPTION 'APPLICATION_REJECTED: a rejected application cannot be approved; the applicant must amend and resubmit it'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   v_new_status := CASE p_action WHEN 'approve' THEN 'approved' ELSE 'rejected' END;
 
-  UPDATE organizations
-    SET approval_status  = v_new_status,
-        reviewed_by      = p_reviewer_id,
-        reviewed_at      = v_reviewed_at,
-        rejection_reason = CASE WHEN p_action = 'reject' THEN p_rejection_reason ELSE NULL END
-    WHERE id = p_org_id;
+  BEGIN
+    UPDATE organizations
+      SET approval_status  = v_new_status,
+          reviewed_by      = p_reviewer_id,
+          reviewed_at      = v_reviewed_at,
+          rejection_reason = CASE WHEN p_action = 'reject' THEN p_rejection_reason ELSE NULL END
+      WHERE id = p_org_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      -- idx_organizations_name_active: another organization with this name
+      -- was approved first.
+      RAISE EXCEPTION 'NAME_TAKEN: an approved organization already uses this name'
+        USING ERRCODE = 'P0001';
+  END;
 
   IF p_action = 'approve' THEN
     SELECT id INTO v_owner_role_id
@@ -1492,7 +2124,23 @@ BEGIN
     INSERT INTO organization_memberships (organization_id, user_id, role_id)
       VALUES (p_org_id, v_org.created_by, v_owner_role_id)
       ON CONFLICT (organization_id, user_id) DO NOTHING;
+  ELSE
+    -- Frees the destination while the application is out of review
+    -- (uniq_active_bank_destination). Never registered with CHIP Send: that
+    -- only happens on approval. A resubmission registers it again.
+    UPDATE organization_bank_accounts
+      SET is_active = false
+      WHERE organization_id = p_org_id AND is_active;
   END IF;
+
+  INSERT INTO organization_application_events (organization_id, event, reason, actor_id, created_at)
+    VALUES (
+      p_org_id,
+      v_new_status::text::org_application_event,
+      CASE WHEN p_action = 'reject' THEN p_rejection_reason END,
+      p_reviewer_id,
+      v_reviewed_at
+    );
 
   RETURN jsonb_build_object(
     'id', v_org.id,
@@ -1652,7 +2300,7 @@ RETURNS varchar(20)
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT '2026-11-18'::varchar(20);
+  SELECT '2026-11-20'::varchar(20);
 $$;
 
 -- =============================================
@@ -2224,6 +2872,1050 @@ $$;
 -- supabase/tests/function_privileges.sql fails if a SECURITY DEFINER function is
 -- executable by anon or authenticated without being on that list.
 -- =============================================
+-- =============================================
+-- GUARDIANSHIPS
+-- =============================================
+
+-- =============================================
+-- ENFORCE GUARDIANSHIP LIMIT
+-- =============================================
+-- A guardian may hold at most 10 active guardianships. Locks the guardian's
+-- users row first, so two concurrent inserts for one guardian can't both see 9
+-- and end on 11.
+CREATE OR REPLACE FUNCTION enforce_guardianship_limit()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  c_limit  constant integer := 10;
+  v_active integer;
+BEGIN
+  IF NEW.status <> 'active' THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE'
+     AND OLD.status = 'active'
+     AND OLD.guardian_user_id = NEW.guardian_user_id THEN
+    RETURN NEW;
+  END IF;
+
+  -- Serializes cap checks per guardian. NO KEY UPDATE doesn't conflict with
+  -- the KEY SHARE locks foreign keys take, so other rows referencing the
+  -- guardian aren't held up.
+  PERFORM 1 FROM users WHERE id = NEW.guardian_user_id FOR NO KEY UPDATE;
+
+  SELECT count(*) INTO v_active
+  FROM guardianships
+  WHERE guardian_user_id = NEW.guardian_user_id
+    AND status = 'active'
+    AND id <> NEW.id;
+
+  IF v_active >= c_limit THEN
+    RAISE EXCEPTION 'GUARDIANSHIP_LIMIT_REACHED: a guardian may act for at most % players', c_limit
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER enforce_guardianship_limit
+  BEFORE INSERT OR UPDATE OF status, guardian_user_id ON guardianships
+  FOR EACH ROW EXECUTE FUNCTION enforce_guardianship_limit();
+
+-- =============================================
+-- HELPER INVITATIONS (#719)
+-- All called by the API with the service role. Errors are RAISEd with a CODE:
+-- prefix, which the routes map to responses.
+--
+-- create_helper_invitation: the player invites. Only a live self-managed
+-- account with a login that isn't under 18 can (HELPER_INVITE_NOT_ALLOWED);
+-- not to their own mailbox (HELPER_SELF); not to someone already helping them
+-- (HELPER_ALREADY_ACTIVE). Inviting the same address again replaces the token
+-- and restarts the 72 hours.
+-- =============================================
+CREATE FUNCTION create_helper_invitation(
+  p_player_user_id uuid,
+  p_email          text,
+  p_relationship   guardianship_relationship,
+  p_token_hash     text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_email      text := lower(btrim(p_email));
+  v_expires_at timestamptz := now() + interval '72 hours';
+  v_player     users;
+  v_id         uuid;
+BEGIN
+  SELECT * INTO v_player
+  FROM users
+  WHERE id = p_player_user_id
+  FOR NO KEY UPDATE;
+
+  IF NOT FOUND
+     OR v_player.account_type <> 'self'
+     OR v_player.auth_user_id IS NULL
+     OR v_player.deleted_at IS NOT NULL
+     OR self_managed_minor(p_player_user_id) THEN
+    RAISE EXCEPTION 'HELPER_INVITE_NOT_ALLOWED: only a self-managed account aged 18 or over can invite a helper'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF coalesce(v_email, '') = '' OR strpos(v_email, '@') < 2 THEN
+    RAISE EXCEPTION 'INVALID_HELPER_INVITATION: a valid email address is required'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_relationship = 'legal_guardian' THEN
+    RAISE EXCEPTION 'INVALID_HELPER_INVITATION: a helper can''t be invited as a legal guardian'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF canonical_email(v_email) = canonical_email(v_player.email) THEN
+    RAISE EXCEPTION 'HELPER_SELF: you can''t invite yourself as your own helper'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM guardianships g
+    JOIN users h ON h.id = g.guardian_user_id
+    WHERE g.dependent_user_id = p_player_user_id
+      AND g.status = 'active'
+      AND h.deleted_at IS NULL
+      AND h.email_canonical = canonical_email(v_email)
+  ) THEN
+    RAISE EXCEPTION 'HELPER_ALREADY_ACTIVE: this person already helps you'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE helper_invitations
+  SET token_hash   = p_token_hash,
+      relationship = p_relationship,
+      created_at   = now(),
+      expires_at   = v_expires_at
+  WHERE player_user_id = p_player_user_id
+    AND email = v_email
+    AND status = 'pending'
+  RETURNING id INTO v_id;
+
+  IF v_id IS NULL THEN
+    INSERT INTO helper_invitations (
+      player_user_id, email, relationship, token_hash, expires_at
+    ) VALUES (
+      p_player_user_id, v_email, p_relationship, p_token_hash, v_expires_at
+    )
+    RETURNING id INTO v_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'invitation_id', v_id,
+    'email', v_email,
+    'expires_at', v_expires_at
+  );
+END;
+$$;
+
+-- =============================================
+-- ACCEPT HELPER INVITATION
+-- =============================================
+-- The helper accepts with the emailed token. They must be signed in as the
+-- invited mailbox (INVITATION_WRONG_ACCOUNT) and be a live self-managed adult
+-- with a login (HELPER_NOT_ELIGIBLE). Inserts the guardianship, or reactivates
+-- an earlier revoked or claimed row for the same pair. The helper accepts the
+-- Terms version the server passes in. The cap of 10 active guardianships per
+-- helper still applies. A second accept is refused (INVITATION_CLOSED).
+CREATE FUNCTION accept_helper_invitation(
+  p_token_hash     text,
+  p_helper_user_id uuid,
+  p_terms_version  text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_inv          helper_invitations;
+  v_helper       users;
+  v_player       users;
+  v_existing     guardianships;
+  v_guardianship uuid;
+BEGIN
+  SELECT * INTO v_inv
+  FROM helper_invitations
+  WHERE token_hash = p_token_hash
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: no invitation for this link'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_inv.status <> 'pending' THEN
+    RAISE EXCEPTION 'INVITATION_CLOSED: this invitation was %', v_inv.status
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF v_inv.expires_at <= now() THEN
+    RAISE EXCEPTION 'INVITATION_EXPIRED: this invitation expired at %', v_inv.expires_at
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_helper FROM users WHERE id = p_helper_user_id;
+  IF NOT FOUND
+     OR v_helper.deleted_at IS NOT NULL
+     OR v_helper.email IS NULL
+     OR canonical_email(v_helper.email) <> canonical_email(v_inv.email) THEN
+    RAISE EXCEPTION 'INVITATION_WRONG_ACCOUNT: this invitation was sent to a different address'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF v_helper.id = v_inv.player_user_id THEN
+    RAISE EXCEPTION 'HELPER_SELF: you can''t be your own helper'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF v_helper.account_type <> 'self'
+     OR v_helper.auth_user_id IS NULL
+     OR self_managed_minor(v_helper.id) THEN
+    RAISE EXCEPTION 'HELPER_NOT_ELIGIBLE: a helper must hold their own account and be 18 or over'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_player FROM users WHERE id = v_inv.player_user_id;
+  IF v_player.deleted_at IS NOT NULL
+     OR v_player.account_type <> 'self'
+     OR v_player.auth_user_id IS NULL THEN
+    RAISE EXCEPTION 'HELPER_INVITE_NOT_ALLOWED: this player can no longer be helped through an invitation'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF coalesce(btrim(p_terms_version), '') = '' THEN
+    RAISE EXCEPTION 'INVALID_HELPER_INVITATION: the helper must accept the Terms'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_existing
+  FROM guardianships
+  WHERE guardian_user_id = v_helper.id
+    AND dependent_user_id = v_inv.player_user_id
+  FOR UPDATE;
+
+  IF FOUND THEN
+    IF v_existing.status = 'active' THEN
+      RAISE EXCEPTION 'HELPER_ALREADY_ACTIVE: you already help this player'
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    UPDATE guardianships
+    SET status               = 'active',
+        revoked_at           = NULL,
+        relationship         = v_inv.relationship,
+        basis                = 'authorised',
+        authorisation_method = 'player_invite',
+        terms_version        = p_terms_version,
+        terms_accepted_at    = now()
+    WHERE id = v_existing.id;
+    v_guardianship := v_existing.id;
+  ELSE
+    INSERT INTO guardianships (
+      guardian_user_id, dependent_user_id, relationship, basis,
+      authorisation_method, terms_version, terms_accepted_at
+    ) VALUES (
+      v_helper.id, v_inv.player_user_id, v_inv.relationship, 'authorised',
+      'player_invite', p_terms_version, now()
+    )
+    RETURNING id INTO v_guardianship;
+  END IF;
+
+  UPDATE helper_invitations
+  SET status          = 'accepted',
+      responded_at    = now(),
+      responded_by    = v_helper.id,
+      guardianship_id = v_guardianship
+  WHERE id = v_inv.id;
+
+  RETURN jsonb_build_object(
+    'invitation_id', v_inv.id,
+    'guardianship_id', v_guardianship,
+    'player_user_id', v_inv.player_user_id
+  );
+END;
+$$;
+
+-- =============================================
+-- DECLINE HELPER INVITATION
+-- =============================================
+-- Anyone holding the token can say no, with or without an account; declining
+-- grants nothing.
+CREATE FUNCTION decline_helper_invitation(
+  p_token_hash text,
+  p_user_id    uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_inv helper_invitations;
+BEGIN
+  SELECT * INTO v_inv
+  FROM helper_invitations
+  WHERE token_hash = p_token_hash
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: no invitation for this link'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_inv.status = 'declined' THEN
+    RETURN jsonb_build_object('invitation_id', v_inv.id, 'already_declined', true);
+  END IF;
+  IF v_inv.status <> 'pending' THEN
+    RAISE EXCEPTION 'INVITATION_CLOSED: this invitation was %', v_inv.status
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF v_inv.expires_at <= now() THEN
+    RAISE EXCEPTION 'INVITATION_EXPIRED: this invitation expired at %', v_inv.expires_at
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE helper_invitations
+  SET status = 'declined', responded_at = now(), responded_by = p_user_id
+  WHERE id = v_inv.id;
+
+  RETURN jsonb_build_object('invitation_id', v_inv.id, 'already_declined', false);
+END;
+$$;
+
+-- =============================================
+-- REVOKE HELPER INVITATION
+-- =============================================
+-- The player withdraws a pending invitation.
+CREATE FUNCTION revoke_helper_invitation(
+  p_player_user_id uuid,
+  p_invitation_id  uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_inv helper_invitations;
+BEGIN
+  SELECT * INTO v_inv
+  FROM helper_invitations
+  WHERE id = p_invitation_id
+    AND player_user_id = p_player_user_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'INVITATION_NOT_FOUND: invitation % not found', p_invitation_id
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_inv.status = 'revoked' THEN
+    RETURN jsonb_build_object('invitation_id', v_inv.id, 'already_revoked', true);
+  END IF;
+  IF v_inv.status <> 'pending' THEN
+    RAISE EXCEPTION 'INVITATION_CLOSED: this invitation was %', v_inv.status
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE helper_invitations
+  SET status = 'revoked', responded_at = now(), responded_by = p_player_user_id
+  WHERE id = v_inv.id;
+
+  RETURN jsonb_build_object('invitation_id', v_inv.id, 'already_revoked', false);
+END;
+$$;
+
+-- =============================================
+-- END HELPER GUARDIANSHIP
+-- =============================================
+-- The player revokes a helper, or the helper steps down. Either side, at any
+-- time; nothing else changes, so registrations and payments the helper made
+-- stay as they are. The player can end any active guardianship over their own
+-- self-managed account, not only invited ones: an adult with capacity decides
+-- who acts for them.
+CREATE FUNCTION end_helper_guardianship(
+  p_user_id         uuid,
+  p_guardianship_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_g     guardianships;
+  v_ended text;
+BEGIN
+  SELECT g.* INTO v_g
+  FROM guardianships g
+  JOIN users d ON d.id = g.dependent_user_id
+  WHERE g.id = p_guardianship_id
+    AND g.status = 'active'
+    AND (
+      g.guardian_user_id = p_user_id
+      OR (g.dependent_user_id = p_user_id AND d.account_type = 'self')
+    )
+  FOR UPDATE OF g;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'HELPER_NOT_FOUND: no active helper relationship with that id for this account'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  v_ended := CASE WHEN v_g.guardian_user_id = p_user_id THEN 'helper' ELSE 'player' END;
+
+  UPDATE guardianships
+  SET status = 'revoked', revoked_at = now()
+  WHERE id = v_g.id;
+
+  RETURN jsonb_build_object(
+    'guardianship_id', v_g.id,
+    'ended_by', v_ended,
+    'guardian_user_id', v_g.guardian_user_id,
+    'dependent_user_id', v_g.dependent_user_id
+  );
+END;
+$$;
+
+-- =============================================
+-- DEPENDENTS (#712)
+-- A dependent is a player record with no login: a parent's child, or an
+-- assisted adult whose carer acts for them. Both are a users row
+-- (account_type 'managed', no auth_user_id), a player_profiles row and a
+-- guardianships row. Called by the API with the service role. Errors are
+-- RAISEd with a CODE: prefix and SQLSTATE P0001.
+--
+-- create_dependent inserts the three rows in one transaction and returns
+-- {dependent_id, guardianship_id, reactivated}.
+--   - The guardian must be a live self-managed account with a login.
+--   - basis 'minor' needs a date of birth under 18 today in Malaysia
+--     (Asia/Kuala_Lumpur), the same rule as self_managed_minor; 'authorised'
+--     needs 18 or over, and records authorisation_method =
+--     'guardian_attestation': the guardian confirms the player authorised them.
+--   - 'appointed' is refused (BASIS_NOT_SUPPORTED): an appointed guardian
+--     needs proof, and there is no document upload or admin review for it yet.
+--   - Adding the same dependent again (same first name, last name and date of
+--     birth, case-insensitively, among this guardian's managed dependents)
+--     never creates a second player record. A revoked guardianship is
+--     reactivated; an active one raises DEPENDENT_EXISTS.
+--   - The guardian's users row is locked first, so two concurrent adds of the
+--     same child can't both miss each other.
+-- =============================================
+CREATE FUNCTION create_dependent(
+  p_guardian_user_id uuid,
+  p_first_name       text,
+  p_last_name        text,
+  p_date_of_birth    date,
+  p_relationship     guardianship_relationship,
+  p_basis            guardianship_basis,
+  p_terms_version    text,
+  p_gender           gender DEFAULT NULL,
+  p_nationality      text DEFAULT NULL,
+  p_contact_email    text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_today         date := (now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date;
+  v_adult_cutoff  date := (v_today - interval '18 years')::date;
+  v_first_name    text := btrim(p_first_name);
+  v_last_name     text := btrim(p_last_name);
+  v_nationality   text := NULLIF(btrim(p_nationality), '');
+  v_contact_email text := NULLIF(lower(btrim(p_contact_email)), '');
+  v_method        guardianship_authorisation_method;
+  v_existing      record;
+  v_dependent_id  uuid;
+  v_guardianship  uuid;
+BEGIN
+  PERFORM 1
+  FROM users
+  WHERE id = p_guardian_user_id
+    AND account_type = 'self'
+    AND auth_user_id IS NOT NULL
+    AND deleted_at IS NULL
+  FOR NO KEY UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'GUARDIAN_NOT_ELIGIBLE: only a self-managed account can add dependents'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF coalesce(v_first_name, '') = '' OR coalesce(v_last_name, '') = '' THEN
+    RAISE EXCEPTION 'INVALID_DEPENDENT: first and last name are required'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF p_date_of_birth IS NULL OR p_date_of_birth > v_today THEN
+    RAISE EXCEPTION 'INVALID_DEPENDENT: a date of birth on or before today is required'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF coalesce(btrim(p_terms_version), '') = '' THEN
+    RAISE EXCEPTION 'INVALID_DEPENDENT: the guardian must accept the Terms'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_basis = 'appointed' THEN
+    RAISE EXCEPTION 'BASIS_NOT_SUPPORTED: an appointed guardianship needs proof and admin review, which isn''t available yet'
+      USING ERRCODE = 'P0001';
+  ELSIF p_basis = 'minor' THEN
+    IF p_date_of_birth <= v_adult_cutoff THEN
+      RAISE EXCEPTION 'BASIS_AGE_MISMATCH: basis minor needs a dependent under 18'
+        USING ERRCODE = 'P0001';
+    END IF;
+    IF v_contact_email IS NOT NULL THEN
+      RAISE EXCEPTION 'INVALID_DEPENDENT: only an adult dependent may have a contact email'
+        USING ERRCODE = 'P0001';
+    END IF;
+    v_method := NULL;
+  ELSE
+    IF p_date_of_birth > v_adult_cutoff THEN
+      RAISE EXCEPTION 'BASIS_AGE_MISMATCH: basis % needs a dependent aged 18 or over', p_basis
+        USING ERRCODE = 'P0001';
+    END IF;
+    v_method := 'guardian_attestation';
+  END IF;
+
+  SELECT g.id AS guardianship_id, g.status, u.id AS dependent_id
+  INTO v_existing
+  FROM guardianships g
+  JOIN users u ON u.id = g.dependent_user_id
+  JOIN player_profiles p ON p.user_id = u.id
+  WHERE g.guardian_user_id = p_guardian_user_id
+    AND u.account_type = 'managed'
+    AND u.deleted_at IS NULL
+    AND lower(u.first_name) = lower(v_first_name)
+    AND lower(u.last_name) = lower(v_last_name)
+    AND p.date_of_birth = p_date_of_birth
+    AND g.status IN ('active', 'revoked')
+  ORDER BY (g.status = 'active') DESC, g.created_at
+  LIMIT 1
+  FOR UPDATE OF g;
+
+  IF FOUND THEN
+    IF v_existing.status = 'active' THEN
+      RAISE EXCEPTION 'DEPENDENT_EXISTS: this dependent is already on your account'
+        USING ERRCODE = 'P0001';
+    END IF;
+
+    UPDATE guardianships
+    SET status               = 'active',
+        revoked_at           = NULL,
+        relationship         = p_relationship,
+        basis                = p_basis,
+        authorisation_method = v_method,
+        terms_version        = p_terms_version,
+        terms_accepted_at    = now()
+    WHERE id = v_existing.guardianship_id;
+
+    UPDATE users
+    SET contact_email = v_contact_email
+    WHERE id = v_existing.dependent_id
+      AND contact_email IS DISTINCT FROM v_contact_email;
+
+    RETURN jsonb_build_object(
+      'dependent_id', v_existing.dependent_id,
+      'guardianship_id', v_existing.guardianship_id,
+      'reactivated', true
+    );
+  END IF;
+
+  INSERT INTO users (email, first_name, last_name, account_type, contact_email)
+  VALUES (NULL, v_first_name, v_last_name, 'managed', v_contact_email)
+  RETURNING id INTO v_dependent_id;
+
+  INSERT INTO player_profiles (user_id, date_of_birth, gender, nationality)
+  VALUES (v_dependent_id, p_date_of_birth, p_gender, v_nationality);
+
+  INSERT INTO guardianships (
+    guardian_user_id, dependent_user_id, relationship, basis,
+    terms_version, terms_accepted_at, authorisation_method
+  ) VALUES (
+    p_guardian_user_id, v_dependent_id, p_relationship, p_basis,
+    p_terms_version, now(), v_method
+  )
+  RETURNING id INTO v_guardianship;
+
+  RETURN jsonb_build_object(
+    'dependent_id', v_dependent_id,
+    'guardianship_id', v_guardianship,
+    'reactivated', false
+  );
+END;
+$$;
+
+-- =============================================
+-- REVOKE DEPENDENT
+-- =============================================
+-- Sets the guardianship to 'revoked'. Nothing else changes: the dependent's
+-- records, registrations and payments stay as they are.
+--   - No active guardianship of that dependent by this guardian raises
+--     DEPENDENT_NOT_FOUND, so a stranger learns nothing.
+--   - A pending_payment registration for the dependent raises
+--     DEPENDENT_HAS_PENDING_PAYMENT: the checkout in flight should be finished
+--     or abandoned first.
+--   - Confirmed registrations for tournaments that haven't ended are not
+--     cancelled; they are returned so the API can warn about them.
+CREATE FUNCTION revoke_dependent(
+  p_guardian_user_id  uuid,
+  p_dependent_user_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_today        date := (now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date;
+  v_guardianship uuid;
+  v_upcoming     jsonb;
+BEGIN
+  SELECT id INTO v_guardianship
+  FROM guardianships
+  WHERE guardian_user_id = p_guardian_user_id
+    AND dependent_user_id = p_dependent_user_id
+    AND status = 'active'
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DEPENDENT_NOT_FOUND: no active dependent with that id on this account'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM registrations
+    WHERE user_id = p_dependent_user_id
+      AND status = 'pending_payment'
+  ) THEN
+    RAISE EXCEPTION 'DEPENDENT_HAS_PENDING_PAYMENT: finish or abandon the dependent''s pending checkout first'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+           'registration_id', r.id,
+           'tournament_id', t.id,
+           'tournament_name', t.name,
+           'start_date', t.start_date
+         ) ORDER BY t.start_date, t.name), '[]'::jsonb)
+  INTO v_upcoming
+  FROM registrations r
+  JOIN tournaments t ON t.id = r.tournament_id
+  WHERE r.user_id = p_dependent_user_id
+    AND r.status = 'confirmed'
+    AND t.status <> 'cancelled'
+    AND t.end_date >= v_today;
+
+  UPDATE guardianships
+  SET status = 'revoked',
+      revoked_at = now()
+  WHERE id = v_guardianship;
+
+  RETURN jsonb_build_object(
+    'guardianship_id', v_guardianship,
+    'upcoming_registrations', v_upcoming
+  );
+END;
+$$;
+
+-- =============================================
+-- ACCOUNT CLAIMS (#720)
+-- Called by the API with the service role. Errors are RAISEd with a CODE:
+-- prefix. Locks, in one order everywhere: the dependent's pending claim, then
+-- the guardianship, then the dependent's users row, so a resend racing an
+-- acceptance waits instead of deadlocking. Guardianship before users is also
+-- the order checkout and consent recording use.
+--
+-- create_account_claim: the guardian starts a handover. Needs an active
+-- guardianship (DEPENDENT_NOT_FOUND), a managed dependent (CLAIM_NOT_ALLOWED),
+-- a date of birth that makes them 18 or over (UNDER_18), and an address that
+-- no account uses yet (EMAIL_TAKEN: we don't merge automatically, the player
+-- contacts support). Starting another claim cancels the pending one.
+-- =============================================
+CREATE FUNCTION create_account_claim(
+  p_guardian_user_id  uuid,
+  p_dependent_user_id uuid,
+  p_email             text,
+  p_token_hash        text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_email   text := lower(btrim(p_email));
+  v_user    users;
+  v_dob     date;
+  v_claim   account_claims;
+BEGIN
+  PERFORM 1 FROM account_claims
+    WHERE dependent_user_id = p_dependent_user_id
+      AND status = 'pending'
+    FOR UPDATE;
+
+  PERFORM 1 FROM guardianships
+    WHERE guardian_user_id = p_guardian_user_id
+      AND dependent_user_id = p_dependent_user_id
+      AND status = 'active'
+    FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DEPENDENT_NOT_FOUND: no active dependent with that id on this account'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_user FROM users WHERE id = p_dependent_user_id FOR UPDATE;
+  IF v_user.account_type <> 'managed' OR v_user.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'CLAIM_NOT_ALLOWED: only a dependent with no login of their own can be handed over'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT date_of_birth INTO v_dob FROM player_profiles WHERE user_id = p_dependent_user_id;
+  IF v_dob IS NULL
+     OR v_dob > ((now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date - interval '18 years')::date THEN
+    RAISE EXCEPTION 'UNDER_18: a player must be 18 or over to hold their own account'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_email = '' OR strpos(v_email, '@') = 0 THEN
+    RAISE EXCEPTION 'INVALID_EMAIL: an email address is required' USING ERRCODE = '22023';
+  END IF;
+
+  IF email_registered(v_email) THEN
+    RAISE EXCEPTION 'EMAIL_TAKEN: an account already uses this email'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE account_claims
+    SET status = 'cancelled', cancelled_at = now()
+    WHERE dependent_user_id = p_dependent_user_id
+      AND status = 'pending';
+
+  INSERT INTO account_claims (dependent_user_id, guardian_user_id, email, token_hash, expires_at)
+    VALUES (p_dependent_user_id, p_guardian_user_id, v_email, p_token_hash, now() + interval '72 hours')
+    RETURNING * INTO v_claim;
+
+  RETURN jsonb_build_object(
+    'claim_id',   v_claim.id,
+    'email',      v_claim.email,
+    'expires_at', v_claim.expires_at
+  );
+END;
+$$;
+
+-- =============================================
+-- CANCEL ACCOUNT CLAIM
+-- =============================================
+-- The guardian withdraws a pending claim.
+CREATE FUNCTION cancel_account_claim(
+  p_guardian_user_id  uuid,
+  p_dependent_user_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM 1 FROM guardianships
+    WHERE guardian_user_id = p_guardian_user_id
+      AND dependent_user_id = p_dependent_user_id
+      AND status = 'active';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'DEPENDENT_NOT_FOUND: no active dependent with that id on this account'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE account_claims
+    SET status = 'cancelled', cancelled_at = now()
+    WHERE dependent_user_id = p_dependent_user_id
+      AND status = 'pending';
+  RETURN FOUND;
+END;
+$$;
+
+-- =============================================
+-- LINK CLAIMED ACCOUNT
+-- =============================================
+-- The link step, bound to the player's VERIFIED email, so it runs when the auth
+-- user's email is confirmed, inside the auth.users write that confirms it:
+-- from handle_new_user when the auth user is created already confirmed, else
+-- from handle_claimed_user_confirmed. Refuses (CLAIM_INVALID) a claim that
+-- isn't pending, has expired, or whose guardianship is no longer active; an
+-- auth user that isn't confirmed (CLAIM_EMAIL_UNVERIFIED) or doesn't reach the
+-- claim's mailbox (CLAIM_EMAIL_MISMATCH); EMAIL_TAKEN, in case an account
+-- appeared since; and UNDER_18 on the profile's date of birth. Then it:
+--   - points the users row at the new login: auth_user_id, email,
+--     account_type 'self', contact_email cleared, and the Terms the player
+--     accepted;
+--   - sets every active guardianship of the player to 'claimed', so each
+--     guardian's access ends at that moment;
+--   - marks the claim accepted.
+-- Payments stay with whoever paid: payments.user_id is the payer.
+CREATE FUNCTION link_claimed_account(
+  p_auth_user_id       uuid,
+  p_email              text,
+  p_email_confirmed_at timestamptz,
+  p_token_hash         text,
+  p_terms_version      varchar(20)
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_claim account_claims;
+  v_user  users;
+  v_dob   date;
+BEGIN
+  SELECT * INTO v_claim FROM account_claims WHERE token_hash = p_token_hash FOR UPDATE;
+  IF NOT FOUND OR v_claim.status <> 'pending' OR v_claim.expires_at <= now() THEN
+    RAISE EXCEPTION 'CLAIM_INVALID: this handover link is no longer valid'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_email_confirmed_at IS NULL THEN
+    RAISE EXCEPTION 'CLAIM_EMAIL_UNVERIFIED: the account''s email must be verified'
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF canonical_email(p_email) IS DISTINCT FROM canonical_email(v_claim.email) THEN
+    RAISE EXCEPTION 'CLAIM_EMAIL_MISMATCH: the account must use the address the link was sent to'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  PERFORM 1 FROM guardianships
+    WHERE guardian_user_id = v_claim.guardian_user_id
+      AND dependent_user_id = v_claim.dependent_user_id
+      AND status = 'active'
+    FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'CLAIM_INVALID: the guardian who started this handover no longer acts for this player'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT * INTO v_user FROM users WHERE id = v_claim.dependent_user_id FOR UPDATE;
+  IF v_user.account_type <> 'managed' OR v_user.deleted_at IS NOT NULL THEN
+    RAISE EXCEPTION 'CLAIM_INVALID: this record can''t be handed over any more'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT date_of_birth INTO v_dob FROM player_profiles WHERE user_id = v_user.id;
+  IF v_dob IS NULL
+     OR v_dob > ((now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date - interval '18 years')::date THEN
+    RAISE EXCEPTION 'UNDER_18: a player must be 18 or over to hold their own account'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  IF email_registered(p_email) THEN
+    RAISE EXCEPTION 'EMAIL_TAKEN: an account already uses this email'
+      USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE users
+    SET auth_user_id      = p_auth_user_id,
+        email             = p_email,
+        account_type      = 'self',
+        contact_email     = NULL,
+        terms_version     = p_terms_version,
+        terms_accepted_at = CASE WHEN p_terms_version IS NULL THEN NULL ELSE now() END
+    WHERE id = v_user.id;
+
+  UPDATE guardianships
+    SET status = 'claimed'
+    WHERE dependent_user_id = v_user.id
+      AND status = 'active';
+
+  UPDATE account_claims
+    SET status = 'accepted', accepted_at = now(), auth_user_id = p_auth_user_id
+    WHERE id = v_claim.id;
+
+  RETURN v_user.id;
+END;
+$$;
+
+-- =============================================
+-- HANDLE CLAIMED USER CONFIRMED
+-- =============================================
+-- Runs link_claimed_account in the UPDATE that confirms a claiming auth user's
+-- email. Admin createUser(email_confirm) reaches this or handle_new_user in the
+-- same transaction, so creating the login and accepting the claim commit or
+-- fail together.
+CREATE FUNCTION handle_claimed_user_confirmed()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = NEW.id) THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM link_claimed_account(
+    NEW.id, NEW.email, NEW.email_confirmed_at,
+    NEW.raw_user_meta_data->>'claim_token_hash',
+    NULLIF(NEW.raw_user_meta_data->>'terms_version', '')
+  );
+  RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'handle_claimed_user_confirmed failed: % (SQLSTATE: %)', SQLERRM, SQLSTATE
+      USING ERRCODE = 'P0001';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER on_auth_user_confirmed
+  AFTER UPDATE OF email_confirmed_at ON auth.users
+  FOR EACH ROW
+  WHEN (OLD.email_confirmed_at IS NULL
+        AND NEW.email_confirmed_at IS NOT NULL
+        AND NEW.raw_user_meta_data ? 'claim_token_hash')
+  EXECUTE FUNCTION handle_claimed_user_confirmed();
+
+-- =============================================
+-- MINOR TURNS 18 (#721)
+-- A guardian's authority on the 'minor' basis ends at 18. From the 18th
+-- birthday (Asia/Kuala_Lumpur) the guardian can only view the record, start or
+-- resend the handover, or end the guardianship: assert_payer_acts_for (006) and
+-- record_sensitive_data_consent refuse with AGED_OUT. That lasts for a grace
+-- period the scheduled job passes in (src/lib/guardianship/age-out.ts), after
+-- which the guardianship is revoked, unless a pending, unexpired handover
+-- claim is in flight.
+--
+-- minor_guardianship_aged_out: the one test, true when a 'minor'-basis
+-- guardianship's dependent is 18 or over today.
+-- =============================================
+CREATE OR REPLACE FUNCTION minor_guardianship_aged_out(
+  p_basis         guardianship_basis,
+  p_date_of_birth date
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT p_basis = 'minor'
+     AND p_date_of_birth IS NOT NULL
+     AND p_date_of_birth <=
+         ((now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date - interval '18 years')::date;
+$$;
+
+-- =============================================
+-- CLAIM GUARDIANSHIP AGE OUT NOTICES
+-- =============================================
+-- Records and returns the upcoming / turned_18 notices due today, in one
+-- INSERT ... ON CONFLICT DO NOTHING, so two overlapping runs can't both send
+-- one.
+CREATE OR REPLACE FUNCTION claim_guardianship_age_out_notices(
+  p_notice_days integer,
+  p_grace_days  integer
+)
+RETURNS TABLE (
+  stage             guardianship_age_out_stage,
+  guardianship_id   uuid,
+  guardian_user_id  uuid,
+  dependent_user_id uuid,
+  turns_18_on       date,
+  access_ends_on    date
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_today date := (now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date;
+BEGIN
+  IF p_notice_days IS NULL OR p_notice_days < 0 OR p_grace_days IS NULL OR p_grace_days < 0 THEN
+    RAISE EXCEPTION 'notice and grace days must be zero or more' USING ERRCODE = '22023';
+  END IF;
+
+  RETURN QUERY
+  WITH due AS (
+    SELECT g.id,
+           g.guardian_user_id,
+           g.dependent_user_id,
+           (p.date_of_birth + interval '18 years')::date AS turns_18_on
+      FROM guardianships g
+      JOIN player_profiles p ON p.user_id = g.dependent_user_id
+     WHERE g.status = 'active'
+       AND g.basis = 'minor'
+       AND p.date_of_birth IS NOT NULL
+       AND (p.date_of_birth + interval '18 years')::date <= v_today + p_notice_days
+  ),
+  staged AS (
+    SELECT d.*,
+           CASE WHEN d.turns_18_on <= v_today THEN 'turned_18'
+                ELSE 'upcoming' END::guardianship_age_out_stage AS stage
+      FROM due d
+  ),
+  recorded AS (
+    INSERT INTO guardianship_age_out_notices (guardianship_id, stage)
+    SELECT s.id, s.stage FROM staged s
+    ON CONFLICT DO NOTHING
+    RETURNING guardianship_age_out_notices.guardianship_id,
+              guardianship_age_out_notices.stage
+  )
+  SELECT r.stage, s.id, s.guardian_user_id, s.dependent_user_id, s.turns_18_on,
+         s.turns_18_on + p_grace_days
+    FROM recorded r
+    JOIN staged s ON s.id = r.guardianship_id AND s.stage = r.stage;
+END;
+$$;
+
+-- =============================================
+-- END AGED OUT MINOR GUARDIANSHIPS
+-- =============================================
+-- Revokes the guardianships whose grace period is over and returns them, with
+-- their 'ended' notice recorded. Locks follow the established order: the
+-- dependent's pending claim, then the guardianship.
+CREATE OR REPLACE FUNCTION end_aged_out_minor_guardianships(p_grace_days integer)
+RETURNS TABLE (
+  guardianship_id   uuid,
+  guardian_user_id  uuid,
+  dependent_user_id uuid,
+  turns_18_on       date
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_today date := (now() AT TIME ZONE 'Asia/Kuala_Lumpur')::date;
+  v_row   record;
+BEGIN
+  IF p_grace_days IS NULL OR p_grace_days < 0 THEN
+    RAISE EXCEPTION 'grace days must be zero or more' USING ERRCODE = '22023';
+  END IF;
+
+  FOR v_row IN
+    SELECT g.id, g.guardian_user_id, g.dependent_user_id,
+           (p.date_of_birth + interval '18 years')::date AS turns_18_on
+      FROM guardianships g
+      JOIN player_profiles p ON p.user_id = g.dependent_user_id
+     WHERE g.status = 'active'
+       AND g.basis = 'minor'
+       AND p.date_of_birth IS NOT NULL
+       AND (p.date_of_birth + interval '18 years')::date + p_grace_days <= v_today
+     ORDER BY g.id
+  LOOP
+    PERFORM 1 FROM account_claims c
+      WHERE c.dependent_user_id = v_row.dependent_user_id
+        AND c.status = 'pending'
+        AND c.expires_at > now()
+      FOR UPDATE;
+    CONTINUE WHEN FOUND;
+
+    UPDATE guardianships g
+       SET status = 'revoked', revoked_at = now()
+     WHERE g.id = v_row.id AND g.status = 'active';
+    CONTINUE WHEN NOT FOUND;
+
+    INSERT INTO guardianship_age_out_notices (guardianship_id, stage)
+      VALUES (v_row.id, 'ended')
+      ON CONFLICT DO NOTHING;
+
+    guardianship_id   := v_row.id;
+    guardian_user_id  := v_row.guardian_user_id;
+    dependent_user_id := v_row.dependent_user_id;
+    turns_18_on       := v_row.turns_18_on;
+    RETURN NEXT;
+  END LOOP;
+END;
+$$;
+
 REVOKE EXECUTE ON FUNCTION set_organization_bank_account   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION set_player_bank_account         FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION record_sensitive_data_consent   FROM PUBLIC, anon, authenticated;
@@ -2244,6 +3936,29 @@ REVOKE EXECUTE ON FUNCTION decline_organization_invitation_by_id FROM PUBLIC, an
 REVOKE EXECUTE ON FUNCTION revoke_organization_invitation  FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION anonymise_user_audit_logs       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION list_global_permission_holders  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION assert_org_name_available FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION assert_org_entity_documents FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION resubmit_organization_application FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION set_organization_registered_name FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION email_registered(text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION audit_log_retention() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION prune_audit_logs(boolean, integer) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION audit_logs_storage() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION enforce_guardianship_limit() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION create_helper_invitation(uuid, text, guardianship_relationship, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION accept_helper_invitation(text, uuid, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION decline_helper_invitation(text, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION revoke_helper_invitation(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION end_helper_guardianship(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION create_dependent(uuid, text, text, date, guardianship_relationship, guardianship_basis, text, gender, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION revoke_dependent(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION create_account_claim FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION cancel_account_claim FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION link_claimed_account FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION handle_claimed_user_confirmed() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION minor_guardianship_aged_out FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION claim_guardianship_age_out_notices FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION end_aged_out_minor_guardianships FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION set_organization_bank_account   TO service_role;
 GRANT EXECUTE ON FUNCTION set_player_bank_account         TO service_role;
@@ -2265,3 +3980,24 @@ GRANT EXECUTE ON FUNCTION decline_organization_invitation_by_id TO service_role;
 GRANT EXECUTE ON FUNCTION revoke_organization_invitation  TO service_role;
 GRANT EXECUTE ON FUNCTION anonymise_user_audit_logs       TO service_role;
 GRANT EXECUTE ON FUNCTION list_global_permission_holders  TO service_role;
+GRANT EXECUTE ON FUNCTION assert_org_name_available TO service_role;
+GRANT EXECUTE ON FUNCTION assert_org_entity_documents TO service_role;
+GRANT EXECUTE ON FUNCTION resubmit_organization_application TO service_role;
+GRANT EXECUTE ON FUNCTION set_organization_registered_name TO service_role;
+GRANT EXECUTE ON FUNCTION email_registered(text) TO service_role;
+GRANT EXECUTE ON FUNCTION audit_log_retention() TO service_role;
+GRANT EXECUTE ON FUNCTION prune_audit_logs(boolean, integer) TO service_role;
+GRANT EXECUTE ON FUNCTION audit_logs_storage() TO service_role;
+GRANT EXECUTE ON FUNCTION create_helper_invitation(uuid, text, guardianship_relationship, text) TO service_role;
+GRANT EXECUTE ON FUNCTION accept_helper_invitation(text, uuid, text) TO service_role;
+GRANT EXECUTE ON FUNCTION decline_helper_invitation(text, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION revoke_helper_invitation(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION end_helper_guardianship(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION create_dependent(uuid, text, text, date, guardianship_relationship, guardianship_basis, text, gender, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION revoke_dependent(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION create_account_claim TO service_role;
+GRANT EXECUTE ON FUNCTION cancel_account_claim TO service_role;
+GRANT EXECUTE ON FUNCTION link_claimed_account TO service_role;
+GRANT EXECUTE ON FUNCTION minor_guardianship_aged_out TO service_role;
+GRANT EXECUTE ON FUNCTION claim_guardianship_age_out_notices TO service_role;
+GRANT EXECUTE ON FUNCTION end_aged_out_minor_guardianships TO service_role;

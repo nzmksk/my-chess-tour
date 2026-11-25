@@ -1,6 +1,6 @@
 -- =============================================================================
--- Concurrency test for withdrawing a prize award (withdraw_prize_award,
--- 20261124200000_withdraw_prize_award.sql, #611): an organizer withdrawing an
+-- Concurrency test for withdrawing a prize award (withdraw_prize_award in
+-- 006_payment_functions.sql, #611): an organizer withdrawing an
 -- award while an admin approves it, in two real sessions.
 --
 -- Both functions lock the tournament row, then the award, so they serialise:

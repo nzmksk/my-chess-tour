@@ -2,16 +2,23 @@
 -- Staging seed data
 -- MY Chess Tour
 --
--- Creates: 5 organizers · 50 players · 15 tournaments
---          · ~200 registrations, one payment attempt each
+-- Creates: 1 platform admin · 5 organizers · 50 players (40 with their own
+--          account, 10 juniors who are dependents of a parent among them, and
+--          one adult helped by another) · 59 tournaments · ~400 registrations,
+--          one payment attempt each
 --
--- Dates are relative to the moment the seed runs, so re-run it (on a fresh
--- database) when the seeded tournaments have drifted into the past: the
--- listing hides anything that ended more than 30 days ago.
+-- Tournaments:
+--   * The 2027 calendar: one published tournament every Saturday of 2027
+--     (2 January to 25 December) and a year-end blitz on Friday 31 December,
+--     so every week of the year has at least one. Fixed dates.
+--   * Six relative to the day the seed runs, for the flows a fixed calendar
+--     can't keep current: two that ended within the listing's 30-day "past"
+--     window, one ongoing, two drafts, and one published but waiting for its
+--     prize pool (pending_funding).
 --
--- Prerequisites: migrations 001–007 must be applied first (the roles come
--- from 007, the registration amounts from compute_registration_amounts in
--- 006).
+-- Run it on a freshly built database (supabase/staging/drop_all.sql, then
+-- `supabase db push`): migrations 001–007 first, since the roles come from
+-- 007 and compute_registration_amounts / create_dependent from 003 and 006.
 -- Password for all seed accounts: Abcd!234
 --
 -- Identity note: inserting into auth.users fires on_auth_user_created, which
@@ -26,15 +33,22 @@
 -- Tag all audit log entries created during seeding
 SET LOCAL app.audit_context = 'seed';
 
--- =============================================
--- USERS, ORGANIZATIONS, TOURNAMENTS, REGISTRATIONS
--- =============================================
 DO $$
 DECLARE
+  -- Keep in step with src/lib/reference/legal.ts: TERMS_VERSION (players and
+  -- guardians) and, through current_organizer_agreement_version(), the
+  -- Organizer Agreement. An older version here opens every seeded account
+  -- behind the re-acceptance gate.
+  c_terms_version constant text := '2026-11-24';
+
   -- Tracked IDs
+  v_admin_id       uuid;
   org_profile_ids  uuid[] := '{}';
   org_user_ids     uuid[] := '{}';
   player_user_ids  uuid[] := '{}';
+  -- Who pays for each player's registrations: themselves, or for a junior
+  -- dependent, their parent.
+  payer_user_ids   uuid[] := '{}';
   tourney_ids      uuid[] := '{}';
 
   -- RBAC role IDs (look them up)
@@ -43,13 +57,17 @@ DECLARE
 
   -- Loop / temp vars
   i            integer;
-  j            integer;
   idx          integer;
+  w            integer;
   reg_idx      integer := 0;
   new_user_id  uuid;
   new_org_id   uuid;
   new_t_id     uuid;
   new_reg_id   uuid;
+  v_dependent  jsonb;
+  v_guardianship_id uuid;
+  v_org_created timestamptz;
+  v_org_reviewed timestamptz;
 
   -- Pre-compute bcrypt hash once
   pwd_hash     text := crypt('Abcd!234', gen_salt('bf'));
@@ -58,8 +76,8 @@ DECLARE
   p_first      text;
   p_last       text;
   p_email      text;
-  p_state      text;
   p_gender     varchar(10);
+  p_dob        date;
   p_fide_std   integer;
   p_fide_rpd   integer;
   p_fide_blz   integer;
@@ -69,7 +87,6 @@ DECLARE
   reg_status   text;
   k            integer;
   n_regs       integer;
-  t_pick       integer;
   v_t          tournaments;
   v_pp         player_profiles;
   v_r          jsonb;
@@ -86,6 +103,11 @@ DECLARE
   n_confirmed  integer := 0;
   n_failed     integer := 0;
   n_expired    integer := 0;
+  scenario_ids  uuid[];
+  cal_restricted_ids uuid[];
+  cal_open_ids  uuid[];
+  cand_ids      uuid[];
+  n_restricted  integer;
 
   -- Prize funding vars
   v_funder       record;
@@ -94,23 +116,18 @@ DECLARE
   v_funder_email text;
   n_funded       integer := 0;
 
+  -- The tournament plan, one entry per tournament, built before inserting.
+  pl_name     text[] := '{}';
+  pl_start    date[] := '{}';
+  pl_status   tournament_status[] := '{}';
+  pl_org      integer[] := '{}';
+  pl_venue    integer[] := '{}';
+  pl_format   text[] := '{}';
+  pl_restr    integer[] := '{}';
+  pl_platform boolean[] := '{}';
+  s           integer;
+
   -- Tournament vars
-  -- Start date of each tournament, in days from today. 1–2 ended within the
-  -- listing's 30-day "past" window, 3 is ongoing, 4–12 are upcoming with
-  -- registration still open (deadline = start - 7 days), 13–14 are drafts and
-  -- 15 is published but waiting for its prize pool (pending_funding).
-  t_offset_days integer[] := ARRAY[
-    -20, -6, -1,
-     10, 17, 24, 31, 38, 45, 52, 59, 66,
-     80, 94, 108
-  ];
-  n_published  integer := 12;
-  -- Platform-distributed (idx % 5 = 0), so publishing it parks it in
-  -- 'pending_funding': visible to its organizer, hidden from the public.
-  -- Seeded without funder contacts, so no funding request exists: the daily
-  -- reconcile run reports the missing addresses instead of creating CHIP
-  -- purchases and emailing sponsors from staging.
-  pending_funding_idx integer := 15;
   t_published_at timestamptz;
   t_start      date;
   t_end        date;
@@ -148,11 +165,8 @@ DECLARE
   indian_last   text[] := ARRAY[
     'Krishnan','Rajan','Kumar','Chandran','Pillai','Nair','Gopal'
   ];
-
-  states text[] := ARRAY[
-    'Selangor','W.P. Kuala Lumpur','Pulau Pinang','Johor','Perak',
-    'Kedah','Sabah','Sarawak','Negeri Sembilan','Pahang',
-    'Terengganu','Kelantan','Melaka'
+  junior_first  text[] := ARRAY[
+    'Adam','Aiman','Mei','Iman','Arjun','Sofia','Hakim','Xin Yi','Rayyan','Kavya'
   ];
 
   org_names   text[] := ARRAY[
@@ -187,32 +201,20 @@ DECLARE
   -- compute_registration_amounts can produce.
   org_commission_pct smallint[] := ARRAY[0, 3, 10, 0, 5];
 
-  t_names text[] := ARRAY[
-    'KL Open Chess Championship',        'Selangor Rapid Chess Tournament',
-    'Penang International Chess Festival','Johor Chess Open',
-    'Perak State Championship',          'National Age Group Championship',
-    -- Names 7–9 pair with the non-Malaysian venues at the same indices below.
-    'Bangkok Open Chess Championship',   'Jakarta Rapid Chess Open',
-    'Singapore Blitz Chess Open',        'Sabah Chess Open',
-    'Sarawak Heritage Chess Festival',   'Kedah Open Chess Tournament',
-    'Pahang Chess Classic',              'Negeri Sembilan Chess Open',
-    'KL Junior Chess Championship'
-  ];
   -- Venues carry their own state/region and timezone: a tournament's dates are
   -- calendar dates at its venue, so the two have to agree (tournaments.timezone;
   -- picklist in VENUE_TIME_ZONES, src/lib/tournaments/datetime.ts).
   --
-  -- Positions 7–9 are outside Malaysia. Venue index is (idx - 1) % 11 and
-  -- tournaments 7–9 are published and upcoming, so those three non-Malaysian
-  -- venues reach discovery — two at UTC+7, which is what makes a seeded
-  -- database disagree with Malaysia about what day it is.
+  -- Positions 7–9 are outside Malaysia, two at UTC+7, which is what makes a
+  -- seeded database disagree with Malaysia about what day it is.
   venue_names text[] := ARRAY[
     'KL Convention Centre',           'Sunway Pyramid Convention Centre',
     'Penang Chess Academy',           'Johor Bahru Chess Club',
     'Ipoh Chess Centre',              'Alor Setar Municipal Hall',
     'Bangkok Chess Club',             'Jakarta Chess Arena',
     'Singapore Chess Centre',
-    'Kota Kinabalu Convention Centre','Kuching Chess Federation Hall'
+    'Kota Kinabalu Convention Centre','Kuching Chess Federation Hall',
+    'Seremban Chess Hall',            'Kuantan Sports Complex'
   ];
   venue_addrs text[] := ARRAY[
     'Kuala Lumpur City Centre, 50088 Kuala Lumpur',
@@ -225,37 +227,61 @@ DECLARE
     'Jalan Jenderal Sudirman 52, Jakarta 12190',
     '1 Marina Boulevard, Singapore 018989',
     'Jalan Tun Razak, 88000 Kota Kinabalu, Sabah',
-    '22 Jalan Padungan, 93100 Kuching, Sarawak'
+    '22 Jalan Padungan, 93100 Kuching, Sarawak',
+    'Jalan Dato Bandar Tunggal, 70000 Seremban, Negeri Sembilan',
+    'Jalan Stadium, 25200 Kuantan, Pahang'
   ];
   venue_states text[] := ARRAY[
     'W.P. Kuala Lumpur','Selangor','Pulau Pinang','Johor',
     'Perak','Kedah',
     'Bangkok','Jakarta','Singapore',
-    'Sabah','Sarawak'
+    'Sabah','Sarawak',
+    'Negeri Sembilan','Pahang'
   ];
   venue_tz text[] := ARRAY[
     'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur','Asia/Kuala_Lumpur','Asia/Kuala_Lumpur',
     'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur',
     'Asia/Bangkok','Asia/Jakarta','Asia/Singapore',
+    'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur',
     'Asia/Kuala_Lumpur','Asia/Kuala_Lumpur'
   ];
   -- ISO 3166-1 alpha-2 of each venue (tournaments.venue_country). Deliberately
   -- separate from the timezone above: the country decides which payout rails and
-  -- currency the money moves on, the timezone decides how the dates read. A
-  -- country can span several zones, so neither derives from the other.
+  -- currency the money moves on, the timezone decides how the dates read.
   --
-  -- Positions 7–9 are TH/ID/SG, which are NOT in SUPPORTED_COUNTRIES
-  -- (src/lib/tournaments/venues.ts is MY-only today) — exactly as their venue_states above
-  -- already sit outside the Malaysian region list. They exist to exercise
-  -- cross-country reads; editing one through the creation wizard would fall back
-  -- to MY, which is the accepted cost of seeding venues the picklist cannot yet
-  -- express. Widening SUPPORTED_COUNTRIES is what makes them round-trip.
+  -- TH/ID/SG are NOT in SUPPORTED_COUNTRIES (src/lib/tournaments/venues.ts is
+  -- MY-only today). They exist to exercise cross-country reads; editing one
+  -- through the creation wizard falls back to MY, the accepted cost of seeding
+  -- venues the picklist cannot yet express.
   venue_countries text[] := ARRAY[
     'MY','MY','MY','MY',
     'MY','MY',
     'TH','ID','SG',
+    'MY','MY',
     'MY','MY'
   ];
+
+  -- The 2027 calendar cycles through these series week by week, so each runs
+  -- four times a year, about three months apart. The month goes in the name,
+  -- which keeps names (and so slugs) unique.
+  -- Restriction codes: 0 open, 1 Malaysians only, 2 under 18, 3 women only,
+  -- 4 under 1800, 5 Malaysians under 21.
+  series_names text[] := ARRAY[
+    'KL Open Chess Championship',        'Selangor Rapid Chess Tournament',
+    'Penang International Chess Festival','Johor Chess Open',
+    'Perak State Championship',          'Kedah Open Chess Tournament',
+    'Bangkok Open Chess Championship',   'Jakarta Rapid Chess Open',
+    'Singapore Blitz Chess Open',        'Sabah Rapid Chess Open',
+    'Sarawak Women''s Chess Festival',   'National Age Group Championship',
+    'KL Junior Chess Championship'
+  ];
+  series_venue  integer[] := ARRAY[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2];
+  series_format text[] := ARRAY[
+    'classical', 'rapid', 'classical', 'rapid', 'classical', 'rapid',
+    'classical', 'rapid', 'blitz', 'rapid', 'classical', 'classical', 'rapid'
+  ];
+  series_restr  integer[] := ARRAY[0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 3, 5, 2];
+
   -- Prize funding. Entry fees never fund prizes (src/lib/tournaments/prize-funding.ts), so
   -- every category carrying money must name an external source and the party
   -- putting it up. Publish validation rejects one that doesn't, so seeded
@@ -266,27 +292,22 @@ DECLARE
     'Ministry of Youth and Sports',
     NULL  -- 'organizer' names the organizing body itself; filled in per row
   ];
-  t_types   text[]    := ARRAY['rapid','blitz','classical','rapid','blitz'];
-  t_rounds  integer[] := ARRAY[7, 9, 9, 7, 11];
-  t_base    integer[] := ARRAY[15, 5, 90, 10, 3];
-  t_inc     integer[] := ARRAY[10, 3, 30,  5, 2];
   fee_opts  integer[] := ARRAY[3000, 4000, 5000, 6000, 8000];
   max_parts integer[] := ARRAY[64, 80, 100, 128, 150];
 
 BEGIN
 
-  -- Look up the owner role ID
   SELECT id INTO r_owner_id FROM roles WHERE name = 'owner';
   SELECT id INTO r_platform_admin_id FROM roles WHERE name = 'platform_admin';
 
   -- ===========================================================================
   -- 0. PLATFORM ADMIN
   -- A global-scope admin (platform.manage) — assigned via user_global_roles, not
-  -- an organization membership. Used to review CHIP applications, etc.
+  -- an organization membership. Reviews organizer applications, CHIP checks, etc.
   -- ===========================================================================
-  RAISE NOTICE '[0b/4] Seeding platform admin...';
+  RAISE NOTICE '[0/5] Seeding platform admin...';
 
-  new_user_id := gen_random_uuid();
+  v_admin_id := gen_random_uuid();
 
   INSERT INTO auth.users (
     id, instance_id, aud, role,
@@ -298,7 +319,7 @@ BEGIN
     email_change_token_new, email_change_token_current,
     phone_change, phone_change_token, reauthentication_token
   ) VALUES (
-    new_user_id,
+    v_admin_id,
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated',
     'review@chip.com', pwd_hash,
@@ -306,9 +327,9 @@ BEGIN
     '{"provider":"email","providers":["email"]}',
     -- terms_version rides in the metadata exactly as the signup route sends it,
     -- so handle_new_user records the acceptance the same way it does in
-    -- production. Keep in step with TERMS_VERSION in src/lib/reference/legal.ts.
+    -- production.
     json_build_object('first_name', 'CHIP', 'last_name', 'Review',
-                      'terms_version', '2026-08-02'),
+                      'terms_version', c_terms_version),
     now(), now(),
     '', '', '', '', '', '', '', ''
   );
@@ -319,33 +340,38 @@ BEGIN
     provider_id, user_id, identity_data, provider,
     last_sign_in_at, created_at, updated_at
   ) VALUES (
-    new_user_id::text, new_user_id,
-    jsonb_build_object('sub', new_user_id::text, 'email', 'review@chip.com',
+    v_admin_id::text, v_admin_id,
+    jsonb_build_object('sub', v_admin_id::text, 'email', 'review@chip.com',
                        'email_verified', true, 'phone_verified', false),
     'email', now(), now(), now()
   );
 
   -- Mark verified so the account is immediately login-ready.
   INSERT INTO public.users (id, auth_user_id, email, first_name, last_name, is_verified, verified_at)
-  VALUES (new_user_id, new_user_id, 'review@chip.com', 'CHIP', 'Review', true, now())
+  VALUES (v_admin_id, v_admin_id, 'review@chip.com', 'CHIP', 'Review', true, now())
   ON CONFLICT (id) DO UPDATE SET
     auth_user_id = EXCLUDED.auth_user_id,
     is_verified = true,
     verified_at = now();
 
-  -- Grant the global platform_admin role.
   INSERT INTO public.user_global_roles (user_id, role_id)
-  VALUES (new_user_id, r_platform_admin_id);
+  VALUES (v_admin_id, r_platform_admin_id);
 
   RAISE NOTICE '  > 1 platform admin created (review@chip.com)';
 
   -- ===========================================================================
   -- 1. ORGANIZERS
+  -- Each applied four months ago and was approved by the platform admin the
+  -- next day, as create_organization_application and
+  -- review_organization_application would leave it: the organization, its
+  -- registered name, its application history and its owner membership.
   -- ===========================================================================
-  RAISE NOTICE '[1/4] Seeding organizers...';
+  RAISE NOTICE '[1/5] Seeding organizers...';
 
   FOR i IN 1..5 LOOP
     new_user_id := gen_random_uuid();
+    v_org_created  := now() - interval '120 days' + make_interval(hours => i);
+    v_org_reviewed := v_org_created + interval '1 day';
 
     INSERT INTO auth.users (
       id, instance_id, aud, role,
@@ -364,13 +390,11 @@ BEGIN
       now(),
       '{"provider":"email","providers":["email"]}',
       json_build_object('first_name', org_first[i], 'last_name', org_last[i],
-                        'terms_version', '2026-08-02'),
+                        'terms_version', c_terms_version),
       now(), now(),
       '', '', '', '', '', '', '', ''
     );
 
-    -- Email/password sign-in resolves through auth.identities; raw inserts into
-    -- auth.users bypass the Auth Admin API, so create the identity explicitly.
     INSERT INTO auth.identities (
       provider_id, user_id, identity_data, provider,
       last_sign_in_at, created_at, updated_at
@@ -390,57 +414,75 @@ BEGIN
       is_verified = true,
       verified_at = now();
 
+    -- Adult organizers: a date of birth, as signup now asks for one.
+    UPDATE public.player_profiles
+      SET date_of_birth = date '1975-03-01' + i * 400, nationality = 'Malaysia'
+      WHERE user_id = new_user_id;
+
     org_user_ids := array_append(org_user_ids, new_user_id);
 
     -- Seeded organizations accept the current Organizer Agreement, otherwise
-    -- every seeded dashboard opens behind the re-acceptance gate. Keep this
-    -- literal in step with ORGANIZER_AGREEMENT_VERSION in src/lib/reference/legal.ts —
-    -- a mismatch here surfaces as the gate appearing on every seeded org.
+    -- every seeded dashboard opens behind the re-acceptance gate.
     INSERT INTO public.organizations (
       name, description, email,
       phone, approval_status, reviewed_at,
       reviewed_by, created_by,
       entity_type, registration_number,
-      agreement_version, agreement_accepted_at, agreement_accepted_by
+      agreement_version, agreement_accepted_at, agreement_accepted_by,
+      created_at
     ) VALUES (
       org_names[i], org_descs[i], org_emails[i],
       '+601' || (i + 1)::text || '-' || (1000000 + i * 123456)::text,
-      'approved', now(),
-      new_user_id, new_user_id,
+      'approved', v_org_reviewed,
+      v_admin_id, new_user_id,
       'society', 'PPM-' || lpad(i::text, 3, '0') || '-14-01012020',
-      current_organizer_agreement_version(), now(), new_user_id
+      current_organizer_agreement_version(), v_org_created, new_user_id,
+      v_org_created
     ) RETURNING id INTO new_org_id;
 
     org_profile_ids := array_append(org_profile_ids, new_org_id);
 
+    -- A society's registered name is the one on its ROS registration, which
+    -- payout holder names are matched against (#374).
+    INSERT INTO public.organization_registered_names (organization_id, registered_name, created_at, updated_at)
+    VALUES (new_org_id, upper(org_names[i]), v_org_created, v_org_created);
+
+    INSERT INTO public.organization_application_events (organization_id, event, actor_id, created_at)
+    VALUES
+      (new_org_id, 'submitted', new_user_id, v_org_created),
+      (new_org_id, 'approved',  v_admin_id,  v_org_reviewed);
+
+    INSERT INTO public.organization_memberships (organization_id, user_id, role_id, joined_at)
+    VALUES (new_org_id, new_user_id, r_owner_id, v_org_reviewed);
+
     -- Inserted directly rather than through set_organization_bank_account,
     -- which can only ever produce a 'pending' row (CHIP Send is what verifies,
-    -- from #519). A seed needs the end state, not the starting one — including
-    -- the CHIP Send recipient id a verified account carries. The ids are fake;
-    -- nothing calls CHIP with them until payouts run against a sandbox.
+    -- from #519). A seed needs the end state, not the starting one: the CHIP
+    -- Send recipient id a verified account carries, and the holder name the
+    -- bank returned, which matched. The ids are fake; nothing calls CHIP with
+    -- them until payouts run against a sandbox.
     INSERT INTO public.organization_bank_accounts (
       organization_id, bank_name, bank_code, account_holder, account_number,
-      status, chip_bank_account_id, verified_at, created_by
+      status, chip_bank_account_id, verified_at, bank_holder_name, created_by
     ) VALUES (
       new_org_id, org_bank_names[i], org_bank_codes[i], org_names[i],
       '5140' || lpad((1000000 + i * 98765)::text, 8, '0'),
-      'verified', 900000 + i, now(), new_user_id
+      'verified', 900000 + i, now(), upper(org_names[i]), new_user_id
     );
-
-    INSERT INTO public.organization_memberships (organization_id, user_id, role_id)
-    VALUES (new_org_id, new_user_id, r_owner_id);
   END LOOP;
 
-  RAISE NOTICE '  > 5 organizers created (each with a verified payout bank account)';
+  RAISE NOTICE '  > 5 approved organizers created (each with a verified payout bank account)';
 
   -- ===========================================================================
   -- 2. PLAYERS
+  -- Every 5th player is a junior. Under-18s can't hold an account (#710), so a
+  -- junior is a managed dependent of the player before them, created the way
+  -- the app creates one (create_dependent): no login, a 'minor' guardianship
+  -- with their parent, who accepted the Terms for them.
   -- ===========================================================================
-  RAISE NOTICE '[2/4] Seeding players...';
+  RAISE NOTICE '[2/5] Seeding players...';
 
   FOR i IN 1..50 LOOP
-    new_user_id := gen_random_uuid();
-
     IF i % 10 < 7 THEN
       p_first := malay_first[((i - 1) % array_length(malay_first,  1)) + 1];
       p_last  := malay_last [((i - 1) % array_length(malay_last,   1)) + 1];
@@ -452,14 +494,49 @@ BEGIN
       p_last  := indian_last [((i - 1) % array_length(indian_last,  1)) + 1];
     END IF;
 
-    p_email  := lower(p_first) || '.' || lower(p_last) || i || '@mct.com';
-    p_state  := states[((i - 1) % array_length(states, 1)) + 1];
     p_gender := CASE WHEN i % 4 = 0 THEN 'female' ELSE 'male' END;
     -- Deterministic but varied ratings
     p_fide_std := CASE WHEN i % 3 != 0 THEN 1000 + (i * 23) % 1200 ELSE NULL END;
     p_fide_rpd := CASE WHEN p_fide_std IS NOT NULL THEN p_fide_std - 50 + (i % 100) ELSE NULL END;
     p_fide_blz := CASE WHEN p_fide_std IS NOT NULL THEN p_fide_std - 100 + (i % 80) ELSE NULL END;
     p_nat    := 800 + (i * 31) % 1300;
+
+    IF i % 5 = 0 THEN
+      -- Aged 8 to 15 on the day the seed runs, so none turns 18 during 2027
+      -- and sets off the age-out emails (#721).
+      p_dob := (current_date - make_interval(years => 8 + (i / 5) % 8))::date - (i * 13) % 300;
+      v_dependent := create_dependent(
+        p_guardian_user_id => player_user_ids[i - 1],
+        p_first_name       => junior_first[i / 5],
+        -- The parent's surname.
+        p_last_name        => (SELECT last_name FROM users WHERE id = player_user_ids[i - 1]),
+        p_date_of_birth    => p_dob,
+        p_relationship     => (CASE WHEN i % 10 = 0 THEN 'legal_guardian' ELSE 'parent' END)::guardianship_relationship,
+        p_basis            => 'minor',
+        p_terms_version    => c_terms_version,
+        p_gender           => p_gender::gender,
+        p_nationality      => 'Malaysia'
+      );
+      new_user_id := (v_dependent ->> 'dependent_id')::uuid;
+
+      UPDATE public.player_profiles SET
+        fide_id         = CASE WHEN p_fide_std IS NOT NULL THEN 10000000 + i * 7 END,
+        mcf_id          = 20000 + i,
+        fide_rating     = CASE WHEN p_fide_std IS NOT NULL THEN
+                            json_build_object('standard', p_fide_std, 'rapid', p_fide_rpd, 'blitz', p_fide_blz)::jsonb
+                          END,
+        national_rating = p_nat
+      WHERE user_id = new_user_id;
+
+      player_user_ids := array_append(player_user_ids, new_user_id);
+      payer_user_ids  := array_append(payer_user_ids, player_user_ids[i - 1]);
+      CONTINUE;
+    END IF;
+
+    new_user_id := gen_random_uuid();
+    p_email  := lower(p_first) || '.' || lower(p_last) || i || '@mct.com';
+    -- Aged 19 to 43 on the day the seed runs.
+    p_dob := (current_date - interval '19 years')::date - (i * 173) % 9000;
 
     INSERT INTO auth.users (
       id, instance_id, aud, role,
@@ -477,15 +554,15 @@ BEGIN
       p_email, pwd_hash,
       now(),
       '{"provider":"email","providers":["email"]}',
+      -- date_of_birth rides in the metadata as signup sends it (#710).
       json_build_object('first_name', p_first, 'last_name', p_last,
-                        'terms_version', '2026-08-02'),
+                        'terms_version', c_terms_version,
+                        'date_of_birth', p_dob),
       now() - (i || ' days')::interval,
       now() - (i || ' days')::interval,
       '', '', '', '', '', '', '', ''
     );
 
-    -- Email/password sign-in resolves through auth.identities; raw inserts into
-    -- auth.users bypass the Auth Admin API, so create the identity explicitly.
     INSERT INTO auth.identities (
       provider_id, user_id, identity_data, provider,
       last_sign_in_at, created_at, updated_at
@@ -508,6 +585,7 @@ BEGIN
       verified_at = now();
 
     player_user_ids := array_append(player_user_ids, new_user_id);
+    payer_user_ids  := array_append(payer_user_ids, new_user_id);
 
     INSERT INTO public.player_profiles (
       user_id, fide_id, mcf_id,
@@ -521,12 +599,7 @@ BEGIN
         json_build_object('standard', p_fide_std, 'rapid', p_fide_rpd, 'blitz', p_fide_blz)::jsonb
       ELSE NULL END,
       p_nat,
-      -- Every 5th player is a junior (born 2009–2013) so the under-18 and
-      -- under-21 restricted tournaments have someone eligible to enter them.
-      CASE WHEN i % 5 = 0
-        THEN date '2009-01-01' + (i * 97) % 1800
-        ELSE (date '1985-01-01' + ((i * 173) % 9131 || ' days')::interval)::date
-      END,
+      p_dob,
       p_gender::gender,
       'Malaysia'
     )
@@ -540,187 +613,247 @@ BEGIN
       nationality     = EXCLUDED.nationality;
   END LOOP;
 
-  RAISE NOTICE '  > 50 players created';
+  -- A helper (#719): player 3 invited player 2 to help with their account, and
+  -- player 2 accepted. The accepted invitation and the 'authorised'
+  -- guardianship it created, as accept_helper_invitation leaves them.
+  INSERT INTO public.guardianships (
+    guardian_user_id, dependent_user_id, relationship, basis,
+    terms_version, terms_accepted_at, authorisation_method, created_at
+  ) VALUES (
+    player_user_ids[2], player_user_ids[3], 'carer', 'authorised',
+    c_terms_version, now() - interval '9 days', 'player_invite', now() - interval '9 days'
+  ) RETURNING id INTO v_guardianship_id;
+
+  INSERT INTO public.helper_invitations (
+    player_user_id, email, relationship, token_hash, status,
+    created_at, expires_at, responded_at, responded_by, guardianship_id
+  ) VALUES (
+    player_user_ids[3],
+    (SELECT email FROM users WHERE id = player_user_ids[2]),
+    'carer',
+    encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex'),
+    'accepted',
+    now() - interval '10 days', now() - interval '10 days' + interval '72 hours',
+    now() - interval '9 days', player_user_ids[2], v_guardianship_id
+  );
+
+  RAISE NOTICE '  > 50 players created: 40 accounts, 10 junior dependents, 1 helper';
 
   -- ===========================================================================
-  -- 3. TOURNAMENTS (3 per organizer = 15 total)
+  -- 3. TOURNAMENTS
+  -- Planned first, then inserted in one loop. The six relative ones come
+  -- first, then the 2027 calendar.
   -- ===========================================================================
-  RAISE NOTICE '[3/4] Seeding tournaments...';
+  RAISE NOTICE '[3/5] Seeding tournaments...';
 
-  FOR i IN 1..5 LOOP
-    FOR j IN 1..3 LOOP
-      idx := (i - 1) * 3 + j;
+  -- Relative to the day the seed runs.
+  pl_name     := ARRAY['Klang Valley Weekend Swiss', 'Penang Heritage Rapid',
+                       'Ipoh Chess Centre Classic', 'Negeri Sembilan Chess Open',
+                       'Pahang Chess Classic', 'Merdeka Prize Chess Open'];
+  pl_start    := ARRAY[current_date - 20, current_date - 6, current_date - 1,
+                       current_date + 80, current_date + 94, current_date + 108];
+  pl_status   := ARRAY['published', 'published', 'published',
+                       'draft', 'draft', 'pending_funding']::tournament_status[];
+  pl_org      := ARRAY[1, 2, 3, 4, 5, 5];
+  pl_venue    := ARRAY[1, 3, 5, 12, 13, 1];
+  pl_format   := ARRAY['rapid', 'rapid', 'classical', 'classical', 'classical', 'classical'];
+  pl_restr    := ARRAY[0, 1, 0, 0, 4, 0];
+  -- The pending_funding one distributes its prizes through the platform, so
+  -- publishing it parked it there: visible to its organizer, hidden from the
+  -- public. Seeded without funder contacts, so no funding request exists: the
+  -- daily reconcile run reports the missing addresses instead of creating CHIP
+  -- purchases and emailing sponsors from staging.
+  pl_platform := ARRAY[false, false, false, false, false, true];
 
-      t_start    := current_date + t_offset_days[idx];
-      t_end      := t_start + (idx % 3) + 1;
-      t_deadline := (t_start - 7)::timestamptz;
+  -- Every Saturday of 2027, then the year-end blitz on Friday 31 December, the
+  -- one week (27–31 December) without a Saturday in 2027. Every 5th week's
+  -- prizes go through the platform, funded below.
+  FOR w IN 1..52 LOOP
+    s := ((w - 1) % array_length(series_names, 1)) + 1;
+    pl_name     := pl_name || (series_names[s] || ' (' || to_char(date '2027-01-02' + (w - 1) * 7, 'FMMonth YYYY') || ')');
+    pl_start    := pl_start || (date '2027-01-02' + (w - 1) * 7);
+    pl_status   := pl_status || 'published'::tournament_status;
+    pl_org      := pl_org || ((w - 1) % 5 + 1);
+    pl_venue    := pl_venue || series_venue[s];
+    pl_format   := pl_format || series_format[s];
+    pl_restr    := pl_restr || series_restr[s];
+    pl_platform := pl_platform || (w % 5 = 0);
+  END LOOP;
+  pl_name     := pl_name || 'KL Year-End Blitz (December 2027)'::text;
+  pl_start    := pl_start || date '2027-12-31';
+  pl_status   := pl_status || 'published'::tournament_status;
+  pl_org      := pl_org || 5;
+  pl_venue    := pl_venue || 1;
+  pl_format   := pl_format || 'blitz'::text;
+  pl_restr    := pl_restr || 0;
+  pl_platform := pl_platform || false;
 
-      t_status := CASE
-        WHEN idx <= n_published         THEN 'published'::tournament_status
-        WHEN idx = pending_funding_idx  THEN 'pending_funding'::tournament_status
-        ELSE                                 'draft'::tournament_status
-      END;
+  FOR idx IN 1..array_length(pl_name, 1) LOOP
+    t_start    := pl_start[idx];
+    -- Classical events run over the weekend; rapid and blitz finish in a day.
+    t_end      := t_start + CASE WHEN pl_format[idx] = 'classical' THEN 1 ELSE 0 END;
+    t_deadline := (t_start - 7)::timestamptz;
+    t_status   := pl_status[idx];
+    i          := pl_org[idx];
+    v_idx      := pl_venue[idx];
 
-      -- Published three weeks ago, or two weeks before the start if that is
-      -- earlier, so it is never in the future and always leaves a registration
-      -- window before the deadline. Satisfies chk_published_at (<= deadline).
-      t_published_at := LEAST((t_start - 14)::timestamptz, now() - interval '21 days');
+    -- Published three weeks before the seed ran, or two weeks before the
+    -- start if that is earlier, so it is never in the future and always leaves
+    -- a registration window before the deadline. Satisfies chk_published_at.
+    t_published_at := LEAST((t_start - 14)::timestamptz, now() - interval '21 days');
 
-      t_fee := fee_opts[((idx - 1) % 5) + 1];
-      v_idx := ((idx - 1) % array_length(venue_names, 1)) + 1;
-      f_idx := (idx % array_length(funding_srcs, 1)) + 1;
+    t_fee := fee_opts[((idx - 1) % 5) + 1];
+    f_idx := (idx % array_length(funding_srcs, 1)) + 1;
 
-      -- An early-bird tier's `valid_until` is the instant its last day ENDS at
-      -- the venue, not the deadline instant itself: consumers test it with
-      -- `new Date(valid_until) < now`, so midnight would expire the tier for
-      -- the whole of the day the UI says is still included.
-      --
-      -- Built to be byte-identical to toValidUntilTimestamp() in
-      -- src/app/my/organizations/[orgId]/tournaments/create/_components/entryFees.ts
-      -- ("YYYY-MM-DDTHH:MI:SS+HH:MM"). entry_fees is jsonb and the money-field
-      -- freeze compares it exactly, so a seed row in any other shape would look
-      -- like a fee change the moment an organizer saved an unrelated edit — and
-      -- be refused, because these tournaments have paid registrations.
-      t_local_end  := (t_deadline AT TIME ZONE venue_tz[v_idx])::date + time '23:59:59';
-      t_utc_offset := t_local_end - ((t_local_end AT TIME ZONE venue_tz[v_idx]) AT TIME ZONE 'UTC');
-      t_valid_until := to_char(t_local_end, 'YYYY-MM-DD"T"HH24:MI:SS')
-                    || CASE WHEN t_utc_offset < interval '0' THEN '-' ELSE '+' END
-                    -- No abs() for intervals, and `@` was dropped in PG 14.
-                    || to_char(
-                         CASE WHEN t_utc_offset < interval '0'
-                              THEN -t_utc_offset ELSE t_utc_offset END,
-                         'HH24:MI'
-                       );
+    -- An early-bird tier's `valid_until` is the instant its last day ENDS at
+    -- the venue, not the deadline instant itself: consumers test it with
+    -- `new Date(valid_until) < now`, so midnight would expire the tier for
+    -- the whole of the day the UI says is still included.
+    --
+    -- Built to be byte-identical to toValidUntilTimestamp() in
+    -- src/app/my/organizations/[orgId]/tournaments/create/_components/entryFees.ts
+    -- ("YYYY-MM-DDTHH:MI:SS+HH:MM"). entry_fees is jsonb and the money-field
+    -- freeze compares it exactly, so a seed row in any other shape would look
+    -- like a fee change the moment an organizer saved an unrelated edit — and
+    -- be refused, because these tournaments have paid registrations.
+    t_local_end  := (t_deadline AT TIME ZONE venue_tz[v_idx])::date + time '23:59:59';
+    t_utc_offset := t_local_end - ((t_local_end AT TIME ZONE venue_tz[v_idx]) AT TIME ZONE 'UTC');
+    t_valid_until := to_char(t_local_end, 'YYYY-MM-DD"T"HH24:MI:SS')
+                  || CASE WHEN t_utc_offset < interval '0' THEN '-' ELSE '+' END
+                  -- No abs() for intervals, and `@` was dropped in PG 14.
+                  || to_char(
+                       CASE WHEN t_utc_offset < interval '0'
+                            THEN -t_utc_offset ELSE t_utc_offset END,
+                       'HH24:MI'
+                     );
 
-      -- Vary restrictions: open, nationality, age, gender, rating, combined
-      t_restrictions := CASE (idx % 6)
-        WHEN 0 THEN NULL                                                                            -- open
-        WHEN 1 THEN '[{"type":"nationality","value":"Malaysia"}]'::jsonb                           -- nationals only
-        WHEN 2 THEN '[{"type":"age","max":18}]'::jsonb                                             -- under 18
-        WHEN 3 THEN '[{"type":"gender","value":"female"}]'::jsonb                                  -- women only
-        WHEN 4 THEN '[{"type":"rating","max":1799}]'::jsonb                                        -- under 1800
-        WHEN 5 THEN '[{"type":"nationality","value":"Malaysia"},{"type":"age","max":20}]'::jsonb   -- nationals + under 21
-      END;
+    t_restrictions := CASE pl_restr[idx]
+      WHEN 0 THEN NULL                                                                            -- open
+      WHEN 1 THEN '[{"type":"nationality","value":"Malaysia"}]'::jsonb                           -- nationals only
+      WHEN 2 THEN '[{"type":"age","max":18}]'::jsonb                                             -- under 18
+      WHEN 3 THEN '[{"type":"gender","value":"female"}]'::jsonb                                  -- women only
+      WHEN 4 THEN '[{"type":"rating","max":1799}]'::jsonb                                        -- under 1800
+      WHEN 5 THEN '[{"type":"nationality","value":"Malaysia"},{"type":"age","max":20}]'::jsonb   -- nationals + under 21
+    END;
 
-      INSERT INTO public.tournaments (
-        organization_id, name, slug, description,
-        venue_name, venue_state, venue_address, venue_country, timezone,
-        start_date, end_date, registration_deadline,
-        format, time_control,
-        is_fide_rated, is_mcf_rated,
-        entry_fees, prizes, restrictions,
-        max_participants, organizer_commission_pct, status,
-        published_by, published_at, registration_closed_at
-      ) VALUES (
-        org_profile_ids[i],
-        t_names[idx],
-        -- Published tournaments get a public slug (matches slugify() in
-        -- src/lib/tournaments/slugs.ts), pending_funding included; drafts have
-        -- none. Seed names are unique → no collision.
-        CASE
-          WHEN t_status <> 'draft'::tournament_status
-          THEN regexp_replace(
-                 regexp_replace(lower(t_names[idx]), '[^a-z0-9]+', '-', 'g'),
-                 '(^-+|-+$)', '', 'g'
-               )
-          ELSE NULL
-        END,
-        t_names[idx] || ' — a competitive chess event open to all rated players.',
-        venue_names[v_idx],
-        venue_states[v_idx],
-        venue_addrs[v_idx],
-        venue_countries[v_idx],
-        venue_tz[v_idx],
-        t_start, t_end, t_deadline,
-        json_build_object(
-          'type',   t_types  [(idx % 5) + 1],
-          'system', 'swiss',
-          'rounds', t_rounds [(idx % 5) + 1]
-        ),
-        json_build_object(
-          'base_minutes',      t_base[(idx % 5) + 1],
-          'increment_seconds', t_inc [(idx % 5) + 1],
-          'delay_seconds',     0
-        ),
-        (idx % 2 = 0),
-        true,
-        json_build_object(
-          'standard', json_build_object('amount_cents', t_fee),
-          'additional', json_build_array(
-            json_build_object(
-              'type', 'early_bird',
-              'amount_cents', (t_fee * 0.8)::integer,
-              'valid_until', t_valid_until
+    INSERT INTO public.tournaments (
+      organization_id, name, slug, description,
+      venue_name, venue_state, venue_address, venue_country, timezone,
+      start_date, end_date, registration_deadline,
+      format, time_control,
+      is_fide_rated, is_mcf_rated,
+      entry_fees, prizes, restrictions,
+      max_participants, organizer_commission_pct, status,
+      published_by, published_at, registration_closed_at
+    ) VALUES (
+      org_profile_ids[i],
+      pl_name[idx],
+      -- Published tournaments get a public slug (matches slugify() in
+      -- src/lib/tournaments/slugs.ts), pending_funding included; drafts have
+      -- none. Seed names are unique → no collision.
+      CASE
+        WHEN t_status <> 'draft'::tournament_status
+        THEN regexp_replace(
+               regexp_replace(lower(pl_name[idx]), '[^a-z0-9]+', '-', 'g'),
+               '(^-+|-+$)', '', 'g'
+             )
+        ELSE NULL
+      END,
+      pl_name[idx] || ' — a competitive ' || pl_format[idx] || ' chess event.',
+      venue_names[v_idx],
+      venue_states[v_idx],
+      venue_addrs[v_idx],
+      venue_countries[v_idx],
+      venue_tz[v_idx],
+      t_start, t_end, t_deadline,
+      json_build_object(
+        'type',   pl_format[idx],
+        'system', 'swiss',
+        'rounds', CASE pl_format[idx] WHEN 'classical' THEN 7 WHEN 'rapid' THEN 9 ELSE 11 END
+      ),
+      CASE pl_format[idx]
+        WHEN 'classical' THEN json_build_object('base_minutes', 90, 'increment_seconds', 30, 'delay_seconds', 0)
+        WHEN 'rapid'     THEN json_build_object('base_minutes', 15, 'increment_seconds', 10, 'delay_seconds', 0)
+        ELSE                  json_build_object('base_minutes', 3,  'increment_seconds', 2,  'delay_seconds', 0)
+      END,
+      (pl_format[idx] = 'classical' OR idx % 2 = 0),
+      true,
+      json_build_object(
+        'standard', json_build_object('amount_cents', t_fee),
+        'additional', json_build_array(
+          json_build_object(
+            'type', 'early_bird',
+            'amount_cents', (t_fee * 0.8)::integer,
+            'valid_until', t_valid_until
+          ),
+          json_build_object(
+            'type', 'age_based',
+            'amount_cents', (t_fee * 0.6)::integer,
+            'age_min', 0, 'age_max', 12
+          )
+        )
+      ),
+      json_build_object(
+        'categories', json_build_array(
+          json_build_object(
+            'name', 'Open',
+            -- Every category carrying money names its source and funder;
+            -- publish validation refuses one that doesn't.
+            'funding', json_build_object(
+              'source', funding_srcs[f_idx],
+              'funder_name', COALESCE(funder_names[f_idx], org_names[i])
             ),
-            json_build_object(
-              'type', 'age_based',
-              'amount_cents', (t_fee * 0.6)::integer,
-              'age_min', 0, 'age_max', 12
+            'entries', json_build_array(
+              json_build_object('place', '1st', 'amount_cents', t_fee * 20),
+              json_build_object('place', '2nd', 'amount_cents', t_fee * 12),
+              json_build_object('place', '3rd', 'amount_cents', t_fee * 8)
             )
           )
         ),
-        json_build_object(
-          'categories', json_build_array(
-            json_build_object(
-              'name', 'Open',
-              -- Every category carrying money names its source and funder;
-              -- publish validation refuses one that doesn't.
-              'funding', json_build_object(
-                'source', funding_srcs[f_idx],
-                'funder_name', COALESCE(funder_names[f_idx], org_names[i])
-              ),
-              'entries', json_build_array(
-                json_build_object('place', '1st', 'amount_cents', t_fee * 20),
-                json_build_object('place', '2nd', 'amount_cents', t_fee * 12),
-                json_build_object('place', '3rd', 'amount_cents', t_fee * 8)
-              )
-            )
-          ),
-          -- Special prizes are flat — one name, one amount, its own funding —
-          -- not category-shaped (SpecialPrizeJson, src/lib/tournaments/prize-funding.ts).
-          -- The eligibility rule lives in the name because nothing reads a
-          -- structured condition: the wizard's SpecialPrize has no field for one.
-          'special', json_build_array(
-            json_build_object(
-              'name', 'Best Under-1500',
-              'funding', json_build_object(
-                'source', funding_srcs[f_idx],
-                'funder_name', COALESCE(funder_names[f_idx], org_names[i])
-              ),
-              'amount_cents', t_fee * 5
+        -- Special prizes are flat — one name, one amount, its own funding —
+        -- not category-shaped (SpecialPrizeJson, src/lib/tournaments/prize-funding.ts).
+        -- The eligibility rule lives in the name because nothing reads a
+        -- structured condition: the wizard's SpecialPrize has no field for one.
+        'special', json_build_array(
+          json_build_object(
+            'name', 'Best Under-1500',
+            'funding', json_build_object(
+              'source', funding_srcs[f_idx],
+              'funder_name', COALESCE(funder_names[f_idx], org_names[i])
             ),
-            json_build_object(
-              'name', 'Best Female Player',
-              'funding', json_build_object(
-                'source', funding_srcs[f_idx],
-                'funder_name', COALESCE(funder_names[f_idx], org_names[i])
-              ),
-              'amount_cents', t_fee * 5
-            )
+            'amount_cents', t_fee * 5
           ),
-          -- Who hands the money to the winners. Mostly the organizer directly;
-          -- every 5th tournament appoints the platform, so the ring-fenced
-          -- prize balance Phase 8 needs has seed data to work against.
-          'distribution', CASE WHEN idx % 5 = 0 THEN 'platform' ELSE 'organizer' END
+          json_build_object(
+            'name', 'Best Female Player',
+            'funding', json_build_object(
+              'source', funding_srcs[f_idx],
+              'funder_name', COALESCE(funder_names[f_idx], org_names[i])
+            ),
+            'amount_cents', t_fee * 5
+          )
         ),
-        t_restrictions,
-        max_parts[(idx % 5) + 1],
-        org_commission_pct[i],
-        t_status::tournament_status,
-        CASE WHEN t_status <> 'draft'::tournament_status THEN org_user_ids[i] ELSE NULL END,
-        CASE WHEN t_status <> 'draft'::tournament_status THEN t_published_at ELSE NULL END,
-        -- registration_closed_at defaults to the deadline at publish; drafts NULL.
-        CASE WHEN t_status <> 'draft'::tournament_status THEN t_deadline ELSE NULL END
-      ) RETURNING id INTO new_t_id;
+        -- Who hands the money to the winners: the organizer, or the platform
+        -- out of a ring-fenced, sponsor-funded pool.
+        'distribution', CASE WHEN pl_platform[idx] THEN 'platform' ELSE 'organizer' END
+      ),
+      t_restrictions,
+      max_parts[((idx - 1) % 5) + 1],
+      org_commission_pct[i],
+      t_status,
+      CASE WHEN t_status <> 'draft'::tournament_status THEN org_user_ids[i] ELSE NULL END,
+      CASE WHEN t_status <> 'draft'::tournament_status THEN t_published_at ELSE NULL END,
+      -- registration_closed_at defaults to the deadline at publish; drafts NULL.
+      CASE WHEN t_status <> 'draft'::tournament_status THEN t_deadline ELSE NULL END
+    ) RETURNING id INTO new_t_id;
 
-      tourney_ids := array_append(tourney_ids, new_t_id);
-    END LOOP;
+    tourney_ids := array_append(tourney_ids, new_t_id);
   END LOOP;
 
-  RAISE NOTICE '  > 15 tournaments created: 2 recently ended, 1 ongoing, 9 upcoming, 1 awaiting prize funding, 2 drafts (3 venues outside Malaysia)';
+  RAISE NOTICE '  > % tournaments created: 53 on the 2027 calendar, 2 recently ended, 1 ongoing, 1 awaiting prize funding, 2 drafts',
+    array_length(tourney_ids, 1);
 
   -- ===========================================================================
-  -- 3b. PRIZE FUNDING
+  -- 4. PRIZE FUNDING
   --
   -- A platform-distributed tournament is only listed once its prize pool is
   -- fully funded (release_funded_tournament, 006); until then it waits in
@@ -733,9 +866,9 @@ BEGIN
   --     settles a paid one: a type='prize_funding' ledger row in payments, which
   --     is what prize_pool_position counts as funded.
   -- Paid half an hour after publishing, which releases the tournament before
-  -- the first registration (an hour after publishing, section 4).
+  -- the first registration (an hour after publishing, section 5).
   -- ===========================================================================
-  RAISE NOTICE '[3b/4] Seeding prize funding...';
+  RAISE NOTICE '[4/5] Seeding prize funding...';
 
   FOR v_t IN
     SELECT * FROM tournaments
@@ -790,11 +923,14 @@ BEGIN
   RAISE NOTICE '  > % listed platform-distributed tournaments fully funded', n_funded;
 
   -- ===========================================================================
-  -- 4. REGISTRATIONS & PAYMENTS
+  -- 5. REGISTRATIONS & PAYMENTS
   --
   -- Shaped like what the payment functions in 006 produce, not hand-rolled:
   --   * every registration has one payment attempt (payments is a per-attempt
   --     ledger) and points at it through registrations.current_payment_id;
+  --   * the payer is kept apart from the participant (#708): a junior's
+  --     registration is the junior's (registrations.user_id), made and paid
+  --     for by their parent (registered_by, payments.user_id);
   --   * amounts come from compute_registration_amounts on the tournament's own
   --     fee for the tier, under its commission settings;
   --   * end states only, because a pending_payment row older than the 10-minute
@@ -808,19 +944,49 @@ BEGIN
   -- only inside the registration window (published_at .. deadline, never in the
   -- future). Inserted directly rather than through the functions because those
   -- stamp now() and the seed needs back-dated history.
+  --
+  -- Each player tries two of the three ended / ongoing tournaments (so the
+  -- payout flows have plenty of paid entries), then up to three restricted 2027
+  -- events they're eligible for (so the junior, women's and rating-capped
+  -- events have entrants), then the open ones, each list starting from the
+  -- player's own week, until they have eight registrations.
   -- ===========================================================================
-  RAISE NOTICE '[4/4] Seeding registrations and payments...';
+  RAISE NOTICE '[5/5] Seeding registrations and payments...';
+
+  scenario_ids := tourney_ids[1:3];
+  SELECT array_agg(id ORDER BY start_date) FILTER (WHERE restrictions IS NOT NULL),
+         array_agg(id ORDER BY start_date) FILTER (WHERE restrictions IS NULL)
+    INTO cal_restricted_ids, cal_open_ids
+    FROM tournaments
+    WHERE id = ANY(tourney_ids[7:]);
 
   FOR i IN 1..50 LOOP
     SELECT * INTO v_pp FROM player_profiles WHERE user_id = player_user_ids[i];
     n_regs := 0;
+    n_restricted := 0;
 
-    -- Walk the published tournaments starting from a per-player offset and take
-    -- the first four the player may enter.
-    FOR k IN 0..(n_published - 1) LOOP
-      EXIT WHEN n_regs = 4;
-      t_pick := ((i - 1 + k) % n_published) + 1;
-      SELECT * INTO v_t FROM tournaments WHERE id = tourney_ids[t_pick];
+    cand_ids := '{}';
+    FOR k IN 0..2 LOOP
+      IF (i + k) % 3 <> 0 THEN
+        cand_ids := cand_ids || scenario_ids[k + 1];
+      END IF;
+    END LOOP;
+    cand_ids := cand_ids
+      -- Age- and gender-restricted events first: the fewest players can enter.
+      || (SELECT array_agg(c.id ORDER BY
+                   NOT jsonb_path_exists(t.restrictions, '$[*] ? (@.type == "age" || @.type == "gender")'),
+                   (c.ord + (i - 1) * 7) % array_length(cal_restricted_ids, 1))
+            FROM unnest(cal_restricted_ids) WITH ORDINALITY AS c(id, ord)
+            JOIN tournaments t ON t.id = c.id)
+      || (SELECT array_agg(c.id ORDER BY (c.ord + (i - 1) * 7) % array_length(cal_open_ids, 1))
+            FROM unnest(cal_open_ids) WITH ORDINALITY AS c(id, ord));
+
+    FOREACH new_t_id IN ARRAY cand_ids LOOP
+      EXIT WHEN n_regs = 8;
+      SELECT * INTO v_t FROM tournaments WHERE id = new_t_id;
+      CONTINUE WHEN v_t.restrictions IS NOT NULL
+                AND NOT (v_t.id = ANY(scenario_ids))
+                AND n_restricted = 3;
 
       -- Eligibility, mirroring checkRestrictions / resolvePlayerRating
       -- (src/app/api/v1/tournaments/[slug]/registrations/validators.ts,
@@ -851,6 +1017,9 @@ BEGIN
         END CASE;
       END LOOP;
       CONTINUE WHEN NOT v_eligible;
+      IF v_t.restrictions IS NOT NULL AND NOT (v_t.id = ANY(scenario_ids)) THEN
+        n_restricted := n_restricted + 1;
+      END IF;
 
       reg_status := CASE
         WHEN reg_idx % 10 < 8 THEN 'confirmed'
@@ -879,13 +1048,15 @@ BEGIN
 
       INSERT INTO public.registrations (
         user_id, tournament_id, fee_tier, status,
-        registered_at, confirmed_at, cancelled_at, cancellation_reason
+        registered_at, confirmed_at, cancelled_at, cancellation_reason,
+        registered_by
       ) VALUES (
         player_user_ids[i], v_t.id, v_tier, reg_status::registration_status,
         v_reg_at,
         CASE WHEN reg_status = 'confirmed' THEN v_settled_at END,
         CASE WHEN reg_status = 'cancelled_payment' THEN v_reg_at + interval '10 minutes' END,
-        CASE WHEN reg_status = 'cancelled_payment' THEN 'payment_expired' END
+        CASE WHEN reg_status = 'cancelled_payment' THEN 'payment_expired' END,
+        NULLIF(payer_user_ids[i], player_user_ids[i])
       ) RETURNING id INTO new_reg_id;
 
       INSERT INTO public.payments (
@@ -895,7 +1066,7 @@ BEGIN
         fee_tier, currency, payment_method, chip_transaction_id,
         status, paid_at, created_at
       ) VALUES (
-        'registration', v_t.id, new_reg_id, player_user_ids[i], v_t.organization_id,
+        'registration', v_t.id, new_reg_id, payer_user_ids[i], v_t.organization_id,
         v_amounts.gross_amount_cents, v_amounts.platform_fee_cents,
         v_amounts.organizer_commission_cents, v_amounts.player_commission_cents,
         v_amounts.net_amount_cents,

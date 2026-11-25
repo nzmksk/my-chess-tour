@@ -1,6 +1,7 @@
 -- =============================================================================
--- Regression test: a dependent's prize goes to the right account (#718,
--- 20261124210000_dependent_prize_accounts.sql).
+-- Regression test: a dependent's prize goes to the right account (#718:
+-- prize_payees and claim_prize_award_send in 006, set_player_bank_account in
+-- 003).
 --
 -- Covers:
 --   M1  set_player_bank_account refuses a minor dependent (MINOR_DEPENDENT),

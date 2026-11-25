@@ -37,17 +37,35 @@ CREATE TABLE role_permissions (
 -- The indirection means users.id is stable for the life of the record: a player
 -- row can exist before it has an auth account, and can later be adopted by one,
 -- without rewriting the id across registrations/payments/refunds/audit_logs.
--- NULL = a record with no login yet. Today every row has one (written by
--- handle_new_user), so nothing depends on the nullability yet.
+-- NULL = a record with no login: a managed dependent (account_type 'managed').
 -- terms_version records WHICH Terms of Service the user agreed to, not merely
 -- that they ticked a box. The version is written by the signup route from
 -- src/lib/reference/legal.ts (TERMS_VERSION) via handle_new_user — never from the request
 -- body, since a client-supplied version is not evidence of anything. NULL on
--- rows created outside signup (seeds, admin-created players).
+-- rows created outside signup (seeds, admin-created players, dependents).
+--
+-- account_type (#706): 'self' is an account its holder signs in to; 'managed'
+-- is a dependent a guardian created (create_dependent), with no login of its
+-- own. A managed account may have no email (a child often has none), and only a
+-- managed account may leave it empty. When its holder claims it (#720) the same
+-- UPDATE sets auth_user_id and flips it to 'self'.
+--
+-- email_canonical (#286): the mailbox email reaches (canonical_email(), 003),
+-- kept by the set_email_canonical trigger and unique among active users
+-- (idx_users_email_canonical_active, 002), so test+1@gmail.com and
+-- t.e.s.t@gmail.com can't hold a second account. email keeps the address as
+-- typed; it's what mail is sent to and what the user signs in with.
+--
+-- contact_email (#712): an optional address for an adult dependent, used for
+-- notifications only. Not users.email on purpose: that is the sign-in identity
+-- and unique per mailbox, so a guardian typing a dependent's address there
+-- would stop that person from ever signing up with it.
+CREATE TYPE account_type AS ENUM ('self', 'managed');
+
 CREATE TABLE users (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   auth_user_id      uuid UNIQUE,
-  email             varchar(255) NOT NULL,  -- uniqueness enforced via partial index in 002_indexes.sql
+  email             varchar(255),  -- uniqueness enforced via partial index in 002_indexes.sql
   first_name        varchar(255) NOT NULL,
   last_name         varchar(255) NOT NULL,
   avatar_url        varchar(255),
@@ -58,10 +76,19 @@ CREATE TABLE users (
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now(),
   deleted_at        timestamptz,
+  email_canonical   varchar(255),
+  account_type      account_type NOT NULL DEFAULT 'self',
+  contact_email     varchar(255),
   -- A version with no timestamp (or the reverse) is a half-written acceptance
   -- and proves nothing. Both or neither.
   CONSTRAINT chk_terms_shape
-    CHECK ((terms_version IS NULL) = (terms_accepted_at IS NULL))
+    CHECK ((terms_version IS NULL) = (terms_accepted_at IS NULL)),
+  CONSTRAINT chk_users_email_required
+    CHECK (email IS NOT NULL OR account_type = 'managed'),
+  CONSTRAINT chk_users_managed_has_no_login
+    CHECK (account_type = 'self' OR auth_user_id IS NULL),
+  CONSTRAINT chk_users_contact_email_managed_only
+    CHECK (contact_email IS NULL OR account_type = 'managed')
 );
 
 -- Global roles (e.g. platform admin)
@@ -111,6 +138,127 @@ CREATE TABLE player_profiles (
   oku_rejection_reason  text,
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
+);
+
+-- =============================================
+-- GUARDIANSHIPS (#705)
+-- A guardian (the parent of a minor) or a helper (a carer for an adult player,
+-- for example a blind player) acting for another player. One row per guardian
+-- and dependent. basis says why the guardian may act:
+--   minor       a parent or legal guardian of someone under 18. Accepts the
+--               Terms on the child's behalf. Ends at 18 (#721): from the
+--               birthday the guardian can only view, and after a grace period
+--               end_aged_out_minor_guardianships revokes the row.
+--   authorised  an adult player authorised this helper (a helper invitation,
+--               or the guardian's attestation). The player stays the party to
+--               the Terms.
+--   appointed   legally appointed for an adult who lacks capacity.
+-- The basis is always chosen, never inferred (not from OKU status either).
+-- authorisation_method records how an adult's guardianship was established, so
+-- it is NULL exactly when the basis is minor. terms_version / terms_accepted_at
+-- are the Terms the guardian accepted when the row was created.
+--
+-- 'claimed' (#720): the dependent took their record over, which ends the
+-- guardian's access.
+--
+-- Both user references are ON DELETE RESTRICT: a dependent with payment
+-- history must never disappear by cascade, and neither may the person who
+-- acted for them. A guardian holds at most 10 active guardianships
+-- (enforce_guardianship_limit, 003). Audited, and kept out of
+-- audit_log_retention(): it is the evidence of who was allowed to act, and pay,
+-- for whom.
+-- =============================================
+CREATE TYPE guardianship_relationship AS ENUM ('parent', 'legal_guardian', 'carer', 'coach', 'other');
+CREATE TYPE guardianship_basis AS ENUM ('minor', 'authorised', 'appointed');
+CREATE TYPE guardianship_status AS ENUM ('active', 'revoked', 'claimed');
+CREATE TYPE guardianship_authorisation_method AS ENUM ('player_invite', 'guardian_attestation', 'document');
+
+CREATE TABLE guardianships (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  guardian_user_id      uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  dependent_user_id     uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  relationship          guardianship_relationship NOT NULL,
+  basis                 guardianship_basis NOT NULL,
+  status                guardianship_status NOT NULL DEFAULT 'active',
+  terms_version         varchar(20) NOT NULL,
+  terms_accepted_at     timestamptz NOT NULL,
+  authorisation_method  guardianship_authorisation_method,
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  revoked_at            timestamptz,
+
+  CONSTRAINT uq_guardianship_pair UNIQUE (guardian_user_id, dependent_user_id),
+  CONSTRAINT chk_guardianship_not_self
+    CHECK (guardian_user_id <> dependent_user_id),
+  -- Only a parent or legal guardian accepts the Terms for a child.
+  CONSTRAINT chk_guardianship_minor_relationship
+    CHECK (basis <> 'minor' OR relationship IN ('parent', 'legal_guardian')),
+  -- A minor's guardian needs no authorisation; an adult's always records one.
+  CONSTRAINT chk_guardianship_authorisation_for_basis
+    CHECK ((basis = 'minor') = (authorisation_method IS NULL)),
+  -- A revoked row says when, and nothing else carries a revoked_at.
+  CONSTRAINT chk_guardianship_revoked_at
+    CHECK ((status = 'revoked') = (revoked_at IS NOT NULL)),
+  CONSTRAINT chk_guardianship_revoked_after_created
+    CHECK (revoked_at IS NULL OR revoked_at >= created_at)
+);
+
+-- Which age-out notice (#721) went out for which minor guardianship, so the
+-- daily job emails each stage once:
+--   upcoming   the 18th birthday is within the notice window
+--   turned_18  the birthday has passed; the grace period is running
+--   ended      the grace period is over and the guardianship was revoked
+-- Written by claim_guardianship_age_out_notices and
+-- end_aged_out_minor_guardianships (003). Service role only.
+CREATE TYPE guardianship_age_out_stage AS ENUM ('upcoming', 'turned_18', 'ended');
+
+CREATE TABLE guardianship_age_out_notices (
+  guardianship_id uuid NOT NULL REFERENCES guardianships(id) ON DELETE CASCADE,
+  stage           guardianship_age_out_stage NOT NULL,
+  sent_at         timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (guardianship_id, stage)
+);
+
+-- =============================================
+-- ACCOUNT CLAIMS (#720)
+-- A guardian hands a dependent's record over to its player. Claim first, never
+-- merge afterwards: the guardian starts the handover while the player has no
+-- account, the player gets a link, sets a password, and signup LINKS the
+-- existing users row (link_claimed_account, 003) instead of creating a new one.
+-- users.id never changes, so registrations, profile and history stay put.
+--
+-- One row per handover attempt. Only the SHA-256 of the emailed token is
+-- stored (token_hash). 72-hour expiry, single use: accepting flips status to
+-- 'accepted' and records the auth user it was bound to. At most one pending
+-- claim per dependent (uq_account_claims_one_pending, 002); starting another
+-- cancels the earlier one. email is the player's address, lower-cased; the
+-- account it creates must reach that mailbox (canonical_email). Both user
+-- references are ON DELETE RESTRICT, like guardianships.
+--
+-- RLS: the guardian who started a claim can read every column but token_hash,
+-- which is what a signup presents to claim the record (004).
+-- =============================================
+CREATE TYPE account_claim_status AS ENUM ('pending', 'accepted', 'cancelled');
+
+CREATE TABLE account_claims (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  dependent_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  guardian_user_id  uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  email             varchar(255) NOT NULL,
+  token_hash        char(64) NOT NULL UNIQUE,
+  status            account_claim_status NOT NULL DEFAULT 'pending',
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  expires_at        timestamptz NOT NULL,
+  accepted_at       timestamptz,
+  auth_user_id      uuid,
+  cancelled_at      timestamptz,
+
+  CONSTRAINT chk_account_claim_email_lower CHECK (email = lower(email)),
+  CONSTRAINT chk_account_claim_not_self
+    CHECK (guardian_user_id <> dependent_user_id),
+  CONSTRAINT chk_account_claim_accepted
+    CHECK ((status = 'accepted') = (accepted_at IS NOT NULL AND auth_user_id IS NOT NULL)),
+  CONSTRAINT chk_account_claim_cancelled
+    CHECK ((status = 'cancelled') = (cancelled_at IS NOT NULL))
 );
 
 -- =============================================
@@ -185,6 +333,42 @@ CREATE TABLE organizations (
 );
 
 -- =============================================
+-- ORGANIZATION APPLICATION EVENTS (#582)
+-- The history of an organizer application. A rejected application is amended
+-- in place and resubmitted (resubmit_organization_application, 003), back to
+-- 'pending', so the organizations row only holds the latest decision; this
+-- table keeps every submission and verdict. Server-only.
+-- =============================================
+CREATE TYPE org_application_event AS ENUM ('submitted', 'resubmitted', 'approved', 'rejected');
+
+CREATE TABLE organization_application_events (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  event           org_application_event NOT NULL,
+  reason          text,                    -- the rejection reason, on 'rejected'
+  actor_id        uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chk_application_event_reason CHECK (reason IS NULL OR event = 'rejected')
+);
+
+-- =============================================
+-- ORGANIZATION REGISTERED NAMES (#374)
+-- The legal name on the organization's SSM/ROS registration (or the
+-- individual's own name), given at application. A bank account's holder name
+-- as CHIP reports it is matched against this and the display name
+-- (settle_bank_account_verification, 006); a mismatch holds the account for
+-- review (bank_account_status 'name_mismatch'). Not on organizations, whose
+-- public SELECT policy has no column restriction. Server-only.
+-- =============================================
+CREATE TABLE organization_registered_names (
+  organization_id uuid PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  registered_name varchar(255) NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chk_registered_name_not_blank CHECK (btrim(registered_name) <> '')
+);
+
+-- =============================================
 -- ORGANIZATION BANK ACCOUNTS
 -- Where an organization's payouts are sent. A separate table rather than
 -- columns on `organizations`, for three independent reasons:
@@ -202,7 +386,11 @@ CREATE TABLE organizations (
 -- chip_bank_account_id and the move to 'verified' are written in Phase 4 (#519);
 -- nothing in this phase can leave a row in any state but 'pending'.
 -- =============================================
-CREATE TYPE bank_account_status AS ENUM ('pending', 'verified', 'rejected');
+-- name_mismatch (#374): CHIP Send verified the account, but the holder name the
+-- bank returned (bank_holder_name) doesn't match who the money is for. Not
+-- payable until an admin confirms it (review_bank_account_name, 006), which
+-- leaves who decided and why in name_reviewed_by / _at / _note.
+CREATE TYPE bank_account_status AS ENUM ('pending', 'verified', 'rejected', 'name_mismatch');
 
 CREATE TABLE organization_bank_accounts (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -219,9 +407,15 @@ CREATE TABLE organization_bank_accounts (
   created_by           uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
+  bank_holder_name     varchar(255),           -- the holder name CHIP Send returned
+  name_reviewed_by     uuid REFERENCES users(id) ON DELETE SET NULL,
+  name_reviewed_at     timestamptz,
+  name_review_note     text,
   CONSTRAINT chk_bank_account_number_digits CHECK (account_number ~ '^[0-9]{5,20}$'),
   CONSTRAINT chk_bank_code_format  CHECK (bank_code ~ '^[A-Z0-9]{8}([A-Z0-9]{3})?$'),
-  CONSTRAINT chk_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified')
+  CONSTRAINT chk_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified'),
+  CONSTRAINT chk_bank_name_review_shape
+    CHECK ((name_reviewed_at IS NULL) = (name_review_note IS NULL))
 );
 
 -- =============================================
@@ -243,6 +437,12 @@ CREATE TABLE organization_bank_accounts (
 -- number is then cut down to '****' plus its last 4 digits; the bank and the
 -- holder stay, as the record of where prize money went. Rows no award names
 -- are deleted outright instead (set_player_bank_account).
+--
+-- entered_by (#718): who saved these details when it was not the player, a
+-- helper acting under the financial consent they recorded for an adult player.
+-- The holder name of such a row is checked against the player's name, never
+-- the typed holder. A minor dependent has no row: their prizes go to a
+-- guardian's account (prize_payees, 006).
 -- =============================================
 CREATE TABLE player_bank_accounts (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -259,6 +459,11 @@ CREATE TABLE player_bank_accounts (
   redacted_at          timestamptz,
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
+  bank_holder_name     varchar(255),           -- the holder name CHIP Send returned
+  name_reviewed_by     uuid REFERENCES users(id) ON DELETE SET NULL,
+  name_reviewed_at     timestamptz,
+  name_review_note     text,
+  entered_by           uuid REFERENCES users(id) ON DELETE SET NULL,
   -- Full digits while live; only the masked form, and never active, once
   -- redacted.
   CONSTRAINT chk_player_bank_account_number_digits CHECK (
@@ -268,8 +473,15 @@ CREATE TABLE player_bank_accounts (
     END
   ),
   CONSTRAINT chk_player_bank_code_format  CHECK (bank_code ~ '^[A-Z0-9]{8}([A-Z0-9]{3})?$'),
-  CONSTRAINT chk_player_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified')
+  CONSTRAINT chk_player_bank_verified_at  CHECK (verified_at IS NULL OR status = 'verified'),
+  CONSTRAINT chk_player_bank_name_review_shape
+    CHECK ((name_reviewed_at IS NULL) = (name_review_note IS NULL)),
+  CONSTRAINT chk_player_bank_account_entered_by_other
+    CHECK (entered_by IS DISTINCT FROM user_id)
 );
+
+COMMENT ON COLUMN player_bank_accounts.entered_by IS
+  'Who saved these details when it was not the player: their guardian or helper. NULL means the player saved them. The holder name of such a row is checked against the player''s name.';
 
 -- =============================================
 -- SENSITIVE DATA CONSENTS (#451)
@@ -289,6 +501,11 @@ CREATE TABLE player_bank_accounts (
 -- src/lib/reference/legal.ts and never from the request body. A withdrawal
 -- carries none: it withdraws whatever was granted.
 --
+-- granted_by / on_behalf_basis (#717): a guardian or helper may record consent
+-- for the player they act for. The row is still the player's (user_id); it
+-- names who recorded it and the guardianship basis they acted under, which
+-- decides the wording agreed to.
+--
 -- Written only by record_sensitive_data_consent (003); clients cannot write
 -- (004) and no one can UPDATE a row (guard_consent_immutable, 003).
 -- =============================================
@@ -301,9 +518,21 @@ CREATE TABLE sensitive_data_consents (
   granted    boolean NOT NULL,
   version    varchar(20),
   created_at timestamptz NOT NULL DEFAULT now(),
+  granted_by      uuid REFERENCES users(id),
+  on_behalf_basis guardianship_basis,
   -- A grant names the wording agreed to; a withdrawal names none.
-  CONSTRAINT chk_consent_version CHECK (granted = (version IS NOT NULL))
+  CONSTRAINT chk_consent_version CHECK (granted = (version IS NOT NULL)),
+  CONSTRAINT chk_consent_on_behalf
+    CHECK ((granted_by IS NULL) = (on_behalf_basis IS NULL)),
+  CONSTRAINT chk_consent_granted_by_not_subject
+    CHECK (granted_by IS DISTINCT FROM user_id)
 );
+
+COMMENT ON COLUMN sensitive_data_consents.granted_by IS
+  'Who recorded this row when it was not the data subject (user_id): their guardian or helper. NULL means the player recorded it themselves.';
+
+COMMENT ON COLUMN sensitive_data_consents.on_behalf_basis IS
+  'The guardianship basis granted_by acted under, which names the wording agreed to. Set exactly when granted_by is.';
 
 -- =============================================
 -- ORGANIZATION DOCUMENTS (KYB)
@@ -375,6 +604,45 @@ CREATE TABLE organization_invitations (
   CONSTRAINT chk_invitation_email_lower CHECK (email = lower(email)),
   -- Pending exactly while nobody has answered it.
   CONSTRAINT chk_invitation_responded CHECK ((status = 'pending') = (responded_at IS NULL))
+);
+
+-- =============================================
+-- HELPER INVITATIONS (#719)
+-- A player who already has an account (for example a blind player who signed
+-- up with a screen reader) invites a carer to help. Accepting creates a
+-- guardianship over the player's own account: basis 'authorised',
+-- authorisation_method 'player_invite'. The player keeps their login, and the
+-- invitation is the consent record. A second, managed record for them would
+-- split one person into two identities, so this is the only way in.
+--
+-- Only the SHA-256 of the emailed token is stored, as for organization
+-- invitations. 72-hour expiry (from creation or the last resend), single use.
+-- email is lower-cased; the helper must be signed in with an account reaching
+-- the same mailbox (canonical_email). Not 'legal_guardian': that is an
+-- appointed guardianship, which needs proof. One pending invitation per player
+-- and address (idx_helper_invitations_pending, 002). player_user_id is
+-- ON DELETE RESTRICT like guardianships: the evidence of who authorised whom.
+-- =============================================
+CREATE TABLE helper_invitations (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_user_id  uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  email           varchar(255) NOT NULL,
+  relationship    guardianship_relationship NOT NULL,
+  token_hash      char(64) NOT NULL UNIQUE,
+  status          invitation_status NOT NULL DEFAULT 'pending',
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  expires_at      timestamptz NOT NULL,
+  responded_at    timestamptz,
+  responded_by    uuid REFERENCES users(id) ON DELETE SET NULL,
+  guardianship_id uuid REFERENCES guardianships(id) ON DELETE RESTRICT,
+
+  CONSTRAINT chk_helper_invitation_email_lower CHECK (email = lower(email)),
+  CONSTRAINT chk_helper_invitation_relationship
+    CHECK (relationship <> 'legal_guardian'),
+  CONSTRAINT chk_helper_invitation_responded
+    CHECK ((status = 'pending') = (responded_at IS NULL)),
+  CONSTRAINT chk_helper_invitation_accepted_links_guardianship
+    CHECK ((status = 'accepted') = (guardianship_id IS NOT NULL))
 );
 
 -- =============================================
@@ -520,6 +788,9 @@ CREATE TABLE registrations (
   confirmed_at          timestamptz,                        -- when payment is confirmed and registration is finalized
   cancelled_at          timestamptz,                        -- when the system cancels the registration due to timeout or player cancels (before payment) or forfeiture (after payment)
   cancellation_reason   text,
+  -- Who made the registration when it wasn't the participant: their guardian
+  -- or helper (#705). NULL means the player registered themselves.
+  registered_by         uuid REFERENCES users(id)                ON DELETE SET NULL,
   UNIQUE (user_id, tournament_id),
 
   CONSTRAINT chk_confirmed_at
@@ -571,7 +842,7 @@ CREATE TABLE payments (
   -- attempt only and changes on a retry (a corrected DOB, an OKU verification
   -- landing between attempts); this is the tier AS CHARGED, and never changes.
   -- Count tiers from here, not from registrations. NULL on non-registration
-  -- rows, and on registration rows written before this column existed.
+  -- rows.
   fee_tier                    varchar(50),
   currency                   varchar(3) NOT NULL DEFAULT 'MYR',
   payment_method              varchar(50),
@@ -581,6 +852,9 @@ CREATE TABLE payments (
   paid_at                     timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now()
 );
+
+COMMENT ON COLUMN payments.user_id IS
+  'The payer: whose money this row moves. For a registration payment this can differ from registrations.user_id, which is the participant (#708). A refund row copies it from the payment it refunds.';
 
 -- A registration's active payment attempt. payments is an append-only ledger
 -- (one row per attempt); this points at the live one. Added after the payments
@@ -764,7 +1038,16 @@ CREATE TABLE prize_fundings (
 -- ledger row carries it, and the summary view groups on it.
 -- bank_account_id is the account the money is sent to, snapshotted when the
 -- send is claimed (the player may have no verified account at approval time).
+-- user_id stays the winner; payee_user_id / payee_reason (#718) record whose
+-- account that is and why: the winner's own, or a minor winner's guardian's
+-- (prize_payees, 006).
+--
+-- A withdrawn award (#611) is one the organizer took back while it awaited
+-- review: approval 'rejected' with withdrawn_at / withdrawn_by set and no
+-- admin review. Reusing 'rejected' keeps it out of every rule for a live award.
 -- =============================================
+CREATE TYPE prize_payee_reason AS ENUM ('winner', 'guardian_of_minor');
+
 CREATE TABLE prize_awards (
   id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id            uuid NOT NULL REFERENCES tournaments(id)   ON DELETE RESTRICT,
@@ -797,13 +1080,30 @@ CREATE TABLE prize_awards (
   processed_at             timestamptz,  -- set once by settle_prize_award; the idempotency marker
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now(),
+  withdrawn_by             uuid REFERENCES users(id) ON DELETE SET NULL,
+  withdrawn_at             timestamptz,
+  payee_user_id            uuid REFERENCES users(id) ON DELETE SET NULL,
+  payee_reason             prize_payee_reason,
 
   CONSTRAINT chk_prize_award_amount_positive CHECK (amount_cents > 0),
   CONSTRAINT chk_prize_award_reviewed_at     CHECK (reviewed_at IS NULL OR reviewed_at >= entered_at),
   CONSTRAINT chk_prize_award_paid_shape      CHECK (status <> 'paid' OR (payment_id IS NOT NULL AND settled_amount_cents IS NOT NULL)),
   -- Nothing moves before an admin has approved it.
-  CONSTRAINT chk_prize_award_moves_approved  CHECK (status = 'pending' OR approval = 'approved')
+  CONSTRAINT chk_prize_award_moves_approved  CHECK (status = 'pending' OR approval = 'approved'),
+  CONSTRAINT chk_prize_award_withdrawn_shape CHECK (
+    withdrawn_at IS NULL
+    OR (approval = 'rejected' AND reviewed_at IS NULL AND rejection_reason IS NULL)
+  ),
+  CONSTRAINT chk_prize_award_withdrawn_by CHECK (
+    withdrawn_by IS NULL OR withdrawn_at IS NOT NULL
+  )
 );
+
+COMMENT ON COLUMN prize_awards.payee_user_id IS
+  'Whose bank account the award was sent to, snapshotted with bank_account_id when the send is claimed: the winner, or a minor winner''s guardian.';
+
+COMMENT ON COLUMN prize_awards.payee_reason IS
+  'Why the award went to that account: winner (their own) or guardian_of_minor.';
 
 -- =============================================
 -- AUDIT LOGS
@@ -811,11 +1111,13 @@ CREATE TABLE prize_awards (
 -- Captures full row snapshots for regulated tables.
 -- organization_id denormalized for efficient RLS scoping.
 -- =============================================
+CREATE TYPE audit_action AS ENUM ('INSERT', 'UPDATE', 'DELETE');
+
 CREATE TABLE audit_logs (
   id               bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   table_name       varchar(50)  NOT NULL,
   record_id        text         NOT NULL,  -- text to support composite PKs
-  action           varchar(10)  NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
+  action           audit_action NOT NULL,
   changed_by       uuid         REFERENCES users(id)         ON DELETE SET NULL,
   organization_id  uuid         REFERENCES organizations(id) ON DELETE SET NULL,
   context          varchar(100) NOT NULL DEFAULT 'trigger',
@@ -828,10 +1130,12 @@ CREATE TABLE audit_logs (
 -- WAITLIST
 -- Pre-launch email capture. user_type segments players vs organizers.
 -- =============================================
+CREATE TYPE waitlist_user_type AS ENUM ('player', 'organizer');
+
 CREATE TABLE waitlist (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email      varchar(255) UNIQUE NOT NULL,
-  user_type  text NOT NULL DEFAULT 'player' CHECK (user_type IN ('player', 'organizer')),
+  user_type  waitlist_user_type NOT NULL DEFAULT 'player',
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

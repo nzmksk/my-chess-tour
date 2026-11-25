@@ -10,7 +10,7 @@ This page covers how long rows are kept and how they're removed (#507).
 ## Retention
 
 The policy is `audit_log_retention()` in
-`supabase/migrations/20261123100000_audit_log_retention.sql`. This table
+`supabase/migrations/003_functions_triggers.sql`. This table
 describes it, and `/privacy` (with the signup `PrivacyModal`) publishes it. A
 change touches all three, plus a new migration.
 

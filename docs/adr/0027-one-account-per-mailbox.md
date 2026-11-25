@@ -14,7 +14,7 @@ with one mailbox, each passing email verification.
 ## Decision
 
 - **Uniqueness is on the mailbox, not the address.** `canonical_email()`
-  (`supabase/migrations/20261123090000_canonical_user_email.sql`) lower-cases
+  (`supabase/migrations/003_functions_triggers.sql`) lower-cases
   and trims the address, and drops a `+tag` sub-address on every domain. For
   `gmail.com` and `googlemail.com` only, it also drops dots and reads
   `googlemail.com` as `gmail.com`. A trigger stores the result in
