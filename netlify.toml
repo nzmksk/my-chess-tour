@@ -1,0 +1,11 @@
+[[redirects]]
+  from = "https://mychesstour.netlify.app/*"
+  to = "https://www.mychesstour.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://staging-mychesstour.netlify.app/*"
+  to = "https://staging.mychesstour.com/:splat"
+  status = 301
+  force = true
