@@ -60,8 +60,7 @@ export default function LandingPage() {
         {/* Body copy */}
         <p className="text--body mb-2">
           MY Chess Tour is a dedicated platform for discovering, registering,
-          and managing chess tournaments across Malaysia — built for players and
-          organizers alike.
+          and managing chess tournaments across Malaysia — built for the chess community.
         </p>
         {/* Feature cards */}
         <div className="my-6 grid gap-4 sm:grid-cols-3">
