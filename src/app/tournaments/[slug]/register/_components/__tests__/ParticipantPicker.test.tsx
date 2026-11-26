@@ -18,8 +18,8 @@ afterEach(() => {
 });
 
 const PARTICIPANTS = [
-  { id: "u1", name: "Myself", isSelf: true },
-  { id: "dep-1", name: "Aina Rahman", isSelf: false },
+  { id: "u1", label: "Myself", isSelf: true, disabled: false },
+  { id: "dep-1", label: "Aina Rahman", isSelf: false, disabled: false },
 ];
 
 describe("ParticipantPicker", () => {
@@ -55,5 +55,29 @@ describe("ParticipantPicker", () => {
       target: { value: "u1" },
     });
     expect(mockPush).toHaveBeenCalledWith("/tournaments/kl-open/register");
+  });
+
+  it("lists a player who can no longer be registered as a disabled option", () => {
+    render(
+      <ParticipantPicker
+        participants={[
+          ...PARTICIPANTS,
+          {
+            id: "dep-2",
+            label: "Jane Doe (turned 18, registers themselves)",
+            isSelf: false,
+            disabled: true,
+          },
+        ]}
+        selectedId="u1"
+      />,
+    );
+    const select = screen.getByLabelText(
+      "Who is playing?",
+    ) as HTMLSelectElement;
+    const option = Array.from(select.options).find((o) => o.value === "dep-2");
+    expect(option?.disabled).toBe(true);
+    fireEvent.change(select, { target: { value: "dep-2" } });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

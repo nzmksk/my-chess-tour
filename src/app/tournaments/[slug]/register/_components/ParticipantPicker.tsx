@@ -2,15 +2,10 @@
 
 import { useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
-
-interface PickerOption {
-  id: string;
-  name: string;
-  isSelf: boolean;
-}
+import type { ParticipantOption } from "../_lib/participant";
 
 interface Props {
-  participants: PickerOption[];
+  participants: ParticipantOption[];
   selectedId: string;
 }
 
@@ -21,7 +16,7 @@ export default function ParticipantPicker({ participants, selectedId }: Props) {
 
   function choose(id: string) {
     const next = participants.find((p) => p.id === id);
-    if (!next || next.id === selectedId) return;
+    if (!next || next.disabled || next.id === selectedId) return;
     const query = next.isSelf
       ? ""
       : `?participant=${encodeURIComponent(next.id)}`;
@@ -47,8 +42,8 @@ export default function ParticipantPicker({ participants, selectedId }: Props) {
           className="border-border bg-bg-raised font-lato text-text-primary focus:border-gold-bright w-full cursor-pointer appearance-none rounded-md border px-3 py-2.5 pr-8 text-sm transition-colors focus:outline-none disabled:cursor-wait disabled:opacity-60"
         >
           {participants.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
+            <option key={p.id} value={p.id} disabled={p.disabled}>
+              {p.label}
             </option>
           ))}
         </select>
