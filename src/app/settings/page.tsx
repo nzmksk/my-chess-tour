@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import NavBar from "@/components/NavBar";
+import PlayerDashboardShell from "@/app/my/_components/PlayerDashboardShell";
 import { getAuthClaims } from "@/services/supabase/permission";
 import ProfileClient from "./_components/ProfileClient";
 import type { PlayerProfile } from "@/app/profile/types";
@@ -52,7 +53,9 @@ export default async function SettingsPage() {
   return (
     <div className="bg-bg-base flex-1">
       <NavBar />
-      <ProfileClient profile={profile} />
+      <PlayerDashboardShell>
+        <ProfileClient profile={profile} />
+      </PlayerDashboardShell>
     </div>
   );
 }
