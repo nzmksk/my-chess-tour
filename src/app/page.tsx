@@ -30,9 +30,6 @@ export default function LandingPage() {
           and managing chess tournaments across Malaysia — built for players and
           organizers alike.
         </p>
-        <p className="text--body">
-          Join the waitlist to be first in line when we launch.
-        </p>
         {/* Feature cards */}
         <div className="my-6 grid gap-4 sm:grid-cols-3">
           <div className="card flex flex-col p-4">
@@ -74,7 +71,6 @@ export default function LandingPage() {
         </div>
         {/* Waitlist form */}
         <WaitlistForm />
-        
       </div>
       {/* Build progress — second section */}
       <section
