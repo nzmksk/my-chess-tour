@@ -1,0 +1,114 @@
+name: Production deploy preview
+
+# Builds every pull request against master and deploys it as a draft (never
+# published) to the production Netlify site, then posts the preview URL on the
+# pull request. Netlify itself only builds previews for the staging site.
+#
+# The build runs in Netlify's "deploy-preview" context, so it gets the
+# production site's environment variables as scoped to that context. Unless a
+# variable is scoped to Production only, the preview uses the same value:
+# with the current settings a preview reads and writes the PRODUCTION
+# database. Don't submit real-looking data from a preview.
+#
+# Only pull requests from branches of this repository run it. Fork pull
+# requests and Dependabot don't get repository secrets, so they are skipped
+# rather than failing.
+#
+# Needs two repository secrets (Settings -> Secrets and variables -> Actions):
+#   NETLIFY_AUTH_TOKEN          a Netlify personal access token
+#   NETLIFY_PRODUCTION_SITE_ID  production site -> Site configuration -> Site ID
+on:
+  pull_request:
+    branches: ["master"]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: production-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Deploy a production preview
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]' &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The CLI reads NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID from the
+      # environment, so neither appears on the command line or in the log.
+      - name: Build and deploy a draft
+        id: deploy
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_PRODUCTION_SITE_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=""
+          [ -n "$NETLIFY_AUTH_TOKEN" ] || missing="$missing NETLIFY_AUTH_TOKEN"
+          [ -n "$NETLIFY_SITE_ID" ] || missing="$missing NETLIFY_PRODUCTION_SITE_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing. See the comment at the top of this workflow."
+            exit 1
+          fi
+
+          npx --yes netlify-cli@27.17.0 deploy \
+            --build \
+            --context deploy-preview \
+            --alias "pr-${PR_NUMBER}" \
+            --message "PR #${PR_NUMBER} at ${HEAD_SHA:0:7}" \
+            --json > deploy-output.txt
+
+          url=$(node -e '
+            const lines = require("fs").readFileSync("deploy-output.txt", "utf8").split("\n");
+            for (let i = lines.length - 1; i >= 0; i--) {
+              if (!lines[i].startsWith("{")) continue;
+              try {
+                const result = JSON.parse(lines.slice(i).join("\n"));
+                if (result.deploy_url) { console.log(result.deploy_url); process.exit(0); }
+              } catch {}
+            }
+            process.exit(1);
+          ') || { echo "::error::Could not find the deploy URL in the Netlify CLI output."; cat deploy-output.txt; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post the preview URL on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          marker="<!-- production-deploy-preview -->"
+          body="${marker}
+          **Production deploy preview** for ${HEAD_SHA:0:7}: ${URL}
+
+          Built with the production site's deploy-preview environment, so it uses the **production** database."
+
+          comment_id=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"${marker}\"))) | .id" | head -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/${REPO}/issues/comments/${comment_id}" -f body="$body" > /dev/null
+          else
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$body"
+          fi
