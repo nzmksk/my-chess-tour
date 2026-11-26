@@ -20,17 +20,17 @@ const FEATURES = [
   {
     icon: PayIcon,
     title: "Register & Pay Online",
-    body: "FPX, DuitNow QR, e-wallets. No bank transfer receipts. No Google Forms.",
+    body: "Pay with FPX or DuitNow. Complete registration in just 4 clicks.",
   },
   {
     icon: ProfileCardIcon,
     title: "One Player Profile",
-    body: "Enter your FIDE ID, ratings, and details once. Every registration reuses them.",
+    body: "Fill your details once. No more repetitive Google Forms during registration.",
   },
   {
     icon: FamilyIcon,
     title: "For Parents",
-    body: "Add your children once, then register and pay for their entries from your own account.",
+    body: "One account for the whole family: enter your kids into tournaments and pay for them in one go.",
   },
   {
     icon: TrophyIcon,
