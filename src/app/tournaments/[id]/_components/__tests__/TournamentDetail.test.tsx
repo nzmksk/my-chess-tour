@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterAll, beforeAll, describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import TournamentDetail from "../TournamentDetail";
 
@@ -9,6 +9,15 @@ vi.mock("next/navigation", () => ({
 }));
 import type { TournamentDetail as TournamentDetailType } from "../../types";
 import type { StartingRankPlayer } from "../../types";
+
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-05-01T00:00:00Z"));
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 // ── Fixtures ─────────────────────────────────────────────────
 
