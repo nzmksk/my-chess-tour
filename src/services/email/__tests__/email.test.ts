@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockReadFileSync, mockSend } = vi.hoisted(() => ({
-  mockReadFileSync: vi.fn(),
+const { mockLoadTemplate, mockSend } = vi.hoisted(() => ({
+  mockLoadTemplate: vi.fn(),
   mockSend: vi.fn(),
 }));
 
-vi.mock("fs", () => ({
-  default: { readFileSync: mockReadFileSync },
-  readFileSync: mockReadFileSync,
+vi.mock("../template-source", () => ({
+  loadTemplate: mockLoadTemplate,
 }));
 
 vi.mock("resend", () => ({
@@ -46,25 +45,15 @@ import {
 describe("sendVerificationEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue("<html>{{code}}</html>");
+    mockLoadTemplate.mockReturnValue("<html>{{code}}</html>");
     mockSend.mockResolvedValue({ error: null });
   });
 
-  it("loads the verification.html template from the filesystem", async () => {
+  it("loads the verification.html template", async () => {
     await sendVerificationEmail("player@example.com", "ABC123");
 
-    expect(mockReadFileSync).toHaveBeenCalledOnce();
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("verification.html"),
-      "utf-8",
-    );
-  });
-
-  it("loads the template from the templates directory", async () => {
-    await sendVerificationEmail("player@example.com", "ABC123");
-
-    const [filePath] = mockReadFileSync.mock.calls[0];
-    expect(filePath).toMatch(/templates/);
+    expect(mockLoadTemplate).toHaveBeenCalledOnce();
+    expect(mockLoadTemplate).toHaveBeenCalledWith("verification.html");
   });
 
   it("injects the code into the template", async () => {
@@ -114,23 +103,20 @@ describe("sendVerificationEmail", () => {
 describe("sendPasswordResetEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       '<html><a href="{{resetLink}}">reset</a>{{resetLink}}</html>',
     );
     mockSend.mockResolvedValue({ error: null });
   });
 
-  it("loads the reset-password.html template from the filesystem", async () => {
+  it("loads the reset-password.html template", async () => {
     await sendPasswordResetEmail(
       "player@example.com",
       "https://example.com/reset",
     );
 
-    expect(mockReadFileSync).toHaveBeenCalledOnce();
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("reset-password.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledOnce();
+    expect(mockLoadTemplate).toHaveBeenCalledWith("reset-password.html");
   });
 
   it("replaces all {{resetLink}} placeholders with the actual link", async () => {
@@ -195,7 +181,7 @@ describe("sendTournamentCancellationEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "<html>Dear {{recipientName}}, {{lead}} {{tournamentName}} cancelled. " +
         '<a href="{{browseUrl}}">browse</a> {{footerReason}}</html>',
     );
@@ -209,10 +195,7 @@ describe("sendTournamentCancellationEmail", () => {
       tournamentName: "KL Open 2026",
     });
 
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("tournament-cancellation.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("tournament-cancellation.html");
   });
 
   it("injects player name, tournament name, and browse URL", async () => {
@@ -288,7 +271,7 @@ describe("sendTournamentCancellationEmail", () => {
 describe("sendCancellationReviewEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "<html>Hi {{recipientName}}, {{tournamentName}} — {{rejectionReason}} " +
         '<a href="{{dashboardUrl}}">dashboard</a></html>',
     );
@@ -303,10 +286,7 @@ describe("sendCancellationReviewEmail", () => {
       approved: true,
     });
 
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("tournament-cancellation-approved.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("tournament-cancellation-approved.html");
     const { subject } = mockSend.mock.calls[0][0];
     expect(subject).toMatch(/approved/i);
     expect(subject).toMatch(/KL Open 2026/);
@@ -320,10 +300,7 @@ describe("sendCancellationReviewEmail", () => {
       rejectionReason: "Event is proceeding",
     });
 
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("tournament-cancellation-rejected.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("tournament-cancellation-rejected.html");
     const { subject } = mockSend.mock.calls[0][0];
     expect(subject).toMatch(/declined/i);
   });
@@ -406,7 +383,7 @@ describe("sendBankVerificationEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "<html>Hi {{recipientName}}, {{orgName}} {{bankName}} *{{accountLast4}} " +
         '— {{rejectionReason}} <a href="{{settingsUrl}}">settings</a></html>',
     );
@@ -420,10 +397,7 @@ describe("sendBankVerificationEmail", () => {
       verified: true,
     });
 
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("bank-account-verified.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("bank-account-verified.html");
     const { subject, to } = mockSend.mock.calls[0][0];
     expect(to).toBe("owner@example.com");
     expect(subject).toMatch(/verified/i);
@@ -437,10 +411,7 @@ describe("sendBankVerificationEmail", () => {
       rejectionReason: "Name does not match",
     });
 
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("bank-account-verification-failed.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("bank-account-verification-failed.html");
     const { html, subject } = mockSend.mock.calls[0][0];
     expect(subject).toMatch(/couldn't verify/i);
     expect(html).toContain("Name does not match");
@@ -499,7 +470,7 @@ describe("sendPayoutProcessedEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{tournamentName}}|{{amount}}|{{accountLast4}}|{{ctaUrl}}|{{ctaLabel}}|{{dashboardUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -509,10 +480,7 @@ describe("sendPayoutProcessedEmail", () => {
 
   it("loads the template and renders the amount in ringgit", async () => {
     await sendPayoutProcessedEmail("o@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("payout-processed.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("payout-processed.html");
     expect(sentHtml()).toContain("RM 1,234.50");
   });
 
@@ -568,7 +536,7 @@ describe("sendPayoutProcessedEmail", () => {
 describe("sendPayoutFailedEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{tournamentName}}|{{amount}}|{{failureReason}}|{{dashboardUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -582,10 +550,7 @@ describe("sendPayoutFailedEmail", () => {
       failureReason: "Bank <said> no",
     });
     const html = mockSend.mock.calls[0][0].html as string;
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("payout-failed.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("payout-failed.html");
     expect(html).toContain("RM 50.00");
     expect(html).toContain("Bank &lt;said&gt; no");
   });
@@ -600,7 +565,7 @@ describe("sendPayoutReviewEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{tournamentName}}|{{amount}}|{{dashboardUrl}}|{{rejectionReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -610,10 +575,7 @@ describe("sendPayoutReviewEmail", () => {
 
   it("uses the approved template and subject when approved", async () => {
     await sendPayoutReviewEmail("o@example.com", { ...base, approved: true });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("payout-request-approved.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("payout-request-approved.html");
     expect(sent().subject).toMatch(/early payout request for KL Open was approved/);
     expect(sent().html).toContain("RM 2,500.00");
   });
@@ -624,10 +586,7 @@ describe("sendPayoutReviewEmail", () => {
       approved: false,
       rejectionReason: "Send <the> invoice",
     });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("payout-request-rejected.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("payout-request-rejected.html");
     expect(sent().subject).toMatch(/was declined/);
     expect(sent().html).toContain("Send &lt;the&gt; invoice");
   });
@@ -661,7 +620,7 @@ describe("sendAdminPayoutAlertEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{headline}}|{{intro}}|{{recipientName}}|{{tournamentName}}|{{organizationName}}|{{amount}}|{{detail}}|{{ctaUrl}}|{{ctaLabel}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -675,10 +634,7 @@ describe("sendAdminPayoutAlertEmail", () => {
       alert: "early_request",
       detail: "Venue deposit",
     });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("admin-payout-alert.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("admin-payout-alert.html");
     expect(sent().subject).toBe("Early payout request to review: KL Open");
     expect(sent().html).toContain("Early Payout Request|");
     expect(sent().html).toContain("RM 4,000.00");
@@ -720,7 +676,7 @@ describe("sendBeneficiaryNominationEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{nomineeName}}|{{organizerName}}|{{tournamentName}}|{{dashboardUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -730,10 +686,7 @@ describe("sendBeneficiaryNominationEmail", () => {
 
   it("links the nominee to its own dashboard", async () => {
     await sendBeneficiaryNominationEmail("n@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("beneficiary-nomination.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("beneficiary-nomination.html");
     expect(sent().html).toContain("/my/organizations/org%2F1");
     expect(sent().subject).toBe(
       "KL Chess Club nominated Selangor Chess to receive a tournament payout",
@@ -760,7 +713,7 @@ describe("sendOrganizerApplicationReviewEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{organizationName}}|{{dashboardUrl}}|{{applicationsUrl}}|{{siteUrl}}|{{rejectionReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -770,10 +723,7 @@ describe("sendOrganizerApplicationReviewEmail", () => {
 
   it("uses the approved template, linking to the new organization's dashboard", async () => {
     await sendOrganizerApplicationReviewEmail("a@example.com", { ...base, approved: true });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("organizer-application-approved.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("organizer-application-approved.html");
     expect(sent().to).toBe("a@example.com");
     expect(sent().subject).toBe("KL Chess Club is approved on MY Chess Tour");
     expect(sent().html).toContain(
@@ -787,10 +737,7 @@ describe("sendOrganizerApplicationReviewEmail", () => {
       approved: false,
       rejectionReason: "Attach the <SSM> certificate",
     });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("organizer-application-rejected.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("organizer-application-rejected.html");
     expect(sent().subject).toBe("Your application for KL Chess Club was declined");
     expect(sent().html).toContain("Attach the &lt;SSM&gt; certificate");
     expect(sent().html).toContain("/my/organizations/applications|");
@@ -818,7 +765,7 @@ describe("sendOrganizerApplicationReviewEmail", () => {
 describe("sendOkuReviewEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{settingsUrl}}|{{browseUrl}}|{{rejectionReason}}|{{lead}}|{{retryLine}}|{{footerReason}}|{{ctaUrl}}|{{ctaLabel}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -828,10 +775,7 @@ describe("sendOkuReviewEmail", () => {
 
   it("uses the verified template", async () => {
     await sendOkuReviewEmail("p@example.com", { recipientName: "Farid", verified: true });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("oku-verified.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("oku-verified.html");
     expect(sent().to).toBe("p@example.com");
     expect(sent().subject).toBe("Your OKU status is verified");
     expect(sent().html).toContain("Farid|");
@@ -844,10 +788,7 @@ describe("sendOkuReviewEmail", () => {
       verified: false,
       rejectionReason: "Card <expired>",
     });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("oku-rejected.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("oku-rejected.html");
     expect(sent().subject).toBe("We couldn't verify your OKU card");
     expect(sent().html).toContain("Card &lt;expired&gt;");
     expect(sent().html).toContain("/settings|");
@@ -929,7 +870,7 @@ describe("sendRegistrationConfirmationEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{tournamentName}}|{{tournamentDates}}|{{venue}}|{{feePaid}}|{{tournamentUrl}}|{{siteUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -939,10 +880,7 @@ describe("sendRegistrationConfirmationEmail", () => {
 
   it("renders the tournament, dates, venue and fee paid", async () => {
     await sendRegistrationConfirmationEmail("p@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("registration-confirmed.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("registration-confirmed.html");
     expect(sent().to).toBe("p@example.com");
     expect(sent().subject).toBe("You're registered for KL Open");
     expect(sent().html).toContain("Farid|KL Open|10 Aug – 12 Aug 2026 (MYT)|Dewan Besar, Selangor|RM 55.00|");
@@ -1007,7 +945,7 @@ describe("sendNominationResponseEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{nomineeName}}|{{tournamentName}}|{{tournamentUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1017,10 +955,7 @@ describe("sendNominationResponseEmail", () => {
 
   it("uses the accepted template, linking to the organizer's tournament", async () => {
     await sendNominationResponseEmail("o@example.com", { ...base, accepted: true });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("nomination-accepted.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("nomination-accepted.html");
     expect(sent().to).toBe("o@example.com");
     expect(sent().subject).toBe(
       "Selangor Chess Association accepted the payout nomination for KL Open",
@@ -1030,10 +965,7 @@ describe("sendNominationResponseEmail", () => {
 
   it("uses the declined template", async () => {
     await sendNominationResponseEmail("o@example.com", { ...base, accepted: false });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("nomination-declined.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("nomination-declined.html");
     expect(sent().subject).toMatch(/declined the payout nomination for KL Open/);
   });
 
@@ -1066,7 +998,7 @@ describe("sendRefundOutcomeEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{tournamentName}}|{{amount}}|{{paymentMethod}}|{{dashboardUrl}}|{{siteUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1076,10 +1008,7 @@ describe("sendRefundOutcomeEmail", () => {
 
   it("renders a completed refund from refund-completed.html", async () => {
     await sendRefundOutcomeEmail("p@example.com", { ...base, completed: true });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("refund-completed.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("refund-completed.html");
     expect(sent().to).toBe("p@example.com");
     expect(sent().subject).toBe("Your refund for KL Open is on its way");
     expect(sent().html).toMatch(/^Farid\|KL Open\|RM 110\.00\|GrabPay\|.*\/my\|/);
@@ -1087,10 +1016,7 @@ describe("sendRefundOutcomeEmail", () => {
 
   it("renders a failed refund from refund-failed.html", async () => {
     await sendRefundOutcomeEmail("p@example.com", { ...base, completed: false });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("refund-failed.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("refund-failed.html");
     expect(sent().subject).toMatch(/^Action needed: your refund for KL Open/);
     expect(sent().html).toContain("|We tried to refund RM 110.00 for|");
   });
@@ -1155,7 +1081,7 @@ describe("sendMemberInvitationEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{inviterName}}|{{organizationName}}|{{roleLabel}}|{{roleSummary}}|{{invitationUrl}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1166,10 +1092,7 @@ describe("sendMemberInvitationEmail", () => {
 
   it("links to the invitation, naming the inviter, organization and role", async () => {
     await sendMemberInvitationEmail("f@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("member-invitation.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("member-invitation.html");
     expect(sent().to).toBe("f@example.com");
     expect(sent().subject).toBe(
       "Aisha Rahman invited you to join KL Chess Club on MY Chess Tour",
@@ -1219,7 +1142,7 @@ describe("sendInvitationResponseEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{inviteeName}}|{{inviteeEmail}}|{{organizationName}}|{{roleLabel}}|{{membersUrl}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1230,10 +1153,7 @@ describe("sendInvitationResponseEmail", () => {
 
   it("tells the inviter the invitation was accepted", async () => {
     await sendInvitationResponseEmail("aisha@example.com", { ...base, accepted: true });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("invitation-accepted.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("invitation-accepted.html");
     expect(sent().to).toBe("aisha@example.com");
     expect(sent().subject).toBe("Farid Ali joined KL Chess Club");
     expect(sent().html).toContain(
@@ -1248,10 +1168,7 @@ describe("sendInvitationResponseEmail", () => {
       inviteeName: "farid@example.com",
       accepted: false,
     });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("invitation-declined.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("invitation-declined.html");
     expect(sent().subject).toBe(
       "farid@example.com declined your invitation to KL Chess Club",
     );
@@ -1288,7 +1205,7 @@ describe("sendPrizeAwardedEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{bankLine}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1298,10 +1215,7 @@ describe("sendPrizeAwardedEmail", () => {
 
   it("loads the template and says where the prize will go", async () => {
     await sendPrizeAwardedEmail("w@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("prize-awarded.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("prize-awarded.html");
     expect(sent().html).toContain("RM 300.00");
     expect(sent().html).toContain("account ending in 0101");
     expect(sent().subject).toBe("You've been awarded a prize at Merdeka Open");
@@ -1407,7 +1321,7 @@ describe("sendPrizePaidEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{tournamentName}}|{{prizeName}}|{{amount}}|{{accountLast4}}|{{ctaUrl}}|{{ctaLabel}}|{{settingsUrl}}|{{lead}}|{{footerReason}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1420,10 +1334,7 @@ describe("sendPrizePaidEmail", () => {
       ...base,
       receiptUrl: "https://chip.test/receipt/7001",
     });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("prize-paid.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("prize-paid.html");
     expect(sentHtml()).toContain("https://chip.test/receipt/7001|View Receipt");
     expect(sentHtml()).toContain("RM 300.00");
   });
@@ -1470,7 +1381,7 @@ describe("sendPrizeFundingRequestEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{funderName}}|{{organizerName}}|{{tournamentName}}|{{amount}}|{{prizeList}}|{{checkoutUrl}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1479,10 +1390,7 @@ describe("sendPrizeFundingRequestEmail", () => {
   it("sends the sponsor their share and the CHIP link", async () => {
     await sendPrizeFundingRequestEmail("pay@acme.test", base);
     const sent = mockSend.mock.calls[0][0];
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("prize-funding-request.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("prize-funding-request.html");
     expect(sent.to).toBe("pay@acme.test");
     expect(sent.subject).toBe("Prize fund payment for Merdeka Open");
     expect(sent.html).toContain("RM 450.00");
@@ -1508,7 +1416,7 @@ describe("sendPrizeFundingRequestEmail", () => {
 describe("sendTournamentListedEmail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{recipientName}}|{{orgName}}|{{tournamentName}}|{{amount}}|{{ctaUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1550,7 +1458,7 @@ describe("sendHelperInvitationEmail", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{playerName}}|{{relationshipLabel}}|{{invitationUrl}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1561,10 +1469,7 @@ describe("sendHelperInvitationEmail", () => {
 
   it("links to the invitation, naming the player and relationship", async () => {
     await sendHelperInvitationEmail("h@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("helper-invitation.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("helper-invitation.html");
     expect(sent().to).toBe("h@example.com");
     expect(sent().subject).toBe(
       "Bea Player asked you to help them on MY Chess Tour",
@@ -1602,7 +1507,7 @@ describe("sendGuardianshipAgeOutEmail (#721)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{headline}}|{{recipientName}}|{{message}}|{{noticeMain}}|{{noticeReason}}|{{ctaUrl}}|{{ctaLabel}}|{{footerReason}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1617,10 +1522,7 @@ describe("sendGuardianshipAgeOutEmail (#721)", () => {
       audience: "guardian",
       stage: "upcoming",
     });
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("guardianship-age-out.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("guardianship-age-out.html");
     expect(sent().to).toBe("gwen@example.com");
     expect(sent().subject).toBe(
       "Sara Child turns 18 on 5 Dec 2026: hand over their MY Chess Tour record",
@@ -1677,7 +1579,7 @@ describe("sendAccountClaimEmail (#720)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFileSync.mockReturnValue(
+    mockLoadTemplate.mockReturnValue(
       "{{playerName}}|{{guardianName}}|{{claimUrl}}|{{siteUrl}}",
     );
     mockSend.mockResolvedValue({ error: null });
@@ -1688,10 +1590,7 @@ describe("sendAccountClaimEmail (#720)", () => {
 
   it("sends the player the link, naming who is handing the record over", async () => {
     await sendAccountClaimEmail("ada@example.com", base);
-    expect(mockReadFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("account-claim.html"),
-      "utf-8",
-    );
+    expect(mockLoadTemplate).toHaveBeenCalledWith("account-claim.html");
     expect(sent().to).toBe("ada@example.com");
     expect(sent().subject).toBe(
       "Gwen Guardian is handing your MY Chess Tour record over to you",

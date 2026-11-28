@@ -64,7 +64,10 @@ const eslintConfig = defineConfig([
   },
   globalIgnores([
     ".claude/**",
+    ".cloudflare/**",
     ".next/**",
+    ".vinext/**",
+    "dist/**",
     "build/**",
     "next-env.d.ts",
     "out/**",

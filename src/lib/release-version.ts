@@ -42,8 +42,8 @@ export function resolveReleaseVersion(
 ): string {
   if (env.APP_VERSION) return env.APP_VERSION;
 
-  const onNetlify = env.NETLIFY === "true";
-  if (onNetlify && !syncTags(run, env)) {
+  const onBuildHost = env.NETLIFY === "true" || env.WORKERS_CI === "1";
+  if (onBuildHost && !syncTags(run, env)) {
     console.warn(
       "[release-version] Could not fetch git tags; the version may be stale.",
     );
@@ -58,11 +58,15 @@ export function resolveReleaseVersion(
   ]);
   if (tag) return tag;
 
-  if (onNetlify) {
+  if (onBuildHost) {
     throw new Error(
       "[release-version] No v* git tag is reachable from this commit. " +
-        "Set APP_VERSION in the Netlify environment to override.",
+        "Set APP_VERSION in the build environment to override.",
     );
   }
   return "dev";
+}
+
+export function resolveReleaseCommit(env: Env = process.env): string {
+  return (env.COMMIT_REF ?? env.WORKERS_CI_COMMIT_SHA ?? "").slice(0, 7);
 }

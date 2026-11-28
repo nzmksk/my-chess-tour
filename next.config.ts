@@ -1,11 +1,19 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs/config";
-import { resolveReleaseVersion } from "./src/lib/release-version";
+import {
+  resolveReleaseCommit,
+  resolveReleaseVersion,
+} from "./src/lib/release-version";
 
 const nextConfig: NextConfig = {
   env: {
     APP_VERSION: resolveReleaseVersion(),
-    APP_COMMIT: process.env.COMMIT_REF?.slice(0, 7) ?? "",
+    APP_COMMIT: resolveReleaseCommit(),
+  },
+  turbopack: {
+    rules: {
+      "*.html": { condition: { query: "?raw" }, type: "text" },
+    },
   },
   async redirects() {
     return [
