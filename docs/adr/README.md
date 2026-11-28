@@ -52,3 +52,4 @@ old one `Superseded by NNNN`, and link both ways.
 | 0027 | [One account per mailbox](0027-one-account-per-mailbox.md)                                             | Accepted           |
 | 0028 | [A FIDE ID must carry the player's name](0028-a-fide-id-must-carry-the-players-name.md)                | Accepted           |
 | 0029 | [FIDE players come from the Lichess API](0029-fide-players-come-from-the-lichess-api.md)               | Accepted           |
+| 0030 | [Host on Cloudflare Workers with vinext](0030-host-on-cloudflare-workers-with-vinext.md)               | Proposed           |

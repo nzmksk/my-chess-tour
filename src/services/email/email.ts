@@ -1,17 +1,9 @@
-import fs from "fs";
-import path from "path";
 import { Resend } from "resend";
 import { SUPPORT_EMAIL } from "@/lib/reference/contact";
+import { loadTemplate } from "./template-source";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL!;
-
-function loadTemplate(name: string): string {
-  return fs.readFileSync(
-    path.join(process.cwd(), "src/services/email/templates", name),
-    "utf-8",
-  );
-}
 
 function escapeHtml(value: string): string {
   return value

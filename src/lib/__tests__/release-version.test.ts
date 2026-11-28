@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { resolveReleaseVersion } from "../release-version";
+import {
+  resolveReleaseCommit,
+  resolveReleaseVersion,
+} from "../release-version";
 
 type Responses = Record<string, string | Error>;
 
@@ -33,7 +36,7 @@ describe("resolveReleaseVersion", () => {
     expect(run).toHaveBeenCalledWith(DESCRIBE_ARGS);
   });
 
-  it("does not fetch outside Netlify", () => {
+  it("does not fetch outside a build host", () => {
     const run = fakeGit({ describe: "v0.10.0-alpha" });
     resolveReleaseVersion(run, {});
     expect(run).toHaveBeenCalledTimes(1);
@@ -129,5 +132,49 @@ describe("resolveReleaseVersion", () => {
         /No v\* git tag/,
       );
     });
+  });
+
+  describe("on Workers Builds", () => {
+    it("fetches tags before describing", () => {
+      const run = fakeGit({
+        "rev-parse": "true",
+        "fetch origin": "",
+        describe: "v0.12.0-alpha",
+      });
+      expect(resolveReleaseVersion(run, { WORKERS_CI: "1" })).toBe(
+        "v0.12.0-alpha",
+      );
+      const order = run.mock.calls.map(([args]) => args[0]);
+      expect(order.indexOf("fetch")).toBeLessThan(order.indexOf("describe"));
+    });
+
+    it("fails the build when no tag is reachable", () => {
+      const run = fakeGit({
+        "rev-parse": "false",
+        "fetch origin": "",
+        describe: new Error("No names found"),
+      });
+      expect(() => resolveReleaseVersion(run, { WORKERS_CI: "1" })).toThrow(
+        /No v\* git tag/,
+      );
+    });
+  });
+});
+
+describe("resolveReleaseCommit", () => {
+  it("shortens Netlify's COMMIT_REF", () => {
+    expect(resolveReleaseCommit({ COMMIT_REF: "328669df0123456789" })).toBe(
+      "328669d",
+    );
+  });
+
+  it("shortens Workers Builds' WORKERS_CI_COMMIT_SHA", () => {
+    expect(
+      resolveReleaseCommit({ WORKERS_CI_COMMIT_SHA: "a2dfc6130123456789" }),
+    ).toBe("a2dfc61");
+  });
+
+  it("is empty when no build host sets a commit", () => {
+    expect(resolveReleaseCommit({})).toBe("");
   });
 });
